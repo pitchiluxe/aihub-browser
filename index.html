@@ -741,7 +741,7 @@
     <a href="#steps">Get Started</a>
     <a href="mailto:erickomari243@gmail.com">Contact</a>
   </div>
-  <a href="https://github.com/pitchiluxe/aihub-browser/releases/download/v1.0.0/AIHub-Browser-Setup-1.0.0.exe" target="_blank" rel="noopener noreferrer" class="nav-cta">
+  <a href="/download" class="nav-cta">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     Download Free
   </a>
@@ -766,7 +766,7 @@
           No extensions. No subscriptions.
         </p>
         <div class="hero-btns">
-          <a href="https://github.com/pitchiluxe/aihub-browser/releases/download/v1.0.0/AIHub-Browser-Setup-1.0.0.exe" target="_blank" rel="noopener noreferrer" class="btn-chalk">
+          <a href="/download" class="btn-chalk">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Download for Windows
           </a>
@@ -1010,7 +1010,7 @@
       <div class="dl-eyebrow">✦ Assignment Due: Now ✦</div>
       <h2>Download.<br/>Browse smarter.</h2>
       <p>Free download. No account. No subscription.<br/>No tracking. Just a better browser.</p>
-      <a href="https://github.com/pitchiluxe/aihub-browser/releases/download/v1.0.0/AIHub-Browser-Setup-1.0.0.exe" target="_blank" rel="noopener noreferrer" class="btn-dl">
+      <a href="/download" class="btn-dl">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download for Windows — Free
       </a>
@@ -1040,6 +1040,15 @@
 </footer>
 
 <script>
+  /* ── Source protection ── */
+  document.addEventListener('contextmenu', e => e.preventDefault())
+  document.addEventListener('keydown', e => {
+    const ctrl = e.ctrlKey || e.metaKey
+    if (ctrl && (e.key === 'u' || e.key === 'U')) { e.preventDefault(); return }
+    if (ctrl && e.shiftKey && ['i','I','j','J','c','C'].includes(e.key)) { e.preventDefault(); return }
+    if (e.key === 'F12') e.preventDefault()
+  })
+
   /* ── Custom cursor ── */
   const cur = document.getElementById('cur')
   const ring = document.getElementById('cur-ring')
