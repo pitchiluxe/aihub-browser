@@ -1,0 +1,12 @@
+{
+  "headers": [
+    {
+      "source": "**/*.exe",
+      "headers": [
+        { "key": "Content-Disposition", "value": "attachment" },
+        { "key": "Content-Type",        "value": "application/octet-stream" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    }
+  ]
+}

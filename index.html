@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIHub Browser — The Browser That Thinks With You</title>
+  <meta name="description" content="An AI-native browser with built-in assistant, 3D knowledge graph, and local AI. Free for Windows." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --chalk-bg:   #1d3a2e;
+      --chalk-bg2:  #162e23;
+      --chalk:      #f5f1e3;
+      --chalk2:     rgba(245,241,227,0.55);
+      --chalk3:     rgba(245,241,227,0.28);
+      --paper:      #faf8f2;
+      --paper2:     #f3f0e7;
+      --paper3:     #ece8db;
+      --ink:        #1c2b1f;
+      --ink2:       #374427;
+      --muted:      #6b7c66;
+      --rule:       rgba(100,116,95,0.18);
+      --green:      #2d6a4f;
+      --green2:     #40916c;
+      --green3:     #52b788;
+      --yellow:     #f4a825;
+      --yellow2:    #ffd166;
+      --red:        #c62828;
+      --wood:       #8b6914;
+      --r:          12px;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      overflow-x: hidden;
+      cursor: none;
+    }
+    ::selection { background: rgba(82,183,136,.22); }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--paper2); }
+    ::-webkit-scrollbar-thumb { background: var(--paper3); border-radius: 5px; }
+
+    /* ── Cursor ── */
+    #cur, #cur-ring {
+      position: fixed; border-radius: 50%;
+      pointer-events: none; z-index: 9999;
+    }
+    #cur {
+      width: 7px; height: 7px; background: var(--green2);
+      transform: translate(-50%,-50%);
+    }
+    #cur-ring {
+      width: 28px; height: 28px;
+      border: 1.5px solid rgba(64,145,108,.4);
+      transform: translate(-50%,-50%);
+      transition: width .16s, height .16s, border-color .16s;
+    }
+    body:has(a:hover) #cur-ring,
+    body:has(button:hover) #cur-ring { width: 42px; height: 42px; border-color: rgba(64,145,108,.65); }
+
+    /* Notebook ruling */
+    .ruled {
+      background-image: linear-gradient(var(--rule) 1px, transparent 1px);
+      background-size: 100% 28px;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 500;
+      height: 58px; padding: 0 48px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(29,58,46,.96);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(245,241,227,.1);
+      transition: border-color .2s;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 9px;
+      text-decoration: none;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700; font-size: 15px; color: var(--chalk);
+    }
+    .nav-mark {
+      width: 29px; height: 29px; border-radius: 8px;
+      background: var(--yellow);
+      display: grid; place-items: center;
+      font-size: 15px; font-weight: 900; color: var(--chalk-bg);
+      box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    }
+    .nav-links { display: flex; gap: 26px; }
+    .nav-links a {
+      font-size: 13px; font-weight: 500; color: var(--chalk2);
+      text-decoration: none; transition: color .13s;
+    }
+    .nav-links a:hover { color: var(--chalk); }
+    .nav-cta {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 18px; border-radius: 8px;
+      background: var(--yellow); color: var(--chalk-bg);
+      font-size: 13px; font-weight: 700;
+      text-decoration: none; border: none; cursor: none;
+      transition: all .13s; font-family: 'Space Grotesk', sans-serif;
+      box-shadow: 0 2px 10px rgba(0,0,0,.25);
+    }
+    .nav-cta:hover { background: var(--yellow2); transform: translateY(-1px); }
+
+    /* ── HERO — chalkboard ── */
+    .hero {
+      background: var(--chalk-bg);
+      padding: 120px 0 80px;
+      position: relative; overflow: hidden;
+      min-height: 100vh; display: flex; align-items: center;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(245,241,227,.04) 1px, transparent 1px);
+      background-size: 100% 32px;
+      pointer-events: none;
+    }
+    .chalk-smudge {
+      position: absolute; border-radius: 50%;
+      background: radial-gradient(circle, rgba(245,241,227,.04) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .wrap { max-width: 1160px; margin: 0 auto; padding: 0 48px; position: relative; z-index: 1; }
+
+    .hero-inner {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 4px 12px; border-radius: 4px; margin-bottom: 22px;
+      border: 1px dashed rgba(245,241,227,.25);
+      font-family: 'Caveat', cursive; font-size: 15px;
+      color: var(--yellow2); letter-spacing: .03em;
+    }
+
+    .hero-title {
+      font-family: 'Caveat', cursive;
+      font-size: clamp(50px, 6vw, 82px);
+      font-weight: 700; line-height: 1.05;
+      color: var(--chalk); margin-bottom: 20px;
+    }
+    .underline-chalk {
+      position: relative; display: inline-block;
+    }
+    .underline-chalk::after {
+      content: '';
+      position: absolute; left: 0; bottom: -2px; right: 0;
+      height: 3px; border-radius: 2px;
+      background: var(--yellow); opacity: .85;
+    }
+
+    .hero-desc {
+      font-size: 16px; line-height: 1.75;
+      color: var(--chalk2); max-width: 440px; margin-bottom: 36px;
+    }
+
+    .hero-btns { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn-chalk {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 26px; border-radius: 8px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px; font-weight: 700;
+      background: var(--yellow); color: var(--chalk-bg);
+      text-decoration: none; border: none; cursor: none;
+      transition: all .14s;
+      box-shadow: 0 3px 16px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.2);
+    }
+    .btn-chalk:hover { background: var(--yellow2); transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+    .btn-ghost-chalk {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 13px 22px; border-radius: 8px;
+      font-size: 14px; font-weight: 600; color: var(--chalk2);
+      border: 1px solid rgba(245,241,227,.2);
+      text-decoration: none; cursor: none;
+      transition: all .13s; background: transparent;
+    }
+    .btn-ghost-chalk:hover { border-color: rgba(245,241,227,.4); color: var(--chalk); background: rgba(245,241,227,.05); }
+
+    .hero-meta {
+      margin-top: 18px;
+      font-family: 'Caveat', cursive; font-size: 13px;
+      color: var(--chalk3); display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    }
+    .hero-meta .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--chalk3); }
+
+    /* ── Chalkboard mockup ── */
+    .chalkboard {
+      background: var(--chalk-bg2);
+      border-radius: 10px; overflow: hidden;
+      border: 6px solid #3d2c16;
+      box-shadow: 0 0 0 2px #5a3f1f, 0 20px 60px rgba(0,0,0,.5);
+      position: relative;
+    }
+    .chalkboard::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(245,241,227,.035) 1px, transparent 1px);
+      background-size: 100% 26px; pointer-events: none; z-index: 1;
+    }
+    .cb-inner { padding: 20px; position: relative; z-index: 2; }
+    .cb-title {
+      font-family: 'Caveat', cursive; font-size: 12px; font-weight: 600;
+      color: rgba(245,241,227,.35); margin-bottom: 12px;
+      text-align: center; letter-spacing: .12em; text-transform: uppercase;
+    }
+    .cb-browser {
+      background: rgba(0,0,0,.2); border-radius: 7px; overflow: hidden;
+      border: 1px solid rgba(245,241,227,.07);
+    }
+    .cb-chrome {
+      height: 32px; background: rgba(0,0,0,.2);
+      border-bottom: 1px solid rgba(245,241,227,.06);
+      display: flex; align-items: center; padding: 0 10px; gap: 6px;
+    }
+    .cb-dots { display: flex; gap: 4px; }
+    .cb-dot { width: 9px; height: 9px; border-radius: 50%; opacity: .6; }
+    .cb-url {
+      flex: 1; max-width: 200px; margin: 0 auto; height: 18px;
+      border-radius: 5px; background: rgba(245,241,227,.07);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; color: rgba(245,241,227,.3);
+    }
+    .cb-body {
+      display: grid; grid-template-columns: 38px 1fr 180px; height: 260px;
+    }
+    .cb-sidebar {
+      background: rgba(0,0,0,.15); border-right: 1px solid rgba(245,241,227,.05);
+      display: flex; flex-direction: column; align-items: center;
+      padding: 8px 0; gap: 4px;
+    }
+    .cb-si {
+      width: 26px; height: 26px; border-radius: 7px;
+      display: grid; place-items: center; font-size: 12px; opacity: .4;
+    }
+    .cb-si.on { opacity: .85; background: rgba(245,241,227,.08); }
+    .cb-main {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 14px 10px 8px; background: rgba(0,0,0,.05);
+    }
+    .cb-clock {
+      font-family: 'Caveat', cursive; font-size: 26px; font-weight: 400;
+      color: rgba(245,241,227,.65);
+    }
+    .cb-date { font-size: 8px; color: rgba(245,241,227,.22); margin: 1px 0 9px; }
+    .cb-search {
+      width: 100%; height: 22px; border-radius: 6px;
+      background: rgba(245,241,227,.07); border: 1px solid rgba(245,241,227,.1);
+      display: flex; align-items: center; padding: 0 7px;
+      font-size: 8px; color: rgba(245,241,227,.22); margin-bottom: 10px;
+    }
+    .cb-bms { display: flex; gap: 6px; margin-bottom: 8px; }
+    .cb-bm  { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .cb-bm-i {
+      width: 24px; height: 24px; border-radius: 6px;
+      display: grid; place-items: center; font-size: 11px;
+      background: rgba(245,241,227,.07);
+    }
+    .cb-bm-l { font-size: 7px; color: rgba(245,241,227,.22); }
+    .cb-sph { position: relative; width: 80px; height: 46px; margin-top: 4px; }
+    .cb-sn {
+      position: absolute; border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, rgba(82,183,136,.85), rgba(45,106,79,.4));
+      box-shadow: 0 0 8px rgba(82,183,136,.4);
+    }
+    .cb-sl { position: absolute; height: 1px; background: rgba(82,183,136,.22); transform-origin: left; }
+    .cb-ai {
+      background: rgba(0,0,0,.1); border-left: 1px solid rgba(245,241,227,.05);
+      display: flex; flex-direction: column; padding: 8px; gap: 5px;
+    }
+    .cb-ai-hdr {
+      display: flex; align-items: center; gap: 5px;
+      padding-bottom: 5px; border-bottom: 1px solid rgba(245,241,227,.06);
+    }
+    .cb-ai-av {
+      width: 18px; height: 18px; border-radius: 5px;
+      background: var(--yellow); display: grid; place-items: center;
+      font-size: 9px; font-weight: 900; color: var(--chalk-bg);
+    }
+    .cb-ai-n { font-size: 8px; font-weight: 600; color: rgba(245,241,227,.5); }
+    .cb-ai-s { font-size: 7px; color: var(--green3); }
+    .cb-msg {
+      padding: 5px 6px; border-radius: 5px;
+      font-size: 7.5px; line-height: 1.5;
+      background: rgba(245,241,227,.05); color: rgba(245,241,227,.4);
+    }
+    .cb-msg.u {
+      background: var(--yellow); color: var(--chalk-bg);
+      font-weight: 600; align-self: flex-end; max-width: 80%;
+    }
+    .cb-inp {
+      margin-top: auto; height: 18px;
+      background: rgba(245,241,227,.06); border-radius: 5px;
+      border: 1px solid rgba(245,241,227,.07);
+      display: flex; align-items: center; padding: 0 6px;
+      font-size: 7.5px; color: rgba(245,241,227,.18);
+    }
+
+    /* Sticky notes */
+    .sticky {
+      position: absolute; padding: 9px 12px; border-radius: 2px;
+      font-family: 'Caveat', cursive; font-size: 12px; font-weight: 500;
+      box-shadow: 2px 3px 10px rgba(0,0,0,.35);
+      animation: sf 4s ease-in-out infinite; white-space: nowrap; line-height: 1.4;
+    }
+    .sticky.s1 { background: #f4c430; color: #1a1200; bottom: -12px; left: -20px; transform: rotate(-4deg); animation-delay: 0s; }
+    .sticky.s2 { background: #86efac; color: #0f2d1a; top: 14px; right: -18px; transform: rotate(3deg); animation-delay: 1.6s; }
+    .sticky.s3 { background: #93c5fd; color: #0c1f3d; bottom: 50px; right: -14px; transform: rotate(-2deg); animation-delay: 3s; }
+    @keyframes sf {
+      0%,100% { transform: rotate(var(--sr,-4deg)) translateY(0); }
+      50%      { transform: rotate(var(--sr,-4deg)) translateY(-6px); }
+    }
+    .sticky.s1 { --sr: -4deg; } .sticky.s2 { --sr: 3deg; } .sticky.s3 { --sr: -2deg; }
+
+    .tray {
+      background: #3d2c16; height: 18px;
+      border-top: 2px solid #5a3f1f; border-bottom: 2px solid #2a1f0e;
+      display: flex; align-items: center; padding: 0 16px; gap: 8px;
+    }
+    .tray-chalk { height: 7px; border-radius: 3px; opacity: .7; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+
+    /* ── Shared section stuff ── */
+    .eyebrow {
+      font-family: 'Caveat', cursive; font-size: 15px; font-weight: 600;
+      color: var(--green2); margin-bottom: 8px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .eyebrow::before { content: '§'; opacity: .5; }
+
+    h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(28px, 3.5vw, 46px);
+      font-weight: 700; letter-spacing: -0.03em;
+      color: var(--ink); margin-bottom: 12px; line-height: 1.1;
+    }
+    .hl { position: relative; display: inline-block; }
+    .hl::before {
+      content: '';
+      position: absolute; left: -2px; right: -2px; bottom: 2px;
+      height: 10px; background: var(--yellow2); opacity: .35; z-index: -1; border-radius: 2px;
+    }
+    .desc { font-size: 15px; color: var(--muted); line-height: 1.72; max-width: 440px; }
+
+    /* ── Course section ── */
+    .course-section { background: var(--paper); padding: 96px 0; }
+    .course-header { margin-bottom: 52px; }
+
+    .course-grid {
+      display: grid; grid-template-columns: repeat(3,1fr); gap: 2px;
+      border: 2px solid var(--paper3); border-radius: var(--r);
+      overflow: hidden; background: var(--paper3);
+    }
+    .course-card {
+      background: var(--paper); padding: 28px 24px;
+      transition: background .18s; position: relative;
+    }
+    .course-card:hover { background: #fff9f0; }
+    .course-card.wide { grid-column: span 2; }
+    .course-card.full { grid-column: span 3; display: flex; align-items: center; justify-content: space-between; gap: 32px; }
+    .lesson-num {
+      position: absolute; top: 16px; right: 16px;
+      font-family: 'Caveat', cursive; font-size: 36px; font-weight: 700;
+      color: var(--paper3); line-height: 1; pointer-events: none; user-select: none;
+    }
+    .card-ico {
+      width: 38px; height: 38px; border-radius: 10px;
+      display: grid; place-items: center; font-size: 17px;
+      margin-bottom: 14px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,.07);
+    }
+    .course-card h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 17px; font-weight: 700; letter-spacing: -.02em;
+      color: var(--ink); margin-bottom: 8px; line-height: 1.25;
+    }
+    .course-card p { font-size: 13px; color: var(--muted); line-height: 1.65; }
+
+    .chat-preview { margin-top: 20px; border-radius: 10px; overflow: hidden; border: 1px solid var(--paper3); }
+    .cp-hdr {
+      padding: 7px 11px; background: var(--paper2);
+      border-bottom: 1px solid var(--paper3);
+      font-family: 'Caveat', cursive; font-size: 12px;
+      color: var(--muted); display: flex; align-items: center; gap: 5px;
+    }
+    .cp-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green3); box-shadow: 0 0 4px var(--green3); }
+    .cp-msgs { padding: 10px; display: flex; flex-direction: column; gap: 6px; background: var(--paper2); }
+    .cp-msg {
+      padding: 7px 9px; border-radius: 7px; font-size: 11px; line-height: 1.55;
+      background: var(--paper); border: 1px solid var(--paper3); color: var(--ink2);
+    }
+    .cp-msg.u { background: var(--green); color: #e8f5ee; border: none; align-self: flex-end; max-width: 80%; }
+
+    .sphere-mini { position: relative; width: 100%; height: 78px; margin-top: 12px; }
+    .sm-n {
+      position: absolute; border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, var(--green2), var(--green));
+      box-shadow: 0 0 8px rgba(45,106,79,.3);
+    }
+    .sm-l { position: absolute; height: 1px; background: rgba(45,106,79,.18); transform-origin: left; }
+
+    .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      padding: 4px 11px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      background: var(--paper2); border: 1px solid var(--paper3); color: var(--ink2);
+      transition: all .12s; font-family: 'Space Grotesk', sans-serif;
+    }
+    .chip:hover { border-color: var(--green3); color: var(--green); background: rgba(82,183,136,.08); }
+
+    /* ── Bulletin (stats) ── */
+    .bulletin { background: var(--chalk-bg); padding: 80px 0; position: relative; overflow: hidden; }
+    .bulletin::after {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(245,241,227,.035) 1px, transparent 1px);
+      background-size: 100% 32px; pointer-events: none;
+    }
+    .bulletin-title {
+      font-family: 'Caveat', cursive; font-size: 13px; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--chalk3); text-align: center; margin-bottom: 40px;
+    }
+    .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 20px; position: relative; z-index: 1; }
+    .stat-pin {
+      background: rgba(245,241,227,.06); border: 1px solid rgba(245,241,227,.1);
+      border-radius: 10px; padding: 28px 20px; text-align: center; position: relative;
+    }
+    .stat-pin::before {
+      content: '📌'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); font-size: 16px;
+    }
+    .stat-n {
+      font-family: 'Caveat', cursive; font-size: 52px; font-weight: 700;
+      line-height: 1; color: var(--chalk); margin-bottom: 6px;
+    }
+    .stat-n .u { font-size: 26px; opacity: .6; }
+    .stat-l { font-size: 11px; color: var(--chalk3); letter-spacing: .05em; }
+
+    /* ── Lesson steps ── */
+    .lesson-section { background: var(--paper2); padding: 96px 0; }
+    .lesson-list { margin-top: 48px; display: flex; flex-direction: column; }
+    .lesson-row {
+      display: flex; background: var(--paper);
+      border: 1px solid var(--paper3); overflow: hidden; transition: background .15s;
+    }
+    .lesson-row:first-child { border-radius: 10px 10px 0 0; }
+    .lesson-row:last-child  { border-radius: 0 0 10px 10px; }
+    .lesson-row + .lesson-row { border-top: none; }
+    .lesson-row:hover { background: #fff9f0; }
+    .lesson-num-cell {
+      width: 72px; flex-shrink: 0;
+      border-right: 1px solid var(--paper3);
+      display: flex; align-items: center; justify-content: center;
+      background: var(--paper2);
+    }
+    .lesson-num-val {
+      font-family: 'Caveat', cursive; font-size: 22px; font-weight: 700; color: var(--green2);
+    }
+    .lesson-content { padding: 22px 28px; flex: 1; }
+    .lesson-content h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 5px;
+    }
+    .lesson-content p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .lesson-badge { padding: 22px 20px; display: flex; align-items: center; flex-shrink: 0; }
+    .lb {
+      font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 5px;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .lb.green { background: rgba(82,183,136,.15); color: var(--green); }
+    .lb.yellow { background: rgba(244,168,37,.15); color: #92580a; }
+    .lb.blue  { background: rgba(37,99,235,.1); color: #1d4ed8; }
+
+    /* ── Index card note ── */
+    .note-section { background: var(--paper); padding: 96px 0; }
+    .index-card {
+      max-width: 680px; background: #fffef5; border-radius: 6px;
+      border: 1px solid #e5d9b0; padding: 36px 40px;
+      box-shadow: 2px 4px 20px rgba(139,105,20,.1), 4px 6px 0 #e5d9b0;
+      position: relative; overflow: hidden;
+    }
+    .index-card::before {
+      content: '';
+      position: absolute; top: 50%; left: -8px; transform: translateY(-50%);
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--paper); border: 1px solid #e5d9b0;
+    }
+    .index-card::after {
+      content: '';
+      position: absolute; inset: 0; top: 60px;
+      background-image: linear-gradient(rgba(198,40,40,.08) 1px, transparent 1px);
+      background-size: 100% 26px; pointer-events: none;
+    }
+    .card-content { position: relative; z-index: 1; }
+    .card-heading {
+      font-family: 'Caveat', cursive; font-size: 13px;
+      color: var(--red); opacity: .5;
+      text-transform: uppercase; letter-spacing: .1em;
+      margin-bottom: 14px; border-bottom: 1px solid rgba(198,40,40,.15); padding-bottom: 8px;
+    }
+    .index-card blockquote {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 18px; line-height: 1.7; color: var(--ink2); margin-bottom: 24px;
+    }
+    .index-card blockquote strong { color: var(--ink); }
+    .author { display: flex; align-items: center; gap: 12px; }
+    .author-av {
+      width: 38px; height: 38px; border-radius: 8px;
+      background: var(--chalk-bg); display: grid; place-items: center;
+      font-family: 'Caveat', cursive; font-size: 20px; font-weight: 700; color: var(--yellow);
+    }
+    .author-name { font-weight: 700; font-size: 14px; color: var(--ink); }
+    .author-role { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    /* ── Download ── */
+    .download-section {
+      background: var(--chalk-bg); padding: 96px 0;
+      position: relative; overflow: hidden;
+    }
+    .download-section::after {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(245,241,227,.035) 1px, transparent 1px);
+      background-size: 100% 32px; pointer-events: none;
+    }
+    .dl-inner { text-align: center; max-width: 640px; margin: 0 auto; position: relative; z-index: 1; }
+    .dl-eyebrow {
+      font-family: 'Caveat', cursive; font-size: 16px; color: var(--yellow2); margin-bottom: 14px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .dl-inner h2 { color: var(--chalk); font-size: clamp(32px, 4.5vw, 54px); margin-bottom: 12px; }
+    .dl-inner p { color: var(--chalk2); font-size: 15px; line-height: 1.7; margin-bottom: 36px; }
+    .btn-dl {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 15px 34px; border-radius: 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 16px; font-weight: 700;
+      background: var(--yellow); color: var(--chalk-bg);
+      text-decoration: none; border: none; cursor: none;
+      box-shadow: 0 4px 24px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.2);
+      transition: all .14s;
+    }
+    .btn-dl:hover { background: var(--yellow2); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,.35); }
+    .dl-meta {
+      display: flex; justify-content: center; flex-wrap: wrap; gap: 16px; margin-top: 20px;
+    }
+    .dl-meta span {
+      font-family: 'Caveat', cursive; font-size: 14px; color: var(--chalk3);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .dl-meta .ck { color: var(--green3); }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--chalk-bg2); border-top: 1px solid rgba(245,241,227,.06); padding: 28px 0;
+    }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .footer-brand {
+      display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--chalk2);
+      font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 700;
+    }
+    .footer-mark {
+      width: 24px; height: 24px; border-radius: 6px;
+      background: var(--yellow); display: grid; place-items: center;
+      font-weight: 900; font-size: 12px; color: var(--chalk-bg);
+    }
+    .footer-copy { font-size: 11px; color: rgba(245,241,227,.2); }
+    .footer-links { display: flex; gap: 16px; }
+    .footer-links a { font-size: 11px; color: rgba(245,241,227,.22); text-decoration: none; transition: color .12s; }
+    .footer-links a:hover { color: var(--chalk2); }
+    .footer-note { text-align: center; margin-top: 14px; font-family: 'Caveat', cursive; font-size: 13px; color: rgba(245,241,227,.18); }
+
+    /* ── Reveal ── */
+    .r { opacity: 0; transform: translateY(20px); transition: opacity .55s cubic-bezier(.16,1,.3,1), transform .55s cubic-bezier(.16,1,.3,1); }
+    .r.in { opacity: 1; transform: translateY(0); }
+    .r.d1 { transition-delay: .06s; } .r.d2 { transition-delay: .12s; }
+    .r.d3 { transition-delay: .18s; } .r.d4 { transition-delay: .24s; }
+    .r.d5 { transition-delay: .30s; } .r.d6 { transition-delay: .36s; }
+
+    /* ── Responsive ── */
+    @media (max-width: 960px) {
+      .hero-inner { grid-template-columns: 1fr; }
+      .chalkboard { display: none; }
+      .course-grid { grid-template-columns: 1fr 1fr; }
+      .course-card.wide, .course-card.full { grid-column: span 2; }
+      .stats-row { grid-template-columns: repeat(2,1fr); }
+    }
+    @media (max-width: 640px) {
+      nav { padding: 0 20px; } .nav-links { display: none; }
+      .wrap { padding: 0 20px; }
+      .course-grid { grid-template-columns: 1fr; }
+      .course-card.wide, .course-card.full { grid-column: span 1; flex-direction: column; align-items: flex-start; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="cur"></div>
+<div id="cur-ring"></div>
+
+<!-- Nav -->
+<nav id="nav">
+  <a href="#" class="nav-logo">
+    <div class="nav-mark">A</div>AIHub Browser
+  </a>
+  <div class="nav-links">
+    <a href="#features">Lessons</a>
+    <a href="#steps">Get Started</a>
+    <a href="mailto:erickomari243@gmail.com">Contact</a>
+  </div>
+  <a href="#download" class="nav-cta">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Download Free
+  </a>
+</nav>
+
+<!-- Hero — chalkboard -->
+<section class="hero">
+  <div class="chalk-smudge" style="width:600px;height:500px;top:-100px;left:-150px"></div>
+  <div class="chalk-smudge" style="width:500px;height:400px;bottom:-80px;right:-100px"></div>
+  <div class="wrap">
+    <div class="hero-inner">
+      <div>
+        <div class="hero-eyebrow">✦ v1.0 — Free for Windows</div>
+        <h1 class="hero-title">
+          The browser<br/>
+          that <span class="underline-chalk">thinks</span><br/>
+          with you.
+        </h1>
+        <p class="hero-desc">
+          AIHub Browser puts a full AI assistant, 3D knowledge graph,
+          and private local AI right inside your browser.
+          No extensions. No subscriptions.
+        </p>
+        <div class="hero-btns">
+          <a href="AIHub-Browser-Setup-1.0.0.exe" download class="btn-chalk">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download for Windows
+          </a>
+          <a href="#features" class="btn-ghost-chalk">See features →</a>
+        </div>
+        <div class="hero-meta">
+          <span>Free forever</span><span class="sep"></span>
+          <span>No account</span><span class="sep"></span>
+          <span>No telemetry</span><span class="sep"></span>
+          <span>80 MB</span>
+        </div>
+      </div>
+
+      <!-- Chalkboard mockup -->
+      <div style="position:relative">
+        <div class="chalkboard">
+          <div class="tray">
+            <div class="tray-chalk" style="width:40px;background:#e8e0cc"></div>
+            <div class="tray-chalk" style="width:30px;background:#94c27a"></div>
+            <div class="tray-chalk" style="width:26px;background:#f4c430"></div>
+            <div class="tray-chalk" style="width:22px;background:#93c5fd"></div>
+            <div class="tray-chalk" style="width:34px;background:#e8e0cc;margin-left:auto"></div>
+          </div>
+          <div class="cb-inner">
+            <div class="cb-title">AIHub Browser — Live Preview</div>
+            <div class="cb-browser">
+              <div class="cb-chrome">
+                <div class="cb-dots">
+                  <div class="cb-dot" style="background:#ff5f57"></div>
+                  <div class="cb-dot" style="background:#febc2e"></div>
+                  <div class="cb-dot" style="background:#28c840"></div>
+                </div>
+                <div class="cb-url">🔒 aihub://home</div>
+              </div>
+              <div class="cb-body">
+                <div class="cb-sidebar">
+                  <div class="cb-si on">🌐</div>
+                  <div class="cb-si">🔖</div>
+                  <div class="cb-si">🤖</div>
+                  <div class="cb-si">🕐</div>
+                  <div class="cb-si">🛡️</div>
+                </div>
+                <div class="cb-main">
+                  <div class="cb-clock">9:41</div>
+                  <div class="cb-date">Wednesday, June 11</div>
+                  <div class="cb-search">🔍 &nbsp;Search or ask AI…</div>
+                  <div class="cb-bms">
+                    <div class="cb-bm"><div class="cb-bm-i">🔍</div><span class="cb-bm-l">Search</span></div>
+                    <div class="cb-bm"><div class="cb-bm-i">▶</div><span class="cb-bm-l">YouTube</span></div>
+                    <div class="cb-bm"><div class="cb-bm-i">🤖</div><span class="cb-bm-l">AIHub</span></div>
+                    <div class="cb-bm"><div class="cb-bm-i">📈</div><span class="cb-bm-l">Trader</span></div>
+                  </div>
+                  <div class="cb-sph">
+                    <div class="cb-sl" style="width:50px;left:12px;top:16px;transform:rotate(-22deg)"></div>
+                    <div class="cb-sl" style="width:38px;left:24px;top:16px;transform:rotate(30deg)"></div>
+                    <div class="cb-sl" style="width:32px;left:10px;top:34px;transform:rotate(-5deg)"></div>
+                    <div class="cb-sn" style="width:10px;height:10px;left:50%;top:0;transform:translateX(-50%)"></div>
+                    <div class="cb-sn" style="width:8px;height:8px;left:6px;top:28px"></div>
+                    <div class="cb-sn" style="width:8px;height:8px;left:50px;top:28px"></div>
+                    <div class="cb-sn" style="width:6px;height:6px;left:27px;top:38px;background:rgba(244,168,37,.8);box-shadow:0 0 6px rgba(244,168,37,.5)"></div>
+                  </div>
+                </div>
+                <div class="cb-ai">
+                  <div class="cb-ai-hdr">
+                    <div class="cb-ai-av">⚡</div>
+                    <div><div class="cb-ai-n">AIHub AI</div><div class="cb-ai-s">● Online</div></div>
+                  </div>
+                  <div class="cb-msg">Ready. Ask me anything.</div>
+                  <div class="cb-msg u">Latest AI news?</div>
+                  <div class="cb-msg">🔥 From HN now:<br/>• GPT-5 drops (921 pts)<br/>• Llama 4 open (740 pts)</div>
+                  <div class="cb-inp">Type here…</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sticky s1">🤖 Ollama running<br/>100% private</div>
+        <div class="sticky s2">3D Sphere<br/>24 bookmarks</div>
+        <div class="sticky s3">VPN 🇫🇷<br/>Connected</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features — course cards -->
+<section class="course-section ruled" id="features">
+  <div class="wrap">
+    <div class="course-header r">
+      <div class="eyebrow">Curriculum · Module 1</div>
+      <h2>Everything you need,<br/><span class="hl">taught by your browser.</span></h2>
+    </div>
+    <div class="course-grid">
+
+      <div class="course-card wide r d1">
+        <div class="lesson-num">01</div>
+        <div class="card-ico" style="background:#dcfce7;border:1px solid #bbf7d0">🤖</div>
+        <h3>Built-in AI Assistant</h3>
+        <p>Summarize pages, research topics, pull live AI headlines — without leaving the tab. Works offline with Ollama or uses cloud models through OpenRouter.</p>
+        <div class="chat-preview">
+          <div class="cp-hdr"><div class="cp-dot"></div>AIHub Assistant — Live</div>
+          <div class="cp-msgs">
+            <div class="cp-msg u">Summarize this page for me.</div>
+            <div class="cp-msg">Summary (3 key points):<br/><br/>1. <strong>AIHub is an AI-native browser</strong> — AI is first-class, not an add-on.<br/>2. <strong>Local + cloud AI</strong> — Ollama keeps data private; OpenRouter adds cloud power.<br/>3. <strong>3D Bookmark Graph</strong> — knowledge organizes itself visually.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="course-card r d2">
+        <div class="lesson-num">02</div>
+        <div class="card-ico" style="background:#f3e8ff;border:1px solid #ddd6fe">🔮</div>
+        <h3>3D Bookmark<br/>Knowledge Graph</h3>
+        <p>Bookmarks become connected nodes in a living 3D sphere. Clusters form by topic. Navigate knowledge like a galaxy.</p>
+        <div class="sphere-mini">
+          <div class="sm-l" style="width:72px;left:30px;top:26px;transform:rotate(-22deg)"></div>
+          <div class="sm-l" style="width:52px;left:56px;top:26px;transform:rotate(30deg)"></div>
+          <div class="sm-l" style="width:46px;left:28px;top:50px;transform:rotate(-5deg)"></div>
+          <div class="sm-n" style="width:14px;height:14px;left:50%;top:0;transform:translateX(-50%)"></div>
+          <div class="sm-n" style="width:10px;height:10px;left:20px;top:42px"></div>
+          <div class="sm-n" style="width:10px;height:10px;left:84px;top:42px"></div>
+          <div class="sm-n" style="width:8px;height:8px;left:54px;top:54px;background:var(--yellow);box-shadow:0 0 7px rgba(244,168,37,.4)"></div>
+        </div>
+      </div>
+
+      <div class="course-card r d3">
+        <div class="lesson-num">03</div>
+        <div class="card-ico" style="background:#fff7ed;border:1px solid #fed7aa">🛡️</div>
+        <h3>Built-in VPN Proxy</h3>
+        <p>One-click SOCKS5/HTTP proxy with country presets: France, DR Congo, USA, UK. Zero extra software.</p>
+      </div>
+
+      <div class="course-card r d4">
+        <div class="lesson-num">04</div>
+        <div class="card-ico" style="background:#fffbeb;border:1px solid #fde68a">📰</div>
+        <h3>Live AI News Feed</h3>
+        <p>Ask the AI for today's AI headlines — fetched live from Hacker News, ranked by score, no subscriptions required.</p>
+      </div>
+
+      <div class="course-card r d5">
+        <div class="lesson-num">05</div>
+        <div class="card-ico" style="background:#ecfdf5;border:1px solid #a7f3d0">📄</div>
+        <h3>Article Summarizer</h3>
+        <p>Summarize any page instantly. Export as Markdown or save into your Articles knowledge cluster.</p>
+      </div>
+
+      <div class="course-card full r d6">
+        <div>
+          <div class="card-ico" style="background:#ecfdf5;border:1px solid #a7f3d0;margin-bottom:10px">⚡</div>
+          <h3>Local AI + Cloud AI —<br/>always your choice.</h3>
+          <p style="max-width:300px">Ollama runs on your machine for 100% private AI. OpenRouter connects to every major model — with no lock-in.</p>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:9px;text-transform:uppercase;letter-spacing:.07em;font-family:'Space Grotesk',sans-serif">Supported models</div>
+          <div class="chip-row">
+            <span class="chip">Claude</span><span class="chip">GPT-4o</span><span class="chip">Gemini</span>
+            <span class="chip">Llama 3.3</span><span class="chip">DeepSeek R1</span><span class="chip">Mistral</span>
+            <span class="chip">Qwen 2.5</span><span class="chip">Grok</span><span class="chip">+ dozens more</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Stats — bulletin board -->
+<section class="bulletin">
+  <div class="wrap">
+    <div class="bulletin-title">— Class Summary —</div>
+    <div class="stats-row" id="stats-row">
+      <div class="stat-pin r d1"><div class="stat-n"><span class="cnt" data-t="80">0</span><span class="u">MB</span></div><div class="stat-l">Installer size</div></div>
+      <div class="stat-pin r d2"><div class="stat-n"><span class="cnt" data-t="10">0</span><span class="u">+</span></div><div class="stat-l">AI models</div></div>
+      <div class="stat-pin r d3"><div class="stat-n"><span class="cnt" data-t="6">0</span></div><div class="stat-l">Core features</div></div>
+      <div class="stat-pin r d4"><div class="stat-n"><span class="cnt" data-t="100">0</span><span class="u">%</span></div><div class="stat-l">Free forever</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Steps — lesson plan -->
+<section class="lesson-section" id="steps">
+  <div class="wrap">
+    <div class="r">
+      <div class="eyebrow">Lesson Plan · Module 2</div>
+      <h2>Up and running<br/>in <span class="hl">three steps.</span></h2>
+    </div>
+    <div class="lesson-list">
+      <div class="lesson-row r d1">
+        <div class="lesson-num-cell"><div class="lesson-num-val">01</div></div>
+        <div class="lesson-content">
+          <h3>Download &amp; Install</h3>
+          <p>Run the 80 MB installer. Sets up AIHub Browser and optionally installs Ollama for private local AI — free, no account.</p>
+        </div>
+        <div class="lesson-badge"><span class="lb green">✓ 5 min</span></div>
+      </div>
+      <div class="lesson-row r d2">
+        <div class="lesson-num-cell"><div class="lesson-num-val">02</div></div>
+        <div class="lesson-content">
+          <h3>Add Your AI Key</h3>
+          <p>Open Settings → AI Configuration. Paste your OpenRouter key (free tier available) or point to local Ollama.</p>
+        </div>
+        <div class="lesson-badge"><span class="lb yellow">⏱ 2 min</span></div>
+      </div>
+      <div class="lesson-row r d3">
+        <div class="lesson-num-cell"><div class="lesson-num-val">03</div></div>
+        <div class="lesson-content">
+          <h3>Browse Smarter</h3>
+          <p>Summarize pages, build your 3D knowledge graph, ask for live AI news, toggle light/dark theme.</p>
+        </div>
+        <div class="lesson-badge"><span class="lb blue">🚀 Now</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Founder note — index card -->
+<section class="note-section ruled">
+  <div class="wrap">
+    <div class="index-card r">
+      <div class="card-content">
+        <div class="card-heading">Personal Note — Erick OMARI</div>
+        <blockquote>
+          "I built AIHub Browser because I was tired of switching between my browser, AI chat, research tools, and notes app.
+          <strong>Everything should live in one place.</strong>
+          The browser is where you spend most of your time online — it should be the smartest tool you own, not the dumbest."
+        </blockquote>
+        <div class="author">
+          <div class="author-av">E</div>
+          <div>
+            <div class="author-name">Erick OMARI</div>
+            <div class="author-role">Creator · My Digital Solutions · erickomari243@gmail.com</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Download — chalkboard announcement -->
+<section class="download-section" id="download">
+  <div class="wrap">
+    <div class="dl-inner r">
+      <div class="dl-eyebrow">✦ Assignment Due: Now ✦</div>
+      <h2>Download.<br/>Browse smarter.</h2>
+      <p>Free download. No account. No subscription.<br/>No tracking. Just a better browser.</p>
+      <a href="AIHub-Browser-Setup-1.0.0.exe" download class="btn-dl">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download for Windows — Free
+      </a>
+      <div class="dl-meta">
+        <span><span class="ck">✓</span>Windows 10/11 x64</span>
+        <span><span class="ck">✓</span>No account</span>
+        <span><span class="ck">✓</span>No telemetry</span>
+        <span><span class="ck">✓</span>80 MB</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="wrap">
+    <div class="footer-inner">
+      <a href="#" class="footer-brand"><div class="footer-mark">A</div>AIHub Browser</a>
+      <span class="footer-copy">© 2025 Erick OMARI — My Digital Solutions</span>
+      <div class="footer-links">
+        <a href="../LICENSE.txt">License</a>
+        <a href="mailto:erickomari243@gmail.com">Contact</a>
+      </div>
+    </div>
+    <p class="footer-note">Crafted with ✏️ by Erick OMARI</p>
+  </div>
+</footer>
+
+<script>
+  const cur = document.getElementById('cur')
+  const ring = document.getElementById('cur-ring')
+  let mx=0,my=0,rx=0,ry=0
+  document.addEventListener('mousemove', e=>{ mx=e.clientX; my=e.clientY })
+  ;(function tick(){
+    rx+=(mx-rx)*.13; ry+=(my-ry)*.13
+    cur.style.cssText=`left:${mx}px;top:${my}px`
+    ring.style.cssText=`left:${rx}px;top:${ry}px`
+    requestAnimationFrame(tick)
+  })()
+
+  window.addEventListener('scroll', ()=>{
+    document.getElementById('nav').style.borderBottomColor = scrollY > 30 ? 'rgba(245,241,227,.18)' : 'rgba(245,241,227,.1)'
+  }, {passive:true})
+
+  document.querySelectorAll('.btn-chalk,.btn-dl,.nav-cta').forEach(btn=>{
+    btn.addEventListener('mousemove', e=>{
+      const r=btn.getBoundingClientRect()
+      const bx=e.clientX-r.left-r.width/2, by=e.clientY-r.top-r.height/2
+      btn.style.transform=`translate(${bx*.12}px,${by*.16}px)`
+    })
+    btn.addEventListener('mouseleave', ()=>btn.style.transform='')
+  })
+
+  const obs=new IntersectionObserver(e=>{
+    e.forEach(el=>{ if(el.isIntersecting){ el.target.classList.add('in'); obs.unobserve(el.target) } })
+  },{threshold:.1})
+  document.querySelectorAll('.r').forEach(el=>obs.observe(el))
+
+  const cObs=new IntersectionObserver(e=>{
+    e.forEach(el=>{
+      if(el.isIntersecting){
+        el.target.querySelectorAll('.cnt').forEach(c=>{
+          const t=+c.dataset.t, s=performance.now()
+          ;(function f(n){
+            const p=Math.min((n-s)/1300,1), ease=1-Math.pow(1-p,3)
+            c.textContent=Math.round(ease*t)
+            if(p<1) requestAnimationFrame(f)
+          })(s)
+        })
+        cObs.unobserve(el.target)
+      }
+    })
+  },{threshold:.4})
+  const sr=document.getElementById('stats-row'); if(sr) cObs.observe(sr)
+
+  document.querySelectorAll('a[href^="#"]').forEach(a=>{
+    a.addEventListener('click', e=>{
+      const t=document.querySelector(a.getAttribute('href'))
+      if(t){ e.preventDefault(); t.scrollIntoView({behavior:'smooth'}) }
+    })
+  })
+</script>
+</body>
+</html>
