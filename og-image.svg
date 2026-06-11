@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#070B14"/>
+      <stop offset="100%" stop-color="#0d1a2e"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#40916c" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#2d6a4f" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f4a825"/>
+      <stop offset="100%" stop-color="#ffd166"/>
+    </linearGradient>
+    <filter id="blur">
+      <feGaussianBlur stdDeviation="40"/>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="8" stdDeviation="20" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+    <clipPath id="browserClip">
+      <rect x="220" y="80" width="760" height="470" rx="14"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Glow blobs -->
+  <circle cx="200" cy="200" r="300" fill="#40916c" opacity="0.08" filter="url(#blur)"/>
+  <circle cx="1000" cy="450" r="250" fill="#2563eb" opacity="0.06" filter="url(#blur)"/>
+
+  <!-- Grid lines (subtle) -->
+  <g opacity="0.04" stroke="#ffffff" stroke-width="1">
+    <line x1="0" y1="90" x2="1200" y2="90"/>
+    <line x1="0" y1="180" x2="1200" y2="180"/>
+    <line x1="0" y1="270" x2="1200" y2="270"/>
+    <line x1="0" y1="360" x2="1200" y2="360"/>
+    <line x1="0" y1="450" x2="1200" y2="450"/>
+    <line x1="0" y1="540" x2="1200" y2="540"/>
+  </g>
+
+  <!-- Browser window -->
+  <rect x="220" y="80" width="760" height="470" rx="14" fill="#0d1a2e" filter="url(#shadow)"/>
+  <rect x="220" y="80" width="760" height="470" rx="14" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+
+  <!-- Browser chrome bar -->
+  <rect x="220" y="80" width="760" height="46" rx="14" fill="#111827"/>
+  <rect x="220" y="107" width="760" height="19" fill="#111827"/>
+
+  <!-- Traffic lights -->
+  <circle cx="248" cy="103" r="6" fill="#ff5f57"/>
+  <circle cx="266" cy="103" r="6" fill="#febc2e"/>
+  <circle cx="284" cy="103" r="6" fill="#28c840"/>
+
+  <!-- URL bar -->
+  <rect x="320" y="92" width="420" height="22" rx="6" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+  <text x="530" y="108" font-family="Inter, sans-serif" font-size="10" fill="rgba(255,255,255,0.35)" text-anchor="middle">🔒 aihub://home</text>
+
+  <!-- Sidebar -->
+  <rect x="220" y="126" width="50" height="424" fill="rgba(0,0,0,0.2)"/>
+  <rect x="270" y="126" width="1" height="424" fill="rgba(255,255,255,0.05)"/>
+
+  <!-- Sidebar icons -->
+  <rect x="233" y="140" width="26" height="26" rx="7" fill="rgba(64,145,108,0.2)" stroke="rgba(64,145,108,0.4)" stroke-width="1"/>
+  <text x="246" y="158" font-size="12" text-anchor="middle">🌐</text>
+  <rect x="233" y="178" width="26" height="26" rx="7" fill="transparent"/>
+  <text x="246" y="196" font-size="12" text-anchor="middle">🔖</text>
+  <rect x="233" y="216" width="26" height="26" rx="7" fill="transparent"/>
+  <text x="246" y="234" font-size="12" text-anchor="middle">🤖</text>
+  <rect x="233" y="254" width="26" height="26" rx="7" fill="transparent"/>
+  <text x="246" y="272" font-size="12" text-anchor="middle">🕐</text>
+  <rect x="233" y="292" width="26" height="26" rx="7" fill="transparent"/>
+  <text x="246" y="310" font-size="12" text-anchor="middle">🛡️</text>
+
+  <!-- Main content area -->
+  <rect x="271" y="126" width="710" height="424" fill="#070B14"/>
+
+  <!-- Clock / greeting -->
+  <text x="620" y="200" font-family="Georgia, serif" font-size="52" fill="rgba(255,255,255,0.85)" text-anchor="middle" font-weight="300">9:41</text>
+  <text x="620" y="222" font-family="Inter, sans-serif" font-size="12" fill="rgba(255,255,255,0.3)" text-anchor="middle">Wednesday, June 11 · Good morning</text>
+
+  <!-- Search bar -->
+  <rect x="391" y="238" width="458" height="36" rx="10" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+  <text x="620" y="262" font-family="Inter, sans-serif" font-size="12" fill="rgba(255,255,255,0.25)" text-anchor="middle">🔍  Search or ask AI anything…</text>
+
+  <!-- Quick access icons -->
+  <g transform="translate(430, 298)">
+    <rect width="46" height="46" rx="10" fill="rgba(255,255,255,0.05)"/>
+    <text x="23" y="30" font-size="18" text-anchor="middle">🔍</text>
+    <text x="23" y="54" font-family="Inter, sans-serif" font-size="9" fill="rgba(255,255,255,0.3)" text-anchor="middle">Search</text>
+  </g>
+  <g transform="translate(490, 298)">
+    <rect width="46" height="46" rx="10" fill="rgba(255,255,255,0.05)"/>
+    <text x="23" y="30" font-size="18" text-anchor="middle">▶</text>
+    <text x="23" y="54" font-family="Inter, sans-serif" font-size="9" fill="rgba(255,255,255,0.3)" text-anchor="middle">YouTube</text>
+  </g>
+  <g transform="translate(550, 298)">
+    <rect width="46" height="46" rx="10" fill="rgba(64,145,108,0.15)" stroke="rgba(64,145,108,0.3)" stroke-width="1"/>
+    <text x="23" y="30" font-size="18" text-anchor="middle">🤖</text>
+    <text x="23" y="54" font-family="Inter, sans-serif" font-size="9" fill="rgba(82,183,136,0.7)" text-anchor="middle">AIHub</text>
+  </g>
+  <g transform="translate(610, 298)">
+    <rect width="46" height="46" rx="10" fill="rgba(255,255,255,0.05)"/>
+    <text x="23" y="30" font-size="18" text-anchor="middle">📈</text>
+    <text x="23" y="54" font-family="Inter, sans-serif" font-size="9" fill="rgba(255,255,255,0.3)" text-anchor="middle">Trader</text>
+  </g>
+  <g transform="translate(670, 298)">
+    <rect width="46" height="46" rx="10" fill="rgba(255,255,255,0.05)"/>
+    <text x="23" y="30" font-size="18" text-anchor="middle">📝</text>
+    <text x="23" y="54" font-family="Inter, sans-serif" font-size="9" fill="rgba(255,255,255,0.3)" text-anchor="middle">Notes</text>
+  </g>
+  <g transform="translate(730, 298)">
+    <rect width="46" height="46" rx="10" fill="rgba(255,255,255,0.05)"/>
+    <text x="23" y="30" font-size="18" text-anchor="middle">⚡</text>
+    <text x="23" y="54" font-family="Inter, sans-serif" font-size="9" fill="rgba(255,255,255,0.3)" text-anchor="middle">AI Agent</text>
+  </g>
+
+  <!-- AI Panel (right side) -->
+  <rect x="820" y="126" width="160" height="424" fill="rgba(0,0,0,0.15)"/>
+  <rect x="820" y="126" width="1" height="424" fill="rgba(255,255,255,0.05)"/>
+  <rect x="828" y="138" width="144" height="24" rx="5" fill="rgba(64,145,108,0.15)" stroke="rgba(64,145,108,0.3)" stroke-width="1"/>
+  <circle cx="838" cy="150" r="4" fill="#40916c"/>
+  <text x="850" y="154" font-family="Inter, sans-serif" font-size="9" fill="rgba(82,183,136,0.9)">AIHub AI · Online</text>
+  <rect x="828" y="172" width="144" height="40" rx="6" fill="rgba(255,255,255,0.04)"/>
+  <text x="836" y="188" font-family="Inter, sans-serif" font-size="8" fill="rgba(255,255,255,0.4)">Summarize this page</text>
+  <text x="836" y="200" font-family="Inter, sans-serif" font-size="7" fill="rgba(255,255,255,0.25)">for me.</text>
+  <rect x="856" y="222" width="116" height="52" rx="6" fill="rgba(64,145,108,0.12)" stroke="rgba(64,145,108,0.2)" stroke-width="1"/>
+  <text x="864" y="235" font-family="Inter, sans-serif" font-size="7" fill="rgba(255,255,255,0.45)">Summary: 3 key points</text>
+  <text x="864" y="247" font-family="Inter, sans-serif" font-size="7" fill="rgba(255,255,255,0.35)">1. AI-native browser</text>
+  <text x="864" y="258" font-family="Inter, sans-serif" font-size="7" fill="rgba(255,255,255,0.35)">2. Local + cloud AI</text>
+  <text x="864" y="269" font-family="Inter, sans-serif" font-size="7" fill="rgba(255,255,255,0.35)">3. 3D bookmark graph</text>
+
+  <!-- 3D sphere mini -->
+  <g transform="translate(390, 380)">
+    <text x="0" y="0" font-family="Inter, sans-serif" font-size="9" fill="rgba(255,255,255,0.25)">BOOKMARK SPHERE</text>
+    <circle cx="60" cy="40" r="6" fill="url(#accentGrad)" opacity="0.9"/>
+    <circle cx="30" cy="60" r="5" fill="#40916c" opacity="0.8"/>
+    <circle cx="90" cy="55" r="4" fill="#52b788" opacity="0.8"/>
+    <circle cx="75" cy="30" r="5" fill="#40916c" opacity="0.7"/>
+    <circle cx="45" cy="75" r="4" fill="#2d6a4f" opacity="0.8"/>
+    <circle cx="100" cy="35" r="3" fill="#52b788" opacity="0.6"/>
+    <circle cx="15" cy="45" r="4" fill="#40916c" opacity="0.7"/>
+    <line x1="60" y1="40" x2="30" y2="60" stroke="rgba(64,145,108,0.3)" stroke-width="1"/>
+    <line x1="60" y1="40" x2="90" y2="55" stroke="rgba(64,145,108,0.3)" stroke-width="1"/>
+    <line x1="60" y1="40" x2="75" y2="30" stroke="rgba(64,145,108,0.3)" stroke-width="1"/>
+    <line x1="30" y1="60" x2="45" y2="75" stroke="rgba(64,145,108,0.2)" stroke-width="1"/>
+    <line x1="75" y1="30" x2="100" y2="35" stroke="rgba(64,145,108,0.2)" stroke-width="1"/>
+    <line x1="30" y1="60" x2="15" y2="45" stroke="rgba(64,145,108,0.2)" stroke-width="1"/>
+  </g>
+
+  <!-- Left side — branding area -->
+
+  <!-- Logo mark -->
+  <rect x="60" y="80" width="110" height="110" rx="22" fill="rgba(244,168,37,0.12)" stroke="rgba(244,168,37,0.25)" stroke-width="1.5"/>
+  <rect x="73" y="93" width="84" height="84" rx="16" fill="#f4a825"/>
+  <text x="115" y="148" font-family="Georgia, serif" font-size="52" fill="#1d3a2e" text-anchor="middle" font-weight="900">A</text>
+
+  <!-- Brand name -->
+  <text x="60" y="225" font-family="Inter, sans-serif" font-size="28" fill="#ffffff" font-weight="700" letter-spacing="-0.5">AIHub</text>
+  <text x="60" y="255" font-family="Inter, sans-serif" font-size="28" fill="#ffffff" font-weight="700" letter-spacing="-0.5">Browser</text>
+
+  <!-- Tagline -->
+  <text x="60" y="290" font-family="Inter, sans-serif" font-size="13" fill="rgba(255,255,255,0.45)" letter-spacing="0.5">The browser that thinks</text>
+  <text x="60" y="308" font-family="Inter, sans-serif" font-size="13" fill="rgba(255,255,255,0.45)" letter-spacing="0.5">with you.</text>
+
+  <!-- Feature pills -->
+  <g transform="translate(60, 335)">
+    <rect width="80" height="22" rx="11" fill="rgba(64,145,108,0.2)" stroke="rgba(64,145,108,0.4)" stroke-width="1"/>
+    <text x="40" y="15.5" font-family="Inter, sans-serif" font-size="9" font-weight="600" fill="#52b788" text-anchor="middle">🤖 AI Built-in</text>
+  </g>
+  <g transform="translate(60, 366)">
+    <rect width="80" height="22" rx="11" fill="rgba(244,168,37,0.15)" stroke="rgba(244,168,37,0.35)" stroke-width="1"/>
+    <text x="40" y="15.5" font-family="Inter, sans-serif" font-size="9" font-weight="600" fill="#f4a825" text-anchor="middle">🔮 3D Graph</text>
+  </g>
+  <g transform="translate(60, 397)">
+    <rect width="80" height="22" rx="11" fill="rgba(37,99,235,0.15)" stroke="rgba(37,99,235,0.35)" stroke-width="1"/>
+    <text x="40" y="15.5" font-family="Inter, sans-serif" font-size="9" font-weight="600" fill="#93c5fd" text-anchor="middle">🛡️ VPN Built-in</text>
+  </g>
+  <g transform="translate(60, 428)">
+    <rect width="80" height="22" rx="11" fill="rgba(139,92,246,0.15)" stroke="rgba(139,92,246,0.35)" stroke-width="1"/>
+    <text x="40" y="15.5" font-family="Inter, sans-serif" font-size="9" font-weight="600" fill="#c4b5fd" text-anchor="middle">✦ Free Forever</text>
+  </g>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="598" width="1200" height="32" fill="rgba(0,0,0,0.3)"/>
+  <text x="600" y="619" font-family="Inter, sans-serif" font-size="11" fill="rgba(255,255,255,0.25)" text-anchor="middle">landing-sooty-omega-22.vercel.app · v1.0.0 · Windows 10/11 · Free</text>
+</svg>

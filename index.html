@@ -15,7 +15,7 @@
   <meta property="og:url" content="https://landing-sooty-omega-22.vercel.app/" />
   <meta property="og:title" content="AIHub Browser — AI-Native Web Browser with 3D Knowledge Graph" />
   <meta property="og:description" content="Free Windows browser with built-in AI assistant, 3D bookmark sphere, Ollama local AI, and OpenRouter cloud models. No subscriptions. No tracking." />
-  <meta property="og:image" content="https://landing-sooty-omega-22.vercel.app/og-image.png" />
+  <meta property="og:image" content="https://landing-sooty-omega-22.vercel.app/og-image.svg" />
   <meta property="og:site_name" content="AIHub Browser" />
   <meta property="og:locale" content="en_US" />
 
@@ -23,7 +23,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="AIHub Browser — AI-Native Web Browser" />
   <meta name="twitter:description" content="Free Windows browser with built-in AI assistant, 3D knowledge graph, and local AI. No account. No subscriptions." />
-  <meta name="twitter:image" content="https://landing-sooty-omega-22.vercel.app/og-image.png" />
+  <meta name="twitter:image" content="https://landing-sooty-omega-22.vercel.app/og-image.svg" />
 
   <!-- Mobile / PWA -->
   <meta name="theme-color" content="#1d3a2e" />
@@ -1052,10 +1052,11 @@
     requestAnimationFrame(tick)
   })()
 
-  /* ── Download fix — cross-origin href; skip download attr ── */
+  /* ── Download — window.open(_blank) reliably triggers save dialog on GitHub CDN redirects ── */
   function triggerDownload(e, el) {
     e.preventDefault()
-    window.location.href = el.href
+    e.stopPropagation()
+    window.open(el.href, '_blank', 'noopener,noreferrer')
   }
 
   /* ── Visitor counter ── */
