@@ -662,6 +662,58 @@
     }
     .dl-meta .ck { color: var(--green3); }
 
+    /* ── Download toast ── */
+    #dl-toast {
+      position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(120px);
+      z-index: 9000; pointer-events: none;
+      background: #1c3528; border: 1px solid rgba(82,183,136,.4);
+      border-radius: 14px; padding: 18px 28px 16px;
+      min-width: 340px; max-width: 440px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5);
+      text-align: center;
+      transition: transform .35s cubic-bezier(.16,1,.3,1), opacity .35s;
+      opacity: 0;
+    }
+    #dl-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
+    .dl-toast-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+    .dl-toast-title {
+      font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700;
+      color: #e2fdf0; margin-bottom: 6px;
+    }
+    .dl-toast-body {
+      font-family: 'Inter', sans-serif; font-size: 12px; color: rgba(255,255,255,.5);
+      line-height: 1.6; margin-bottom: 12px;
+    }
+    .dl-toast-steps {
+      display: flex; flex-direction: column; gap: 4px;
+      text-align: left; margin-bottom: 12px;
+    }
+    .dl-toast-step {
+      font-family: 'Inter', sans-serif; font-size: 11px;
+      color: rgba(255,255,255,.55); display: flex; align-items: flex-start; gap: 7px;
+    }
+    .dl-toast-step span.n {
+      background: rgba(82,183,136,.25); color: #52b788;
+      border-radius: 50%; width: 16px; height: 16px; min-width: 16px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 700;
+    }
+    .dl-toast-fallback {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 16px; border-radius: 7px;
+      background: rgba(244,168,37,.12); border: 1px solid rgba(244,168,37,.3);
+      color: #ffd166; font-size: 11px; font-weight: 600;
+      text-decoration: none; font-family: 'Space Grotesk', sans-serif;
+      cursor: pointer; transition: background .12s;
+    }
+    .dl-toast-fallback:hover { background: rgba(244,168,37,.22); }
+    .dl-toast-close {
+      position: absolute; top: 10px; right: 14px;
+      font-size: 14px; color: rgba(255,255,255,.25); cursor: pointer;
+      background: none; border: none; padding: 0; line-height: 1;
+    }
+    .dl-toast-close:hover { color: rgba(255,255,255,.6); }
+
     /* ── Footer ── */
     footer {
       background: var(--chalk-bg2); border-top: 1px solid rgba(245,241,227,.06); padding: 28px 0;
@@ -766,9 +818,9 @@
           No extensions. No subscriptions.
         </p>
         <div class="hero-btns">
-          <a href="/download" class="btn-chalk">
+          <a href="/download" onclick="startDownload(event,this)" class="btn-chalk" id="btn-hero">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download for Windows
+            <span class="btn-label">Download for Windows</span>
           </a>
           <a href="#features" class="btn-ghost-chalk">See features →</a>
         </div>
@@ -1010,9 +1062,9 @@
       <div class="dl-eyebrow">✦ Assignment Due: Now ✦</div>
       <h2>Download.<br/>Browse smarter.</h2>
       <p>Free download. No account. No subscription.<br/>No tracking. Just a better browser.</p>
-      <a href="/download" class="btn-dl">
+      <a href="/download" onclick="startDownload(event,this)" class="btn-dl" id="btn-dl-main">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download for Windows — Free
+        <span class="btn-label">Download for Windows — Free</span>
       </a>
       <div class="dl-meta">
         <span><span class="ck">✓</span>Windows 10/11 x64</span>
@@ -1023,6 +1075,22 @@
     </div>
   </div>
 </section>
+
+<!-- Download toast notification -->
+<div id="dl-toast" role="alert">
+  <button class="dl-toast-close" onclick="document.getElementById('dl-toast').classList.remove('show')">✕</button>
+  <span class="dl-toast-icon">⬇️</span>
+  <div class="dl-toast-title">Download is starting…</div>
+  <div class="dl-toast-body">AIHub-Browser-Setup-1.0.0.exe (80 MB)</div>
+  <div class="dl-toast-steps">
+    <div class="dl-toast-step"><span class="n">1</span><span>Look for the download bar at the <strong style="color:#e2fdf0">bottom of Chrome</strong> or click the <strong style="color:#e2fdf0">⬇ icon</strong> in Chrome's top-right toolbar.</span></div>
+    <div class="dl-toast-step"><span class="n">2</span><span>If Chrome says <em>"This file can harm your computer"</em>, click <strong style="color:#ffd166">Keep → Keep anyway</strong>.</span></div>
+    <div class="dl-toast-step"><span class="n">3</span><span>If nothing starts within 10 seconds, use the button below.</span></div>
+  </div>
+  <a href="https://github.com/pitchiluxe/aihub-browser/releases/tag/v1.0.0" target="_blank" rel="noopener" class="dl-toast-fallback">
+    📦 Download from GitHub Releases →
+  </a>
+</div>
 
 <!-- Footer -->
 <footer>
@@ -1040,6 +1108,27 @@
 </footer>
 
 <script>
+  /* ── Download handler ── */
+  function startDownload(e, btn) {
+    e.preventDefault()
+
+    // Change button label
+    const label = btn.querySelector('.btn-label')
+    if (label) { label.textContent = 'Starting download…'; setTimeout(() => { label.textContent = btn.id === 'btn-dl-main' ? 'Download for Windows — Free' : 'Download for Windows' }, 6000) }
+
+    // Show toast
+    const toast = document.getElementById('dl-toast')
+    toast.classList.add('show')
+    setTimeout(() => toast.classList.remove('show'), 18000)
+
+    // Trigger download via hidden iframe — keeps user on page, no navigation, avoids popup blocker
+    const frame = document.createElement('iframe')
+    frame.style.cssText = 'display:none;position:fixed;width:0;height:0;border:none;'
+    frame.src = '/download'
+    document.body.appendChild(frame)
+    setTimeout(() => { try { document.body.removeChild(frame) } catch(_){} }, 60000)
+  }
+
   /* ── Source protection ── */
   document.addEventListener('contextmenu', e => e.preventDefault())
   document.addEventListener('keydown', e => {
