@@ -793,7 +793,7 @@
     <a href="#steps">Get Started</a>
     <a href="mailto:pitchiluxe@gmail.com">Contact</a>
   </div>
-  <a href="https://github.com/pitchiluxe/aihub-browser/releases/download/v1.0.0/AIHub-Browser-1.0.0-win-x64.zip" onclick="showDlToast()" class="nav-cta">
+  <a href="/download" class="nav-cta">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     Download Free
   </a>
@@ -818,7 +818,7 @@
           No extensions. No subscriptions.
         </p>
         <div class="hero-btns">
-          <a href="https://github.com/pitchiluxe/aihub-browser/releases/download/v1.0.0/AIHub-Browser-1.0.0-win-x64.zip" onclick="showDlToast()" class="btn-chalk" id="btn-hero">
+          <a href="/download" class="btn-chalk" id="btn-hero">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span class="btn-label">Download for Windows</span>
           </a>
@@ -1062,7 +1062,7 @@
       <div class="dl-eyebrow">✦ Assignment Due: Now ✦</div>
       <h2>Download.<br/>Browse smarter.</h2>
       <p>Free download. No account. No subscription.<br/>No tracking. Just a better browser.</p>
-      <a href="https://github.com/pitchiluxe/aihub-browser/releases/download/v1.0.0/AIHub-Browser-1.0.0-win-x64.zip" onclick="showDlToast()" class="btn-dl" id="btn-dl-main">
+      <a href="/download" class="btn-dl" id="btn-dl-main">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span class="btn-label">Download for Windows — Free</span>
       </a>
@@ -1108,13 +1108,6 @@
 </footer>
 
 <script>
-  /* ── Download: show toast only — do NOT preventDefault, let browser navigate naturally ── */
-  function showDlToast() {
-    const toast = document.getElementById('dl-toast')
-    toast.classList.add('show')
-    setTimeout(() => toast.classList.remove('show'), 20000)
-  }
-
   /* ── Source protection ── */
   document.addEventListener('contextmenu', e => e.preventDefault())
   document.addEventListener('keydown', e => {
