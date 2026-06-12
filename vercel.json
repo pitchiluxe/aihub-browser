@@ -1,5 +1,7 @@
 {
   "version": 2,
+  "buildCommand": "",
+  "outputDirectory": ".",
   "routes": [
     { "src": "/download", "dest": "/download.html" },
     { "src": "/(.*\\.html)", "dest": "/$1" },
