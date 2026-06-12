@@ -1,0 +1,66 @@
+MIT License
+
+Copyright (c) 2025 Erick OMARI — My Digital Solutions
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+──────────────────────────────────────────────────────────────────────────────
+
+AIHub Browser
+Created by Erick OMARI
+My Digital Solutions
+
+Website : https://mydigitalsolutions.com
+Contact : erickomari243@gmail.com
+
+──────────────────────────────────────────────────────────────────────────────
+
+Third-Party Licenses
+
+This software is built on top of the following open-source projects:
+
+  Electron          MIT   https://electronjs.org
+  React             MIT   https://react.dev
+  TypeScript        Apache-2.0   https://typescriptlang.org
+  Vite              MIT   https://vitejs.dev
+  electron-vite     MIT   https://electron-vite.org
+  Framer Motion     MIT   https://framer.com/motion
+  Tailwind CSS      MIT   https://tailwindcss.com
+  Zustand           MIT   https://github.com/pmndrs/zustand
+  D3.js             ISC   https://d3js.org
+  Lucide React      ISC   https://lucide.dev
+  electron-builder  MIT   https://electron.build
+
+Full third-party license texts are available in the node_modules directory
+or at their respective project URLs listed above.
+
+──────────────────────────────────────────────────────────────────────────────
+
+AI Services
+
+AIHub Browser integrates with third-party AI services:
+
+  OpenRouter   https://openrouter.ai   (Terms: https://openrouter.ai/terms)
+  Ollama       https://ollama.ai       (MIT License)
+
+Use of these services is subject to their respective terms of service.
+Your API keys and data are stored locally on your device and are never
+transmitted to My Digital Solutions servers.
+
+──────────────────────────────────────────────────────────────────────────────

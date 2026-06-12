@@ -1,0 +1,94 @@
+{
+  "name": "aihub-browser",
+  "version": "1.0.0",
+  "description": "AIHub — Next-Generation AI-Powered Browser",
+  "main": "./out/main/index.js",
+  "homepage": ".",
+  "author": "My Digital Solutions",
+  "license": "MIT",
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "generate-icon": "node scripts/generate-icon.js",
+    "package": "npm run generate-icon && npm run build && cross-env ELECTRON_RUN_AS_NODE= electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@types/d3": "^7.4.3",
+    "axios": "^1.7.2",
+    "d3": "^7.9.0",
+    "framer-motion": "^11.2.10",
+    "lucide-react": "^0.400.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "^1.0.1",
+    "@types/node": "^20.14.2",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.165.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "cross-env": "^10.1.0",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.1"
+  },
+  "build": {
+    "appId": "com.mydigitalsolutions.aihub-browser",
+    "productName": "AIHub Browser",
+    "copyright": "Copyright © 2025 Erick OMARI — My Digital Solutions",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "resources/icon.ico",
+      "LICENSE.txt"
+    ],
+    "extraResources": [
+      { "from": "LICENSE.txt", "to": "LICENSE.txt" }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "zip",  "arch": ["x64"] }
+      ],
+      "icon": "resources/icon.ico",
+      "artifactName": "AIHub-Browser-${version}-${os}-${arch}.${ext}",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "resources/installer.nsh",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AIHub Browser",
+      "uninstallDisplayName": "AIHub Browser",
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico",
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "resources/icon.ico",
+      "category": "Network"
+    }
+  }
+}

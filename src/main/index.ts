@@ -1,0 +1,859 @@
+import { app, BrowserWindow, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, webContents as electronWebContents } from 'electron'
+import { join } from 'path'
+import http from 'http'
+import https from 'https'
+import os from 'os'
+import fs from 'fs'
+import { execSync } from 'child_process'
+import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
+
+const isDev = process.env.NODE_ENV === 'development'
+
+// ── Set paths BEFORE app is ready ─────────────────────────────────────────
+// Must run before app.whenReady() — setting after has no effect on Chromium.
+const APP_DIR = join(os.homedir(), '.aihub-browser')
+app.setPath('userData', APP_DIR)
+
+// Point GPU and disk caches to our writable directory so Chromium
+// doesn't fight over temp paths that other processes may have locked.
+app.commandLine.appendSwitch('disk-cache-dir',     join(APP_DIR, 'cache'))
+app.commandLine.appendSwitch('gpu-disk-cache-dir', join(APP_DIR, 'gpu-cache'))
+// Disable problematic GPU sandbox on Windows to avoid cache permission errors
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('no-sandbox')
+  app.commandLine.appendSwitch('disable-gpu-sandbox')
+}
+
+// ── Single-instance lock — prevent cache conflicts ─────────────────────────
+// If a second instance launches, focus the existing window instead.
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  // Another instance is already running — quit immediately
+  app.quit()
+  process.exit(0)
+}
+
+// ── SimpleStore ────────────────────────────────────────────────────────────
+const DATA_FILE = join(APP_DIR, 'data.json')
+const HIST_FILE = join(APP_DIR, 'history.json')
+const DL_FILE   = join(APP_DIR, 'downloads.json')
+
+const DEFAULT_BOOKMARKS = [
+  { id: 'bm-g',  url: 'https://www.google.com',                        title: 'Google',           favicon: '', category: 'Search',        addedAt: 0, color: '#4285F4' },
+  { id: 'bm-yt', url: 'https://www.youtube.com',                       title: 'YouTube',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#FF0000' },
+  { id: 'bm-nf', url: 'https://www.netflix.com',                       title: 'Netflix',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#E50914' },
+  { id: 'bm-1',  url: 'https://aihub-eight-xi.vercel.app/dashboard',   title: 'AIHub Dashboard',  favicon: '', category: 'AI',            addedAt: 0, color: '#a78bfa' },
+  { id: 'bm-2',  url: 'https://www.technobiztrader.net/',               title: 'TechnoBiz Trader', favicon: '', category: 'Trading',       addedAt: 0, color: '#fb923c' },
+  { id: 'bm-3',  url: 'https://quickbooks-playground.vercel.app/login', title: 'QuickBooks',       favicon: '', category: 'Finance',       addedAt: 0, color: '#4ade80' },
+  { id: 'bm-4',  url: 'https://technobiz-trader-agent.vercel.app/',     title: 'TechnoBiz Agent',  favicon: '', category: 'AI',            addedAt: 0, color: '#a78bfa' },
+]
+
+function ensureDir() { if (!fs.existsSync(APP_DIR)) fs.mkdirSync(APP_DIR, { recursive: true }) }
+function readJson(f: string, fb: any): any { try { return JSON.parse(fs.readFileSync(f, 'utf-8')) } catch { return fb } }
+function writeJson(f: string, d: any) { try { ensureDir(); fs.writeFileSync(f, JSON.stringify(d, null, 2)) } catch {} }
+
+let _data: any = null
+function getData(): any {
+  if (!_data) {
+    const s = readJson(DATA_FILE, null)
+    _data = s
+      ? { ...{ bookmarks: DEFAULT_BOOKMARKS, settings: defaultSettings() }, ...s, settings: { ...defaultSettings(), ...(s.settings || {}) } }
+      : { bookmarks: DEFAULT_BOOKMARKS.map(b => ({ ...b, addedAt: Date.now() })), settings: defaultSettings() }
+  }
+  return _data
+}
+function defaultSettings() {
+  return {
+    theme: 'dark', aiModel: 'llama3', transparency: 'none',
+    sidebarVisible: true, searchEngine: 'google',
+    // AI API config — set via Settings page or baked from .env.local at build time
+    openrouterKey:   '',
+    openrouterBase:  '',
+    openrouterModel: '',
+    ollamaUrl:       '',
+  }
+}
+function saveData() { writeJson(DATA_FILE, _data) }
+
+// ── Dynamic AI config ──────────────────────────────────────────────────────
+function validHttpUrl(url: string): boolean {
+  try { const u = new URL(url); return u.protocol === 'http:' || u.protocol === 'https:' } catch { return false }
+}
+
+// Priority: stored settings → build-time env vars (from .env.local via vite define)
+// Strip non-ASCII — HTTP headers only allow bytes 0-255
+function toAscii(s: string) { return s.replace(/[^\x00-\x7F]/g, '') }
+
+// Confirmed-working free models on OpenRouter (June 2026), ordered by quality.
+// Mirrors AIHub's FALLBACK_MODELS exactly so both apps share the same proven chain.
+const OR_DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
+
+function getAIConfig() {
+  const s = getData().settings
+  const orKey   = s.openrouterKey   || process.env.ANTHROPIC_AUTH_TOKEN  || ''
+  const orBase  = (s.openrouterBase  || process.env.ANTHROPIC_BASE_URL   || 'https://openrouter.ai/api').replace(/\/$/, '') + '/v1'
+  const orMdl   = s.openrouterModel  || process.env.ANTHROPIC_MODEL      || OR_DEFAULT_MODEL
+  // Validate stored Ollama URL — bad values (e.g. "::1:11434") cause ECONNREFUSED
+  const rawOl   = s.ollamaUrl || process.env.NEXT_PUBLIC_OLLAMA_BASE_URL || ''
+  const olBase  = (rawOl && validHttpUrl(rawOl)) ? rawOl : 'http://localhost:11434'
+  return { orKey, orBase, orMdl, olBase }
+}
+
+// ── Native HTTP helpers (more reliable than axios in packaged Electron) ────
+function httpGet(url: string, timeoutMs = 5000): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith('https') ? https : http
+    const req = lib.get(url, { timeout: timeoutMs }, (res) => {
+      let body = ''
+      res.on('data', c => { body += c })
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, body }))
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
+  })
+}
+
+function httpPost(url: string, data: object, headers: Record<string, string> = {}, timeoutMs = 60000): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(data)
+    const parsed = new URL(url)
+    const lib = url.startsWith('https') ? https : http
+    const req = lib.request({
+      hostname: parsed.hostname,
+      port:     parsed.port || (url.startsWith('https') ? 443 : 80),
+      path:     parsed.pathname + parsed.search,
+      method:   'POST',
+      timeout:  timeoutMs,
+      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...headers },
+    }, (res) => {
+      let b = ''
+      res.on('data', c => { b += c })
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, body: b }))
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
+    req.write(body)
+    req.end()
+  })
+}
+
+// ── Ollama detection using native http ────────────────────────────────────
+async function checkOllamaRunning(): Promise<{ running: boolean; models: string[] }> {
+  const { olBase } = getAIConfig()
+  // Try both the configured base AND a 127.0.0.1 fallback to handle systems
+  // where 'localhost' resolves differently in packaged Electron.
+  const bases = [olBase, 'http://127.0.0.1:11434']
+  const uniqueBases = [...new Set(bases)]
+
+  for (const base of uniqueBases) {
+    for (const path of ['/api/tags', '/api/version']) {
+      try {
+        const { status, body } = await httpGet(`${base}${path}`, 4000)
+        if (status >= 200 && status < 400) {
+          try {
+            const json = JSON.parse(body)
+            const models = (json.models || []).map((m: any) => (typeof m === 'string' ? m : m.name || 'unknown')).filter(Boolean)
+            return { running: true, models: models.length ? models : ['llama3'] }
+          } catch {
+            return { running: true, models: ['llama3'] }
+          }
+        }
+      } catch { /* try next */ }
+    }
+  }
+  return { running: false, models: [] }
+}
+
+// ── Window ─────────────────────────────────────────────────────────────────
+let mainWindow: BrowserWindow
+
+// Safe IPC sender — prevents "Render frame was disposed" crash when webContents
+// transitions (navigation, tab switch) happen just as a send is attempted.
+function safelySend(channel: string, ...args: any[]) {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.send(channel, ...args)
+    }
+  } catch {}
+}
+
+function applyTransparency(win: BrowserWindow, mode: string) {
+  if (process.platform !== 'win32') return
+  try {
+    const mat = mode === 'acrylic' ? 'acrylic' : mode === 'mica' ? 'mica' : 'none'
+    ;(win as any).setBackgroundMaterial(mat)
+  } catch {}
+}
+
+function createWindow(): void {
+  nativeTheme.themeSource = 'dark'
+  const settings = getData().settings
+  const glassMode = settings.transparency !== 'none'
+
+  mainWindow = new BrowserWindow({
+    width: 1440, height: 900, minWidth: 900, minHeight: 600,
+    show: false, frame: false, titleBarStyle: 'hidden',
+    // Always allow transparency so setBackgroundMaterial works at runtime
+    // without needing an app restart when the user switches modes.
+    backgroundColor: glassMode ? '#00000000' : '#070B14',
+    transparent: glassMode,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false, webviewTag: true,
+      nodeIntegration: false, contextIsolation: true, webSecurity: false,
+    }
+  })
+
+  applyTransparency(mainWindow, settings.transparency)
+  mainWindow.on('ready-to-show', () => {
+    mainWindow.show()
+    safelySend('theme:transparency', settings.transparency)
+  })
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && !url.startsWith('devtools://') && !url.startsWith('chrome-extension://')) {
+      safelySend('open-in-new-tab', url)
+    }
+    return { action: 'deny' }
+  })
+
+  // ── Right-click context menu (copy / paste / cut / select-all) ──────────
+  mainWindow.webContents.on('context-menu', (_e, params) => {
+    const menu = new Menu()
+    if (params.editFlags.canUndo) menu.append(new MenuItem({ label: 'Undo', role: 'undo', accelerator: 'Ctrl+Z' }))
+    if (params.editFlags.canRedo) menu.append(new MenuItem({ label: 'Redo', role: 'redo', accelerator: 'Ctrl+Y' }))
+    if (params.editFlags.canUndo || params.editFlags.canRedo) menu.append(new MenuItem({ type: 'separator' }))
+    if (params.editFlags.canCut)  menu.append(new MenuItem({ label: 'Cut',  role: 'cut',  accelerator: 'Ctrl+X' }))
+    if (params.editFlags.canCopy || params.selectionText) menu.append(new MenuItem({ label: 'Copy', role: 'copy', accelerator: 'Ctrl+C' }))
+    if (params.editFlags.canPaste) menu.append(new MenuItem({ label: 'Paste', role: 'paste', accelerator: 'Ctrl+V' }))
+    if (params.editFlags.canSelectAll) {
+      menu.append(new MenuItem({ type: 'separator' }))
+      menu.append(new MenuItem({ label: 'Select All', role: 'selectAll', accelerator: 'Ctrl+A' }))
+    }
+    if (params.linkURL) {
+      menu.append(new MenuItem({ type: 'separator' }))
+      menu.append(new MenuItem({ label: 'Copy Link', click: () => clipboard.writeText(params.linkURL) }))
+      menu.append(new MenuItem({ label: 'Open in New Tab', click: () => safelySend('open-in-new-tab', params.linkURL) }))
+    }
+    if (menu.items.length > 0) menu.popup({ window: mainWindow })
+  })
+
+  // ── Download tracking ──────────────────────────────────────────────────
+  mainWindow.webContents.session.on('will-download', (_e, item) => {
+    const dls = readJson(DL_FILE, [])
+    const dl: any = {
+      id: `dl-${Date.now()}`, filename: item.getFilename(), url: item.getURL(),
+      savePath: '', totalBytes: item.getTotalBytes(), receivedBytes: 0,
+      state: 'progressing', startedAt: Date.now(), completedAt: null,
+    }
+    const persist = () => {
+      const i = dls.findIndex((x: any) => x.id === dl.id)
+      if (i !== -1) dls[i] = { ...dl }; else dls.unshift({ ...dl })
+      writeJson(DL_FILE, dls.slice(0, 500))
+      safelySend('download:update', dl)
+    }
+    item.on('updated', (_ev, state) => { dl.receivedBytes = item.getReceivedBytes(); dl.state = state; persist() })
+    item.on('done', (_ev, state) => {
+      dl.state = state; dl.savePath = item.getSavePath()
+      dl.completedAt = Date.now(); dl.receivedBytes = item.getReceivedBytes()
+      persist()
+    })
+    dls.unshift({ ...dl }); writeJson(DL_FILE, dls.slice(0, 500))
+    safelySend('download:update', dl)
+  })
+
+  if (isDev && process.env['ELECTRON_RENDERER_URL']) mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  else mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+
+  // Background AI recommendation refresh
+  setTimeout(async () => {
+    try {
+      const { olBase } = getAIConfig()
+      const recs = await generateRecommendations(olBase, getData().settings.aiModel || 'llama3')
+      saveRecommendations(recs)
+      safelySend('brain:recommendations', recs)
+    } catch {}
+  }, 8000)
+}
+
+// Focus existing window when second instance tries to open
+app.on('second-instance', () => {
+  const wins = BrowserWindow.getAllWindows()
+  if (wins.length > 0) {
+    const win = wins[0]
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  }
+})
+
+app.whenReady().then(() => {
+  getData()
+  if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
+  if (isDev) {
+    app.on('browser-window-created', (_, w) => {
+      w.webContents.on('before-input-event', (_e, i) => { if (i.key === 'F12') w.webContents.toggleDevTools() })
+    })
+  }
+  createWindow()
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
+})
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
+
+// ── IPC: Default browser ───────────────────────────────────────────────────
+ipcMain.handle('app:isDefaultBrowser', () => {
+  try { return app.isDefaultProtocolClient('http') && app.isDefaultProtocolClient('https') }
+  catch { return false }
+})
+ipcMain.handle('app:setDefaultBrowser', async () => {
+  try {
+    const exePath = app.getPath('exe').replace(/\\/g, '\\\\')
+    if (process.platform === 'win32') {
+      // Register AIHub Browser in Windows registry so it appears in Default Apps picker
+      const regCmds = [
+        `reg add "HKCU\\Software\\Classes\\AIhubBrowser" /ve /t REG_SZ /d "AIHub Browser" /f`,
+        `reg add "HKCU\\Software\\Classes\\AIhubBrowser\\Application" /v "ApplicationName" /t REG_SZ /d "AIHub Browser" /f`,
+        `reg add "HKCU\\Software\\Classes\\AIhubBrowser\\Application" /v "ApplicationDescription" /t REG_SZ /d "AI-Powered Web Browser" /f`,
+        `reg add "HKCU\\Software\\Classes\\AIhubBrowser\\Application" /v "ApplicationIcon" /t REG_SZ /d "${exePath},0" /f`,
+        `reg add "HKCU\\Software\\Classes\\AIhubBrowser\\shell\\open\\command" /ve /t REG_SZ /d "\\"${exePath}\\" \\"%1\\"" /f`,
+        `reg add "HKCU\\Software\\Classes\\AIhubBrowser\\DefaultIcon" /ve /t REG_SZ /d "${exePath},0" /f`,
+        `reg add "HKCU\\Software\\Clients\\StartMenuInternet\\AIhubBrowser" /ve /t REG_SZ /d "AIHub Browser" /f`,
+        `reg add "HKCU\\Software\\Clients\\StartMenuInternet\\AIhubBrowser\\Capabilities" /v "ApplicationDescription" /t REG_SZ /d "AI-Powered Web Browser by My Digital Solutions" /f`,
+        `reg add "HKCU\\Software\\Clients\\StartMenuInternet\\AIhubBrowser\\Capabilities" /v "ApplicationName" /t REG_SZ /d "AIHub Browser" /f`,
+        `reg add "HKCU\\Software\\Clients\\StartMenuInternet\\AIhubBrowser\\Capabilities\\URLAssociations" /v "http" /t REG_SZ /d "AIhubBrowser" /f`,
+        `reg add "HKCU\\Software\\Clients\\StartMenuInternet\\AIhubBrowser\\Capabilities\\URLAssociations" /v "https" /t REG_SZ /d "AIhubBrowser" /f`,
+        `reg add "HKCU\\Software\\Clients\\StartMenuInternet\\AIhubBrowser\\Capabilities\\FileAssociations" /v ".htm" /t REG_SZ /d "AIhubBrowser" /f`,
+        `reg add "HKCU\\Software\\Clients\\StartMenuInternet\\AIhubBrowser\\Capabilities\\FileAssociations" /v ".html" /t REG_SZ /d "AIhubBrowser" /f`,
+        `reg add "HKCU\\Software\\Clients\\StartMenuInternet\\AIhubBrowser\\shell\\open\\command" /ve /t REG_SZ /d "\\"${exePath}\\"" /f`,
+        `reg add "HKCU\\Software\\RegisteredApplications" /v "AIhubBrowser" /t REG_SZ /d "Software\\Clients\\StartMenuInternet\\AIhubBrowser\\Capabilities" /f`,
+      ]
+      for (const cmd of regCmds) {
+        try { execSync(cmd, { stdio: 'ignore' }) } catch {}
+      }
+    }
+    app.setAsDefaultProtocolClient('http')
+    app.setAsDefaultProtocolClient('https')
+    await shell.openExternal('ms-settings:defaultapps')
+    return { success: true }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+// ── IPC: VPN / Proxy ──────────────────────────────────────────────────────
+let vpnActive: { protocol: string; host: string; port: number; username?: string; password?: string } | null = null
+
+ipcMain.handle('vpn:getStatus', () => ({ connected: !!vpnActive, config: vpnActive }))
+
+ipcMain.handle('vpn:setProxy', async (_e, cfg: { protocol: string; host: string; port: number; username?: string; password?: string }) => {
+  try {
+    let rules = `${cfg.protocol.toLowerCase()}://`
+    if (cfg.username && cfg.password) rules += `${encodeURIComponent(cfg.username)}:${encodeURIComponent(cfg.password)}@`
+    rules += `${cfg.host}:${cfg.port}`
+    await session.defaultSession.setProxy({ proxyRules: rules })
+    vpnActive = cfg
+    return { success: true }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+ipcMain.handle('vpn:clearProxy', async () => {
+  try {
+    await session.defaultSession.setProxy({ mode: 'direct' })
+    vpnActive = null
+    return { success: true }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+ipcMain.handle('vpn:getIp', async () => {
+  try {
+    const { status, body } = await httpGet('https://ipinfo.io/json', 8000)
+    if (status === 200) {
+      const d = JSON.parse(body)
+      return { success: true, ip: d.ip, city: d.city, region: d.region, country: d.country, org: d.org }
+    }
+    return { success: false, error: `HTTP ${status}` }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+// ── IPC: Window ────────────────────────────────────────────────────────────
+ipcMain.handle('window:minimize',    () => mainWindow?.minimize())
+ipcMain.handle('window:maximize',    () => { mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow?.maximize() })
+ipcMain.handle('window:close',       () => mainWindow?.close())
+ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized())
+ipcMain.handle('window:setTransparency', (_e, mode: string) => {
+  const d = getData(); d.settings.transparency = mode; saveData()
+  if (mainWindow) {
+    applyTransparency(mainWindow, mode)
+    safelySend('theme:transparency', mode)
+  }
+})
+
+// ── IPC: Bookmarks ─────────────────────────────────────────────────────────
+ipcMain.handle('bookmarks:getAll', () => getData().bookmarks)
+ipcMain.handle('bookmarks:add', (_e, bm) => {
+  const d = getData(); const b = { ...bm, id: `bm-${Date.now()}`, addedAt: Date.now() }
+  d.bookmarks.push(b); saveData(); return b
+})
+ipcMain.handle('bookmarks:remove', (_e, id: string) => {
+  const d = getData(); d.bookmarks = d.bookmarks.filter((b: any) => b.id !== id); saveData(); return true
+})
+ipcMain.handle('bookmarks:update', (_e, id: string, u: any) => {
+  const d = getData(); const i = d.bookmarks.findIndex((b: any) => b.id === id)
+  if (i !== -1) d.bookmarks[i] = { ...d.bookmarks[i], ...u }; saveData(); return d.bookmarks[i]
+})
+
+// ── IPC: History ───────────────────────────────────────────────────────────
+ipcMain.handle('history:getAll',     () => readJson(HIST_FILE, []))
+ipcMain.handle('history:clear',      () => { writeJson(HIST_FILE, []); return true })
+ipcMain.handle('history:deleteItem', (_e, id: string) => {
+  const h = readJson(HIST_FILE, []); writeJson(HIST_FILE, h.filter((x: any) => x.id !== id)); return true
+})
+ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?: string }) => {
+  if (!entry.url || entry.url === 'home' || entry.url.startsWith('aihub://')) return
+  const h = readJson(HIST_FILE, [])
+  const recent = h.filter((x: any) => !(x.url === entry.url && Date.now() - x.timestamp < 30000))
+  recent.unshift({ ...entry, timestamp: Date.now(), id: `h-${Date.now()}` })
+  writeJson(HIST_FILE, recent.slice(0, 2000))
+  recordVisit(entry.url, entry.title)
+  return true
+})
+
+// ── IPC: Downloads ─────────────────────────────────────────────────────────
+ipcMain.handle('downloads:getAll',       () => readJson(DL_FILE, []))
+ipcMain.handle('downloads:clear',        () => { writeJson(DL_FILE, []); return true })
+ipcMain.handle('downloads:openFile',     (_e, p: string) => shell.openPath(p))
+ipcMain.handle('downloads:showInFolder', (_e, p: string) => shell.showItemInFolder(p))
+
+// ── IPC: Cache ─────────────────────────────────────────────────────────────
+ipcMain.handle('cache:clear', async () => {
+  await session.defaultSession.clearCache()
+  await session.defaultSession.clearStorageData()
+  return true
+})
+
+// ── IPC: Settings ──────────────────────────────────────────────────────────
+ipcMain.handle('settings:get', () => getData().settings)
+ipcMain.handle('settings:set', (_e, u: any) => { const d = getData(); d.settings = { ...d.settings, ...u }; saveData() })
+
+// Expose the resolved AI config so Settings page can show current values
+ipcMain.handle('settings:getAIConfig', () => {
+  const cfg = getAIConfig()
+  const s   = getData().settings
+  return {
+    openrouterKey:   s.openrouterKey   || '',
+    openrouterBase:  s.openrouterBase  || '',
+    openrouterModel: s.openrouterModel || '',
+    ollamaUrl:       s.ollamaUrl       || '',
+    // Resolved values (from env or settings) — shown as placeholders
+    resolvedKey:     cfg.orKey  ? cfg.orKey.slice(0, 12) + '…' : '',
+    resolvedModel:   cfg.orMdl,
+    resolvedOllama:  cfg.olBase,
+  }
+})
+ipcMain.handle('settings:setAIConfig', (_e, cfg: { openrouterKey?: string; openrouterBase?: string; openrouterModel?: string; ollamaUrl?: string }) => {
+  const d = getData()
+  d.settings = { ...d.settings, ...cfg }
+  saveData()
+  _data = null // flush cache so getAIConfig() picks up new values immediately
+  getData()
+})
+
+// ── IPC: AI Brain ──────────────────────────────────────────────────────────
+ipcMain.handle('brain:getRecommendations',    () => getStoredRecommendations())
+ipcMain.handle('brain:getProfile',            () => buildProfile())
+ipcMain.handle('brain:refreshRecommendations', async () => {
+  const { olBase } = getAIConfig()
+  const model = getData().settings.aiModel || 'llama3'
+  const recs = await generateRecommendations(olBase, model)
+  saveRecommendations(recs)
+  safelySend('brain:recommendations', recs)
+  return recs
+})
+
+// ── IPC: Ollama ────────────────────────────────────────────────────────────
+ipcMain.handle('ollama:status', async () => checkOllamaRunning())
+ipcMain.handle('ollama:pull', async (_e, model: string) => {
+  const { olBase } = getAIConfig()
+  try {
+    const { status, body } = await httpPost(`${olBase}/api/pull`, { name: model, stream: false }, {}, 180000)
+    if (status >= 200 && status < 400) return { success: true }
+    return { success: false, error: body }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+// ── IPC: WiFi ──────────────────────────────────────────────────────────────
+ipcMain.handle('wifi:scan', async () => {
+  if (process.platform !== 'win32') return { networks: [], error: 'WiFi scan only on Windows' }
+  try {
+    const raw = execSync('netsh wlan show networks mode=bssid', { encoding: 'utf-8', timeout: 8000 })
+    return { networks: parseWifiNetworks(raw) }
+  } catch (e: any) { return { networks: [], error: e.message } }
+})
+ipcMain.handle('wifi:connect', async (_e, ssid: string) => {
+  if (process.platform !== 'win32') return { success: false, error: 'Windows only' }
+  try { execSync(`netsh wlan connect name="${ssid}"`, { timeout: 10000 }); return { success: true } }
+  catch (e: any) { return { success: false, error: e.message } }
+})
+
+function parseWifiNetworks(raw: string) {
+  const networks: any[] = []
+  for (const block of raw.split(/SSID \d+ :/).slice(1)) {
+    const lines = block.split('\n').map((l: string) => l.trim())
+    const ssid   = lines[0]?.trim()
+    const auth   = lines.find((l: string) => l.startsWith('Authentication'))?.split(':')[1]?.trim() || ''
+    const signal = lines.find((l: string) => l.startsWith('Signal'))?.split(':')[1]?.trim() || ''
+    const bssid  = lines.find((l: string) => l.match(/^BSSID \d+/))?.split(':').slice(1).join(':').trim() || ''
+    if (ssid) networks.push({ ssid, auth, signal, bssid, open: auth === 'Open' })
+  }
+  return networks
+}
+
+// ── IPC: AI duplicate / categorize ────────────────────────────────────────
+ipcMain.handle('ai:checkDuplicate', async (_e, url: string, existing: string[]) => {
+  try {
+    const u = new URL(url), dom = u.hostname.replace('www.', '')
+    const exact     = existing.find(e => { try { return new URL(e).href === u.href } catch { return false } })
+    if (exact) return { isDuplicate: true, reason: 'URL already bookmarked', matchedUrl: exact }
+    const pathMatch = existing.find(e => { try { const eu = new URL(e); return eu.hostname.replace('www.', '') === dom && eu.pathname === u.pathname } catch { return false } })
+    if (pathMatch) return { isDuplicate: true, reason: 'Same page already bookmarked', matchedUrl: pathMatch }
+    const domMatch  = existing.find(e => { try { return new URL(e).hostname.replace('www.', '') === dom } catch { return false } })
+    return { isDuplicate: false, isSameDomain: !!domMatch, matchedUrl: domMatch }
+  } catch { return { isDuplicate: false } }
+})
+
+ipcMain.handle('ai:categorizeBookmark', async (_e, url: string, title: string) => {
+  const cats = ['AI','Development','Finance','Trading','Education','Business','Entertainment','Personal','News','Tools','Search']
+  const cols: Record<string,string> = {
+    AI:'#a78bfa', Development:'#38bdf8', Finance:'#4ade80', Trading:'#fb923c',
+    Education:'#fbbf24', Business:'#c084fc', Entertainment:'#f43f5e',
+    Personal:'#f87171', News:'#34d399', Tools:'#60a5fa', Search:'#4285F4',
+  }
+  const heuristic = () => {
+    const u = url.toLowerCase()
+    if (u.includes('youtube') || u.includes('netflix') || u.includes('twitch')) return 'Entertainment'
+    if (u.includes('google')) return 'Search'
+    if (u.includes('trade') || u.includes('stock')) return 'Trading'
+    if (u.includes('finance') || u.includes('quickbooks')) return 'Finance'
+    if (u.includes('ai') || u.includes('aihub') || u.includes('agent')) return 'AI'
+    if (u.includes('github') || u.includes('vercel')) return 'Development'
+    return 'Tools'
+  }
+  const { olBase, orKey, orBase, orMdl } = getAIConfig()
+  const prompt = `Category for "${title}" (${url})? Pick exactly one from: ${cats.join(', ')}. Reply with ONLY the category name.`
+
+  // Try Ollama first
+  try {
+    const ol = await checkOllamaRunning()
+    if (ol.running && ol.models.length > 0) {
+      const pref  = getData().settings.aiModel || ''
+      const model = (pref && ol.models.includes(pref)) ? pref : ol.models[0]
+      const { body } = await httpPost(`${olBase}/api/chat`,
+        { model, messages: [{ role: 'user', content: prompt }], stream: false, options: { temperature: 0 } }, {}, 10000)
+      const raw = JSON.parse(body)?.message?.content?.trim() || ''
+      const cat = cats.find(c => raw.toLowerCase().includes(c.toLowerCase())) || heuristic()
+      return { category: cat, color: cols[cat] }
+    }
+  } catch {}
+
+  // Try OpenRouter
+  if (orKey) {
+    try {
+      const { body } = await httpPost(`${orBase}/chat/completions`,
+        { model: orMdl, messages: [{ role: 'user', content: prompt }], max_tokens: 20, temperature: 0, include_reasoning: false },
+        { Authorization: `Bearer ${toAscii(orKey)}`, 'HTTP-Referer': 'https://aihub-browser.app', 'X-Title': 'AIHub Browser' }, 10000)
+      const raw = stripThinkTags(JSON.parse(body)?.choices?.[0]?.message?.content?.trim() || '')
+      const cat = cats.find(c => raw.toLowerCase().includes(c.toLowerCase())) || heuristic()
+      return { category: cat, color: cols[cat] }
+    } catch {}
+  }
+
+  const cat = heuristic(); return { category: cat, color: cols[cat] }
+})
+
+// Exact fallback chain from AIHub (confirmed June 2026) — same key, same account.
+const OR_FREE_FALLBACKS = [
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'mistralai/mistral-small-3.1-24b-instruct:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+  'google/gemma-3-27b-it:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
+  'openai/gpt-oss-120b:free',
+  'openai/gpt-oss-20b:free',
+  'deepseek/deepseek-r1:free',
+]
+
+// Strip DeepSeek/reasoning model chain-of-thought tags before returning content
+function stripThinkTags(s: string): string {
+  return s.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+}
+
+async function openRouterChat(
+  orBase: string, orKey: string, model: string,
+  messages: any[], maxTokens = 2048
+): Promise<string | null> {
+  try {
+    const { status, body } = await httpPost(
+      `${orBase}/chat/completions`,
+      { model, messages, max_tokens: maxTokens, temperature: 0.7, include_reasoning: false },
+      {
+        Authorization: `Bearer ${toAscii(orKey)}`,
+        'HTTP-Referer': toAscii('https://aihub-browser.app'),
+        'X-Title': 'AIHub Browser',
+      },
+      30000
+    )
+    if (status === 200) {
+      const raw = JSON.parse(body)?.choices?.[0]?.message?.content || ''
+      return stripThinkTags(raw) || null
+    }
+    // 404 = model not found on this account, 429 = rate-limited — skip to next model
+    if (status === 404 || status === 429) return null
+    // 401 = bad key, 5xx = server error — stop chain immediately
+    throw new Error(`HTTP ${status}: ${body.slice(0, 200)}`)
+  } catch (e: any) {
+    if (e.message?.startsWith('HTTP 404') || e.message?.startsWith('HTTP 429')) return null
+    throw e
+  }
+}
+
+// ── IPC: AI chat ──────────────────────────────────────────────────────────
+ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string) => {
+  const { olBase, orKey, orBase, orMdl } = getAIConfig()
+
+  // 1. Try local Ollama (preferred — private & free)
+  try {
+    const ol = await checkOllamaRunning()
+    if (ol.running && ol.models.length > 0) {
+      const preferred = preferredModel || getData().settings.aiModel || ''
+      const model = (preferred && ol.models.includes(preferred)) ? preferred : ol.models[0]
+      const { status, body } = await httpPost(
+        `${olBase}/api/chat`, { model, messages, stream: false }, {}, 90000
+      )
+      if (status >= 200 && status < 400) {
+        const raw = JSON.parse(body)?.message?.content || ''
+        const content = stripThinkTags(raw)
+        if (content) return { content, model, provider: 'ollama' }
+      }
+    }
+  } catch {}
+
+  // 2. Fall back to OpenRouter with a model-fallback chain
+  if (orKey) {
+    // Build candidate list: configured model first, then known-free fallbacks
+    const candidates = [orMdl, ...OR_FREE_FALLBACKS.filter(m => m !== orMdl)]
+    let lastError = ''
+    for (const model of candidates) {
+      try {
+        const content = await openRouterChat(orBase, orKey, model, messages)
+        if (content) return { content, model, provider: 'openrouter' }
+        // null = 404 on this model, try next
+      } catch (e: any) {
+        lastError = e.message
+        break // non-404 error — stop trying
+      }
+    }
+    if (lastError) {
+      return {
+        content: `Cloud AI error: ${lastError}\n\nTry:\n• Wait 1–2 minutes and retry\n• Install Ollama (ollama.com) for private local AI\n• Check your OpenRouter API key in Settings → AI Configuration`,
+        model: 'error', provider: 'error',
+      }
+    }
+    return {
+      content: 'All cloud models are currently unavailable.\n\n• Wait 1–2 minutes and retry\n• Install Ollama at ollama.com and run: ollama pull llama3.1\n• Check your OpenRouter API key in Settings → AI Configuration',
+      model: 'none', provider: 'none',
+    }
+  }
+
+  return {
+    content: 'No AI configured.\n\n• Install Ollama at ollama.com, then run: ollama pull llama3.1\n• OR go to Settings → AI Configuration and paste your OpenRouter API key\n\nGet a free key at openrouter.ai',
+    model: 'none', provider: 'none',
+  }
+})
+
+// ── IPC: AI summarize ─────────────────────────────────────────────────────
+ipcMain.handle('ai:summarizePage', async (_e, pageText: string, url: string) => {
+  const { olBase, orKey, orBase, orMdl } = getAIConfig()
+
+  // Build prompt — use real extracted page text if available, else URL-based summary
+  const userContent = pageText && pageText.length > 100
+    ? `Summarize the following web page content in 3-5 concise bullet points. Focus on key takeaways, what the page is about, and who it's for.\n\nURL: ${url}\n\nPAGE CONTENT:\n${pageText.slice(0, 6000)}`
+    : `Summarize the website at ${url} in 3-5 concise bullet points. Focus on what it does and who it's for.`
+
+  const msgs = [{ role: 'user', content: userContent }]
+
+  try {
+    const ol = await checkOllamaRunning()
+    if (ol.running && ol.models.length > 0) {
+      const pref  = getData().settings.aiModel || ''
+      const model = (pref && ol.models.includes(pref)) ? pref : ol.models[0]
+      const { status, body } = await httpPost(`${olBase}/api/chat`, { model, messages: msgs, stream: false }, {}, 45000)
+      if (status >= 200 && status < 400) {
+        const raw = JSON.parse(body)?.message?.content || ''
+        const summary = stripThinkTags(raw)
+        if (summary) return { summary }
+      }
+    }
+  } catch {}
+
+  if (orKey) {
+    const candidates = [...new Set([orMdl, ...OR_FREE_FALLBACKS])]
+    for (const model of candidates) {
+      try {
+        const summary = await openRouterChat(orBase, orKey, model, msgs, 800)
+        if (summary) return { summary }
+      } catch { break }
+    }
+  }
+
+  return { summary: 'Unable to summarize — Ollama offline and no cloud API key configured.' }
+})
+
+// ── IPC: Save summary as Markdown ─────────────────────────────────────────
+ipcMain.handle('file:saveMd', async (_e, { title, content }: { title: string; content: string }) => {
+  const safeName = title.replace(/[^a-z0-9\s]/gi, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'summary'
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save Summary as Markdown',
+    defaultPath: join(os.homedir(), 'Documents', `${safeName}.md`),
+    filters: [{ name: 'Markdown', extensions: ['md'] }],
+  })
+  if (canceled || !filePath) return { success: false }
+  try {
+    fs.writeFileSync(filePath, content, 'utf-8')
+    return { success: true, filePath }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// ── IPC: Live AI news from Hacker News ────────────────────────────────────
+const AI_NEWS_KEYWORDS = [
+  'ai ', ' ai', 'llm', 'gpt', 'claude', 'gemini', 'openai', 'anthropic',
+  'deepseek', 'language model', 'neural', 'chatgpt', 'artificial intelligence',
+  'machine learning', 'mistral', 'llama', 'groq', 'hugging face', 'diffusion',
+  'transformer', 'copilot', 'stable diffusion', 'midjourney', 'sora',
+]
+
+ipcMain.handle('ai:getLatestNews', async () => {
+  try {
+    const { status: s1, body: b1 } = await httpGet('https://hacker-news.firebaseio.com/v0/topstories.json', 8000)
+    if (s1 !== 200) return { success: false, articles: [] }
+    const ids: number[] = JSON.parse(b1).slice(0, 60)
+
+    const settled = await Promise.allSettled(
+      ids.map(id => httpGet(`https://hacker-news.firebaseio.com/v0/item/${id}.json`, 5000))
+    )
+
+    const articles: any[] = []
+    for (const r of settled) {
+      if (r.status !== 'fulfilled' || r.value.status !== 200) continue
+      try {
+        const item = JSON.parse(r.value.body)
+        if (!item || item.type !== 'story' || !item.title) continue
+        const low = item.title.toLowerCase()
+        if (AI_NEWS_KEYWORDS.some(k => low.includes(k))) {
+          articles.push({
+            title: item.title,
+            url: item.url || `https://news.ycombinator.com/item?id=${item.id}`,
+            score: item.score || 0,
+            by: item.by,
+            hnUrl: `https://news.ycombinator.com/item?id=${item.id}`,
+          })
+        }
+      } catch {}
+    }
+
+    articles.sort((a, b) => b.score - a.score)
+    return { success: true, articles: articles.slice(0, 8) }
+  } catch (e: any) {
+    return { success: false, articles: [], error: String(e.message) }
+  }
+})
+
+// ── IPC: Bookmark export ───────────────────────────────────────────────────
+ipcMain.handle('bookmarks:export', async (_e, format: 'json' | 'html') => {
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Bookmarks',
+    defaultPath: `aihub-bookmarks.${format}`,
+    filters: format === 'json'
+      ? [{ name: 'JSON', extensions: ['json'] }]
+      : [{ name: 'HTML', extensions: ['html'] }],
+  })
+  if (canceled || !filePath) return { success: false }
+
+  const bms = getData().bookmarks
+  try {
+    if (format === 'json') {
+      fs.writeFileSync(filePath, JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), bookmarks: bms }, null, 2), 'utf-8')
+    } else {
+      const rows = bms.map((b: any) =>
+        `    <DT><A HREF="${escHtml(b.url)}" ADD_DATE="${Math.floor((b.addedAt || Date.now()) / 1000)}" TAGS="${escHtml(b.category || '')}">${escHtml(b.title)}</A>`
+      ).join('\n')
+      const html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<!-- AIHub Browser Bookmarks -->\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>AIHub Bookmarks</TITLE>\n<H1>AIHub Bookmarks</H1>\n<DL><p>\n${rows}\n</DL><p>`
+      fs.writeFileSync(filePath, html, 'utf-8')
+    }
+    return { success: true, count: bms.length, path: filePath }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// ── IPC: Bookmark import ───────────────────────────────────────────────────
+ipcMain.handle('bookmarks:import', async () => {
+  const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Bookmarks',
+    filters: [{ name: 'Bookmark Files', extensions: ['json', 'html', 'htm'] }],
+    properties: ['openFile'],
+  })
+  if (canceled || !filePaths.length) return { success: false }
+
+  try {
+    const raw = fs.readFileSync(filePaths[0], 'utf-8')
+    const ext = filePaths[0].split('.').pop()?.toLowerCase()
+    let imported: any[] = []
+
+    if (ext === 'json') {
+      const parsed = JSON.parse(raw)
+      // Support both { bookmarks: [] } and plain []
+      const list = Array.isArray(parsed) ? parsed : (parsed.bookmarks || [])
+      imported = list.filter((b: any) => b.url && b.title).map((b: any) => ({
+        url: b.url, title: b.title, category: b.category || 'Tools',
+        color: b.color || '#60a5fa', favicon: b.favicon || '',
+      }))
+    } else {
+      // Parse Netscape HTML bookmark format (Chrome, Firefox, Edge exports)
+      const matches = [...raw.matchAll(/<A\s[^>]*HREF="([^"]+)"[^>]*>([^<]+)<\/A>/gi)]
+      imported = matches.map(m => ({ url: m[1], title: m[2].trim(), category: 'Tools', color: '#60a5fa', favicon: '' }))
+        .filter(b => b.url.startsWith('http'))
+    }
+
+    if (!imported.length) return { success: false, error: 'No valid bookmarks found in file' }
+
+    const d = getData()
+    const existingUrls = new Set(d.bookmarks.map((b: any) => b.url))
+    const fresh = imported.filter(b => !existingUrls.has(b.url))
+    fresh.forEach(b => d.bookmarks.push({ ...b, id: `bm-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, addedAt: Date.now() }))
+    saveData()
+    return { success: true, imported: fresh.length, skipped: imported.length - fresh.length }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// ── IPC: Capture webview screenshot ──────────────────────────────────────
+ipcMain.handle('webview:capture', async (_e, wcId: number) => {
+  try {
+    const wc = electronWebContents.fromId(wcId)
+    if (!wc) return null
+    const img = await wc.capturePage()
+    return img.toDataURL()
+  } catch { return null }
+})
+
+// ── IPC: Execute script inside webview via webContents ────────────────────
+ipcMain.handle('webview:execScript', async (_e, wcId: number, script: string) => {
+  try {
+    const wc = electronWebContents.fromId(wcId)
+    if (!wc) return { ok: false, error: 'webContents not found for id ' + wcId }
+    const result = await wc.executeJavaScript(script, true)
+    return { ok: true, result }
+  } catch (e: any) { return { ok: false, error: e?.message || String(e) } }
+})
+
+function escHtml(s: string) { return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
