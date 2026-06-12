@@ -1,19 +1,12 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "*.html",
-      "use": "@vercel/static"
-    }
-  ],
   "routes": [
-    {
-      "src": "/download",
-      "dest": "/download.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
+    { "src": "/download", "dest": "/download.html" },
+    { "src": "/(.*\\.html)", "dest": "/$1" },
+    { "src": "/sitemap.xml", "dest": "/sitemap.xml" },
+    { "src": "/robots.txt", "dest": "/robots.txt" },
+    { "src": "/og-image.svg", "dest": "/og-image.svg" },
+    { "src": "/serve.json", "dest": "/serve.json" },
+    { "src": "/", "dest": "/index.html" }
   ]
 }
