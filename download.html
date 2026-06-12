@@ -23,8 +23,8 @@
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.1);
       border-radius: 20px;
-      padding: 56px 48px;
-      max-width: 520px;
+      padding: 48px 44px;
+      max-width: 560px;
       width: 100%;
     }
     .logo {
@@ -32,80 +32,122 @@
       background: #f4a825;
       display: flex; align-items: center; justify-content: center;
       font-size: 36px; font-weight: 900; color: #1d3a2e;
-      margin: 0 auto 28px;
+      margin: 0 auto 24px;
     }
-    h1 { font-size: 26px; font-weight: 700; margin-bottom: 10px; color: #fff; }
-    .sub { font-size: 14px; color: rgba(255,255,255,0.45); margin-bottom: 36px; line-height: 1.6; }
+    h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; color: #fff; }
+    .meta { font-size: 13px; color: rgba(255,255,255,0.35); margin-bottom: 28px; }
     .progress-bar {
       width: 100%; height: 4px;
       background: rgba(255,255,255,0.08);
-      border-radius: 4px; overflow: hidden; margin-bottom: 36px;
+      border-radius: 4px; overflow: hidden; margin-bottom: 28px;
     }
     .progress-fill {
       height: 100%; width: 0%;
       background: linear-gradient(90deg, #40916c, #52b788);
       border-radius: 4px;
-      animation: fill 2s ease forwards;
+      animation: fill 1.6s ease forwards;
     }
     @keyframes fill { to { width: 100%; } }
-    .steps {
-      list-style: none; text-align: left;
-      display: flex; flex-direction: column; gap: 14px;
-      margin-bottom: 36px;
+    .status { font-size: 13px; color: rgba(82,183,136,0.9); margin-bottom: 24px; font-weight: 600; }
+
+    /* Chrome warning box */
+    .chrome-warn {
+      background: rgba(244,168,37,0.1);
+      border: 1px solid rgba(244,168,37,0.35);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 24px;
+      text-align: left;
     }
-    .steps li {
-      display: flex; align-items: flex-start; gap: 12px;
-      font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.5;
+    .chrome-warn-title {
+      font-size: 13px; font-weight: 700; color: #f4a825;
+      margin-bottom: 10px; display: flex; align-items: center; gap: 7px;
     }
-    .steps li .n {
-      min-width: 22px; height: 22px; border-radius: 50%;
-      background: rgba(64,145,108,0.2); border: 1px solid rgba(64,145,108,0.4);
-      color: #52b788; font-size: 11px; font-weight: 700;
-      display: flex; align-items: center; justify-content: center;
-      margin-top: 1px;
+    .chrome-warn ol {
+      padding-left: 18px; display: flex; flex-direction: column; gap: 7px;
     }
-    .manual-btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 14px 28px; border-radius: 10px;
+    .chrome-warn li {
+      font-size: 12px; color: rgba(255,255,255,0.65); line-height: 1.55;
+    }
+    .chrome-warn li strong { color: #e2fdf0; }
+
+    /* Big download button */
+    .dl-btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 15px 32px; border-radius: 11px;
       background: #f4a825; color: #1d3a2e;
-      font-weight: 700; font-size: 15px;
+      font-weight: 700; font-size: 16px;
       text-decoration: none; border: none; cursor: pointer;
+      margin-bottom: 14px; transition: background .12s;
+      width: 100%; justify-content: center;
     }
-    .manual-btn:hover { background: #ffd166; }
-    .back { display: block; margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.25); text-decoration: none; }
-    .back:hover { color: rgba(255,255,255,0.5); }
-    .status { font-size: 12px; color: rgba(82,183,136,0.8); margin-bottom: 6px; }
+    .dl-btn:hover { background: #ffd166; }
+    .dl-btn-ghost {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 24px; border-radius: 9px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.65);
+      font-size: 13px; font-weight: 600;
+      text-decoration: none; cursor: pointer;
+      width: 100%; justify-content: center;
+      transition: background .12s;
+    }
+    .dl-btn-ghost:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85); }
+    .back { display: block; margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.2); text-decoration: none; }
+    .back:hover { color: rgba(255,255,255,0.45); }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo">A</div>
-    <div class="status" id="status">⬇ Download starting…</div>
     <h1>AIHub Browser v1.0.0</h1>
-    <p class="sub">AIHub-Browser-1.0.0-win-x64.zip · 104 MB · Windows 10/11</p>
+    <p class="meta">AIHub-Browser-1.0.0-win-x64.exe · 76 MB · Windows 10/11</p>
     <div class="progress-bar"><div class="progress-fill"></div></div>
-    <ul class="steps">
-      <li><span class="n">1</span><span>The ZIP file will appear in Chrome's downloads bar at the <strong style="color:#e2fdf0">bottom of the window</strong> or the <strong style="color:#e2fdf0">⬇ icon</strong> in the top-right toolbar.</span></li>
-      <li><span class="n">2</span><span>Extract the ZIP, then double-click <strong style="color:#e2fdf0">AIHub Browser.exe</strong> inside the folder to launch.</span></li>
-      <li><span class="n">3</span><span>Not starting? Use the button below to download directly.</span></li>
-    </ul>
-    <a id="manual-btn" href="/api/get" class="manual-btn">
-      ⬇ Download ZIP directly
+    <div class="status" id="status">⬇ Starting download…</div>
+
+    <!-- Chrome Safe Browsing warning -->
+    <div class="chrome-warn">
+      <div class="chrome-warn-title">⚠ Chrome may show a safety warning</div>
+      <ol>
+        <li>After clicking Download, look at the <strong>bottom of Chrome</strong> or the <strong>⬇ icon</strong> (top-right).</li>
+        <li>If you see <strong>"This file may harm your computer"</strong> or a warning icon — click the <strong>arrow ›</strong> next to it, then choose <strong>"Keep"</strong> or <strong>"Keep anyway"</strong>.</li>
+        <li>Once downloaded, run <strong>AIHub-Browser-1.0.0-win-x64.exe</strong> to install.</li>
+      </ol>
+    </div>
+
+    <a id="dl-btn" href="/api/get" download="AIHub-Browser-1.0.0-win-x64.exe" class="dl-btn">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download AIHub Browser — Free
     </a>
+
+    <a href="https://github.com/pitchiluxe/aihub-browser/releases/tag/v1.0.0" target="_blank" rel="noopener" class="dl-btn-ghost">
+      📦 Download from GitHub Releases instead
+    </a>
+
     <a href="/" class="back">← Back to AIHub Browser</a>
   </div>
 
   <script>
-    var ZIP = '/api/get'
+    (function() {
+      var status = document.getElementById('status');
 
-    // Auto-start download on page load — window.location.href triggers download without popup blocker
-    window.location.href = ZIP
-
-    // Update status after 3s
-    setTimeout(function() {
-      var s = document.getElementById('status')
-      if (s) s.textContent = '✓ Download initiated — check your downloads'
-    }, 3000)
+      // Auto-trigger on page load via programmatic anchor click (same-origin, download attr)
+      window.addEventListener('load', function() {
+        var a = document.createElement('a');
+        a.href = '/api/get';
+        a.setAttribute('download', 'AIHub-Browser-1.0.0-win-x64.exe');
+        a.style.cssText = 'position:fixed;top:-200px;left:-200px';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+          try { document.body.removeChild(a); } catch(e) {}
+        }, 2000);
+        setTimeout(function() {
+          if (status) status.textContent = '✓ Download triggered — look at the bottom of Chrome';
+        }, 1800);
+      });
+    })();
   </script>
 </body>
 </html>
