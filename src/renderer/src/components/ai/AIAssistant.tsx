@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, X, Send, Loader2, Sparkles, FileText, Trash2, AlertCircle,
-  Zap, Paperclip, Download, BookmarkPlus, Check, Newspaper, ExternalLink,
+  Zap, Paperclip, Download, BookmarkPlus, Check, Newspaper, ExternalLink, Square,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, describeAction, executeAction, AGENT_TOOLS_DOC } from '../../services/agentTools'
@@ -505,7 +505,19 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                       background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
                       color: '#cbd5e1', userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text',
                     }}>
-                      <MdMessage content={msg.content} onNavigate={url => addTab(url, 'browser')} />
+                      {msg.content && <MdMessage content={msg.content} onNavigate={url => addTab(url, 'browser')} />}
+                      {msg.steps && msg.steps.length > 0 && (
+                        <div style={{ marginTop: msg.content ? 8 : 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {msg.steps.map((s, si) => (
+                            <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                              <span style={{ color: s.status === 'done' ? '#34d399' : s.status === 'error' ? '#f87171' : '#facc15', flexShrink: 0 }}>
+                                {s.status === 'done' ? '✓' : s.status === 'error' ? '✕' : '⏳'}
+                              </span>
+                              <span style={{ color: '#94a3b8' }}>{s.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 ))}
@@ -571,6 +583,15 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                     ? <Loader2 size={13} style={{ color: '#60a5fa', animation: 'spin 0.7s linear infinite' }} />
                     : <Send size={13} style={{ color: '#fff' }} />}
                 </button>
+                {isAILoading && (
+                  <button onClick={stopLoop} title="Stop" style={{
+                    width: 30, height: 30, borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    background: 'rgba(239,68,68,0.12)', color: '#f87171',
+                  }}>
+                    <Square size={11} fill="currentColor" />
+                  </button>
+                )}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, padding: '0 2px' }}>
                 <span style={{ fontSize: 10, color: '#334155' }}>↵ send · Shift+↵ newline · Ctrl+Shift+A toggle</span>
