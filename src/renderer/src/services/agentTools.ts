@@ -139,7 +139,11 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
         if (!ctx.getPageContent) return { error: 'no active page to read' }
         const text = await ctx.getPageContent()
         if (!text) return { error: 'page has no readable text' }
-        return { text }
+        // Sanitize: neutralize any literal ###ACTIONS### marker in page
+        // content so a malicious page can't spoof the actions-block protocol
+        // when this text gets fed back to the model as a tool result.
+        const sanitized = text.replace(/###ACTIONS###/gi, '[ACTIONS marker removed]')
+        return { text: sanitized }
       }
 
       default:
