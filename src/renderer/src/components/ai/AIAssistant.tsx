@@ -32,7 +32,7 @@ const OPEN_PATTERNS   = [
 export default function AIAssistant({ currentUrl, currentTitle, getPageContent }: Props) {
   const {
     isAIPanelOpen, toggleAIPanel,
-    aiMessages, addAIMessage, clearAIMessages,
+    aiMessages, addAIMessage, clearAIMessages, setAIMessageStepStatus,
     isAILoading, setAILoading,
     ollamaStatus, setOllamaStatus,
     bookmarks, addTab,
@@ -46,6 +46,8 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
   const [browseHistory, setBrowseHistory] = useState<string[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
+  const stopRequestedRef = useRef(false)
+  const stopLoop = useCallback(() => { stopRequestedRef.current = true }, [])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -157,7 +159,9 @@ When user asks to open a site, reply concisely: "Opening [Site Name] ↗" — th
 Be concise, warm, and genuinely helpful. Use **bold** for site names and key terms. Bullet points for lists.${pageCtx}${bookmarkCtx}${historyCtx}${AGENT_TOOLS_DOC}`
   }, [currentUrl, currentTitle, bookmarks, browseHistory])
 
-  // ── Send message ──────────────────────────────────────────────────────────
+  // ── Send message — agent loop: the model can request tool actions via a
+  // JSON block (see agentTools.ts); we execute them and loop, until it
+  // answers with plain text or a safety cap is hit. ─────────────────────────
   const sendMessage = async () => {
     const msg = input.trim()
     if (!msg || isAILoading) return
@@ -168,33 +172,82 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
 
     addAIMessage({ role: 'user', content: msg })
     setAILoading(true)
+    stopRequestedRef.current = false
+
+    const MAX_TURNS = 6
+    const MAX_ACTIONS = 25
+    let actionsUsed = 0
+
+    // Mirrors what's sent to ai.chat — includes synthetic tool-result turns
+    // that are never pushed into the visible aiMessages store.
+    let loopHistory: { role: string; content: string }[] =
+      useBrowserStore.getState().aiMessages.map(m => ({ role: m.role, content: m.content }))
+
     try {
-      let systemPrompt = buildSystemPrompt()
+      for (let turn = 1; turn <= MAX_TURNS; turn++) {
+        let systemPrompt = buildSystemPrompt()
 
-      if (AI_NEWS_INTENT.test(msg)) {
-        setFetchingNews(true)
-        try {
-          const news = await (window.electronAPI as any).ai.getLatestNews()
-          if (news.success && news.articles.length > 0) {
-            const list = news.articles
-              .map((a: any, i: number) => `${i + 1}. **${a.title}** (${a.score} pts on HN)\n   ${a.url}`)
-              .join('\n\n')
-            systemPrompt += `\n\n## LIVE AI NEWS FROM HACKER NEWS (fetched just now)\n\n${list}\n\nPresent these articles to the user. For each, give a one-sentence summary based on the title. Tell them you fetched these live.`
-          }
-        } catch {}
-        setFetchingNews(false)
+        if (AI_NEWS_INTENT.test(msg) && turn === 1) {
+          setFetchingNews(true)
+          try {
+            const news = await (window.electronAPI as any).ai.getLatestNews()
+            if (news.success && news.articles.length > 0) {
+              const list = news.articles
+                .map((a: any, i: number) => `${i + 1}. **${a.title}** (${a.score} pts on HN)\n   ${a.url}`)
+                .join('\n\n')
+              systemPrompt += `\n\n## LIVE AI NEWS FROM HACKER NEWS (fetched just now)\n\n${list}\n\nPresent these articles to the user. For each, give a one-sentence summary based on the title. Tell them you fetched these live.`
+            }
+          } catch {}
+          setFetchingNews(false)
+        }
+
+        const result = await window.electronAPI.ai.chat([{ role: 'system', content: systemPrompt }, ...loopHistory])
+        const raw = result.content || ''
+        if (result.provider === 'ollama' && !ollamaStatus?.running) {
+          setOllamaStatus({ running: true, models: ollamaStatus?.models || [] })
+        }
+
+        const { narration, actions } = parseActionsBlock(raw)
+
+        if (!actions || actions.length === 0 || stopRequestedRef.current) {
+          addAIMessage({ role: 'assistant', content: narration || raw })
+          return
+        }
+
+        if (actionsUsed + actions.length > MAX_ACTIONS) {
+          addAIMessage({ role: 'assistant', content: (narration ? narration + '\n\n' : '') + 'Stopped after reaching the action limit for this run.' })
+          return
+        }
+
+        const msgIndex = useBrowserStore.getState().aiMessages.length
+        addAIMessage({
+          role: 'assistant',
+          content: narration,
+          steps: actions.map(a => ({ label: describeAction(a), status: 'pending' as const })),
+        })
+        loopHistory.push({ role: 'assistant', content: raw })
+
+        const results: any[] = []
+        for (let i = 0; i < actions.length; i++) {
+          if (stopRequestedRef.current) break
+          const res = await executeAction(actions[i], { getPageContent })
+          actionsUsed++
+          setAIMessageStepStatus(msgIndex, i, res.error ? 'error' : 'done')
+          results.push({ tool: actions[i].tool, ...res })
+        }
+
+        if (stopRequestedRef.current) {
+          addAIMessage({ role: 'assistant', content: `Stopped — ran ${results.length} of ${actions.length} actions.` })
+          return
+        }
+
+        loopHistory.push({
+          role: 'user',
+          content: `[Action results]\n${JSON.stringify(results)}\n\nContinue the task if more steps are needed, otherwise respond normally without an actions block.`,
+        })
       }
 
-      const history = [
-        { role: 'system', content: systemPrompt },
-        ...aiMessages.map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: msg },
-      ]
-      const result = await window.electronAPI.ai.chat(history)
-      addAIMessage({ role: 'assistant', content: result.content })
-      if (result.provider === 'ollama' && !ollamaStatus?.running) {
-        setOllamaStatus({ running: true, models: ollamaStatus?.models || [] })
-      }
+      addAIMessage({ role: 'assistant', content: 'Stopped after reaching the action limit for this run.' })
     } catch {
       addAIMessage({ role: 'assistant', content: 'Connection error. Please try again.' })
     } finally {
