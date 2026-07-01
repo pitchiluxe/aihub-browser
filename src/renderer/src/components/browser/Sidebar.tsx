@@ -1,98 +1,228 @@
 import React, { memo } from 'react'
-import { Home, History, Download, Settings, Plus, Sparkles, Wifi, Shield } from 'lucide-react'
+import {
+  Home, History, Download, Settings, Plus, Sparkles,
+  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid,
+} from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
 interface Props {
   onNavigate: (url: string) => void
-  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn') => void
+  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions') => void
 }
+
+interface NavItem {
+  icon: React.ElementType
+  label: string
+  page: null | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions'
+  type: string
+  accent?: string
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { icon: Home,         label: 'Home',        page: null,           type: 'home'       },
+  { icon: FlaskConical, label: 'Research',     page: 'research',     type: 'research',   accent: '#38bdf8' },
+  { icon: Bot,          label: 'Agent Mode',   page: 'agents',       type: 'agents',     accent: '#a78bfa' },
+  { icon: History,      label: 'History',      page: 'history',      type: 'history'    },
+  { icon: Download,     label: 'Downloads',    page: 'downloads',    type: 'downloads'  },
+  { icon: Puzzle,       label: 'Extensions',   page: 'extensions',   type: 'extensions', accent: '#fb923c' },
+  { icon: Wifi,         label: 'Free WiFi',    page: 'wifi',         type: 'wifi'       },
+  { icon: Shield,       label: 'VPN / Proxy',  page: 'vpn',          type: 'vpn'        },
+  { icon: Settings,     label: 'Settings',     page: 'settings',     type: 'settings'   },
+]
 
 function Sidebar({ onNavigate, onOpenPage }: Props) {
   const { isSidebarOpen, bookmarks, setAddBookmarkOpen, tabs, activeTabId } = useBrowserStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
 
+  const isActive = (type: string) => {
+    if (type === 'home') return !!(activeTab?.isHome && activeTab?.pageType === 'browser')
+    return activeTab?.pageType === type
+  }
+
   return (
     <div
-      className="h-full bg-aihub-surface/60 border-r border-aihub-border/30 overflow-hidden shrink-0 flex flex-col"
+      className="h-full flex flex-col shrink-0 overflow-hidden ds-sidebar"
       style={{
-        width: isSidebarOpen ? 200 : 0,
-        minWidth: isSidebarOpen ? 200 : 0,
-        transition: 'width 0.18s cubic-bezier(0.4,0,0.2,1), min-width 0.18s cubic-bezier(0.4,0,0.2,1)',
-        opacity: isSidebarOpen ? 1 : 0,
+        width:    isSidebarOpen ? 218 : 0,
+        minWidth: isSidebarOpen ? 218 : 0,
+        transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1), min-width 0.22s cubic-bezier(0.4,0,0.2,1)',
+        opacity:       isSidebarOpen ? 1 : 0,
         pointerEvents: isSidebarOpen ? 'auto' : 'none',
         willChange: 'width',
       }}
     >
-      {/* Nav items */}
-      <div className="px-2 pt-3 pb-2 space-y-0.5 shrink-0">
-        <SidebarItem icon={<Home size={14} />} label="Home"
-          active={!!(activeTab?.isHome && activeTab?.pageType === 'browser')}
-          onClick={() => onNavigate('home')} />
-        <SidebarItem icon={<History size={14} />} label="History"
-          active={activeTab?.pageType === 'history'}
-          onClick={() => onOpenPage('history')} />
-        <SidebarItem icon={<Download size={14} />} label="Downloads"
-          active={activeTab?.pageType === 'downloads'}
-          onClick={() => onOpenPage('downloads')} />
-        <SidebarItem icon={<Wifi size={14} />} label="Free WiFi"
-          active={activeTab?.pageType === 'wifi'}
-          onClick={() => onOpenPage('wifi')} />
-        <SidebarItem icon={<Shield size={14} />} label="VPN / Proxy"
-          active={activeTab?.pageType === 'vpn'}
-          onClick={() => onOpenPage('vpn')} />
-        <SidebarItem icon={<Settings size={14} />} label="Settings"
-          active={activeTab?.pageType === 'settings'}
-          onClick={() => onOpenPage('settings')} />
+      {/* ── Brand ── */}
+      <div style={{ padding: '14px 14px 10px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          {/* Logo mark */}
+          <div style={{
+            width: 30, height: 30, borderRadius: 10, flexShrink: 0,
+            background: 'linear-gradient(135deg, #6B4EFF, #9F84FF)',
+            boxShadow: '0 0 16px rgba(107,78,255,0.50), inset 0 1px 0 rgba(255,255,255,0.20)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Sparkles size={13} color="#fff" />
+          </div>
+          <div>
+            <div style={{
+              fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em',
+              background: 'linear-gradient(135deg, #9F84FF, #C2AFFF)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+            }}>
+              AIHub Browser
+            </div>
+            <div style={{ fontSize: 9, color: 'rgb(96,102,130)', marginTop: 1, letterSpacing: '0.05em' }}>
+              AI Operating System
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="h-px bg-aihub-border/30 mx-3 my-1 shrink-0" />
+      {/* Divider with purple gradient */}
+      <div style={{ height: 1, margin: '0 12px 8px', background: 'linear-gradient(90deg, transparent, rgba(107,78,255,0.25), transparent)' }} />
 
-      {/* Bookmarks */}
-      <div className="flex items-center justify-between px-3 py-1.5 shrink-0">
-        <span className="text-xs text-aihub-muted font-semibold uppercase tracking-wider whitespace-nowrap">Bookmarks</span>
-        <button onClick={() => setAddBookmarkOpen(true)}
-          className="w-5 h-5 rounded flex items-center justify-center text-aihub-muted hover:text-aihub-accent hover:bg-aihub-accent/10 transition-all">
-          <Plus size={12} />
+      {/* ── Navigation ── */}
+      <nav style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+        {NAV_ITEMS.map(({ icon: Icon, label, page, type, accent }) => {
+          const active = isActive(type)
+          const activeColor = accent || 'rgb(159,132,255)'
+          return (
+            <button
+              key={type}
+              onClick={() => page ? onOpenPage(page) : onNavigate('home')}
+              className="ds-sidebar-item"
+              style={active ? {
+                color: activeColor,
+                background: accent ? `${accent}18` : 'rgba(107,78,255,0.14)',
+                borderColor: accent ? `${accent}30` : 'rgba(107,78,255,0.28)',
+                boxShadow: `0 0 20px ${accent || 'rgba(107,78,255,0.1)'}20`,
+              } : undefined}
+            >
+              <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                <Icon size={14} />
+              </span>
+              <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
+              {active && (
+                <span style={{
+                  width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+                  background: activeColor,
+                  boxShadow: `0 0 6px ${activeColor}`,
+                }} />
+              )}
+            </button>
+          )
+        })}
+      </nav>
+
+      {/* Divider */}
+      <div style={{ height: 1, margin: '8px 12px', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)' }} />
+
+      {/* ── Bookmarks section ── */}
+      <div style={{ padding: '0 10px 6px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <LayoutGrid size={10} style={{ color: 'rgb(96,102,130)' }} />
+          <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.10em', color: 'rgb(96,102,130)' }}>
+            Bookmarks
+          </span>
+        </div>
+        <button
+          onClick={() => setAddBookmarkOpen(true)}
+          style={{
+            width: 20, height: 20, borderRadius: 7, border: '1px solid rgba(107,78,255,0.20)',
+            background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'rgb(96,102,130)', transition: 'all 0.14s',
+          }}
+          onMouseEnter={e => {
+            const el = e.currentTarget as HTMLElement
+            el.style.background = 'rgba(107,78,255,0.14)'
+            el.style.borderColor = 'rgba(107,78,255,0.35)'
+            el.style.color = 'rgb(159,132,255)'
+            el.style.boxShadow = '0 0 10px rgba(107,78,255,0.20)'
+          }}
+          onMouseLeave={e => {
+            const el = e.currentTarget as HTMLElement
+            el.style.background = 'transparent'
+            el.style.borderColor = 'rgba(107,78,255,0.20)'
+            el.style.color = 'rgb(96,102,130)'
+            el.style.boxShadow = 'none'
+          }}
+        >
+          <Plus size={11} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 space-y-0.5 pb-2">
+      {/* Bookmark list */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}
+        className="no-scrollbar">
+        {bookmarks.length === 0 && (
+          <div style={{ padding: '12px 8px', textAlign: 'center', color: 'rgb(96,102,130)', fontSize: 11 }}>
+            No bookmarks yet
+          </div>
+        )}
         {bookmarks.map(bm => (
-          <button key={bm.id} onClick={() => onNavigate(bm.url)}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-aihub-card/60 transition-colors group">
-            <div className="w-4 h-4 rounded shrink-0 overflow-hidden flex items-center justify-center"
-              style={{ background: `${bm.color}22` }}>
-              <img src={`https://www.google.com/s2/favicons?domain=${bm.url}&sz=16`} className="w-3 h-3"
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+          <button
+            key={bm.id}
+            onClick={() => onNavigate(bm.url)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '6px 8px', borderRadius: 10, border: '1px solid transparent',
+              background: 'transparent', cursor: 'pointer', textAlign: 'left',
+              color: 'rgb(96,102,130)',
+              transition: 'all 0.13s',
+            }}
+            onMouseEnter={e => {
+              const el = e.currentTarget as HTMLElement
+              el.style.background = 'rgba(107,78,255,0.07)'
+              el.style.borderColor = 'rgba(107,78,255,0.14)'
+              el.style.color = 'rgb(184,184,199)'
+            }}
+            onMouseLeave={e => {
+              const el = e.currentTarget as HTMLElement
+              el.style.background = 'transparent'
+              el.style.borderColor = 'transparent'
+              el.style.color = 'rgb(96,102,130)'
+            }}
+          >
+            {/* Favicon with color-tinted bg */}
+            <div style={{
+              width: 18, height: 18, borderRadius: 6, flexShrink: 0,
+              background: `${bm.color || 'rgb(107,78,255)'}1a`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+              border: `1px solid ${bm.color || 'rgba(107,78,255,0.2)'}30`,
+            }}>
+              <img
+                src={`https://www.google.com/s2/favicons?domain=${bm.url}&sz=16`}
+                style={{ width: 11, height: 11, objectFit: 'contain' }}
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
             </div>
-            <span className="flex-1 text-xs text-aihub-muted group-hover:text-aihub-text transition-colors truncate whitespace-nowrap">{bm.title}</span>
+            <span style={{ flex: 1, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {bm.title}
+            </span>
           </button>
         ))}
       </div>
 
-      {/* Footer */}
-      <div className="px-3 py-2 border-t border-aihub-border/30 shrink-0">
-        <div className="flex items-center gap-1.5 text-xs text-aihub-muted/50">
-          <Sparkles size={10} className="text-aihub-accent/60" />
-          <span className="whitespace-nowrap">AIHub Browser</span>
-        </div>
+      {/* ── Footer ── */}
+      <div style={{
+        padding: '8px 14px',
+        borderTop: '1px solid rgba(107,78,255,0.10)',
+        flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontSize: 9, color: 'rgba(96,102,130,0.5)', letterSpacing: '0.04em' }}>
+          AIHub v1.0
+        </span>
+        <span style={{
+          fontSize: 9,
+          background: 'linear-gradient(90deg, rgb(107,78,255), rgb(159,132,255))',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        }}>
+          AI OS
+        </span>
       </div>
     </div>
   )
 }
 
 export default memo(Sidebar)
-
-function SidebarItem({ icon, label, active, onClick }: {
-  icon: React.ReactNode; label: string; active?: boolean; onClick: () => void
-}) {
-  return (
-    <button onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm transition-all whitespace-nowrap ${
-        active ? 'bg-aihub-accent/20 text-aihub-accent' : 'text-aihub-muted hover:bg-aihub-card/60 hover:text-aihub-text'
-      }`}>
-      {icon}
-      <span className="font-medium text-xs">{label}</span>
-    </button>
-  )
-}

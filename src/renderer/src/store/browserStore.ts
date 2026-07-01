@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string }
-export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; pageType?: 'browser'|'settings'|'history'|'downloads'|'wifi' }
+export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; pageType?: 'browser'|'settings'|'history'|'downloads'|'wifi'|'vpn'|'research'|'agents'|'extensions' }
 export interface AIMessage { role: 'user'|'assistant'|'system'; content: string }
 export interface HistoryItem { id: string; url: string; title: string; favicon?: string; timestamp: number }
 export interface DownloadItem { id: string; filename: string; url: string; savePath: string; totalBytes: number; receivedBytes: number; state: string; startedAt: number; completedAt?: number }
@@ -20,6 +20,7 @@ interface BrowserState {
   closeTab: (id: string) => void
   setActiveTab: (id: string) => void
   updateTab: (id: string, u: Partial<Tab>) => void
+  reorderTabs: (fromId: string, toId: string) => void
 
   // Navigation state (per active tab)
   canGoBack: boolean
@@ -49,9 +50,26 @@ interface BrowserState {
   downloads: DownloadItem[]
   setDownloads: (d: DownloadItem[]) => void
   upsertDownload: (d: DownloadItem) => void
+
+  // Extensions
+  extensionStates: Record<string, { enabled: boolean; settings: Record<string, any> }>
+  setExtensionEnabled: (id: string, enabled: boolean) => void
+  setExtensionSettings: (id: string, settings: Record<string, any>) => void
+
+  // WebContentsId per browser tab (for extension injection)
+  tabWcIds: Record<string, number>
+  setTabWcId: (tabId: string, wcId: number) => void
+  removeTabWcId: (tabId: string) => void
 }
 
 let tabN = 1
+
+function loadExtStates(): Record<string, { enabled: boolean; settings: Record<string, any> }> {
+  try { return JSON.parse(localStorage.getItem('aihub-extensions') || '{}') } catch { return {} }
+}
+function saveExtStates(s: Record<string, { enabled: boolean; settings: Record<string, any> }>) {
+  try { localStorage.setItem('aihub-extensions', JSON.stringify(s)) } catch {}
+}
 
 export const useBrowserStore = create<BrowserState>((set, get) => ({
   bookmarks: [],
@@ -74,16 +92,25 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   },
 
   closeTab: (id) => {
-    const { tabs, activeTabId } = get()
+    const { tabs, activeTabId, tabWcIds } = get()
+    const newWcIds = { ...tabWcIds }
+    delete newWcIds[id]
+
     if (tabs.length === 1) {
       const newId = `tab-${++tabN}`
-      set({ tabs: [{ id: newId, url: 'home', title: 'New Tab', favicon: '', isLoading: false, isHome: true, pageType: 'browser' }], activeTabId: newId, canGoBack: false, canGoForward: false })
+      set({ 
+        tabs: [{ id: newId, url: 'home', title: 'New Tab', favicon: '', isLoading: false, isHome: true, pageType: 'browser' }], 
+        activeTabId: newId, 
+        canGoBack: false, 
+        canGoForward: false,
+        tabWcIds: {}
+      })
       return
     }
     const idx = tabs.findIndex(t => t.id === id)
     const newTabs = tabs.filter(t => t.id !== id)
     const newActive = activeTabId === id ? newTabs[Math.max(0, idx - 1)].id : activeTabId
-    set({ tabs: newTabs, activeTabId: newActive })
+    set({ tabs: newTabs, activeTabId: newActive, tabWcIds: newWcIds })
   },
 
   setActiveTab: (id) => {
@@ -94,6 +121,16 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   },
 
   updateTab: (id, u) => set(s => ({ tabs: s.tabs.map(t => t.id === id ? { ...t, ...u } : t) })),
+
+  reorderTabs: (fromId, toId) => set(s => {
+    const tabs = [...s.tabs]
+    const fromIdx = tabs.findIndex(t => t.id === fromId)
+    const toIdx   = tabs.findIndex(t => t.id === toId)
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return {}
+    const [moved] = tabs.splice(fromIdx, 1)
+    tabs.splice(toIdx, 0, moved)
+    return { tabs }
+  }),
 
   canGoBack: false,
   canGoForward: false,
@@ -126,4 +163,20 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     if (idx !== -1) { const arr = [...s.downloads]; arr[idx] = d; return { downloads: arr } }
     return { downloads: [d, ...s.downloads] }
   }),
+
+  extensionStates: loadExtStates(),
+  setExtensionEnabled: (id, enabled) => set(s => {
+    const updated = { ...s.extensionStates, [id]: { ...s.extensionStates[id], enabled, settings: s.extensionStates[id]?.settings || {} } }
+    saveExtStates(updated)
+    return { extensionStates: updated }
+  }),
+  setExtensionSettings: (id, settings) => set(s => {
+    const updated = { ...s.extensionStates, [id]: { ...s.extensionStates[id], settings, enabled: s.extensionStates[id]?.enabled || false } }
+    saveExtStates(updated)
+    return { extensionStates: updated }
+  }),
+
+  tabWcIds: {},
+  setTabWcId: (tabId, wcId) => set(s => ({ tabWcIds: { ...s.tabWcIds, [tabId]: wcId } })),
+  removeTabWcId: (tabId) => set(s => { const m = { ...s.tabWcIds }; delete m[tabId]; return { tabWcIds: m } }),
 }))

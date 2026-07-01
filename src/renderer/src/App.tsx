@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useCallback } from 'react'
-import { useBrowserStore } from './store/browserStore'
+import React, { useRef, useEffect, useCallback, useState } from 'react'
+import { useBrowserStore, type Tab } from './store/browserStore'
 import TabBar from './components/browser/TabBar'
 import NavigationBar from './components/browser/NavigationBar'
 import Sidebar from './components/browser/Sidebar'
@@ -10,6 +10,10 @@ import HistoryPage from './components/pages/HistoryPage'
 import DownloadsPage from './components/pages/DownloadsPage'
 import WifiPage from './components/pages/WifiPage'
 import VpnPage from './components/pages/VpnPage'
+import ResearchPage from './components/pages/ResearchPage'
+import AgentsPage from './components/pages/AgentsPage'
+import ExtensionsPage from './components/pages/ExtensionsPage'
+import { EXTENSION_DEFS } from './extensions/extensionDefs'
 import AddBookmarkModal from './components/homepage/AddBookmarkModal'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import { loadBookmarks } from './services/bookmarkService'
@@ -17,16 +21,13 @@ import { loadBookmarks } from './services/bookmarkService'
 declare global {
   namespace JSX {
     interface IntrinsicElements {
-      webview: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-        src?: string; preload?: string; allowpopups?: string; partition?: string; webpreferences?: string
-      }, HTMLElement>
+      webview: HTMLWebViewElement
     }
   }
   interface Window {
     electronAPI: any
   }
 }
-
 export default function App() {
   const {
     tabs, activeTabId, updateTab, setActiveTab,
@@ -63,6 +64,14 @@ export default function App() {
       return
     }
 
+    // Internal aihub:// pages (research, agents, extensions, history, etc.)
+    if (url.startsWith('aihub://')) {
+      const pageType = url.replace('aihub://', '') as Tab['pageType']
+      const { addTab: storeAddTab } = useBrowserStore.getState()
+      storeAddTab(`aihub://${pageType}`, pageType)
+      return
+    }
+
     let finalUrl = url.trim()
     if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
       finalUrl = `https://${finalUrl}`
@@ -79,14 +88,16 @@ export default function App() {
     updateTab(activeTabId, { url: finalUrl, title: tempTitle, isHome: false, isLoading: true, pageType: 'browser', fromHome: wasHome })
     setNavState({ canGoBack: false, canGoForward: false })
 
+    // If webview already exists (tab was already in browser mode), navigate directly.
+    // If not, the webview will mount fresh and did-attach will call loadURL.
     const wv = webviewMap.current.get(activeTabId) as any
     if (wv?.loadURL) {
-      wv.loadURL(finalUrl)
+      try { wv.loadURL(finalUrl) } catch {}
     }
   }, [activeTabId, updateTab, setNavState])
 
   // ── Open special pages ───────────────────────────────────
-  const openSpecialPage = useCallback((pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn') => {
+  const openSpecialPage = useCallback((pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions') => {
     const { addTab } = useBrowserStore.getState()
     addTab(`aihub://${pageType}`, pageType)
   }, [])
@@ -221,9 +232,10 @@ export default function App() {
   const currentTitle = activeTab?.title
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-aihub-bg select-none">
-      {/* Tab bar — contains tabs + window controls (Chrome-style) */}
-      <div className="drag-region" style={{ borderBottom: '1px solid rgba(59,130,246,0.1)' }}>
+    <div className="flex flex-col h-screen w-screen overflow-hidden select-none"
+      style={{ background: 'linear-gradient(180deg, rgb(23,24,43) 0%, rgb(19,20,38) 100%)' }}>
+      {/* Tab bar — draggable title bar + tabs */}
+      <div className="drag-region">
         <TabBar />
       </div>
 
@@ -245,8 +257,8 @@ export default function App() {
         <Sidebar onNavigate={navigate} onOpenPage={openSpecialPage} />
 
         {/* Content */}
-        <div className="flex flex-1 min-w-0 overflow-hidden">
-          <div className="flex-1 relative min-w-0 overflow-hidden">
+        <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
+          <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
             {/* Home pages */}
             {tabs.map(tab => (
               tab.isHome && tab.pageType === 'browser' && (
@@ -267,14 +279,17 @@ export default function App() {
                   {tab.pageType === 'downloads' && <DownloadsPage />}
                   {tab.pageType === 'wifi'      && <WifiPage />}
                   {tab.pageType === 'vpn'       && <VpnPage />}
+                  {tab.pageType === 'research'    && <ResearchPage onNavigate={navigate} />}
+                  {tab.pageType === 'agents'      && <AgentsPage />}
+                  {tab.pageType === 'extensions'  && <ExtensionsPage />}
                 </div>
               )
             ))}
 
             {/* Webviews */}
             {tabs.filter(t => !t.isHome && t.pageType === 'browser').map(tab => (
-              <div key={`wv-${tab.id}`} className="absolute inset-0"
-                style={{ display: tab.id === activeTabId ? 'flex' : 'none', contain: 'strict' }}>
+              <div key={`wv-${tab.id}`} className="flex-1 h-full"
+                style={{ display: tab.id === activeTabId ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
                 <webview
                   ref={el => {
                     if (el) {
@@ -295,37 +310,42 @@ export default function App() {
                       }
 
                       // ── spinner + title + favicon safety-nets ────────────
-                      // The main useEffect only re-runs on activeTabId change,
-                      // so in-tab navigation events can be missed (stale closure).
-                      // Attaching directly on the element guarantees these always fire.
                       if (!wv.__metaHandled) {
                         wv.__metaHandled = true
 
-                        // Stop spinner
                         const clearSpinner = () => {
                           useBrowserStore.getState().updateTab(tid, { isLoading: false })
                         }
                         wv.addEventListener('did-stop-loading', clearSpinner)
                         wv.addEventListener('did-fail-load',    clearSpinner)
 
-                        // Update tab title from the real page <title>
                         wv.addEventListener('page-title-updated', (e: any) => {
                           if (e.title) useBrowserStore.getState().updateTab(tid, { title: e.title })
                         })
 
-                        // Update favicon
                         wv.addEventListener('page-favicon-updated', (e: any) => {
                           const fav = e.favicons?.[0]
                           if (fav) useBrowserStore.getState().updateTab(tid, { favicon: fav })
                         })
 
-                        // On full navigation, grab title + URL + favicon together
                         wv.addEventListener('did-stop-loading', () => {
                           try {
-                            const title   = (wv as any).getTitle?.()
-                            const url     = (wv as any).getURL?.()
+                            const title = (wv as any).getTitle?.()
+                            const url   = (wv as any).getURL?.()
                             if (title) useBrowserStore.getState().updateTab(tid, { title })
                             if (url)   useBrowserStore.getState().updateTab(tid, { url })
+
+                            const wcId: number | undefined = (wv as any).getWebContentsId?.()
+                            if (wcId) useBrowserStore.getState().setTabWcId(tid, wcId)
+
+                            const { extensionStates } = useBrowserStore.getState()
+                            EXTENSION_DEFS.forEach(ext => {
+                              const state = extensionStates[ext.id]
+                              if (state?.enabled) {
+                                const script = ext.inject(state.settings || {})
+                                window.electronAPI?.webview?.execScript?.(wcId, script)?.catch?.(() => {})
+                              }
+                            })
                           } catch {}
                         })
                       }
@@ -333,10 +353,11 @@ export default function App() {
                       webviewMap.current.delete(tab.id)
                     }
                   }}
-                  src={tab.url}
-                  style={{ width: '100%', height: '100%', flex: 1 }}
-                  allowpopups="true"
-                  webpreferences="contextIsolation=true"
+                  src={tab.url && tab.url !== 'home' ? tab.url : 'about:blank'}
+                  style={{ width: '100%', flex: 1, display: 'block', height: '100%' }}
+                  allowpopups={true}
+                  partition="persist:main"
+                  webpreferences="contextIsolation=true,webSecurity=no"
                 />
               </div>
             ))}
@@ -352,6 +373,44 @@ export default function App() {
 
       {/* Bookmark modal (global) */}
       <AddBookmarkModal />
+
+      {/* Footer clock — bottom-right corner */}
+      <FooterClock />
+    </div>
+  )
+}
+
+function FooterClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const date = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: 10, right: 14,
+      zIndex: 180, pointerEvents: 'none',
+      display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1,
+    }}>
+      <span style={{
+        fontSize: 13, fontWeight: 600, letterSpacing: '0.03em',
+        color: 'rgba(159,132,255,0.90)',
+        textShadow: '0 0 12px rgba(107,78,255,0.50)',
+        fontVariantNumeric: 'tabular-nums',
+      }}>
+        {time}
+      </span>
+      <span style={{
+        fontSize: 9.5, fontWeight: 500, letterSpacing: '0.04em',
+        color: 'rgba(96,102,130,0.70)',
+        textTransform: 'uppercase',
+      }}>
+        {date}
+      </span>
     </div>
   )
 }

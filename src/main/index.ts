@@ -193,9 +193,9 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440, height: 900, minWidth: 900, minHeight: 600,
     show: false, frame: false, titleBarStyle: 'hidden',
-    // Always allow transparency so setBackgroundMaterial works at runtime
-    // without needing an app restart when the user switches modes.
-    backgroundColor: glassMode ? '#00000000' : '#070B14',
+    // Windows 11 native DWM rounded corners (no-op on older Windows/macOS)
+    roundedCorners: true,
+    backgroundColor: glassMode ? '#00000000' : '#17182B',
     transparent: glassMode,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -238,8 +238,8 @@ function createWindow(): void {
     if (menu.items.length > 0) menu.popup({ window: mainWindow })
   })
 
-  // ── Download tracking ──────────────────────────────────────────────────
-  mainWindow.webContents.session.on('will-download', (_e, item) => {
+  // ── Download tracking — covers mainWindow + all webviews ──────────────
+  const handleDownload = (_e: any, item: any) => {
     const dls = readJson(DL_FILE, [])
     const dl: any = {
       id: `dl-${Date.now()}`, filename: item.getFilename(), url: item.getURL(),
@@ -260,6 +260,17 @@ function createWindow(): void {
     })
     dls.unshift({ ...dl }); writeJson(DL_FILE, dls.slice(0, 500))
     safelySend('download:update', dl)
+  }
+
+  // Attach to default session (covers webviews) + mainWindow session
+  session.defaultSession.on('will-download', handleDownload)
+  if (mainWindow.webContents.session !== session.defaultSession) {
+    mainWindow.webContents.session.on('will-download', handleDownload)
+  }
+
+  // Also catch any webview that uses its own session
+  app.on('web-contents-created', (_e, wc) => {
+    wc.session.on('will-download', handleDownload)
   })
 
   if (isDev && process.env['ELECTRON_RENDERER_URL']) mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -298,6 +309,14 @@ app.whenReady().then(() => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
+
+// Network service crashes and restarts automatically — this is non-fatal.
+// Without this handler Electron 28+ may surface it as an unhandled event.
+app.on('child-process-gone', (_event, details) => {
+  if (details.type === 'Utility' && details.name?.includes('network')) return
+  if (details.reason === 'clean-exit') return
+  console.warn('[aihub] child-process-gone:', details.type, details.reason)
+})
 
 // ── IPC: Default browser ───────────────────────────────────────────────────
 ipcMain.handle('app:isDefaultBrowser', () => {

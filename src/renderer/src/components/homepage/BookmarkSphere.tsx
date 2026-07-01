@@ -127,7 +127,7 @@ function buildGraphData(bookmarks: Bookmark[]): { nodes: ExtNode[]; links: ExtLi
     return {
       id:          bm.id,
       bookmark:    bm,
-      size:        12 + (conn / maxConn) * 30,
+      size:        18 + (conn / maxConn) * 34,
       color:       resolveColor(bm),
       connections: conn,
     }
@@ -265,7 +265,8 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     }
 
     // ── Nodes ────────────────────────────────────────────────────────────
-    for (const node of nodes) {
+    for (let ni = 0; ni < nodes.length; ni++) {
+      const node    = nodes[ni]
       const nx      = node.x ?? 0
       const ny      = node.y ?? 0
       const r       = nodeRadius(node.size)
@@ -298,14 +299,28 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       const drawR = r * scale
       if (drawR <= 0) { ctx.globalAlpha = 1; continue }
 
-      // Subtle hub pulse
+      // Pulsing aura — all nodes breathe, hubs breathe more
       let hubBoost = 0
-      if (isHub && !eActive && isConn && isMatch) {
-        hubBoost = Math.sin(now * 0.0009 + node.connections * 0.8) * 0.09
+      if (!eActive && isConn && isMatch) {
+        const amplitude = isHub ? 0.10 : 0.055
+        hubBoost = Math.sin(now * 0.0013 + ni * 0.4) * amplitude
       }
       const finalR = drawR * (1 + hubBoost)
 
       const isHov = hoveredRef.current?.id === node.id
+
+      // Per-node colored aura ring (small arc, NOT fullscreen fillRect)
+      if (!eActive && isConn && isMatch && ga > 0.3) {
+        const pulse    = 0.5 + Math.sin(now * 0.0013 + ni * 0.4) * 0.5
+        const auraR    = finalR * (1.5 + pulse * 0.35)
+        const auraGrd  = ctx.createRadialGradient(nx, ny, finalR * 0.8, nx, ny, auraR)
+        auraGrd.addColorStop(0, hexToRgba(col, (isHub ? 0.22 : 0.12) * pulse))
+        auraGrd.addColorStop(1, hexToRgba(col, 0))
+        ctx.fillStyle = auraGrd
+        ctx.beginPath()
+        ctx.arc(nx, ny, auraR, 0, Math.PI * 2)
+        ctx.fill()
+      }
 
       // Outer glow halo
       if ((isSel || isHov || (isHub && ga > 0.5)) && ga > 0.1) {
@@ -335,13 +350,15 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       ctx.globalAlpha = 1
     }
 
-    // ── Labels ───────────────────────────────────────────────────────────
-    if (k >= LABEL_ZOOM) {
+    // ── Labels — hubs always, others when zoomed in ──────────────────────
+    {
       const fs = Math.max(8, Math.min(13, 10.5 / k))
       ctx.font      = `${fs}px Inter, system-ui, sans-serif`
       ctx.textAlign = 'center'
 
       for (const node of nodes) {
+        const isHub   = node.connections >= HUB_THRESHOLD
+        if (k < LABEL_ZOOM && !isHub) continue
         const isConn  = connSet  ? connSet.has(node.id)  : true
         const isMatch = matchSet ? matchSet.has(node.id) : true
         if ((selId && !isConn) || (matchSet && !isMatch)) continue
@@ -365,7 +382,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     }
 
     ctx.restore()
-  }, [])
+  }, [])  // draw is stable; refs hold mutable state
 
   // ── RAF loop ─────────────────────────────────────────────────────────────
   const startLoop = useCallback(() => {
@@ -455,8 +472,8 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     const linkDist = Math.max(90, Math.min(220, 65 + n * 4))
 
     const sim = d3.forceSimulation<ExtNode>(nodes)
-      .alphaDecay(0.016)
-      .velocityDecay(0.38)
+      .alphaDecay(0.024)
+      .velocityDecay(0.46)
       .force('link', d3.forceLink<ExtNode, ExtLink>(links)
         .id(d => d.id)
         .distance(linkDist)
@@ -473,8 +490,8 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     nodesRef.current = nodes
     linksRef.current = (sim.force('link') as d3.ForceLink<ExtNode, ExtLink>).links()
 
-    // Pre-tick for initial spread
-    const ticks = Math.min(220, Math.max(80, n * 4))
+    // Pre-tick for initial spread — more ticks = nodes arrive already spread
+    const ticks = Math.min(300, Math.max(120, n * 6))
     for (let i = 0; i < ticks; i++) sim.tick()
 
     fitView()

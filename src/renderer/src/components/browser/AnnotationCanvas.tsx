@@ -116,21 +116,24 @@ function buildScript(tool: Tool, color: string, width: number): string {
 }
 
 export default function AnnotationCanvas({ webview }: { webview: any | null }) {
-  const { toggleAnnotationMode } = useBrowserStore()
+  const { toggleAnnotationMode, activeTabId, tabWcIds } = useBrowserStore()
+  const wcId = activeTabId ? tabWcIds[activeTabId] : null
 
-  const [tool, setTool]           = useState<Tool>('pen')
-  const [color, setColor]         = useState('#ef4444')
-  const [lineWidth, setLineWidth] = useState(5)
-  const [status, setStatus]       = useState<'pending' | 'ok' | 'error' | 'no-webview'>('pending')
-  const [statusMsg, setStatusMsg] = useState('')
+  const [tool,        setTool]        = useState<Tool>('pen')
+  const [color,       setColor]       = useState('#ef4444')
+  const [lineWidth,   setLineWidth]   = useState(5)
+  const [status,      setStatus]      = useState<'pending' | 'ok' | 'error' | 'no-webview'>('pending')
+  const [statusMsg,   setStatusMsg]   = useState('')
+  // pointer mode = canvas transparent to mouse so user can browse normally while annotations stay
+  const [pointerMode, setPointerMode] = useState(false)
   const wcIdRef = useRef<number | null>(null)
 
   // ── Helper: run script via IPC (main process → webContents) ──────────
   const execScript = useCallback(async (script: string) => {
-    const wcId = wcIdRef.current
-    if (wcId === null) return null
+    const targetWcId = wcIdRef.current
+    if (targetWcId === null) return null
     try {
-      const res = await window.electronAPI.webview.execScript(wcId, script)
+      const res = await window.electronAPI.webview.execScript(targetWcId, script)
       if (!res?.ok) {
         console.warn('[Annotation] execScript failed:', res?.error)
       }
@@ -141,30 +144,32 @@ export default function AnnotationCanvas({ webview }: { webview: any | null }) {
     }
   }, [])
 
-  // ── Inject canvas on mount ────────────────────────────────────────────
+  // ── Inject canvas on mount / when wcId becomes available ──────────────
   useEffect(() => {
     if (!webview) {
       setStatus('no-webview')
       return
     }
 
-    // Get webContentsId
-    let wcId: number | null = null
-    try {
-      wcId = webview.getWebContentsId?.() ?? null
-    } catch {}
+    // Determine the webContents ID
+    let currentWcId = wcId
+    if (!currentWcId) {
+      try {
+        currentWcId = webview.getWebContentsId?.() ?? null
+      } catch {}
+    }
 
-    if (wcId === null) {
-      setStatus('error')
-      setStatusMsg('Could not get webContentsId')
+    if (!currentWcId) {
+      setStatus('pending')
+      setStatusMsg('Waiting for page load...')
       return
     }
 
-    wcIdRef.current = wcId
+    wcIdRef.current = currentWcId
     setStatus('pending')
 
     const script = buildScript(tool, color, lineWidth)
-    window.electronAPI.webview.execScript(wcId, script)
+    window.electronAPI.webview.execScript(currentWcId, script)
       .then((res: any) => {
         if (res?.ok) {
           setStatus('ok')
@@ -192,13 +197,20 @@ export default function AnnotationCanvas({ webview }: { webview: any | null }) {
       }
       wcIdRef.current = null
     }
-  }, [webview]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [webview, wcId])
 
   // ── Sync tool state ───────────────────────────────────────────────────
   useEffect(() => {
     if (status !== 'ok') return
     execScript(`window.__aihub&&window.__aihub.set(${JSON.stringify(tool)},${JSON.stringify(color)},${lineWidth})`)
   }, [tool, color, lineWidth, status, execScript])
+
+  // ── Toggle pointer-events on injected canvas ──────────────────────────
+  useEffect(() => {
+    if (status !== 'ok') return
+    const pe = pointerMode ? 'none' : 'all'
+    execScript(`var cv=document.getElementById('__aihub_cv');if(cv){cv.style.pointerEvents=${JSON.stringify(pe)};cv.style.cursor=${pointerMode ? '"default"' : '"crosshair"'};}`)
+  }, [pointerMode, status, execScript])
 
   const undo = useCallback(() => execScript(`window.__aihub&&window.__aihub.undo()`), [execScript])
   const redo = useCallback(() => execScript(`window.__aihub&&window.__aihub.redo()`), [execScript])
@@ -304,6 +316,20 @@ export default function AnnotationCanvas({ webview }: { webview: any | null }) {
         </span>
         <span style={{ fontSize: 9, fontWeight: 700, color: statusColor, marginLeft: 4 }}>{statusText}</span>
         <div style={{ flex: 1 }} />
+        {/* Pointer / Draw mode toggle */}
+        <button
+          onClick={() => setPointerMode(m => !m)}
+          title={pointerMode ? 'Switch to Draw mode' : 'Switch to Pointer mode — browse page normally'}
+          style={{
+            ...actionBtn,
+            background: pointerMode ? 'rgba(59,130,246,0.18)' : 'rgba(255,255,255,0.05)',
+            color: pointerMode ? '#60a5fa' : '#64748b',
+            borderColor: pointerMode ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.1)',
+            fontWeight: 700,
+          }}
+        >
+          {pointerMode ? '🖱 Pointer' : '✏️ Draw'}
+        </button>
         <button onClick={toggleAnnotationMode} style={{ ...actionBtn, color: '#ef4444', borderColor: 'rgba(239,68,68,0.2)' }}>✕</button>
       </div>
 
@@ -319,8 +345,15 @@ export default function AnnotationCanvas({ webview }: { webview: any | null }) {
         </div>
       )}
 
+      {/* Pointer mode info banner */}
+      {pointerMode && (
+        <div style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.18)', borderRadius: 8, padding: '5px 8px', textAlign: 'center' }}>
+          🖱 Pointer mode — annotations visible, page is interactive
+        </div>
+      )}
+
       {/* Tools */}
-      <div style={row}>
+      <div style={{ ...row, opacity: pointerMode ? 0.35 : 1, pointerEvents: pointerMode ? 'none' : 'auto', transition: 'opacity 0.15s' }}>
         {TOOL_DEFS.map(t => (
           <button key={t.id} style={toolBtn(tool === t.id)} title={t.label} onClick={() => setTool(t.id)}>
             {t.icon}
@@ -331,7 +364,7 @@ export default function AnnotationCanvas({ webview }: { webview: any | null }) {
       <div style={divider} />
 
       {/* Colors */}
-      <div style={row}>
+      <div style={{ ...row, opacity: pointerMode ? 0.35 : 1, pointerEvents: pointerMode ? 'none' : 'auto', transition: 'opacity 0.15s' }}>
         {COLORS.map(c => (
           <div key={c} style={colorSwatch(c)} title={c} onClick={() => setColor(c)} />
         ))}
@@ -340,7 +373,7 @@ export default function AnnotationCanvas({ webview }: { webview: any | null }) {
       <div style={divider} />
 
       {/* Sizes */}
-      <div style={row}>
+      <div style={{ ...row, opacity: pointerMode ? 0.35 : 1, pointerEvents: pointerMode ? 'none' : 'auto', transition: 'opacity 0.15s' }}>
         <span style={{ fontSize: 10, color: '#475569', marginRight: 2 }}>Size</span>
         {SIZES.map(s => (
           <button key={s.value} style={sizeBtn(s.value)} onClick={() => setLineWidth(s.value)}>{s.label}</button>

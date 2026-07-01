@@ -1,7 +1,11 @@
 import React, { useEffect, useState, memo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Sparkles, LayoutGrid, Network, RefreshCw, Zap, Clock, X, ChevronLeft, ChevronRight, Trash2, Download, Upload, Eye, EyeOff } from 'lucide-react'
+import {
+  Plus, Sparkles, LayoutGrid, Network, RefreshCw, Zap, Clock, X,
+  ChevronLeft, ChevronRight, Download, Upload, Eye, EyeOff,
+  FlaskConical, Bot, Newspaper, BookOpen, Search,
+} from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { loadBookmarks, removeBookmark } from '../../services/bookmarkService'
 import BookmarkSphere from './BookmarkSphere'
@@ -16,8 +20,8 @@ const ITEMS_PER_PAGE = 16
 
 function glassStyle(isLight: boolean): React.CSSProperties {
   return isLight
-    ? { background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }
-    : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }
+    ? { background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }
+    : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }
 }
 
 export default function HomePage({ onNavigate }: Props) {
@@ -87,7 +91,7 @@ export default function HomePage({ onNavigate }: Props) {
     const r = await window.electronAPI.bookmarks.import()
     if (!r.success && !r.imported) return
     if (r.success) {
-      showToast(`Imported ${r.imported} bookmarks${r.skipped ? ` · ${r.skipped} skipped (duplicates)` : ''}`, true)
+      showToast(`Imported ${r.imported} bookmarks${r.skipped ? ` · ${r.skipped} skipped` : ''}`, true)
       const updated = await window.electronAPI.bookmarks.getAll()
       setBookmarks(updated)
     } else if (r.error) {
@@ -114,43 +118,77 @@ export default function HomePage({ onNavigate }: Props) {
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden"
-      style={{ background: isLight ? 'linear-gradient(160deg,#f8fafc 0%,#f1f5f9 100%)' : 'linear-gradient(160deg,#070B14 0%,#060A12 100%)' }}>
+      style={{ background: isLight ? 'linear-gradient(160deg,#f0f0f8 0%,#ededf8 100%)' : 'linear-gradient(160deg,#17182B 0%,#1E2140 100%)' }}>
 
-      {/* Atmospheric blobs */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 left-1/4 w-[520px] h-[360px] rounded-full blur-[130px]"
-          style={{ background: isLight ? 'rgba(37,99,235,0.06)' : 'rgba(59,130,246,0.055)' }} />
-        <div className="absolute bottom-0 right-1/4 w-[420px] h-[260px] rounded-full blur-[110px]"
-          style={{ background: isLight ? 'rgba(124,58,237,0.05)' : 'rgba(139,92,246,0.04)' }} />
-      </div>
+      {/* ── Aurora background orbs ── */}
+      {!isLight && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+          {/* Purple main orb */}
+          <div className="aurora-orb-1 absolute rounded-full"
+            style={{ width: 700, height: 450, top: '-100px', left: '5%', background: 'radial-gradient(ellipse, rgba(107,78,255,0.18) 0%, rgba(107,78,255,0.05) 50%, transparent 70%)', filter: 'blur(50px)' }} />
+          {/* Soft violet orb */}
+          <div className="aurora-orb-2 absolute rounded-full"
+            style={{ width: 500, height: 380, top: '25%', right: '0%', background: 'radial-gradient(ellipse, rgba(159,132,255,0.10) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+          {/* Indigo accent at bottom */}
+          <div className="aurora-orb-3 absolute rounded-full"
+            style={{ width: 450, height: 320, bottom: '5%', left: '20%', background: 'radial-gradient(ellipse, rgba(107,78,255,0.08) 0%, rgba(194,175,255,0.04) 50%, transparent 70%)', filter: 'blur(70px)' }} />
+          {/* Subtle dot grid */}
+          <div className="absolute inset-0" style={{
+            backgroundImage: 'radial-gradient(rgba(107,78,255,0.06) 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+          }} />
+        </div>
+      )}
 
-      <div className="relative z-10 flex flex-col h-full overflow-y-auto">
+      <div className="relative flex flex-col h-full overflow-y-auto" style={{ zIndex: 1 }}>
 
-        {/* Clock */}
-        <motion.div className="text-center pt-10 pb-2"
-          initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
-          <div className={`text-6xl font-extralight tracking-tight tabular-nums ${isLight ? 'text-slate-800' : 'text-slate-100'}`}>{timeStr}</div>
-          <div className={`text-xs mt-1.5 font-medium tracking-wide ${isLight ? 'text-slate-500' : 'text-slate-600'}`}>{greeting} &nbsp;·&nbsp; {dateStr}</div>
+        {/* ── Hero: Clock + Search ── */}
+        <div className="flex flex-col items-center pt-10 pb-4 px-6">
+          <motion.div className="text-center mb-1"
+            initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <div className={`font-extralight tracking-tight tabular-nums ${isLight ? 'text-slate-800' : 'text-white'}`}
+              style={{ fontSize: 72, lineHeight: 1, textShadow: isLight ? 'none' : '0 0 40px rgba(107,78,255,0.30), 0 0 80px rgba(107,78,255,0.12)' }}>
+              {timeStr}
+            </div>
+            <div className={`text-xs mt-2 font-medium tracking-wide ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
+              {greeting} &nbsp;·&nbsp; {dateStr}
+            </div>
+          </motion.div>
+
+          {/* Search */}
+          <motion.div className="w-full max-w-2xl mt-5"
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+            <SearchBar onNavigate={onNavigate} />
+          </motion.div>
+        </div>
+
+        {/* ── Feature shortcuts ── */}
+        <motion.div className="flex justify-center gap-2.5 px-6 pb-5 flex-wrap"
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+          <FeaturePill icon={<FlaskConical size={13} />} label="Research Mode" color="#38bdf8"
+            onClick={() => (window as any).electronAPI?._openPage?.('research') ?? onNavigate('aihub://research')} />
+          <FeaturePill icon={<Bot size={13} />} label="Agent Mode" color="#a78bfa"
+            onClick={() => onNavigate('aihub://agents')} />
+          <FeaturePill icon={<Newspaper size={13} />} label="AI News" color="#fb923c"
+            onClick={() => onNavigate('https://news.ycombinator.com')} />
+          <FeaturePill icon={<Network size={13} />} label="Bookmark Sphere" color="#34d399"
+            onClick={() => setView('sphere')} />
+          <FeaturePill icon={<Search size={13} />} label="History Search" color="#c084fc"
+            onClick={() => onNavigate('aihub://history')} />
         </motion.div>
 
-        {/* Search */}
-        <motion.div className="px-6 pb-5 max-w-3xl mx-auto w-full"
-          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.10 }}>
-          <SearchBar onNavigate={onNavigate} />
-        </motion.div>
-
-        {/* Bookmarks */}
-        <motion.div className="px-6 pb-4"
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.16 }}>
+        {/* ── Bookmarks ── */}
+        <motion.div className="px-6 pb-5"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.22 }}>
           <div className="max-w-3xl mx-auto">
 
-            {/* Header row */}
+            {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_5px_#3b82f6]" />
-                <span className={`text-[11px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>Bookmarks</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" style={{ boxShadow: '0 0 6px #3b82f6' }} />
+                <span className={`text-[11px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-400' : 'text-slate-600'}`}>Bookmarks</span>
                 {totalPages > 1 && (
-                  <span className={`text-[10px] ml-1 ${isLight ? 'text-slate-400' : 'text-slate-700'}`}>{bmPage + 1}/{totalPages}</span>
+                  <span className={`text-[10px] ml-1 ${isLight ? 'text-slate-300' : 'text-slate-700'}`}>{bmPage + 1}/{totalPages}</span>
                 )}
               </div>
               <div className="flex items-center gap-1.5">
@@ -167,7 +205,7 @@ export default function HomePage({ onNavigate }: Props) {
                   </div>
                 )}
 
-                <div className="flex items-center gap-0.5 no-drag" style={{ ...glass, borderRadius: 8 }}>
+                <div className="flex items-center no-drag" style={{ ...glass, borderRadius: 8 }}>
                   <ExportImportMenu isLight={isLight} onExport={handleExport} onImport={handleImport} />
                 </div>
 
@@ -175,39 +213,39 @@ export default function HomePage({ onNavigate }: Props) {
                   <ViewBtn isLight={isLight} active={view === 'grid'} onClick={() => setView('grid')} label="Grid">
                     <LayoutGrid size={12} />
                   </ViewBtn>
-                  <ViewBtn isLight={isLight} active={view === 'sphere'} onClick={() => setView('sphere')} label="Graph">
+                  <ViewBtn isLight={isLight} active={view === 'sphere'} onClick={() => setView('sphere')} label="Sphere">
                     <Network size={12} />
                   </ViewBtn>
                 </div>
               </div>
             </div>
 
-            {/* Bookmark grid */}
-            <div className="flex flex-wrap justify-center gap-5" style={{ minHeight: 172 }}>
+            {/* Bookmark grid — larger tiles */}
+            <div className="flex flex-wrap justify-center gap-5" style={{ minHeight: 104 }}>
               {pageBms.map((bm, i) => (
                 <BookmarkTile key={bm.id} bm={bm} index={i} isLight={isLight} onNavigate={onNavigate} onRemove={handleRemove} />
               ))}
 
               {isLastPage && (
-                <button onClick={() => setAddBookmarkOpen(true)} className="flex flex-col items-center gap-2 group no-drag" style={{ width: 76 }}>
+                <button onClick={() => setAddBookmarkOpen(true)} className="flex flex-col items-center gap-2 group no-drag" style={{ width: 88 }}>
                   <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200 group-hover:scale-110"
+                    className="w-16 h-16 rounded-[18px] flex items-center justify-center transition-all duration-200 group-hover:scale-105"
                     style={{
                       background: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                      border:     isLight ? '1px dashed rgba(0,0,0,0.12)' : '1px dashed rgba(255,255,255,0.12)',
+                      border: isLight ? '1.5px dashed rgba(0,0,0,0.12)' : '1.5px dashed rgba(255,255,255,0.10)',
                     }}
                     onMouseEnter={e => {
-                      (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.4)'
+                      (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.45)'
                       ;(e.currentTarget as HTMLElement).style.background = 'rgba(59,130,246,0.07)'
                     }}
                     onMouseLeave={e => {
-                      (e.currentTarget as HTMLElement).style.borderColor = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)'
+                      (e.currentTarget as HTMLElement).style.borderColor = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.10)'
                       ;(e.currentTarget as HTMLElement).style.background = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)'
                     }}
                   >
-                    <Plus size={20} className={`transition-colors group-hover:text-blue-400 ${isLight ? 'text-slate-400' : 'text-slate-600'}`} />
+                    <Plus size={22} className={`transition-colors group-hover:text-blue-400 ${isLight ? 'text-slate-300' : 'text-slate-700'}`} />
                   </div>
-                  <span className={`text-[11px] text-center ${isLight ? 'text-slate-400' : 'text-slate-600'}`}>Add</span>
+                  <span className={`text-[11px] text-center ${isLight ? 'text-slate-300' : 'text-slate-700'}`}>Add</span>
                 </button>
               )}
             </div>
@@ -218,7 +256,7 @@ export default function HomePage({ onNavigate }: Props) {
                 {Array.from({ length: totalPages }).map((_, i) => (
                   <button key={i} onClick={() => setBmPage(i)}
                     className={`rounded-full transition-all duration-200 no-drag ${
-                      i === bmPage ? 'w-4 h-1.5 bg-blue-500' : `w-1.5 h-1.5 ${isLight ? 'bg-slate-300 hover:bg-slate-400' : 'bg-slate-700 hover:bg-slate-500'}`
+                      i === bmPage ? 'w-4 h-1.5 bg-blue-500' : `w-1.5 h-1.5 ${isLight ? 'bg-slate-200 hover:bg-slate-300' : 'bg-slate-800 hover:bg-slate-600'}`
                     }`}
                   />
                 ))}
@@ -227,30 +265,35 @@ export default function HomePage({ onNavigate }: Props) {
           </div>
         </motion.div>
 
-        {/* AI Recommendations */}
-        <motion.div className="px-6 pb-8 max-w-3xl mx-auto w-full"
-          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}>
+        {/* ── Divider ── */}
+        <div className="max-w-3xl mx-auto w-full px-6 mb-5">
+          <div style={{ height: 1, background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)' }} />
+        </div>
+
+        {/* ── AI Recommendations ── */}
+        <motion.div className="px-6 pb-5 max-w-3xl mx-auto w-full"
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Zap size={12} className="text-blue-400" />
-              <span className={`text-[11px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>AI Picks For You</span>
+              <span className={`text-[11px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-400' : 'text-slate-600'}`}>AI Picks For You</span>
             </div>
             <button onClick={refreshRecommendations} disabled={loadingRecs}
-              className={`flex items-center gap-1 text-xs transition-colors disabled:opacity-40 no-drag ${isLight ? 'text-slate-500 hover:text-blue-500' : 'text-slate-600 hover:text-blue-400'}`}>
+              className={`flex items-center gap-1 text-xs transition-colors disabled:opacity-40 no-drag ${isLight ? 'text-slate-400 hover:text-blue-600' : 'text-slate-600 hover:text-blue-400'}`}>
               <RefreshCw size={11} className={loadingRecs ? 'animate-spin' : ''} />
               Refresh
             </button>
           </div>
 
           {recommendations.length === 0 ? (
-            <div className="flex items-center justify-center h-24 rounded-2xl gap-2 text-xs"
+            <div className="flex flex-col items-center justify-center gap-3 h-24 rounded-2xl text-xs"
               style={{
-                border: isLight ? '1px dashed rgba(0,0,0,0.1)' : '1px dashed rgba(255,255,255,0.07)',
+                border: isLight ? '1px dashed rgba(0,0,0,0.08)' : '1px dashed rgba(255,255,255,0.06)',
                 background: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)',
-                color: isLight ? '#94a3b8' : '#475569',
+                color: isLight ? '#94a3b8' : '#334155',
               }}>
-              <Sparkles size={13} className="text-blue-500/40" />
-              Browse a few sites — AI will personalise recommendations
+              <Sparkles size={16} className="text-blue-500/30" />
+              Browse a few sites — AI will personalise your recommendations
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-3">
@@ -261,14 +304,14 @@ export default function HomePage({ onNavigate }: Props) {
           )}
         </motion.div>
 
-        {/* Recent Activity */}
+        {/* ── Recent Activity ── */}
         <RecentActivity isLight={isLight} onNavigate={onNavigate} />
         <div className="h-8" />
       </div>
 
       <AddBookmarkModal />
 
-      {/* Toast */}
+      {/* ── Toast ── */}
       <AnimatePresence>
         {bmToast && (
           <motion.div
@@ -278,9 +321,9 @@ export default function HomePage({ onNavigate }: Props) {
             transition={{ duration: 0.18 }}
             className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-xs font-medium no-drag pointer-events-none"
             style={{
-              background: bmToast.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-              border: `1px solid ${bmToast.ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-              backdropFilter: 'blur(16px)',
+              background: bmToast.ok ? 'rgba(16,185,129,0.14)' : 'rgba(239,68,68,0.14)',
+              border: `1px solid ${bmToast.ok ? 'rgba(16,185,129,0.28)' : 'rgba(239,68,68,0.28)'}`,
+              backdropFilter: 'blur(20px)',
               color: bmToast.ok ? (isLight ? '#065f46' : '#6ee7b7') : (isLight ? '#991b1b' : '#fca5a5'),
               boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
             }}
@@ -294,7 +337,29 @@ export default function HomePage({ onNavigate }: Props) {
   )
 }
 
-// ── Export / Import dropdown ─────────────────────────────────────────────────
+// ── Feature pill ─────────────────────────────────────────────────────────────
+function FeaturePill({ icon, label, color, onClick }: { icon: React.ReactNode; label: string; color: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="feature-pill no-drag" style={{ '--pill-color': color } as any}
+      onMouseEnter={e => {
+        const el = e.currentTarget as HTMLElement
+        el.style.background = `${color}18`
+        el.style.borderColor = `${color}45`
+        el.style.color = color
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget as HTMLElement
+        el.style.background = ''
+        el.style.borderColor = ''
+        el.style.color = ''
+      }}>
+      {icon}
+      {label}
+    </button>
+  )
+}
+
+// ── Export / Import dropdown ──────────────────────────────────────────────────
 function ExportImportMenu({ isLight, onExport, onImport }: {
   isLight: boolean
   onExport: (fmt: 'json' | 'html') => void
@@ -316,12 +381,12 @@ function ExportImportMenu({ isLight, onExport, onImport }: {
     ? (open ? '#374151' : '#6b7280')
     : (open ? '#e2e8f0' : '#94a3b8')
 
-  const menuBg     = isLight ? '#ffffff'  : '#0f1c2e'
-  const menuBorder = isLight ? '1.5px solid rgba(37,99,235,0.35)' : '1.5px solid rgba(59,130,246,0.55)'
+  const menuBg     = isLight ? '#ffffff'  : '#0c1628'
+  const menuBorder = isLight ? '1.5px solid rgba(37,99,235,0.25)' : '1.5px solid rgba(59,130,246,0.35)'
   const menuShadow = isLight
-    ? '0 8px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.12)'
-    : '0 20px 60px rgba(0,0,0,0.95), 0 4px 16px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.08)'
-  const dividerBg  = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.14)'
+    ? '0 8px 32px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.08)'
+    : '0 20px 60px rgba(0,0,0,0.9), 0 4px 16px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)'
+  const dividerBg  = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.10)'
 
   return (
     <div>
@@ -334,15 +399,11 @@ function ExportImportMenu({ isLight, onExport, onImport }: {
         <Download size={12} />
       </button>
 
-      {/* Portal always mounted — AnimatePresence lives INSIDE to avoid exit-animation deadlock */}
       {createPortal(
         <>
-          {/* Backdrop — closes instantly, no animation needed */}
           {open && (
             <div style={{ position: 'fixed', inset: 0, zIndex: 99997 }} onClick={() => setOpen(false)} />
           )}
-
-          {/* Dropdown — animated by AnimatePresence inside the portal */}
           <AnimatePresence>
             {open && (
               <motion.div
@@ -352,29 +413,21 @@ function ExportImportMenu({ isLight, onExport, onImport }: {
                 exit={{ opacity: 0, scale: 0.95, y: -4 }}
                 transition={{ duration: 0.12 }}
                 style={{
-                  position: 'fixed',
-                  top: dropPos.top,
-                  right: dropPos.right,
-                  zIndex: 99998,
-                  width: 210,
-                  background: menuBg,
-                  border: menuBorder,
-                  borderRadius: 14,
-                  overflow: 'hidden',
-                  boxShadow: menuShadow,
+                  position: 'fixed', top: dropPos.top, right: dropPos.right,
+                  zIndex: 99998, width: 210, background: menuBg,
+                  border: menuBorder, borderRadius: 14, overflow: 'hidden', boxShadow: menuShadow,
                 }}
               >
                 <div style={{
                   padding: '8px 14px 7px',
-                  borderBottom: isLight ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(255,255,255,0.12)',
-                  background: menuBg,
+                  borderBottom: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.08)',
                 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: isLight ? '#94a3b8' : '#4a6080', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Bookmarks</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: isLight ? '#94a3b8' : '#3d5080', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Bookmarks</span>
                 </div>
-                <MenuItem isLight={isLight} icon={<Download size={12} />} label="Export as JSON"   onClick={() => { onExport('json'); setOpen(false) }} />
-                <MenuItem isLight={isLight} icon={<Download size={12} />} label="Export as HTML"   onClick={() => { onExport('html'); setOpen(false) }} sub="Chrome / Firefox compatible" />
+                <MenuItem isLight={isLight} icon={<Download size={12} />} label="Export as JSON" onClick={() => { onExport('json'); setOpen(false) }} />
+                <MenuItem isLight={isLight} icon={<Download size={12} />} label="Export as HTML" onClick={() => { onExport('html'); setOpen(false) }} sub="Chrome / Firefox compatible" />
                 <div style={{ height: 1, background: dividerBg, margin: '2px 12px' }} />
-                <MenuItem isLight={isLight} icon={<Upload size={12} />}   label="Import bookmarks" onClick={() => { onImport(); setOpen(false) }} sub="JSON or HTML (Chrome, Firefox…)" />
+                <MenuItem isLight={isLight} icon={<Upload size={12} />} label="Import bookmarks" onClick={() => { onImport(); setOpen(false) }} sub="JSON or HTML (Chrome, Firefox…)" />
               </motion.div>
             )}
           </AnimatePresence>
@@ -390,7 +443,7 @@ function MenuItem({ isLight, icon, label, sub, onClick }: { isLight: boolean; ic
     <button onClick={onClick} className="flex items-start gap-2.5 w-full px-3 py-2.5 text-left transition-all"
       style={{ color: isLight ? '#6b7280' : '#94a3b8' }}
       onMouseEnter={e => {
-        (e.currentTarget as HTMLElement).style.background = isLight ? 'rgba(37,99,235,0.06)' : 'rgba(59,130,246,0.1)'
+        (e.currentTarget as HTMLElement).style.background = isLight ? 'rgba(37,99,235,0.05)' : 'rgba(59,130,246,0.09)'
         ;(e.currentTarget as HTMLElement).style.color = isLight ? '#111827' : '#e2e8f0'
       }}
       onMouseLeave={e => {
@@ -407,7 +460,7 @@ function MenuItem({ isLight, icon, label, sub, onClick }: { isLight: boolean; ic
   )
 }
 
-// ── Bookmark tile ────────────────────────────────────────────────────────────
+// ── Bookmark tile ─────────────────────────────────────────────────────────────
 function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
   bm: any; index: number; isLight: boolean; onNavigate: (u: string) => void; onRemove: (id: string) => void
 }) {
@@ -415,23 +468,23 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
 
   return (
     <motion.div
-      key={bm.id}
-      initial={{ opacity: 0, scale: 0.88 }}
+      initial={{ opacity: 0, scale: 0.82 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: index * 0.02, duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+      transition={{ delay: index * 0.018, duration: 0.22, ease: [0.34, 1.56, 0.64, 1] }}
       className="flex flex-col items-center gap-2 group no-drag relative"
-      style={{ width: 76 }}
+      style={{ width: 88 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
+      {/* Remove badge */}
       <AnimatePresence>
         {hovered && (
           <motion.button
-            initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}
-            transition={{ duration: 0.12 }}
+            initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ duration: 0.1 }}
             onClick={e => { e.stopPropagation(); onRemove(bm.id) }}
             className="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 rounded-full flex items-center justify-center"
-            style={{ background: 'rgba(239,68,68,0.9)', border: '1.5px solid rgba(255,255,255,0.2)' }}
+            style={{ background: 'rgba(239,68,68,0.92)', border: '1.5px solid rgba(255,255,255,0.2)', boxShadow: '0 2px 8px rgba(239,68,68,0.4)' }}
             title="Remove bookmark"
           >
             <X size={9} className="text-white" />
@@ -441,11 +494,12 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
 
       <button
         onClick={() => onNavigate(bm.url)}
-        className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200 group-hover:scale-110 relative overflow-hidden"
+        className="w-16 h-16 flex items-center justify-center relative overflow-hidden bm-tile-icon"
         style={{
-          background: `linear-gradient(135deg, ${bm.color}28, ${bm.color}12)`,
-          border:     `1px solid ${bm.color}35`,
-          boxShadow:  `0 4px 16px ${bm.color}18`,
+          borderRadius: 18,
+          background: `linear-gradient(145deg, ${bm.color}22, ${bm.color}10)`,
+          border: `1.5px solid ${bm.color}30`,
+          boxShadow: `0 4px 20px ${bm.color}18, inset 0 1px 0 rgba(255,255,255,0.08)`,
         }}
       >
         <img
@@ -455,15 +509,18 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
             const t = e.target as HTMLImageElement
             t.style.display = 'none'
             const p = t.parentElement!
-            p.innerHTML = `<span style="font-size:24px;line-height:1">${bm.title.charAt(0)}</span>`
+            const span = document.createElement('span')
+            span.textContent = bm.title.charAt(0)
+            span.style.cssText = 'font-size:26px;line-height:1'
+            p.appendChild(span)
           }}
         />
-        <div className="absolute inset-0 bg-white/0 group-hover:bg-white/[0.06] transition-all duration-200 rounded-2xl" />
+        <div className="absolute inset-0 rounded-[17px] bg-white/0 group-hover:bg-white/[0.05] transition-all duration-200" />
       </button>
 
       <button onClick={() => onNavigate(bm.url)} className="w-full text-center">
         <span className={`text-[11px] text-center leading-tight line-clamp-1 block transition-colors ${
-          isLight ? 'text-slate-500 group-hover:text-slate-800' : 'text-slate-500 group-hover:text-slate-300'
+          isLight ? 'text-slate-400 group-hover:text-slate-700' : 'text-slate-600 group-hover:text-slate-300'
         }`}>
           {bm.title}
         </span>
@@ -472,7 +529,7 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
   )
 }
 
-// ── View toggle button ───────────────────────────────────────────────────────
+// ── View toggle button ────────────────────────────────────────────────────────
 function ViewBtn({ isLight, active, onClick, label, children }: {
   isLight: boolean; active: boolean; onClick: () => void; label: string; children: React.ReactNode
 }) {
@@ -480,33 +537,39 @@ function ViewBtn({ isLight, active, onClick, label, children }: {
     <button onClick={onClick} title={label}
       className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-150 no-drag ${
         active
-          ? 'bg-blue-600 text-white'
+          ? 'bg-blue-600 text-white shadow-[0_2px_10px_rgba(59,130,246,0.4)]'
           : isLight
-            ? 'text-slate-500 hover:text-slate-800 hover:bg-black/[0.06]'
-            : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.06]'
+            ? 'text-slate-400 hover:text-slate-700 hover:bg-black/[0.05]'
+            : 'text-slate-600 hover:text-slate-300 hover:bg-white/[0.06]'
       }`}>
       {children}
     </button>
   )
 }
 
-// ── Recommendation card ──────────────────────────────────────────────────────
+// ── Recommendation card ───────────────────────────────────────────────────────
 function RecCard({ rec, index, isLight, onNavigate }: { rec: Recommendation; index: number; isLight: boolean; onNavigate: (u: string) => void }) {
   const glass = glassStyle(isLight)
   return (
     <motion.button
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.26 + index * 0.05 }}
+      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.28 + index * 0.05, ease: [0.4, 0, 0.2, 1] }}
       onClick={() => onNavigate(rec.url)}
       className="flex items-start gap-2.5 p-3 rounded-xl text-left group no-drag transition-all duration-150"
-      style={{ ...glass, boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.06)' : '0 2px 12px rgba(0,0,0,0.25)' }}
+      style={{ ...glass, boxShadow: isLight ? '0 2px 10px rgba(0,0,0,0.05)' : '0 2px 14px rgba(0,0,0,0.3)' }}
       onMouseEnter={e => {
-        (e.currentTarget as HTMLElement).style.background = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)'
-        ;(e.currentTarget as HTMLElement).style.borderColor = isLight ? 'rgba(37,99,235,0.25)' : 'rgba(59,130,246,0.25)'
+        const el = e.currentTarget as HTMLElement
+        el.style.background = isLight ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.07)'
+        el.style.borderColor = isLight ? 'rgba(37,99,235,0.2)' : 'rgba(59,130,246,0.22)'
+        el.style.transform = 'translateY(-1px)'
+        el.style.boxShadow = isLight ? '0 4px 16px rgba(0,0,0,0.1)' : '0 4px 20px rgba(0,0,0,0.4)'
       }}
       onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.background = isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)'
-        ;(e.currentTarget as HTMLElement).style.borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'
+        const el = e.currentTarget as HTMLElement
+        el.style.background = ''
+        el.style.borderColor = ''
+        el.style.transform = ''
+        el.style.boxShadow = isLight ? '0 2px 10px rgba(0,0,0,0.05)' : '0 2px 14px rgba(0,0,0,0.3)'
       }}
     >
       <img src={rec.favicon} className="w-7 h-7 rounded-xl shrink-0 mt-0.5"
@@ -519,14 +582,14 @@ function RecCard({ rec, index, isLight, onNavigate }: { rec: Recommendation; ind
   )
 }
 
-// ── Recent Activity ──────────────────────────────────────────────────────────
+// ── Recent Activity ───────────────────────────────────────────────────────────
 const RecentActivity = memo(function RecentActivity({ isLight, onNavigate }: { isLight: boolean; onNavigate: (url: string) => void }) {
   const [recent,  setRecent]  = useState<any[]>([])
   const [visible, setVisible] = useState(() => localStorage.getItem('hideRecent') !== '1')
   const glass = glassStyle(isLight)
 
   useEffect(() => {
-    window.electronAPI.history.getAll().then((h: any[]) => setRecent(h.slice(0, 8)))
+    window.electronAPI.history.getAll().then((h: any[]) => setRecent(h.slice(0, 10)))
   }, [])
 
   const toggleVisible = () => {
@@ -543,11 +606,11 @@ const RecentActivity = memo(function RecentActivity({ isLight, onNavigate }: { i
     <div className="px-6 pb-4 max-w-3xl mx-auto w-full">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Clock size={12} className={isLight ? 'text-slate-400' : 'text-slate-600'} />
-          <span className={`text-[11px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>Recent</span>
+          <Clock size={12} className={isLight ? 'text-slate-300' : 'text-slate-700'} />
+          <span className={`text-[11px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-400' : 'text-slate-600'}`}>Recent</span>
         </div>
-        <button onClick={toggleVisible} title={visible ? 'Hide recent visits' : 'Show recent visits'}
-          className={`flex items-center gap-1 text-[10px] transition-colors no-drag ${isLight ? 'text-slate-400 hover:text-slate-600' : 'text-slate-600 hover:text-slate-400'}`}>
+        <button onClick={toggleVisible} title={visible ? 'Hide recent' : 'Show recent'}
+          className={`flex items-center gap-1 text-[10px] transition-colors no-drag ${isLight ? 'text-slate-300 hover:text-slate-500' : 'text-slate-700 hover:text-slate-400'}`}>
           {visible ? <EyeOff size={11} /> : <Eye size={11} />}
           {visible ? 'Hide' : 'Show'}
         </button>
@@ -557,29 +620,28 @@ const RecentActivity = memo(function RecentActivity({ isLight, onNavigate }: { i
           <motion.div
             initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.18 }}
-            className="flex gap-2.5 overflow-x-auto pb-1 no-scrollbar"
-            style={{ overflow: 'hidden' }}
+            className="flex gap-2 overflow-x-auto pb-1 no-scrollbar"
           >
             {recent.map((h, i) => (
               <motion.button key={h.id}
                 initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.03 }}
                 onClick={() => onNavigate(h.url)}
-                className="flex items-center gap-2 shrink-0 px-3 py-2 rounded-xl transition-all duration-150 max-w-[160px] no-drag"
+                className="flex items-center gap-2 shrink-0 px-3 py-1.5 rounded-xl transition-all duration-150 max-w-[160px] no-drag"
                 style={glass}
                 onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.background = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)'
-                  ;(e.currentTarget as HTMLElement).style.borderColor = isLight ? 'rgba(0,0,0,0.14)' : 'rgba(255,255,255,0.14)'
+                  (e.currentTarget as HTMLElement).style.background = isLight ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.08)'
+                  ;(e.currentTarget as HTMLElement).style.borderColor = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.14)'
                 }}
                 onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.background = isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)'
-                  ;(e.currentTarget as HTMLElement).style.borderColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'
+                  (e.currentTarget as HTMLElement).style.background = ''
+                  ;(e.currentTarget as HTMLElement).style.borderColor = ''
                 }}
               >
                 <img src={`https://www.google.com/s2/favicons?domain=${h.url}&sz=16`} className="w-3.5 h-3.5 rounded shrink-0"
                   onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                <span className={`text-xs truncate ${isLight ? 'text-slate-600' : 'text-slate-500'}`}>
-                  {h.title || (() => { try { return new URL(h.url).hostname.replace('www.','') } catch { return h.url } })()}
+                <span className={`text-xs truncate ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>
+                  {h.title || (() => { try { return new URL(h.url).hostname.replace('www.', '') } catch { return h.url } })()}
                 </span>
               </motion.button>
             ))}

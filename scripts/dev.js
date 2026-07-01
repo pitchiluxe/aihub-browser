@@ -41,8 +41,10 @@ killPrevious()
 ensureDir()
 
 // ── Spawn electron-vite dev (detached so it outlives this script) ─────────────
+// Use 'ignore' for stdio — on Windows, 'inherit' causes the child process to
+// crash when the parent exits because inherited file handles get closed.
 const child = spawn('npx', ['electron-vite', 'dev'], {
-  stdio: 'inherit',
+  stdio: 'ignore',
   env: process.env,
   shell: true,
   cwd: process.cwd(),
