@@ -8,14 +8,16 @@ The AI Assistant (`AIAssistant.tsx`, opened via the nav-bar AI button) can only 
 
 ## Goal
 
-Give the AIAssistant chat bot the ability to execute real multi-step browser actions (opening/closing/navigating tabs, managing bookmarks) in response to natural-language instructions, with the user able to watch it work and stop it mid-run.
+Give the AIAssistant chat bot the ability to execute real multi-step browser actions (opening/closing/navigating tabs, managing bookmarks) in response to natural-language instructions, with the user able to watch it work and stop it mid-run. It should also understand the content of whichever page is currently open, so "summarize this" or "save this link for me" work without the user manually clicking a button first.
+
+"Save this link/page for me" is the existing bookmark system, reached conversationally — not a separate feature. There's no new "reading list" concept; `add_bookmark` (already in the v1 tool table below) is what runs when the user asks to save something.
 
 ## Non-goals (this iteration)
 
-- Page reading/summarization as part of the action loop (the existing manual "Summarize" button stays as-is, untouched).
 - Web search / URL discovery. The model relies on its own training knowledge to name real URLs (sufficient for the "open 5 news sites" class of request). No search API is introduced.
 - Agent Mode page (`AgentsPage.tsx`) — left as-is, out of scope.
 - Undo/rollback of completed actions if the user hits Stop mid-run.
+- A distinct "reading list" / save-for-later feature separate from bookmarks (confirmed out of scope — "save the link" maps directly to the existing bookmark system).
 
 ## Architecture
 
@@ -67,10 +69,13 @@ All operate on the renderer's `useBrowserStore` state and the existing `window.e
 | `navigate_tab` | `tabId, url` | Navigates an existing tab | `{ok: bool}` |
 | `switch_tab` | `tabId` | Makes a tab active | `{ok: bool}` |
 | `list_bookmarks` | — | Existing bookmarks (for dedup/context) | `{bookmarks: [{id,url,title,category}]}` |
-| `add_bookmark` | `url, title, category?` | Adds a bookmark (reuses existing AI categorize heuristic if `category` omitted) | `{id}` |
+| `add_bookmark` | `url, title, category?` | Adds a bookmark (reuses existing AI categorize heuristic if `category` omitted). This is what "save this link/page for me" calls. | `{id}` |
 | `remove_bookmark` | `id` | Removes a bookmark | `{ok: bool}` |
+| `read_page` | `tabId?` (defaults to active tab) | Extracts visible text from the target tab's page. No new IPC — reuses the existing `getPageContent` prop already wired into `AIAssistant.tsx` for the manual Summarize/Attach Page buttons (`document.body.innerText`, capped at 8000 chars, via `webview.execScript`) | `{text}` (or `{error}` if the tab has no page / isn't a browser tab) |
 
 Unknown tool names or malformed args produce an `{error: "..."}` result fed back to the model rather than throwing — keeps the loop resilient to model mistakes.
+
+The system prompt is also updated so the model knows it *has* `read_page` and should reach for it whenever a question needs the current page's actual content ("summarize this", "what does this page say about X", "save this link" needing a real title/description) rather than guessing from the URL/title alone. The always-on page context already in `buildSystemPrompt` (current URL/title) stays as a cheap hint; `read_page` is the tool for when that's not enough.
 
 ## Safety caps
 
@@ -99,3 +104,4 @@ No existing automated test suite in this project (Electron + manual verification
 3. Manual: trigger mid-run and click Stop after 2-3 steps → verify remaining actions don't execute, already-done ones stay.
 4. Manual: ask a plain question ("what's the capital of France") → verify zero actions, normal chat behavior unaffected (regression check against existing `tryNavIntent`/summarize/AI-news paths).
 5. Manual: force a malformed-JSON case (hard to trigger deliberately; covered by code review of the parse-failure fallback path instead).
+6. Manual: on a real article page, ask "summarize this" and separately "save this for me" (no button clicks) → verify `read_page`/`add_bookmark` fire from conversation alone and the existing manual Summarize button still works unchanged.
