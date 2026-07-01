@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string }
 export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; pageType?: 'browser'|'settings'|'history'|'downloads'|'wifi'|'vpn'|'research'|'agents'|'extensions' }
-export interface AIMessage { role: 'user'|'assistant'|'system'; content: string }
+export interface AIMessage { role: 'user'|'assistant'|'system'; content: string; steps?: { label: string; status: 'pending' | 'done' | 'error' }[] }
 export interface HistoryItem { id: string; url: string; title: string; favicon?: string; timestamp: number }
 export interface DownloadItem { id: string; filename: string; url: string; savePath: string; totalBytes: number; receivedBytes: number; state: string; startedAt: number; completedAt?: number }
 
@@ -16,7 +16,7 @@ interface BrowserState {
   // Tabs
   tabs: Tab[]
   activeTabId: string | null
-  addTab: (url?: string, pageType?: Tab['pageType']) => void
+  addTab: (url?: string, pageType?: Tab['pageType']) => string
   closeTab: (id: string) => void
   setActiveTab: (id: string) => void
   updateTab: (id: string, u: Partial<Tab>) => void
@@ -41,6 +41,7 @@ interface BrowserState {
   aiMessages: AIMessage[]
   addAIMessage: (m: AIMessage) => void
   clearAIMessages: () => void
+  setAIMessageStepStatus: (msgIndex: number, stepIndex: number, status: 'done' | 'error') => void
   isAILoading: boolean
   setAILoading: (v: boolean) => void
   ollamaStatus: { running: boolean; models: string[] } | null
@@ -89,6 +90,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       canGoBack: false,
       canGoForward: false,
     }))
+    return id
   },
 
   closeTab: (id) => {
@@ -151,6 +153,15 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   aiMessages: [],
   addAIMessage: (m) => set(s => ({ aiMessages: [...s.aiMessages, m] })),
   clearAIMessages: () => set({ aiMessages: [] }),
+  setAIMessageStepStatus: (msgIndex, stepIndex, status) => set(s => {
+    const messages = [...s.aiMessages]
+    const msg = messages[msgIndex]
+    if (!msg?.steps || !msg.steps[stepIndex]) return {}
+    const steps = [...msg.steps]
+    steps[stepIndex] = { ...steps[stepIndex], status }
+    messages[msgIndex] = { ...msg, steps }
+    return { aiMessages: messages }
+  }),
   isAILoading: false,
   setAILoading: (v) => set({ isAILoading: v }),
   ollamaStatus: null,
