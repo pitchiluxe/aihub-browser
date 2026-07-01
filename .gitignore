@@ -8,3 +8,4 @@ dist/
 Thumbs.db
 .claude/
 landing/
+.worktrees/
