@@ -5,6 +5,7 @@ import {
   Zap, Paperclip, Download, BookmarkPlus, Check, Newspaper, ExternalLink,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
+import { parseActionsBlock, describeAction, executeAction, AGENT_TOOLS_DOC } from '../../services/agentTools'
 
 interface Props {
   currentUrl?: string
@@ -153,7 +154,7 @@ You are deeply aware of the user's browser context: their bookmarks, recent hist
 ## Navigation commands
 When user asks to open a site, reply concisely: "Opening [Site Name] ↗" — the browser detects this and opens the tab automatically.
 
-Be concise, warm, and genuinely helpful. Use **bold** for site names and key terms. Bullet points for lists.${pageCtx}${bookmarkCtx}${historyCtx}`
+Be concise, warm, and genuinely helpful. Use **bold** for site names and key terms. Bullet points for lists.${pageCtx}${bookmarkCtx}${historyCtx}${AGENT_TOOLS_DOC}`
   }, [currentUrl, currentTitle, bookmarks, browseHistory])
 
   // ── Send message ──────────────────────────────────────────────────────────
