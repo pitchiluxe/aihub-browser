@@ -13,7 +13,6 @@ interface Props {
   onReload:   () => void
   canGoBack:    boolean
   canGoForward: boolean
-  liveCanGoBack?: () => boolean
 }
 
 function isUrl(s: string): boolean {
@@ -24,10 +23,10 @@ function isUrl(s: string): boolean {
 
 export default function NavigationBar({
   onNavigate, onHome, onBack, onForward, onReload,
-  canGoBack, canGoForward, liveCanGoBack,
+  canGoBack, canGoForward,
 }: Props) {
   const {
-    tabs, activeTabId, toggleAIPanel, setAddBookmarkOpen,
+    tabs, activeTabId, toggleAIPanel, isAIPanelOpen, setAddBookmarkOpen,
     bookmarks, toggleSidebar, isSidebarOpen,
     isAnnotationMode, toggleAnnotationMode,
   } = useBrowserStore()
@@ -87,8 +86,7 @@ export default function NavigationBar({
       <div className="flex items-center gap-1 no-drag">
         <NavBtn
           onClick={() => {
-            const realBack = liveCanGoBack?.() ?? canGoBack
-            if (realBack) onBack()
+            if (canGoBack) onBack()
             else if (activeTab?.fromHome) onHome()
           }}
           disabled={(!canGoBack && !activeTab?.fromHome) || isSpecialPage}
@@ -189,15 +187,16 @@ export default function NavigationBar({
           <Pencil size={13} />
         </NavBtn>
 
-        {/* AI assistant button — purple accent */}
-        <AIButton onClick={toggleAIPanel} />
+        {/* AI assistant button — purple accent — opens the full docked panel */}
+        <AIButton onClick={toggleAIPanel} active={isAIPanelOpen} />
       </div>
     </div>
   )
 }
 
-function AIButton({ onClick }: { onClick: () => void }) {
+function AIButton({ onClick, active }: { onClick: () => void; active?: boolean }) {
   const [hovered, setHovered] = useState(false)
+  const lit = hovered || active
   return (
     <button
       onClick={onClick}
@@ -207,12 +206,12 @@ function AIButton({ onClick }: { onClick: () => void }) {
       className="no-drag flex items-center gap-1.5 rounded-xl"
       style={{
         height: 32, padding: '0 12px', cursor: 'pointer',
-        background: hovered
+        background: lit
           ? 'linear-gradient(135deg, rgb(107,78,255), rgb(126,92,255))'
           : 'linear-gradient(135deg, rgba(107,78,255,0.22), rgba(126,92,255,0.16))',
-        border: `1px solid ${hovered ? 'rgba(159,132,255,0.50)' : 'rgba(107,78,255,0.32)'}`,
-        color: hovered ? '#fff' : 'rgb(159,132,255)',
-        boxShadow: hovered
+        border: `1px solid ${lit ? 'rgba(159,132,255,0.50)' : 'rgba(107,78,255,0.32)'}`,
+        color: lit ? '#fff' : 'rgb(159,132,255)',
+        boxShadow: lit
           ? '0 4px 20px rgba(107,78,255,0.45), 0 0 0 1px rgba(159,132,255,0.2)'
           : '0 2px 10px rgba(107,78,255,0.20)',
         transition: 'all 0.18s cubic-bezier(0.34,1.2,0.64,1)',

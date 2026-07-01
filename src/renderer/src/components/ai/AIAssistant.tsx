@@ -263,50 +263,9 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
 
   const hasUrl = !!(currentUrl && currentUrl !== 'home')
 
-  return (
+  // Conversation UI, rendered inside the docked panel shell below.
+  const chatBody = (
     <>
-      {/* ── Floating trigger button — always visible when panel is closed ── */}
-      <AnimatePresence>
-        {!isAIPanelOpen && (
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            onClick={toggleAIPanel}
-            title="Open AI Assistant (Ctrl+Shift+A)"
-            style={{
-              position: 'fixed', top: 'calc(50% - 26px)', right: 22, zIndex: 190,
-              width: 52, height: 52, borderRadius: '50%', border: 'none', cursor: 'pointer',
-              background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
-              boxShadow: '0 0 0 0 rgba(59,130,246,0.5), 0 8px 28px rgba(59,130,246,0.45)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              animation: 'aiBtnPulse 2.8s ease-in-out infinite',
-            }}
-          >
-            <Bot size={22} color="#fff" />
-          </motion.button>
-        )}
-      </AnimatePresence>
-
-      {/* ── AI Panel ── */}
-      <AnimatePresence>
-        {isAIPanelOpen && (
-          <motion.div
-            initial={{ x: 20, opacity: 0, scale: 0.97 }}
-            animate={{ x: 0, opacity: 1, scale: 1 }}
-            exit={{ x: 20, opacity: 0, scale: 0.97 }}
-            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-            className="no-drag"
-            style={{
-              position: 'fixed', right: 14, top: 92, bottom: 14, width: 360, zIndex: 200,
-              display: 'flex', flexDirection: 'column', borderRadius: 16, overflow: 'hidden',
-              background: 'linear-gradient(180deg, rgba(10,18,36,0.95) 0%, rgba(7,12,26,0.97) 100%)',
-              backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
-              border: '1px solid rgba(59,130,246,0.18)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07), 0 8px 48px rgba(0,0,0,0.65), 0 0 80px rgba(59,130,246,0.05)',
-            }}
-          >
             {/* Top Aero highlight */}
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 1, pointerEvents: 'none',
@@ -566,10 +525,31 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                   : <span style={{ fontSize: 10, color: 'rgba(96,165,250,0.4)' }}>● cloud</span>}
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </>
+  )
+
+  return (
+    <AnimatePresence>
+      {isAIPanelOpen && (
+        <motion.div
+          initial={{ x: 20, opacity: 0, scale: 0.97 }}
+          animate={{ x: 0, opacity: 1, scale: 1 }}
+          exit={{ x: 20, opacity: 0, scale: 0.97 }}
+          transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+          className="no-drag"
+          style={{
+            position: 'fixed', right: 14, top: 92, bottom: 14, width: 360, zIndex: 200,
+            display: 'flex', flexDirection: 'column', borderRadius: 16, overflow: 'hidden',
+            background: 'linear-gradient(180deg, rgba(10,18,36,0.95) 0%, rgba(7,12,26,0.97) 100%)',
+            backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
+            border: '1px solid rgba(59,130,246,0.18)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07), 0 8px 48px rgba(0,0,0,0.65), 0 0 80px rgba(59,130,246,0.05)',
+          }}
+        >
+          {chatBody}
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 

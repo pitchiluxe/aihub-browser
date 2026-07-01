@@ -79,8 +79,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setDefaultBrowser: () => ipcRenderer.invoke('app:setDefaultBrowser'),
   },
   webview: {
-    capture:    (wcId: number)                 => ipcRenderer.invoke('webview:capture', wcId),
-    execScript: (wcId: number, script: string) => ipcRenderer.invoke('webview:execScript', wcId, script),
+    capture:     (wcId: number)                 => ipcRenderer.invoke('webview:capture', wcId),
+    execScript:  (wcId: number, script: string) => ipcRenderer.invoke('webview:execScript', wcId, script),
+  },
+  tabView: {
+    create:          (tabId: string, url: string)                                              => ipcRenderer.invoke('tabview:create', tabId, url),
+    destroy:         (tabId: string)                                                            => ipcRenderer.invoke('tabview:destroy', tabId),
+    setActive:       (tabId: string | null)                                                      => ipcRenderer.invoke('tabview:setActive', tabId),
+    setBounds:       (bounds: { x: number; y: number; width: number; height: number })          => ipcRenderer.invoke('tabview:setBounds', bounds),
+    setOverlayHidden:(hidden: boolean)                                                          => ipcRenderer.invoke('tabview:setOverlayHidden', hidden),
+    navigate:        (tabId: string, url: string)                                               => ipcRenderer.invoke('tabview:navigate', tabId, url),
+    goBack:          (tabId: string)                                                             => ipcRenderer.invoke('tabview:goBack', tabId),
+    goForward:       (tabId: string)                                                             => ipcRenderer.invoke('tabview:goForward', tabId),
+    reload:          (tabId: string)                                                             => ipcRenderer.invoke('tabview:reload', tabId),
+    getNavState:     (tabId: string): Promise<{ canGoBack: boolean; canGoForward: boolean }>     => ipcRenderer.invoke('tabview:getNavState', tabId),
+    onEvent: (cb: (tabId: string, type: string, payload: any) => void) => {
+      const handler = (_e: any, tabId: string, type: string, payload: any) => cb(tabId, type, payload)
+      ipcRenderer.on('tabview:event', handler)
+      return () => ipcRenderer.removeListener('tabview:event', handler)
+    },
   },
   ipc: {
     on: (channel: string, cb: (...args: any[]) => void) => {

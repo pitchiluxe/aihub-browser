@@ -1,53 +1,30 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 import { useBrowserStore } from '../../store/browserStore'
 
-type Tool = 'pen' | 'highlight' | 'arrow' | 'rect' | 'ellipse' | 'text' | 'eraser'
+// Canvas AND toolbar are both injected directly into the guest page's own
+// DOM — not rendered as host React overlays. BrowserView (the tab's native
+// content view) always paints above our host HTML, so a host-rendered
+// toolbar can only be made visible by permanently cropping the page to
+// leave it a gutter. Injecting it into the page itself sidesteps that
+// entirely: it's real content in the same document as the canvas, floats
+// freely anywhere over the full, uncropped page, exactly like a normal
+// in-page widget.
+const INJECT_SCRIPT = `(function(){
+  if(document.getElementById('__aihub_cv')){ return 'updated'; }
 
-const COLORS = [
-  '#ef4444', '#f97316', '#facc15', '#22c55e',
-  '#06b6d4', '#3b82f6', '#a855f7', '#ec4899',
-  '#ffffff', '#0f172a',
-]
-
-const TOOL_DEFS: { id: Tool; label: string; icon: string }[] = [
-  { id: 'pen',       label: 'Pen',         icon: '✏️' },
-  { id: 'highlight', label: 'Highlighter', icon: '🖊' },
-  { id: 'arrow',     label: 'Arrow',       icon: '➜' },
-  { id: 'rect',      label: 'Rectangle',   icon: '⬜' },
-  { id: 'ellipse',   label: 'Ellipse',     icon: '⭕' },
-  { id: 'text',      label: 'Text',        icon: 'T' },
-  { id: 'eraser',    label: 'Eraser',      icon: '⌫' },
-]
-
-const SIZES = [
-  { value: 2,  label: 'S' },
-  { value: 5,  label: 'M' },
-  { value: 10, label: 'L' },
-]
-
-function buildScript(tool: Tool, color: string, width: number): string {
-  const t = JSON.stringify(tool)
-  const c = JSON.stringify(color)
-  const w = Number(width)
-  return `(function(){
-  if(document.getElementById('__aihub_cv')){
-    if(window.__aihub) window.__aihub.set(${t},${c},${w});
-    return 'updated';
-  }
   var cv=document.createElement('canvas');
   cv.id='__aihub_cv';
-  cv.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;z-index:2147483647;pointer-events:all;cursor:crosshair;touch-action:none;box-sizing:border-box;';
+  cv.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;z-index:2147483646;pointer-events:all;cursor:crosshair;touch-action:none;box-sizing:border-box;';
   cv.width=window.innerWidth; cv.height=window.innerHeight;
   (document.documentElement||document.body).appendChild(cv);
   var ctx=cv.getContext('2d');
   var strokes=[],redo=[],cur=null,drawing=false,sp=[0,0];
-  var st={t:${t},c:${c},w:${w}};
+  var st={t:'pen',c:'#ef4444',w:5};
+  var pointerMode=false;
+
   function gp(e){return[e.clientX,e.clientY];}
-  function sc(){cv.style.cursor=st.t==='text'?'text':st.t==='eraser'?'cell':'crosshair';}
-  function redraw(){
-    ctx.clearRect(0,0,cv.width,cv.height);
-    strokes.forEach(function(s){ds(s);});
-  }
+  function sc(){cv.style.cursor=pointerMode?'default':(st.t==='text'?'text':st.t==='eraser'?'cell':'crosshair');}
+  function redraw(){ ctx.clearRect(0,0,cv.width,cv.height); strokes.forEach(function(s){ds(s);}); }
   function ds(s){
     if(!s||!s.pts||!s.pts.length)return;
     ctx.save();
@@ -80,7 +57,7 @@ function buildScript(tool: Tool, color: string, width: number): string {
     ctx.restore();
   }
   cv.addEventListener('mousedown',function(e){
-    if(e.button!==0)return;
+    if(e.button!==0||pointerMode)return;
     e.preventDefault();e.stopPropagation();
     drawing=true;sp=gp(e);cur={t:st.t,c:st.c,w:st.w,pts:[gp(e)]};
   },true);
@@ -92,7 +69,7 @@ function buildScript(tool: Tool, color: string, width: number): string {
     else cur.pts=[sp,p];
     redraw();ds(cur);
   },true);
-  cv.addEventListener('mouseup',function(e){
+  cv.addEventListener('mouseup',function(){
     if(!drawing||!cur)return;
     drawing=false;strokes.push(cur);redo=[];cur=null;redraw();
   },true);
@@ -103,296 +80,196 @@ function buildScript(tool: Tool, color: string, width: number): string {
     cv.width=window.innerWidth;cv.height=window.innerHeight;
     if(d)try{ctx.putImageData(d,0,0);}catch(e){}
   });
+
+  // ── Toolbar — same in-page element, freely draggable, no host gutter needed ──
+  var TOOLS=[['pen','\\u270F\\uFE0F','Pen'],['highlight','\\uD83D\\uDD8A','Highlighter'],['arrow','\\u279C','Arrow'],['rect','\\u2B1C','Rectangle'],['ellipse','\\u2B55','Ellipse'],['text','T','Text'],['eraser','\\u232B','Eraser']];
+  var COLORS=['#ef4444','#f97316','#facc15','#22c55e','#06b6d4','#3b82f6','#a855f7','#ec4899','#ffffff','#0f172a'];
+  var SIZES=[[2,'S'],[5,'M'],[10,'L']];
+
+  var tb=document.createElement('div');
+  tb.id='__aihub_tb';
+  tb.style.cssText='position:fixed;left:20px;top:120px;z-index:2147483647;background:rgba(10,15,30,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(59,130,246,0.3);border-radius:16px;box-shadow:0 12px 48px rgba(0,0,0,0.7);padding:10px 12px 12px;display:flex;flex-direction:column;gap:10px;user-select:none;min-width:240px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
+  document.body.appendChild(tb);
+
+  function row(){var d=document.createElement('div');d.style.cssText='display:flex;align-items:center;gap:5px;flex-wrap:wrap;';return d;}
+  function divider(){var d=document.createElement('div');d.style.cssText='width:100%;height:1px;background:rgba(255,255,255,0.06);margin:2px 0;';return d;}
+
+  var header=document.createElement('div');
+  header.style.cssText='display:flex;align-items:center;gap:8px;cursor:grab;margin-bottom:2px;';
+  var dot=document.createElement('div');
+  dot.style.cssText='width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);box-shadow:0 0 6px rgba(59,130,246,0.6);flex-shrink:0;';
+  var label=document.createElement('span');
+  label.textContent='ANNOTATION';
+  label.style.cssText='font-size:10px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:0.12em;';
+  var spacer=document.createElement('div'); spacer.style.flex='1';
+  var pointerBtn=document.createElement('button');
+  pointerBtn.type='button';
+  pointerBtn.style.cssText='height:28px;padding:0 10px;border-radius:7px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#64748b;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;';
+  function renderPointerBtn(){
+    pointerBtn.textContent=pointerMode?'\\uD83D\\uDDB1 Pointer':'\\u270F\\uFE0F Draw';
+    pointerBtn.style.background=pointerMode?'rgba(59,130,246,0.18)':'rgba(255,255,255,0.05)';
+    pointerBtn.style.color=pointerMode?'#60a5fa':'#64748b';
+    pointerBtn.style.borderColor=pointerMode?'rgba(59,130,246,0.35)':'rgba(255,255,255,0.1)';
+  }
+  renderPointerBtn();
+  pointerBtn.onclick=function(){
+    pointerMode=!pointerMode;
+    cv.style.pointerEvents=pointerMode?'none':'all';
+    sc();
+    renderPointerBtn();
+    toolsRow.style.opacity=pointerMode?'0.35':'1';
+    toolsRow.style.pointerEvents=pointerMode?'none':'auto';
+    colorsRow.style.opacity=pointerMode?'0.35':'1';
+    colorsRow.style.pointerEvents=pointerMode?'none':'auto';
+    sizesRow.style.opacity=pointerMode?'0.35':'1';
+    sizesRow.style.pointerEvents=pointerMode?'none':'auto';
+  };
+  header.appendChild(dot);header.appendChild(label);header.appendChild(spacer);header.appendChild(pointerBtn);
+  tb.appendChild(header);
+
+  var toolsRow=row();
+  var toolBtns={};
+  TOOLS.forEach(function(t){
+    var b=document.createElement('button');
+    b.type='button'; b.title=t[2]; b.textContent=t[1];
+    b.style.cssText='width:32px;height:32px;border-radius:8px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;transition:all 0.12s;';
+    b.onclick=function(){ st.t=t[0]; sc(); renderTools(); };
+    toolBtns[t[0]]=b;
+    toolsRow.appendChild(b);
+  });
+  function renderTools(){
+    TOOLS.forEach(function(t){
+      var active=st.t===t[0]; var b=toolBtns[t[0]];
+      b.style.border=active?'1.5px solid #3b82f6':'1px solid rgba(255,255,255,0.08)';
+      b.style.background=active?'rgba(59,130,246,0.22)':'rgba(255,255,255,0.05)';
+      b.style.color=active?'#93c5fd':'#94a3b8';
+    });
+  }
+  renderTools();
+  tb.appendChild(toolsRow);
+  tb.appendChild(divider());
+
+  var colorsRow=row();
+  var colorEls={};
+  COLORS.forEach(function(c){
+    var sw=document.createElement('div');
+    sw.title=c;
+    sw.style.cssText='width:22px;height:22px;border-radius:6px;cursor:pointer;flex-shrink:0;background:'+c+';';
+    sw.onclick=function(){ st.c=c; renderColors(); };
+    colorEls[c]=sw;
+    colorsRow.appendChild(sw);
+  });
+  function renderColors(){
+    COLORS.forEach(function(c){
+      var active=st.c===c; var sw=colorEls[c];
+      sw.style.border=active?'2px solid #fff':'2px solid transparent';
+      sw.style.outline=active?'1.5px solid #3b82f6':'none';
+      sw.style.outlineOffset='2px';
+    });
+  }
+  renderColors();
+  tb.appendChild(colorsRow);
+  tb.appendChild(divider());
+
+  var sizesRow=row();
+  var sizeLbl=document.createElement('span');
+  sizeLbl.textContent='Size'; sizeLbl.style.cssText='font-size:10px;color:#475569;margin-right:2px;';
+  sizesRow.appendChild(sizeLbl);
+  var sizeBtns={};
+  SIZES.forEach(function(s){
+    var b=document.createElement('button');
+    b.type='button'; b.textContent=s[1];
+    b.style.cssText='width:28px;height:28px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;';
+    b.onclick=function(){ st.w=s[0]; renderSizes(); };
+    sizeBtns[s[0]]=b;
+    sizesRow.appendChild(b);
+  });
+  function renderSizes(){
+    SIZES.forEach(function(s){
+      var active=st.w===s[0]; var b=sizeBtns[s[0]];
+      b.style.border=active?'1.5px solid #3b82f6':'1px solid rgba(255,255,255,0.1)';
+      b.style.background=active?'rgba(59,130,246,0.2)':'rgba(255,255,255,0.04)';
+      b.style.color=active?'#93c5fd':'#64748b';
+    });
+  }
+  renderSizes();
+  tb.appendChild(sizesRow);
+  tb.appendChild(divider());
+
+  var actionsRow=row();
+  function actionBtn(text,onClick,color){
+    var b=document.createElement('button');
+    b.type='button'; b.textContent=text;
+    b.style.cssText='height:28px;padding:0 10px;border-radius:7px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:'+(color||'#64748b')+';font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;';
+    b.onclick=onClick;
+    return b;
+  }
+  actionsRow.appendChild(actionBtn('\\u21A9 Undo',function(){ if(strokes.length){redo.push(strokes.pop());redraw();} }));
+  actionsRow.appendChild(actionBtn('\\u21AA Redo',function(){ if(redo.length){strokes.push(redo.pop());redraw();} }));
+  actionsRow.appendChild(actionBtn('\\uD83D\\uDDD1 Clear',function(){ strokes=[];redo=[];ctx.clearRect(0,0,cv.width,cv.height); }));
+  actionsRow.appendChild(actionBtn('\\uD83D\\uDCBE Save',function(){
+    var a=document.createElement('a');
+    a.download='annotation-'+Date.now()+'.png';
+    a.href=cv.toDataURL('image/png');
+    document.body.appendChild(a); a.click(); a.remove();
+  },'#22c55e'));
+  tb.appendChild(actionsRow);
+
+  var hint=document.createElement('div');
+  hint.textContent='Drag \\u00B7 P H A R E X = tools \\u00B7 Ctrl+Z/Y undo/redo';
+  hint.style.cssText='font-size:9px;color:#334155;text-align:center;margin-top:2px;';
+  tb.appendChild(hint);
+
+  // Drag
+  var dragging=false,offX=0,offY=0;
+  header.addEventListener('mousedown',function(e){
+    if(e.target!==header&&e.target!==dot&&e.target!==label&&e.target!==spacer)return;
+    dragging=true;
+    var r=tb.getBoundingClientRect();
+    offX=e.clientX-r.left; offY=e.clientY-r.top;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove',function(e){
+    if(!dragging)return;
+    tb.style.left=Math.max(4,e.clientX-offX)+'px';
+    tb.style.top=Math.max(4,e.clientY-offY)+'px';
+  });
+  window.addEventListener('mouseup',function(){ dragging=false; });
+
+  // Keyboard shortcuts, scoped to the page itself so they work regardless
+  // of host focus.
+  window.addEventListener('keydown',function(e){
+    var el=e.target;
+    if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable))return;
+    if(e.ctrlKey&&e.key==='z'){e.preventDefault();if(strokes.length){redo.push(strokes.pop());redraw();}return;}
+    if(e.ctrlKey&&e.key==='y'){e.preventDefault();if(redo.length){strokes.push(redo.pop());redraw();}return;}
+    var map={p:'pen',h:'highlight',a:'arrow',r:'rect',e:'ellipse',t:'text',x:'eraser'};
+    if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&map[e.key]){ st.t=map[e.key]; sc(); renderTools(); }
+  },true);
+
   window.__aihub={
-    set:function(t,c,w){st={t:t,c:c,w:w};sc();},
-    undo:function(){if(strokes.length){redo.push(strokes.pop());redraw();}},
-    redo:function(){if(redo.length){strokes.push(redo.pop());redraw();}},
-    clear:function(){strokes=[];redo=[];ctx.clearRect(0,0,cv.width,cv.height);},
-    save:function(){return cv.toDataURL('image/png');},
-    remove:function(){cv.remove();delete window.__aihub;}
+    remove:function(){ cv.remove(); tb.remove(); delete window.__aihub; }
   };
   return 'injected';
 })()`
-}
 
-export default function AnnotationCanvas({ webview }: { webview: any | null }) {
-  const { toggleAnnotationMode, activeTabId, tabWcIds } = useBrowserStore()
+export default function AnnotationCanvas() {
+  const { activeTabId, tabWcIds } = useBrowserStore()
   const wcId = activeTabId ? tabWcIds[activeTabId] : null
-
-  const [tool,        setTool]        = useState<Tool>('pen')
-  const [color,       setColor]       = useState('#ef4444')
-  const [lineWidth,   setLineWidth]   = useState(5)
-  const [status,      setStatus]      = useState<'pending' | 'ok' | 'error' | 'no-webview'>('pending')
-  const [statusMsg,   setStatusMsg]   = useState('')
-  // pointer mode = canvas transparent to mouse so user can browse normally while annotations stay
-  const [pointerMode, setPointerMode] = useState(false)
   const wcIdRef = useRef<number | null>(null)
 
-  // ── Helper: run script via IPC (main process → webContents) ──────────
-  const execScript = useCallback(async (script: string) => {
-    const targetWcId = wcIdRef.current
-    if (targetWcId === null) return null
-    try {
-      const res = await window.electronAPI.webview.execScript(targetWcId, script)
-      if (!res?.ok) {
-        console.warn('[Annotation] execScript failed:', res?.error)
-      }
-      return res
-    } catch (e) {
-      console.error('[Annotation] execScript threw:', e)
-      return null
-    }
-  }, [])
-
-  // ── Inject canvas on mount / when wcId becomes available ──────────────
   useEffect(() => {
-    if (!webview) {
-      setStatus('no-webview')
-      return
-    }
-
-    // Determine the webContents ID
-    let currentWcId = wcId
-    if (!currentWcId) {
-      try {
-        currentWcId = webview.getWebContentsId?.() ?? null
-      } catch {}
-    }
-
-    if (!currentWcId) {
-      setStatus('pending')
-      setStatusMsg('Waiting for page load...')
-      return
-    }
-
-    wcIdRef.current = currentWcId
-    setStatus('pending')
-
-    const script = buildScript(tool, color, lineWidth)
-    window.electronAPI.webview.execScript(currentWcId, script)
-      .then((res: any) => {
-        if (res?.ok) {
-          setStatus('ok')
-          setStatusMsg(String(res.result))
-        } else {
-          setStatus('error')
-          setStatusMsg(res?.error || 'unknown error')
-        }
-      })
-      .catch((e: any) => {
-        setStatus('error')
-        setStatusMsg(String(e))
-      })
-
-    // Listen for escape signal from webview (if nodeIntegration available)
-    const onIpcMsg = (e: any) => {
-      if (e.channel === 'annotation:escape') toggleAnnotationMode()
-    }
-    webview.addEventListener('ipc-message', onIpcMsg)
+    if (!wcId) return
+    wcIdRef.current = wcId
+    window.electronAPI.webview.execScript(wcId, INJECT_SCRIPT).catch(() => {})
 
     return () => {
-      webview.removeEventListener('ipc-message', onIpcMsg)
       if (wcIdRef.current !== null) {
         window.electronAPI.webview.execScript(wcIdRef.current, `window.__aihub&&window.__aihub.remove()`).catch(() => {})
       }
       wcIdRef.current = null
     }
-  }, [webview, wcId])
+  }, [wcId])
 
-  // ── Sync tool state ───────────────────────────────────────────────────
-  useEffect(() => {
-    if (status !== 'ok') return
-    execScript(`window.__aihub&&window.__aihub.set(${JSON.stringify(tool)},${JSON.stringify(color)},${lineWidth})`)
-  }, [tool, color, lineWidth, status, execScript])
-
-  // ── Toggle pointer-events on injected canvas ──────────────────────────
-  useEffect(() => {
-    if (status !== 'ok') return
-    const pe = pointerMode ? 'none' : 'all'
-    execScript(`var cv=document.getElementById('__aihub_cv');if(cv){cv.style.pointerEvents=${JSON.stringify(pe)};cv.style.cursor=${pointerMode ? '"default"' : '"crosshair"'};}`)
-  }, [pointerMode, status, execScript])
-
-  const undo = useCallback(() => execScript(`window.__aihub&&window.__aihub.undo()`), [execScript])
-  const redo = useCallback(() => execScript(`window.__aihub&&window.__aihub.redo()`), [execScript])
-  const clear = useCallback(() => execScript(`window.__aihub&&window.__aihub.clear()`), [execScript])
-
-  const saveImage = useCallback(async () => {
-    const res = await execScript(`window.__aihub&&window.__aihub.save()`)
-    const dataUrl = res?.result
-    if (dataUrl?.startsWith?.('data:')) {
-      const a = document.createElement('a')
-      a.download = `annotation-${Date.now()}.png`
-      a.href = dataUrl
-      a.click()
-    }
-  }, [execScript])
-
-  // ── Host keyboard shortcuts ───────────────────────────────────────────
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement
-      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') return
-      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo() }
-      if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo() }
-      if (e.key === 'Escape') toggleAnnotationMode()
-      const s: Record<string, Tool> = { p:'pen', h:'highlight', a:'arrow', r:'rect', e:'ellipse', t:'text', x:'eraser' }
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && s[e.key]) setTool(s[e.key] as Tool)
-    }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [undo, redo, toggleAnnotationMode])
-
-  // ── Toolbar drag ──────────────────────────────────────────────────────
-  const [tbPos, setTbPos] = useState({ x: 20, y: 120 })
-  const tbDragging  = useRef(false)
-  const tbDragOff   = useRef({ x: 0, y: 0 })
-
-  const onTbMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button,input')) return
-    tbDragging.current = true
-    tbDragOff.current = { x: e.clientX - tbPos.x, y: e.clientY - tbPos.y }
-    e.preventDefault()
-  }
-  useEffect(() => {
-    const mv = (e: MouseEvent) => { if (tbDragging.current) setTbPos({ x: e.clientX - tbDragOff.current.x, y: e.clientY - tbDragOff.current.y }) }
-    const up = () => { tbDragging.current = false }
-    window.addEventListener('mousemove', mv)
-    window.addEventListener('mouseup', up)
-    return () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up) }
-  }, [])
-
-  // ── Styles ────────────────────────────────────────────────────────────
-  const tb: React.CSSProperties = {
-    position: 'fixed', left: tbPos.x, top: tbPos.y, zIndex: 99999,
-    background: 'rgba(10,15,30,0.97)',
-    backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
-    border: '1px solid rgba(59,130,246,0.3)',
-    borderRadius: 16,
-    boxShadow: '0 12px 48px rgba(0,0,0,0.7)',
-    padding: '10px 12px 12px',
-    display: 'flex', flexDirection: 'column', gap: 10,
-    userSelect: 'none', minWidth: 240,
-  }
-  const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }
-  const toolBtn = (active: boolean): React.CSSProperties => ({
-    width: 32, height: 32, borderRadius: 8,
-    border: active ? '1.5px solid #3b82f6' : '1px solid rgba(255,255,255,0.08)',
-    background: active ? 'rgba(59,130,246,0.22)' : 'rgba(255,255,255,0.05)',
-    color: active ? '#93c5fd' : '#94a3b8',
-    fontSize: 14, cursor: 'pointer', transition: 'all 0.12s',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
-  })
-  const colorSwatch = (c: string): React.CSSProperties => ({
-    width: 22, height: 22, borderRadius: 6, background: c,
-    border: color === c ? '2px solid #fff' : '2px solid transparent',
-    cursor: 'pointer', outline: color === c ? '1.5px solid #3b82f6' : 'none', outlineOffset: 2, flexShrink: 0,
-  })
-  const sizeBtn = (v: number): React.CSSProperties => ({
-    width: 28, height: 28, borderRadius: 7,
-    border: lineWidth === v ? '1.5px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
-    background: lineWidth === v ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.04)',
-    color: lineWidth === v ? '#93c5fd' : '#64748b',
-    fontSize: 11, fontWeight: 700, cursor: 'pointer',
-  })
-  const actionBtn: React.CSSProperties = {
-    height: 28, padding: '0 10px', borderRadius: 7,
-    border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
-    color: '#64748b', fontSize: 11, fontWeight: 600,
-    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
-  }
-  const divider: React.CSSProperties = { width: '100%', height: 1, background: 'rgba(255,255,255,0.06)', margin: '2px 0' }
-
-  const statusColor = status === 'ok' ? '#22c55e' : status === 'error' ? '#ef4444' : status === 'pending' ? '#facc15' : '#475569'
-  const statusText  = status === 'ok' ? '● Active' : status === 'error' ? '● Failed' : status === 'pending' ? '● Connecting…' : '● No page'
-
-  return (
-    <div style={tb} onMouseDown={onTbMouseDown}>
-
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'grab', marginBottom: 2 }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', boxShadow: '0 0 6px rgba(59,130,246,0.6)' }} />
-        <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-          Annotation
-        </span>
-        <span style={{ fontSize: 9, fontWeight: 700, color: statusColor, marginLeft: 4 }}>{statusText}</span>
-        <div style={{ flex: 1 }} />
-        {/* Pointer / Draw mode toggle */}
-        <button
-          onClick={() => setPointerMode(m => !m)}
-          title={pointerMode ? 'Switch to Draw mode' : 'Switch to Pointer mode — browse page normally'}
-          style={{
-            ...actionBtn,
-            background: pointerMode ? 'rgba(59,130,246,0.18)' : 'rgba(255,255,255,0.05)',
-            color: pointerMode ? '#60a5fa' : '#64748b',
-            borderColor: pointerMode ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.1)',
-            fontWeight: 700,
-          }}
-        >
-          {pointerMode ? '🖱 Pointer' : '✏️ Draw'}
-        </button>
-        <button onClick={toggleAnnotationMode} style={{ ...actionBtn, color: '#ef4444', borderColor: 'rgba(239,68,68,0.2)' }}>✕</button>
-      </div>
-
-      {status === 'error' && (
-        <div style={{ fontSize: 9, color: '#ef4444', wordBreak: 'break-all', maxHeight: 36, overflow: 'hidden' }}>
-          {statusMsg}
-        </div>
-      )}
-
-      {status === 'no-webview' && (
-        <div style={{ fontSize: 10, color: '#475569', padding: '4px 0', textAlign: 'center' }}>
-          Navigate to a web page to annotate
-        </div>
-      )}
-
-      {/* Pointer mode info banner */}
-      {pointerMode && (
-        <div style={{ fontSize: 10, color: '#3b82f6', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.18)', borderRadius: 8, padding: '5px 8px', textAlign: 'center' }}>
-          🖱 Pointer mode — annotations visible, page is interactive
-        </div>
-      )}
-
-      {/* Tools */}
-      <div style={{ ...row, opacity: pointerMode ? 0.35 : 1, pointerEvents: pointerMode ? 'none' : 'auto', transition: 'opacity 0.15s' }}>
-        {TOOL_DEFS.map(t => (
-          <button key={t.id} style={toolBtn(tool === t.id)} title={t.label} onClick={() => setTool(t.id)}>
-            {t.icon}
-          </button>
-        ))}
-      </div>
-
-      <div style={divider} />
-
-      {/* Colors */}
-      <div style={{ ...row, opacity: pointerMode ? 0.35 : 1, pointerEvents: pointerMode ? 'none' : 'auto', transition: 'opacity 0.15s' }}>
-        {COLORS.map(c => (
-          <div key={c} style={colorSwatch(c)} title={c} onClick={() => setColor(c)} />
-        ))}
-      </div>
-
-      <div style={divider} />
-
-      {/* Sizes */}
-      <div style={{ ...row, opacity: pointerMode ? 0.35 : 1, pointerEvents: pointerMode ? 'none' : 'auto', transition: 'opacity 0.15s' }}>
-        <span style={{ fontSize: 10, color: '#475569', marginRight: 2 }}>Size</span>
-        {SIZES.map(s => (
-          <button key={s.value} style={sizeBtn(s.value)} onClick={() => setLineWidth(s.value)}>{s.label}</button>
-        ))}
-      </div>
-
-      <div style={divider} />
-
-      {/* Actions */}
-      <div style={row}>
-        <button style={actionBtn} onClick={undo}>↩ Undo</button>
-        <button style={actionBtn} onClick={redo}>↪ Redo</button>
-        <button style={actionBtn} onClick={clear}>🗑 Clear</button>
-        <button style={{ ...actionBtn, color: '#22c55e', borderColor: 'rgba(34,197,94,0.2)' }} onClick={saveImage}>💾 Save</button>
-      </div>
-
-      <div style={{ fontSize: 9, color: '#334155', textAlign: 'center', marginTop: 2 }}>
-        Drag · Esc exit · P H A R E X = tools
-      </div>
-    </div>
-  )
+  return null
 }

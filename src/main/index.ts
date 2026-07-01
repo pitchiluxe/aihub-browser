@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, webContents as electronWebContents } from 'electron'
+import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, webContents as electronWebContents } from 'electron'
 import { join } from 'path'
 import http from 'http'
 import https from 'https'
@@ -167,6 +167,14 @@ async function checkOllamaRunning(): Promise<{ running: boolean; models: string[
 // ── Window ─────────────────────────────────────────────────────────────────
 let mainWindow: BrowserWindow
 
+const CHROME_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+
+const ALLOWED_PERMISSIONS = new Set([
+  'notifications', 'media', 'geolocation', 'fullscreen',
+  'pointerLock', 'clipboard-read', 'clipboard-sanitized-write', 'midi', 'midiSysex',
+])
+
 // Safe IPC sender — prevents "Render frame was disposed" crash when webContents
 // transitions (navigation, tab switch) happen just as a send is attempted.
 function safelySend(channel: string, ...args: any[]) {
@@ -185,40 +193,8 @@ function applyTransparency(win: BrowserWindow, mode: string) {
   } catch {}
 }
 
-function createWindow(): void {
-  nativeTheme.themeSource = 'dark'
-  const settings = getData().settings
-  const glassMode = settings.transparency !== 'none'
-
-  mainWindow = new BrowserWindow({
-    width: 1440, height: 900, minWidth: 900, minHeight: 600,
-    show: false, frame: false, titleBarStyle: 'hidden',
-    // Windows 11 native DWM rounded corners (no-op on older Windows/macOS)
-    roundedCorners: true,
-    backgroundColor: glassMode ? '#00000000' : '#17182B',
-    transparent: glassMode,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false, webviewTag: true,
-      nodeIntegration: false, contextIsolation: true, webSecurity: false,
-    }
-  })
-
-  applyTransparency(mainWindow, settings.transparency)
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
-    safelySend('theme:transparency', settings.transparency)
-  })
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url && !url.startsWith('devtools://') && !url.startsWith('chrome-extension://')) {
-      safelySend('open-in-new-tab', url)
-    }
-    return { action: 'deny' }
-  })
-
-  // ── Right-click context menu (copy / paste / cut / select-all) ──────────
-  mainWindow.webContents.on('context-menu', (_e, params) => {
+function attachContextMenu(wc: Electron.WebContents) {
+  wc.on('context-menu', (_e, params) => {
     const menu = new Menu()
     if (params.editFlags.canUndo) menu.append(new MenuItem({ label: 'Undo', role: 'undo', accelerator: 'Ctrl+Z' }))
     if (params.editFlags.canRedo) menu.append(new MenuItem({ label: 'Redo', role: 'redo', accelerator: 'Ctrl+Y' }))
@@ -237,6 +213,169 @@ function createWindow(): void {
     }
     if (menu.items.length > 0) menu.popup({ window: mainWindow })
   })
+}
+
+// ── Tab content views (BrowserView) ────────────────────────────────────────
+// Electron 28 predates WebContentsView (needs v30+). BrowserView gives the
+// identical fix for the <webview> guest-viewport desync bug: the main process
+// owns sizing directly via setBounds(), so there's no GuestViewContainer
+// ResizeObserver/FrameMsg_Resize round-trip for window.innerHeight to lose sync with.
+const tabViews = new Map<string, BrowserView>()
+let activeTabViewId: string | null = null
+let tabViewBounds = { x: 0, y: 0, width: 0, height: 0 }
+let tabViewOverlayHidden = false // true while a host HTML overlay (modal) must render above tab content
+
+function sendTabEvent(tabId: string, type: string, payload?: any) {
+  safelySend('tabview:event', tabId, type, payload)
+}
+
+// BrowserView always paints above mainWindow's own webContents — there is no
+// z-index control from the renderer side. Overlays that must appear above tab
+// content (e.g. AddBookmarkModal) call tabview:setOverlayHidden(true) to detach
+// the view instead.
+function syncActiveBrowserView() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const view = (!tabViewOverlayHidden && activeTabViewId) ? tabViews.get(activeTabViewId) : undefined
+  const current = mainWindow.getBrowserView()
+  if (view) {
+    if (current !== view) mainWindow.setBrowserView(view)
+    view.setBounds({
+      x: Math.round(tabViewBounds.x), y: Math.round(tabViewBounds.y),
+      width: Math.max(0, Math.round(tabViewBounds.width)), height: Math.max(0, Math.round(tabViewBounds.height)),
+    })
+  } else if (current) {
+    mainWindow.setBrowserView(null)
+  }
+}
+
+function createTabView(tabId: string, url: string) {
+  if (tabViews.has(tabId)) return
+  const view = new BrowserView({
+    webPreferences: {
+      partition: 'persist:main',
+      contextIsolation: true,
+      webSecurity: false,
+      nodeIntegration: false,
+    },
+  })
+  tabViews.set(tabId, view)
+  const wc = view.webContents
+
+  attachContextMenu(wc)
+  sendTabEvent(tabId, 'wc-id', { wcId: wc.id })
+
+  wc.setWindowOpenHandler(({ url: targetUrl }) => {
+    if (targetUrl && !targetUrl.startsWith('devtools://') && !targetUrl.startsWith('chrome-extension://')) {
+      safelySend('open-in-new-tab', targetUrl)
+    }
+    return { action: 'deny' }
+  })
+
+  wc.on('did-navigate', (_e, navUrl) => sendTabEvent(tabId, 'did-navigate', { url: navUrl }))
+  wc.on('did-navigate-in-page', (_e, navUrl) => sendTabEvent(tabId, 'did-navigate-in-page', { url: navUrl }))
+  wc.on('did-start-loading', () => sendTabEvent(tabId, 'did-start-loading'))
+  wc.on('did-stop-loading', () => {
+    let title = ''; let curUrl = ''
+    try { title = wc.getTitle() } catch {}
+    try { curUrl = wc.getURL() } catch {}
+    sendTabEvent(tabId, 'did-stop-loading', { title, url: curUrl })
+  })
+  wc.on('did-fail-load', (_e, errorCode) => { if (errorCode !== -3) sendTabEvent(tabId, 'did-fail-load', { errorCode }) })
+  wc.on('page-title-updated', (_e, title) => sendTabEvent(tabId, 'page-title-updated', { title }))
+  wc.on('page-favicon-updated', (_e, favicons) => sendTabEvent(tabId, 'page-favicon-updated', { favicons }))
+
+  // Hide the page's native scrollbar track — re-inserted on every document
+  // since insertCSS doesn't survive navigation.
+  wc.on('dom-ready', () => {
+    wc.insertCSS('::-webkit-scrollbar{width:0!important;height:0!important;background:transparent!important}').catch(() => {})
+  })
+
+  wc.loadURL(url)
+}
+
+function destroyTabView(tabId: string) {
+  const view = tabViews.get(tabId)
+  if (!view) return
+  if (activeTabViewId === tabId) { activeTabViewId = null; syncActiveBrowserView() }
+  try { mainWindow?.removeBrowserView(view) } catch {}
+  try { view.webContents.close() } catch {}
+  tabViews.delete(tabId)
+}
+
+function createWindow(): void {
+  nativeTheme.themeSource = 'dark'
+  const settings = getData().settings
+  const glassMode = settings.transparency !== 'none'
+
+  mainWindow = new BrowserWindow({
+    width: 1440, height: 900, minWidth: 900, minHeight: 600,
+    show: false, frame: false, titleBarStyle: 'hidden',
+    // Windows 11 native DWM rounded corners (no-op on older Windows/macOS)
+    roundedCorners: true,
+    backgroundColor: glassMode ? '#00000000' : '#17182B',
+    transparent: glassMode,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false, webviewTag: false,
+      nodeIntegration: false, contextIsolation: true, webSecurity: false,
+    }
+  })
+
+  mainWindow.on('closed', () => {
+    tabViews.forEach(v => { try { v.webContents.close() } catch {} })
+    tabViews.clear()
+    activeTabViewId = null
+  })
+
+  applyTransparency(mainWindow, settings.transparency)
+  mainWindow.on('ready-to-show', () => {
+    mainWindow.show()
+    safelySend('theme:transparency', settings.transparency)
+  })
+
+  // F12 / Ctrl+Shift+I toggles DevTools in dev mode
+  mainWindow.webContents.on('before-input-event', (_e, input) => {
+    if (!isDev) return
+    if (input.type !== 'keyDown') return
+    const devKey = input.key === 'F12' || (input.control && input.shift && input.key === 'I')
+    if (devKey) {
+      if (mainWindow.webContents.isDevToolsOpened()) mainWindow.webContents.closeDevTools()
+      else mainWindow.webContents.openDevTools({ mode: 'detach' })
+    }
+  })
+
+  // Configure the persist:main session used by all <webview partition="persist:main"> tags.
+  const webviewSession = session.fromPartition('persist:main')
+
+  // Spoof Chrome UA so sites serve full content (many degrade or block Electron's default UA).
+  webviewSession.setUserAgent(CHROME_UA)
+
+  webviewSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(ALLOWED_PERMISSIONS.has(permission))
+  })
+
+  // Strip X-Frame-Options and CSP that prevent embedding — Electron webviews are treated
+  // like cross-origin iframes, so sites returning DENY or frame-ancestors: none abort with -3.
+  const STRIP_HEADERS = new Set(['x-frame-options', 'content-security-policy'])
+  webviewSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers: Record<string, string[]> = {}
+    for (const [key, val] of Object.entries(details.responseHeaders || {})) {
+      if (!STRIP_HEADERS.has(key.toLowerCase())) {
+        headers[key] = val as string[]
+      }
+    }
+    callback({ responseHeaders: headers })
+  })
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && !url.startsWith('devtools://') && !url.startsWith('chrome-extension://')) {
+      safelySend('open-in-new-tab', url)
+    }
+    return { action: 'deny' }
+  })
+
+  // ── Right-click context menu (copy / paste / cut / select-all) ──────────
+  attachContextMenu(mainWindow.webContents)
 
   // ── Download tracking — covers mainWindow + all webviews ──────────────
   const handleDownload = (_e: any, item: any) => {
@@ -268,9 +407,13 @@ function createWindow(): void {
     mainWindow.webContents.session.on('will-download', handleDownload)
   }
 
-  // Also catch any webview that uses its own session
   app.on('web-contents-created', (_e, wc) => {
     wc.session.on('will-download', handleDownload)
+    let wcType: string | undefined
+    try { wcType = wc.getType() } catch {}
+    if (wcType !== 'webview' && wcType !== 'browserView') return
+
+    process.nextTick(() => { try { wc.setUserAgent(CHROME_UA) } catch {} })
   })
 
   if (isDev && process.env['ELECTRON_RENDERER_URL']) mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -402,6 +545,41 @@ ipcMain.handle('window:setTransparency', (_e, mode: string) => {
     applyTransparency(mainWindow, mode)
     safelySend('theme:transparency', mode)
   }
+})
+
+// ── IPC: Tab content views (BrowserView) ────────────────────────────────────
+ipcMain.handle('tabview:create', (_e, tabId: string, url: string) => createTabView(tabId, url))
+ipcMain.handle('tabview:destroy', (_e, tabId: string) => destroyTabView(tabId))
+ipcMain.handle('tabview:setActive', (_e, tabId: string | null) => {
+  activeTabViewId = tabId
+  syncActiveBrowserView()
+})
+ipcMain.handle('tabview:setBounds', (_e, bounds: { x: number; y: number; width: number; height: number }) => {
+  tabViewBounds = bounds
+  syncActiveBrowserView()
+})
+ipcMain.handle('tabview:setOverlayHidden', (_e, hidden: boolean) => {
+  tabViewOverlayHidden = hidden
+  syncActiveBrowserView()
+})
+ipcMain.handle('tabview:navigate', (_e, tabId: string, url: string) => {
+  try { tabViews.get(tabId)?.webContents.loadURL(url) } catch {}
+})
+ipcMain.handle('tabview:goBack', (_e, tabId: string) => {
+  const wc = tabViews.get(tabId)?.webContents
+  try { if (wc?.canGoBack()) wc.goBack() } catch {}
+})
+ipcMain.handle('tabview:goForward', (_e, tabId: string) => {
+  const wc = tabViews.get(tabId)?.webContents
+  try { if (wc?.canGoForward()) wc.goForward() } catch {}
+})
+ipcMain.handle('tabview:reload', (_e, tabId: string) => {
+  try { tabViews.get(tabId)?.webContents.reload() } catch {}
+})
+ipcMain.handle('tabview:getNavState', (_e, tabId: string) => {
+  const wc = tabViews.get(tabId)?.webContents
+  try { return { canGoBack: wc?.canGoBack() ?? false, canGoForward: wc?.canGoForward() ?? false } }
+  catch { return { canGoBack: false, canGoForward: false } }
 })
 
 // ── IPC: Bookmarks ─────────────────────────────────────────────────────────
