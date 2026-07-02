@@ -815,21 +815,32 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string) =
   const { olBase, orKey, orBase, orMdl } = getAIConfig()
 
   // 1. Try local Ollama (preferred — private & free)
+  let ollamaDiag = ''
   try {
     const ol = await checkOllamaRunning()
     if (ol.running && ol.models.length > 0) {
       const preferred = preferredModel || getData().settings.aiModel || ''
       const model = (preferred && ol.models.includes(preferred)) ? preferred : ol.models[0]
-      const { status, body } = await httpPost(
-        `${olBase}/api/chat`, { model, messages, stream: false }, {}, 90000
-      )
-      if (status >= 200 && status < 400) {
-        const raw = JSON.parse(body)?.message?.content || ''
-        const content = stripThinkTags(raw)
-        if (content) return { content, model, provider: 'ollama' }
+      try {
+        const { status, body } = await httpPost(
+          `${olBase}/api/chat`, { model, messages, stream: false }, {}, 90000
+        )
+        if (status >= 200 && status < 400) {
+          const raw = JSON.parse(body)?.message?.content || ''
+          const content = stripThinkTags(raw)
+          if (content) return { content, model, provider: 'ollama' }
+          ollamaDiag = `Ollama returned an empty response (model: ${model})`
+        } else {
+          ollamaDiag = `Ollama request failed (HTTP ${status}, model: ${model})`
+        }
+      } catch (e: any) {
+        ollamaDiag = `Ollama request failed: ${e?.message || e} (model: ${model})`
       }
     }
-  } catch {}
+  } catch (e: any) {
+    ollamaDiag = `Ollama check failed: ${e?.message || e}`
+  }
+  if (ollamaDiag) console.warn('[aihub] ai:chat Ollama fallback:', ollamaDiag)
 
   // 2. Fall back to OpenRouter with a model-fallback chain
   if (orKey) {
@@ -848,18 +859,20 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string) =
     }
     if (lastError) {
       return {
-        content: `Cloud AI error: ${lastError}\n\nTry:\n• Wait 1–2 minutes and retry\n• Install Ollama (ollama.com) for private local AI\n• Check your OpenRouter API key in Settings → AI Configuration`,
+        content: `Cloud AI error: ${lastError}${ollamaDiag ? `\n\n(Local Ollama also failed: ${ollamaDiag})` : ''}\n\nTry:\n• Wait 1–2 minutes and retry\n• Install Ollama (ollama.com) for private local AI\n• Check your OpenRouter API key in Settings → AI Configuration`,
         model: 'error', provider: 'error',
       }
     }
     return {
-      content: 'All cloud models are currently unavailable.\n\n• Wait 1–2 minutes and retry\n• Install Ollama at ollama.com and run: ollama pull llama3.1\n• Check your OpenRouter API key in Settings → AI Configuration',
+      content: `All cloud models are currently unavailable.${ollamaDiag ? `\n\n(Local Ollama also failed: ${ollamaDiag})` : ''}\n\n• Wait 1–2 minutes and retry\n• Install Ollama at ollama.com and run: ollama pull llama3.1\n• Check your OpenRouter API key in Settings → AI Configuration`,
       model: 'none', provider: 'none',
     }
   }
 
   return {
-    content: 'No AI configured.\n\n• Install Ollama at ollama.com, then run: ollama pull llama3.1\n• OR go to Settings → AI Configuration and paste your OpenRouter API key\n\nGet a free key at openrouter.ai',
+    content: ollamaDiag
+      ? `Ollama is set up but the request failed: ${ollamaDiag}\n\nTry:\n• Wait 1–2 minutes and retry\n• Restart Ollama\n• OR go to Settings → AI Configuration and paste an OpenRouter API key as a cloud fallback\n\nGet a free key at openrouter.ai`
+      : 'No AI configured.\n\n• Install Ollama at ollama.com, then run: ollama pull llama3.1\n• OR go to Settings → AI Configuration and paste your OpenRouter API key\n\nGet a free key at openrouter.ai',
     model: 'none', provider: 'none',
   }
 })
