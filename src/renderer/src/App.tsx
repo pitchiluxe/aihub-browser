@@ -18,6 +18,7 @@ import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import AIAssistant from './components/ai/AIAssistant'
 import { loadBookmarks } from './services/bookmarkService'
 import { buildPageExtractionScript } from './services/pageExtractor'
+import { loadCustomExts } from './extensions/customExts'
 
 declare global {
   interface Window {
@@ -300,6 +301,11 @@ export default function App() {
               if (state?.enabled) {
                 const script = ext.inject(state.settings || {})
                 window.electronAPI?.webview?.execScript?.(wcId, script)?.catch?.(() => {})
+              }
+            })
+            loadCustomExts().forEach(ext => {
+              if (extensionStates[ext.id]?.enabled) {
+                window.electronAPI?.webview?.execScript?.(wcId, ext.injectCode)?.catch?.(() => {})
               }
             })
           }

@@ -1,26 +1,10 @@
 import React, { useState, useCallback } from 'react'
 import { Search, Plus, X, ChevronDown, ChevronUp, Trash2, Code2, Puzzle } from 'lucide-react'
 import { EXTENSION_DEFS, ExtensionDef } from '../../extensions/extensionDefs'
+import { CustomExt, loadCustomExts, saveCustomExts } from '../../extensions/customExts'
 import { useBrowserStore } from '../../store/browserStore'
 
 const CATEGORIES = ['All', 'Media', 'Privacy', 'Productivity', 'Accessibility', 'Developer', 'Reading'] as const
-
-interface CustomExt {
-  id: string
-  name: string
-  tagline: string
-  icon: string
-  category: string
-  injectCode: string
-  removeCode: string
-}
-
-function loadCustomExts(): CustomExt[] {
-  try { return JSON.parse(localStorage.getItem('aihub-custom-exts') || '[]') } catch { return [] }
-}
-function saveCustomExts(exts: CustomExt[]) {
-  try { localStorage.setItem('aihub-custom-exts', JSON.stringify(exts)) } catch {}
-}
 
 function execInAllTabs(script: string) {
   const { tabWcIds } = useBrowserStore.getState()
