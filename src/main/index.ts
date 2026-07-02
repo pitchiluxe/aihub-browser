@@ -167,8 +167,14 @@ async function checkOllamaRunning(): Promise<{ running: boolean; models: string[
 // ── Window ─────────────────────────────────────────────────────────────────
 let mainWindow: BrowserWindow
 
+const CHROME_VERSION = '138'
 const CHROME_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+  `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION}.0.0.0 Safari/537.36`
+// Full Chrome brand list for Client Hints. Chromium's default omits the
+// "Google Chrome" brand, and Google's sign-in cross-checks Sec-CH-UA against
+// the UA string — a mismatch triggers "This browser or app may not be secure".
+const CHROME_SEC_CH_UA =
+  `"Not)A;Brand";v="8", "Chromium";v="${CHROME_VERSION}", "Google Chrome";v="${CHROME_VERSION}"`
 
 const ALLOWED_PERMISSIONS = new Set([
   'notifications', 'media', 'geolocation', 'fullscreen',
@@ -349,6 +355,18 @@ function createWindow(): void {
 
   // Spoof Chrome UA so sites serve full content (many degrade or block Electron's default UA).
   webviewSession.setUserAgent(CHROME_UA)
+
+  // Rewrite Client-Hint brand headers to match the spoofed UA — setUserAgent
+  // alone doesn't change Sec-CH-UA, and Google's sign-in blocks on the mismatch.
+  webviewSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    const headers = details.requestHeaders
+    for (const key of Object.keys(headers)) {
+      const k = key.toLowerCase()
+      if (k === 'sec-ch-ua') headers[key] = CHROME_SEC_CH_UA
+      else if (k === 'sec-ch-ua-full-version-list') delete headers[key]
+    }
+    callback({ requestHeaders: headers })
+  })
 
   webviewSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(ALLOWED_PERMISSIONS.has(permission))
