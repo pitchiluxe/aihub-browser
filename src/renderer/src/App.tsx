@@ -17,6 +17,7 @@ import AddBookmarkModal from './components/homepage/AddBookmarkModal'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import AIAssistant from './components/ai/AIAssistant'
 import { loadBookmarks } from './services/bookmarkService'
+import { buildPageExtractionScript } from './services/pageExtractor'
 
 declare global {
   interface Window {
@@ -107,9 +108,7 @@ export default function App() {
     const wcId = useBrowserStore.getState().tabWcIds[activeTabId]
     if (!wcId) return ''
     try {
-      const res = await window.electronAPI.webview.execScript(wcId,
-        `(function(){var s=document.body.innerText||document.body.textContent||'';return s.slice(0,8000);})()`
-      )
+      const res = await window.electronAPI.webview.execScript(wcId, buildPageExtractionScript())
       return res?.ok ? String(res.result || '').trim() : ''
     } catch { return '' }
   }, [activeTabId])
