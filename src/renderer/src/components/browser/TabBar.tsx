@@ -61,8 +61,8 @@ export default function TabBar() {
       {/* Spacer */}
       <div style={{ flex: 1, minWidth: 12 }} className="drag-region" />
 
-      {/* Window controls */}
-      <div className="flex items-center gap-1.5 pr-1 no-drag shrink-0">
+      {/* Window controls — self-center so they don't inherit the bar's items-end and sink to the tab line */}
+      <div className="flex items-center self-center gap-1.5 pr-1 no-drag shrink-0">
         <WinBtn onClick={() => window.electronAPI.window.minimize()} bg="#f59e0b" title="Minimize">
           <Minus size={7} />
         </WinBtn>
