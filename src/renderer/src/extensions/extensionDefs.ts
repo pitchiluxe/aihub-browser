@@ -39,11 +39,22 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     inject: (s) => `(function(){
   var K='__ext_dime';
   if(window[K]){window[K].update(${+(s.opacity ?? 0.7)});return;}
-  var op=${+(s.opacity ?? 0.7)},ov=null;
+  var op=${+(s.opacity ?? 0.7)},ov=null,poll=null;
+  function findLargestPlaying(){
+    var best=null,bestArea=0;
+    document.querySelectorAll('video').forEach(function(v){
+      if(v.paused||v.ended||v.readyState<=2)return;
+      var r=v.getBoundingClientRect();
+      var area=r.width*r.height;
+      if(area>bestArea){bestArea=area;best=r;}
+    });
+    return best;
+  }
   function show(){
     if(ov)return;
     ov=document.createElement('div');
-    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,'+op+');z-index:2147483640;pointer-events:none;transition:opacity 0.4s;opacity:0;';
+    ov.style.cssText='position:fixed;background:transparent;z-index:2147483640;pointer-events:none;transition:opacity 0.4s;opacity:0;';
+    ov.style.boxShadow='0 0 0 9999px rgba(0,0,0,'+op+')';
     if(document.body)document.body.appendChild(ov);
     setTimeout(function(){if(ov)ov.style.opacity='1';},10);
   }
@@ -53,22 +64,38 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     o.style.opacity='0';
     setTimeout(function(){try{o.remove();}catch(e){}},420);
   }
-  function check(){
-    var pl=false;
-    document.querySelectorAll('video').forEach(function(v){if(!v.paused&&!v.ended&&v.readyState>2)pl=true;});
-    pl?show():hide();
+  function position(){
+    var r=findLargestPlaying();
+    if(!r){hide();return;}
+    if(!ov)show();
+    if(ov){
+      ov.style.left=r.left+'px';
+      ov.style.top=r.top+'px';
+      ov.style.width=r.width+'px';
+      ov.style.height=r.height+'px';
+    }
   }
+  function check(){ position(); }
   document.addEventListener('play',check,true);
   document.addEventListener('pause',check,true);
   document.addEventListener('ended',check,true);
+  window.addEventListener('resize',position);
+  window.addEventListener('scroll',position,true);
+  poll=setInterval(position,250);
   check();
   window[K]={
-    update:function(v){op=v;if(ov)ov.style.background='rgba(0,0,0,'+v+')';},
+    update:function(v){
+      op=v;
+      if(ov)ov.style.boxShadow='0 0 0 9999px rgba(0,0,0,'+v+')';
+    },
     remove:function(){
       hide();
+      if(poll)clearInterval(poll);
       document.removeEventListener('play',check,true);
       document.removeEventListener('pause',check,true);
       document.removeEventListener('ended',check,true);
+      window.removeEventListener('resize',position);
+      window.removeEventListener('scroll',position,true);
       delete window[K];
     }
   };
