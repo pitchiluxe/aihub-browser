@@ -888,19 +888,30 @@ ipcMain.handle('ai:summarizePage', async (_e, pageText: string, url: string) => 
 
   const msgs = [{ role: 'user', content: userContent }]
 
+  let ollamaDiag = ''
   try {
     const ol = await checkOllamaRunning()
     if (ol.running && ol.models.length > 0) {
       const pref  = getData().settings.aiModel || ''
       const model = (pref && ol.models.includes(pref)) ? pref : ol.models[0]
-      const { status, body } = await httpPost(`${olBase}/api/chat`, { model, messages: msgs, stream: false }, {}, 45000)
-      if (status >= 200 && status < 400) {
-        const raw = JSON.parse(body)?.message?.content || ''
-        const summary = stripThinkTags(raw)
-        if (summary) return { summary }
+      try {
+        const { status, body } = await httpPost(`${olBase}/api/chat`, { model, messages: msgs, stream: false }, {}, 45000)
+        if (status >= 200 && status < 400) {
+          const raw = JSON.parse(body)?.message?.content || ''
+          const summary = stripThinkTags(raw)
+          if (summary) return { summary }
+          ollamaDiag = `Ollama returned an empty response (model: ${model})`
+        } else {
+          ollamaDiag = `Ollama request failed (HTTP ${status}, model: ${model})`
+        }
+      } catch (e: any) {
+        ollamaDiag = `Ollama request failed: ${e?.message || e} (model: ${model})`
       }
     }
-  } catch {}
+  } catch (e: any) {
+    ollamaDiag = `Ollama check failed: ${e?.message || e}`
+  }
+  if (ollamaDiag) console.warn('[aihub] ai:summarizePage Ollama fallback:', ollamaDiag)
 
   if (orKey) {
     const candidates = [...new Set([orMdl, ...OR_FREE_FALLBACKS])]
@@ -912,7 +923,11 @@ ipcMain.handle('ai:summarizePage', async (_e, pageText: string, url: string) => 
     }
   }
 
-  return { summary: 'Unable to summarize — Ollama offline and no cloud API key configured.' }
+  return {
+    summary: ollamaDiag
+      ? `Unable to summarize — local Ollama failed: ${ollamaDiag}${orKey ? ' (cloud fallback also failed)' : ' and no cloud API key configured'}.`
+      : 'Unable to summarize — Ollama offline and no cloud API key configured.',
+  }
 })
 
 // ── IPC: Save summary as Markdown ─────────────────────────────────────────
