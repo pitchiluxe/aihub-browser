@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react'
-import { Search, Plus, X, ChevronDown, ChevronUp, Trash2, Code2, Puzzle } from 'lucide-react'
+import { Search, Plus, X, ChevronDown, ChevronUp, Trash2, Code2, Puzzle, Sparkles } from 'lucide-react'
 import { EXTENSION_DEFS, ExtensionDef } from '../../extensions/extensionDefs'
 import { CustomExt, loadCustomExts, saveCustomExts } from '../../extensions/customExts'
+import { buildGenerationPrompt, parseGeneratedExtensions } from '../../services/extensionGenerator'
 import { useBrowserStore } from '../../store/browserStore'
 
 const CATEGORIES = ['All', 'Media', 'Privacy', 'Productivity', 'Accessibility', 'Developer', 'Reading'] as const
@@ -20,6 +21,7 @@ export default function ExtensionsPage() {
   const [category, setCategory]   = useState<string>('All')
   const [expanded, setExpanded]   = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [showGenerate, setShowGenerate] = useState(false)
   const [customExts, setCustomExts] = useState<CustomExt[]>(loadCustomExts)
 
   const allExts: Array<ExtensionDef | (CustomExt & { isCustom: true })> = [
@@ -83,15 +85,26 @@ export default function ExtensionsPage() {
               <p className="text-xs" style={{ color: '#475569' }}>{activeCount} active · {allExts.length} installed</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-            style={{ background: 'rgba(245,158,11,0.12)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.2)' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(245,158,11,0.2)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(245,158,11,0.12)' }}
-          >
-            <Plus size={13} /> Create Extension
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowGenerate(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+              style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.25)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.22)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.12)' }}
+            >
+              <Sparkles size={13} /> Generate with AI
+            </button>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+              style={{ background: 'rgba(245,158,11,0.12)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.2)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(245,158,11,0.2)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(245,158,11,0.12)' }}
+            >
+              <Plus size={13} /> Create Extension
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -238,6 +251,19 @@ export default function ExtensionsPage() {
           </div>
         )}
       </div>
+
+      {/* Generate with AI Modal */}
+      {showGenerate && (
+        <GenerateExtModal
+          existingNames={allExts.map(e => e.name)}
+          onClose={() => setShowGenerate(false)}
+          onGenerated={(exts) => {
+            const updated = [...customExts, ...exts]
+            setCustomExts(updated)
+            saveCustomExts(updated)
+          }}
+        />
+      )}
 
       {/* Create Extension Modal */}
       {showCreate && (
@@ -415,6 +441,113 @@ function CreateExtModal({ onClose, onCreate }: {
               boxShadow: name.trim() ? '0 0 16px rgba(245,158,11,0.3)' : 'none',
             }}>
             Create Extension
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Generate with AI Modal ───────────────────────────────────────────────────
+function GenerateExtModal({ existingNames, onClose, onGenerated }: {
+  existingNames: string[]
+  onClose: () => void
+  onGenerated: (exts: CustomExt[]) => void
+}) {
+  const [topic, setTopic]     = useState('')
+  const [busy, setBusy]       = useState(false)
+  const [error, setError]     = useState('')
+  const [summary, setSummary] = useState('')
+
+  const generate = async () => {
+    setBusy(true); setError(''); setSummary('')
+    try {
+      const result = await window.electronAPI.ai.chat([
+        { role: 'user', content: buildGenerationPrompt(topic, existingNames) },
+      ])
+      if (!result || result.provider === 'error' || result.provider === 'none') {
+        setError(result?.content || 'AI is unavailable.')
+        return
+      }
+      const { extensions, discarded } = parseGeneratedExtensions(result.content || '', existingNames)
+      if (extensions.length === 0) {
+        setError("The AI response couldn't be parsed — try again (local models sometimes fumble JSON).")
+        return
+      }
+      onGenerated(extensions)
+      setSummary(`Added ${extensions.length} extension${extensions.length === 1 ? '' : 's'}${discarded > 0 ? ` · ${discarded} discarded as invalid` : ''}`)
+      setTimeout(onClose, 1800)
+    } catch (e: any) {
+      setError(String(e?.message || e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}>
+      <div className="w-full max-w-md rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: '#0d1526', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div className="flex items-center gap-2.5">
+            <Sparkles size={18} style={{ color: '#a78bfa' }} />
+            <span className="text-sm font-semibold text-white">Generate Extensions with AI</span>
+          </div>
+          <button onClick={onClose} disabled={busy}
+            className="w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{ color: '#475569', background: 'rgba(255,255,255,0.05)' }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>
+              Topic <span style={{ color: '#1e3a5f', textTransform: 'none', fontWeight: 400 }}>— optional</span>
+            </label>
+            <input
+              value={topic}
+              onChange={e => setTopic(e.target.value)}
+              disabled={busy}
+              placeholder="e.g. tools for reading articles — leave empty and I'll pick useful ones"
+              className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0' }}
+            />
+          </div>
+
+          {busy && (
+            <p className="text-xs" style={{ color: '#64748b' }}>
+              ✨ Generating 5–10 extensions… local AI can take 30–60s.
+            </p>
+          )}
+          {error && (
+            <p className="text-xs whitespace-pre-wrap" style={{ color: '#f87171' }}>{error}</p>
+          )}
+          {summary && (
+            <p className="text-xs font-semibold" style={{ color: '#4ade80' }}>{summary}</p>
+          )}
+
+          <p className="text-xs" style={{ color: '#1e3a5f' }}>
+            ⚠ Generated code runs in the context of every web page you visit. New extensions start disabled — review, then enable the ones you want.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-3 px-6 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+          <button onClick={onClose} disabled={busy}
+            className="px-4 py-2 rounded-xl text-sm transition-all"
+            style={{ background: 'rgba(255,255,255,0.05)', color: '#64748b', border: '1px solid rgba(255,255,255,0.07)' }}>
+            Close
+          </button>
+          <button onClick={generate} disabled={busy}
+            className="px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+            style={{
+              background: busy ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
+              color: busy ? '#334155' : '#fff',
+              border: 'none', cursor: busy ? 'not-allowed' : 'pointer',
+              boxShadow: busy ? 'none' : '0 0 16px rgba(139,92,246,0.3)',
+            }}>
+            {busy ? 'Generating…' : '✨ Generate'}
           </button>
         </div>
       </div>
