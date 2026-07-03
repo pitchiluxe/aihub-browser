@@ -213,6 +213,7 @@ const INJECT_SCRIPT = `(function(){
     a.href=cv.toDataURL('image/png');
     document.body.appendChild(a); a.click(); a.remove();
   },'#22c55e'));
+  actionsRow.appendChild(actionBtn('\\uD83D\\uDDD2 Note',function(){ createNote(); },'#eab308'));
   tb.appendChild(actionsRow);
 
   var hint=document.createElement('div');
@@ -247,8 +248,97 @@ const INJECT_SCRIPT = `(function(){
     if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&map[e.key]){ st.t=map[e.key]; sc(); renderTools(); }
   },true);
 
+  // ── Sticky notes — in-page widgets, persisted per URL in site localStorage ──
+  var NOTES_KEY='__aihub_notes::'+location.origin+location.pathname;
+  var notes=[];
+  var noteEls={};
+  function saveNotes(){try{localStorage.setItem(NOTES_KEY,JSON.stringify(notes));}catch(e){}}
+  function makeNoteEl(n){
+    var el=document.createElement('div');
+    el.id='__aihub_note_'+n.id;
+    el.style.cssText='position:fixed;left:'+n.x+'px;top:'+n.y+'px;width:220px;z-index:2147483647;background:linear-gradient(180deg,#fef08a,#fde047);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.35);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;flex-direction:column;overflow:hidden;';
+    var head=document.createElement('div');
+    head.style.cssText='display:flex;align-items:center;gap:6px;padding:6px 8px;background:rgba(0,0,0,0.07);cursor:grab;user-select:none;';
+    var t=document.createElement('span');
+    t.textContent='\\uD83D\\uDDD2';t.style.cssText='font-size:12px;';
+    var sp=document.createElement('div');sp.style.flex='1';
+    var ai=document.createElement('button');
+    ai.type='button';ai.textContent='\\u2728';
+    ai.title='Empty note: AI summarizes this page. With text: AI answers it about this page.';
+    ai.style.cssText='width:22px;height:22px;border:none;border-radius:6px;background:rgba(0,0,0,0.08);cursor:pointer;font-size:12px;';
+    var del=document.createElement('button');
+    del.type='button';del.textContent='\\u00D7';del.title='Delete note';
+    del.style.cssText='width:22px;height:22px;border:none;border-radius:6px;background:rgba(0,0,0,0.08);cursor:pointer;font-size:14px;line-height:1;color:#713f12;';
+    head.appendChild(t);head.appendChild(sp);head.appendChild(ai);head.appendChild(del);
+    var body=document.createElement('div');
+    body.contentEditable='true';
+    body.textContent=n.text||'';
+    body.style.cssText='min-height:70px;max-height:220px;overflow-y:auto;padding:8px 10px;font-size:12px;line-height:1.5;color:#422006;outline:none;white-space:pre-wrap;word-break:break-word;';
+    el.appendChild(head);el.appendChild(body);
+    document.body.appendChild(el);
+    noteEls[n.id]={el:el,body:body,ai:ai};
+    var deb=null;
+    body.addEventListener('input',function(){
+      n.text=body.textContent||'';
+      if(deb)clearTimeout(deb);
+      deb=setTimeout(saveNotes,400);
+    });
+    del.onclick=function(){
+      notes=notes.filter(function(x){return x.id!==n.id;});
+      delete noteEls[n.id];
+      el.remove();saveNotes();
+    };
+    ai.onclick=function(){
+      if(ai.disabled)return;
+      ai.disabled=true;ai.textContent='\\u23F3';
+      window.__aihub_aiQueue=window.__aihub_aiQueue||[];
+      window.__aihub_aiQueue.push({noteId:n.id,text:(n.text||'').trim()});
+    };
+    var ndrag=false,nx=0,ny=0;
+    head.addEventListener('mousedown',function(e){
+      if(e.target===ai||e.target===del)return;
+      ndrag=true;var r=el.getBoundingClientRect();nx=e.clientX-r.left;ny=e.clientY-r.top;e.preventDefault();
+    });
+    window.addEventListener('mousemove',function(e){
+      if(!ndrag)return;
+      n.x=Math.max(4,e.clientX-nx);n.y=Math.max(4,e.clientY-ny);
+      el.style.left=n.x+'px';el.style.top=n.y+'px';
+    });
+    window.addEventListener('mouseup',function(){ if(ndrag){ndrag=false;saveNotes();} });
+  }
+  function createNote(){
+    var tbr=tb.getBoundingClientRect();
+    var n={id:Date.now()+''+Math.floor(Math.random()*1000),
+      x:Math.min(window.innerWidth-240,tbr.right+16+Math.random()*40),
+      y:Math.max(8,tbr.top+Math.random()*40),text:''};
+    notes.push(n);makeNoteEl(n);saveNotes();
+  }
+  function loadNotes(){
+    try{
+      var s=localStorage.getItem(NOTES_KEY);
+      if(!s)return;
+      var arr=JSON.parse(s);
+      if(Array.isArray(arr)){notes=arr;notes.forEach(makeNoteEl);}
+    }catch(e){}
+  }
+  window.__aihub_setNoteText=function(id,text){
+    var rec=noteEls[id];var n=null;
+    for(var i=0;i<notes.length;i++)if(notes[i].id===id)n=notes[i];
+    if(!rec||!n)return;
+    n.text=text;rec.body.textContent=text;
+    rec.ai.disabled=false;rec.ai.textContent='\\u2728';
+    saveNotes();
+  };
+  loadNotes();
+
   window.__aihub={
-    remove:function(){ cv.remove(); tb.remove(); delete window.__aihub; }
+    remove:function(){
+      cv.remove(); tb.remove();
+      Object.keys(noteEls).forEach(function(k){try{noteEls[k].el.remove();}catch(e){}});
+      delete window.__aihub_setNoteText;
+      delete window.__aihub_aiQueue;
+      delete window.__aihub;
+    }
   };
   return 'injected';
 })()`
