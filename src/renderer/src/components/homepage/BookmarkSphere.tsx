@@ -100,23 +100,29 @@ function buildGraphData(bookmarks: Bookmark[]): { nodes: ExtNode[]; links: ExtLi
     counts[b.id] = (counts[b.id] ?? 0) + 1
   }
 
-  // Phase 1 — same-category connections (strong cluster bonds)
-  for (let i = 0; i < bookmarks.length; i++) {
-    for (let j = i + 1; j < bookmarks.length; j++) {
-      const a = bookmarks[i], b = bookmarks[j]
-      if (a.category === b.category) addLink(a, b, 0.65)
-    }
+  // Obsidian-style sparse structure: star clusters, not a clique hairball.
+  // Group by category; within each group the first bookmark is the cluster
+  // anchor and every other member links only to that anchor (a star, ~n-1
+  // links instead of n(n-1)/2). Then link the category anchors together in a
+  // ring so all clusters form one connected graph with nothing floating.
+  const groups = new Map<string, Bookmark[]>()
+  for (const bm of bookmarks) {
+    const cat = bm.category || ''
+    if (!groups.has(cat)) groups.set(cat, [])
+    groups.get(cat)!.push(bm)
   }
 
-  // Phase 2 — ring connection across ALL bookmarks regardless of type.
-  // Every bookmark is part of the same family (bookmarks), so every node
-  // gets a weak link to its ring-neighbour, guaranteeing full connectivity
-  // and a single interconnected graph even for unique-category bookmarks.
-  if (bookmarks.length > 1) {
-    for (let i = 0; i < bookmarks.length; i++) {
-      const a = bookmarks[i]
-      const b = bookmarks[(i + 1) % bookmarks.length]
-      addLink(a, b, 0.20)
+  const anchors: Bookmark[] = []
+  for (const members of groups.values()) {
+    const anchor = members[0]
+    anchors.push(anchor)
+    for (let i = 1; i < members.length; i++) addLink(anchor, members[i], 0.55)
+  }
+
+  // Loose ring between category anchors (only when there are 2+ clusters).
+  if (anchors.length > 1) {
+    for (let i = 0; i < anchors.length; i++) {
+      addLink(anchors[i], anchors[(i + 1) % anchors.length], 0.18)
     }
   }
 
@@ -192,7 +198,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
 
     // Per-category atmosphere glows — each cluster emits its own color
     for (const node of nodesRef.current) {
-      if (node.x == null || node.connections < HUB_THRESHOLD) continue
+      if (node.x == null || node.y == null || node.connections < HUB_THRESHOLD) continue
       const sx = node.x * k + tx
       const sy = node.y * k + ty
       const aura = ctx.createRadialGradient(sx, sy, 0, sx, sy, 80 * k)
@@ -334,16 +340,17 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
         ctx.restore()
       }
 
-      // Core filled circle
+      // Core filled circle — fully saturated at rest so category colors read
+      // solid like Obsidian's nodes; only genuinely dimmed nodes fade.
       ctx.beginPath()
       ctx.arc(nx, ny, isSel ? finalR * 1.22 : finalR, 0, Math.PI * 2)
-      ctx.fillStyle = hexToRgba(col, isSel ? 1 : (isConn && isMatch) ? 0.88 : 0.12)
+      ctx.fillStyle = hexToRgba(col, isSel ? 1 : (isConn && isMatch) ? 1 : 0.12)
       ctx.fill()
 
       // Ring stroke
       ctx.beginPath()
       ctx.arc(nx, ny, isSel ? finalR * 1.22 : finalR, 0, Math.PI * 2)
-      ctx.strokeStyle = hexToRgba(col, isSel ? 1 : 0.65)
+      ctx.strokeStyle = hexToRgba(col, isSel ? 1 : 0.85)
       ctx.lineWidth   = (isSel ? 2.5 : 1.5) / k
       ctx.stroke()
 
