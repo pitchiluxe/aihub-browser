@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useBrowserStore } from '../../store/browserStore'
+import { buildPageExtractionScript } from '../../services/pageExtractor'
 
 // Canvas AND toolbar are both injected directly into the guest page's own
 // DOM — not rendered as host React overlays. BrowserView (the tab's native
@@ -343,6 +344,9 @@ const INJECT_SCRIPT = `(function(){
   return 'injected';
 })()`
 
+// Drains pending note-AI requests enqueued by ✨ buttons inside the page.
+const DRAIN_SCRIPT = `(function(){var q=window.__aihub_aiQueue||[];window.__aihub_aiQueue=[];return JSON.stringify(q);})()`
+
 export default function AnnotationCanvas() {
   const { activeTabId, tabWcIds } = useBrowserStore()
   const wcId = activeTabId ? tabWcIds[activeTabId] : null
@@ -353,7 +357,42 @@ export default function AnnotationCanvas() {
     wcIdRef.current = wcId
     window.electronAPI.webview.execScript(wcId, INJECT_SCRIPT).catch(() => {})
 
+    // Guest pages can't reach electronAPI, so the ✨ buttons only enqueue.
+    // Poll the queue, run ai:chat host-side, write answers back into notes.
+    const poll = setInterval(async () => {
+      const id = wcIdRef.current
+      if (id === null) return
+      try {
+        const res = await window.electronAPI.webview.execScript(id, DRAIN_SCRIPT)
+        if (!res?.ok) return
+        const queue = JSON.parse(String(res.result || '[]'))
+        if (!Array.isArray(queue) || queue.length === 0) return
+        const pageRes = await window.electronAPI.webview.execScript(id, buildPageExtractionScript())
+        const pageText = pageRes?.ok ? String(pageRes.result || '').trim() : ''
+        for (const req of queue) {
+          if (!req || typeof req.noteId !== 'string') continue
+          const prompt = req.text
+            ? `Answer briefly based on this page.\nQUESTION/INSTRUCTION: ${req.text}\n\nPAGE CONTENT:\n${pageText}`
+            : `Summarize this page in 3-5 short bullet points.\n\nPAGE CONTENT:\n${pageText}`
+          let answer = ''
+          try {
+            const result = await window.electronAPI.ai.chat([{ role: 'user', content: prompt }])
+            answer = result?.content || 'No response from AI.'
+          } catch (e: any) {
+            answer = `AI error: ${e?.message || e}`
+          }
+          const target = wcIdRef.current
+          if (target === null) break
+          await window.electronAPI.webview.execScript(
+            target,
+            `window.__aihub_setNoteText&&window.__aihub_setNoteText(${JSON.stringify(req.noteId)},${JSON.stringify(answer)})`
+          ).catch(() => {})
+        }
+      } catch {}
+    }, 1000)
+
     return () => {
+      clearInterval(poll)
       if (wcIdRef.current !== null) {
         window.electronAPI.webview.execScript(wcIdRef.current, `window.__aihub&&window.__aihub.remove()`).catch(() => {})
       }
