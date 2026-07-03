@@ -176,10 +176,7 @@ let mainWindow: BrowserWindow
 //
 // We deliberately claim a CURRENT Chrome version, NOT the bundled Chromium
 // version (Electron 28 ships Chromium 120, ~1.5 years old — old enough that
-// Google's sign-in flags it). Because applyBrowserIdentity() pushes this same
-// version into navigator.userAgentData via CDP, the UA string, the client-hint
-// headers, and the JS-visible userAgentData all stay consistent at this
-// version — so there's no mismatch for Google to catch.
+// Google's sign-in flags it).
 const CHROME_FULL_VERSION = '131.0.6778.140'
 const CHROME_MAJOR = CHROME_FULL_VERSION.split('.')[0]
 const CHROME_UA =
@@ -190,10 +187,11 @@ const CHROME_SEC_CH_UA =
   `"Not)A;Brand";v="8", "Chromium";v="${CHROME_MAJOR}", "Google Chrome";v="${CHROME_MAJOR}"`
 
 // The header rewrite fixes network requests, but Google's sign-in ALSO reads
-// navigator.userAgentData in page JS — and that object still reports plain
-// "Chromium" (no "Google Chrome"), which is what still trips the block. Only
-// CDP's Emulation.setUserAgentOverride sets userAgentData consistently with
-// the UA string. We attach the debugger per tab view and push the metadata.
+// navigator.userAgentData in page JS — plain setUserAgent leaves that reporting
+// bare "Chromium" (no "Google Chrome" brand), which trips the identifier-page
+// block. Confirmed load-bearing 2026-07-03: removing this regressed the app
+// from reaching the passkey step back to blocking right after email entry.
+// Only CDP's Emulation.setUserAgentOverride sets userAgentData consistently.
 const CHROME_UA_METADATA = {
   brands: [
     { brand: 'Not)A;Brand', version: '8' },
@@ -215,11 +213,10 @@ const CHROME_UA_METADATA = {
   wow64: false,
 }
 
-// Give a tab's webContents a full browser identity (UA + client hints +
-// navigator.userAgentData) via CDP. The debugger can't coexist with an open
-// DevTools window on the same view, so re-apply on devtools-closed. All
-// failures are swallowed — setUserAgent + the header rewrite still cover the
-// common case if CDP is unavailable.
+// Push userAgentData via CDP, then detach right away — the override is
+// target-scoped and survives detach, so there's no need to hold the debugger
+// session open (a lingering CDP session was ruled out as the WebAuthn-step
+// blocker separately; that failure has a different, still-unknown cause).
 function applyBrowserIdentity(wc: Electron.WebContents) {
   try {
     if (!wc.debugger.isAttached()) wc.debugger.attach('1.3')
@@ -228,7 +225,9 @@ function applyBrowserIdentity(wc: Electron.WebContents) {
       acceptLanguage: 'en-US,en;q=0.9',
       platform: 'Windows',
       userAgentMetadata: CHROME_UA_METADATA,
-    }).catch(() => {})
+    }).catch(() => {}).finally(() => {
+      try { if (wc.debugger.isAttached()) wc.debugger.detach() } catch {}
+    })
   } catch {}
 }
 
@@ -343,11 +342,49 @@ function createTabView(tabId: string, url: string) {
   attachContextMenu(wc)
   sendTabEvent(tabId, 'wc-id', { wcId: wc.id })
 
-  wc.setWindowOpenHandler(({ url: targetUrl }) => {
+  // Scripted popups (window.open with features — OAuth flows like
+  // "Sign in with Google" on TradingView) must open as real child windows:
+  // the popup posts its result back through window.opener, so routing it
+  // into a disconnected tab strands the flow after account selection.
+  // Plain target=_blank links still open as tabs.
+  wc.setWindowOpenHandler(({ url: targetUrl, disposition }) => {
+    if (disposition === 'new-window') {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          autoHideMenuBar: true,
+          webPreferences: {
+            partition: 'persist:main',
+            contextIsolation: true,
+            webSecurity: true,
+            nodeIntegration: false,
+          },
+        },
+      }
+    }
     if (targetUrl && !targetUrl.startsWith('devtools://') && !targetUrl.startsWith('chrome-extension://')) {
       safelySend('open-in-new-tab', targetUrl)
     }
     return { action: 'deny' }
+  })
+
+  // Popups need the same browser identity as tabs, or Google blocks them.
+  wc.on('did-create-window', (childWin) => {
+    const cwc = childWin.webContents
+    try { cwc.setUserAgent(CHROME_UA) } catch {}
+    applyBrowserIdentity(cwc)
+    attachContextMenu(cwc)
+    // Links clicked inside a popup go to a main-window tab; nested scripted
+    // popups (rare, but some IdPs chain them) stay real windows.
+    cwc.setWindowOpenHandler(({ url: popupUrl, disposition }) => {
+      if (disposition === 'new-window') {
+        return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true } }
+      }
+      if (popupUrl && !popupUrl.startsWith('devtools://') && !popupUrl.startsWith('chrome-extension://')) {
+        safelySend('open-in-new-tab', popupUrl)
+      }
+      return { action: 'deny' }
+    })
   })
 
   wc.on('did-navigate', (_e, navUrl) => sendTabEvent(tabId, 'did-navigate', { url: navUrl }))
@@ -720,8 +757,15 @@ ipcMain.handle('downloads:showInFolder', (_e, p: string) => shell.showItemInFold
 
 // ── IPC: Cache ─────────────────────────────────────────────────────────────
 ipcMain.handle('cache:clear', async () => {
-  await session.defaultSession.clearCache()
-  await session.defaultSession.clearStorageData()
+  // Tabs load in the 'persist:main' partition, not defaultSession — clearing
+  // only defaultSession left tab cookies/site-data (incl. Google's) untouched.
+  const tabSession = session.fromPartition('persist:main')
+  await Promise.all([
+    session.defaultSession.clearCache(),
+    session.defaultSession.clearStorageData(),
+    tabSession.clearCache(),
+    tabSession.clearStorageData(),
+  ])
   return true
 })
 
