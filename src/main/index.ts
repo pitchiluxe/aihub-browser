@@ -172,10 +172,15 @@ let mainWindow: BrowserWindow
 
 // Electron's default UA carries "aihub-browser/x" and "Electron/x" tokens
 // that make Google's sign-in reject the tab ("This browser or app may not be
-// secure"). Build a clean, plain-Chrome UA using the REAL bundled Chromium
-// version (so it stays consistent with navigator.userAgentData, which reports
-// that same version client-side and which Google also inspects).
-const CHROME_FULL_VERSION = process.versions.chrome || '120.0.0.0'
+// secure"). Build a clean, plain-Chrome UA.
+//
+// We deliberately claim a CURRENT Chrome version, NOT the bundled Chromium
+// version (Electron 28 ships Chromium 120, ~1.5 years old — old enough that
+// Google's sign-in flags it). Because applyBrowserIdentity() pushes this same
+// version into navigator.userAgentData via CDP, the UA string, the client-hint
+// headers, and the JS-visible userAgentData all stay consistent at this
+// version — so there's no mismatch for Google to catch.
+const CHROME_FULL_VERSION = '131.0.6778.140'
 const CHROME_MAJOR = CHROME_FULL_VERSION.split('.')[0]
 const CHROME_UA =
   `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_FULL_VERSION} Safari/537.36`
