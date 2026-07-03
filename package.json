@@ -1,6 +1,6 @@
 {
   "name": "aihub-browser",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "AIHub — Next-Generation AI-Powered Browser",
   "main": "./out/main/index.js",
   "homepage": ".",
@@ -55,12 +55,25 @@
       "LICENSE.txt"
     ],
     "extraResources": [
-      { "from": "LICENSE.txt", "to": "LICENSE.txt" }
+      {
+        "from": "LICENSE.txt",
+        "to": "LICENSE.txt"
+      }
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "zip",  "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "resources/icon.ico",
       "artifactName": "AIHub-Browser-${version}-${os}-${arch}.${ext}",
