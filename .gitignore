@@ -9,3 +9,5 @@ Thumbs.db
 .claude/
 landing/
 .worktrees/
+src_backup/
+*.tsbuildinfo
