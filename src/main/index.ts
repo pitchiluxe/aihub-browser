@@ -441,10 +441,19 @@ function createWindow(): void {
     callback(ALLOWED_PERMISSIONS.has(permission))
   })
 
-  // Strip X-Frame-Options and CSP that prevent embedding — Electron webviews are treated
-  // like cross-origin iframes, so sites returning DENY or frame-ancestors: none abort with -3.
+  // Strip X-Frame-Options and CSP ONLY on sub-frame (iframe) requests, so
+  // cross-origin embeds still load. Tab BrowserViews are top-level, not
+  // iframes — X-Frame-Options / frame-ancestors never block them. Stripping
+  // CSP off a top-level document (e.g. Google sign-in) makes the site detect
+  // the missing policy as tampering and refuse with "this browser or app may
+  // not be secure". Leaving main-frame headers untouched is what restores
+  // Google login (regression: this used to strip every response).
   const STRIP_HEADERS = new Set(['x-frame-options', 'content-security-policy'])
   webviewSession.webRequest.onHeadersReceived((details, callback) => {
+    if (details.resourceType !== 'subFrame') {
+      callback({})
+      return
+    }
     const headers: Record<string, string[]> = {}
     for (const [key, val] of Object.entries(details.responseHeaders || {})) {
       if (!STRIP_HEADERS.has(key.toLowerCase())) {
