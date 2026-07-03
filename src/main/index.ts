@@ -843,8 +843,11 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string) =
       const preferred = preferredModel || getData().settings.aiModel || ''
       const model = (preferred && ol.models.includes(preferred)) ? preferred : ol.models[0]
       try {
+        // num_ctx 8192: Ollama defaults to 4096, which truncates long
+        // responses (e.g. generating 5-10 extensions with code) mid-output,
+        // producing unparseable JSON. Raise the window so full replies fit.
         const { status, body } = await httpPost(
-          `${olBase}/api/chat`, { model, messages, stream: false }, {}, 90000
+          `${olBase}/api/chat`, { model, messages, stream: false, options: { num_ctx: 8192 } }, {}, 120000
         )
         if (status >= 200 && status < 400) {
           const raw = JSON.parse(body)?.message?.content || ''
