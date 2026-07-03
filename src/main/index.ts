@@ -321,7 +321,11 @@ function createTabView(tabId: string, url: string) {
     webPreferences: {
       partition: 'persist:main',
       contextIsolation: true,
-      webSecurity: false,
+      // Keep web security ON for tab content — this is the page real sites
+      // (incl. Google sign-in) run in. Disabling it is detectable and makes
+      // Google refuse with "this browser or app may not be secure". The old
+      // <webview> guests ran with security on, which is why login worked then.
+      webSecurity: true,
       nodeIntegration: false,
     },
   })
