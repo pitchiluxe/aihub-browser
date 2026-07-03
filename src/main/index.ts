@@ -184,6 +184,49 @@ const CHROME_UA =
 const CHROME_SEC_CH_UA =
   `"Not)A;Brand";v="8", "Chromium";v="${CHROME_MAJOR}", "Google Chrome";v="${CHROME_MAJOR}"`
 
+// The header rewrite fixes network requests, but Google's sign-in ALSO reads
+// navigator.userAgentData in page JS — and that object still reports plain
+// "Chromium" (no "Google Chrome"), which is what still trips the block. Only
+// CDP's Emulation.setUserAgentOverride sets userAgentData consistently with
+// the UA string. We attach the debugger per tab view and push the metadata.
+const CHROME_UA_METADATA = {
+  brands: [
+    { brand: 'Not)A;Brand', version: '8' },
+    { brand: 'Chromium', version: CHROME_MAJOR },
+    { brand: 'Google Chrome', version: CHROME_MAJOR },
+  ],
+  fullVersionList: [
+    { brand: 'Not)A;Brand', version: '8.0.0.0' },
+    { brand: 'Chromium', version: CHROME_FULL_VERSION },
+    { brand: 'Google Chrome', version: CHROME_FULL_VERSION },
+  ],
+  fullVersion: CHROME_FULL_VERSION,
+  platform: 'Windows',
+  platformVersion: '15.0.0',
+  architecture: 'x86',
+  model: '',
+  mobile: false,
+  bitness: '64',
+  wow64: false,
+}
+
+// Give a tab's webContents a full browser identity (UA + client hints +
+// navigator.userAgentData) via CDP. The debugger can't coexist with an open
+// DevTools window on the same view, so re-apply on devtools-closed. All
+// failures are swallowed — setUserAgent + the header rewrite still cover the
+// common case if CDP is unavailable.
+function applyBrowserIdentity(wc: Electron.WebContents) {
+  try {
+    if (!wc.debugger.isAttached()) wc.debugger.attach('1.3')
+    wc.debugger.sendCommand('Emulation.setUserAgentOverride', {
+      userAgent: CHROME_UA,
+      acceptLanguage: 'en-US,en;q=0.9',
+      platform: 'Windows',
+      userAgentMetadata: CHROME_UA_METADATA,
+    }).catch(() => {})
+  } catch {}
+}
+
 // Global default UA for every webContents. Set at module load (before app is
 // ready and before any BrowserView loads), so tabs never fall back to the
 // Electron-branded default. This is what actually reaches Google's servers.
@@ -282,6 +325,11 @@ function createTabView(tabId: string, url: string) {
   // Belt-and-suspenders: force the clean Chrome UA on this view before it
   // loads anything, so no request ever goes out with the Electron default.
   try { wc.setUserAgent(CHROME_UA) } catch {}
+  // Push the full browser identity (incl. navigator.userAgentData) via CDP so
+  // Google's client-side "secure browser" check passes. DevTools opening on
+  // this view detaches the debugger, so re-apply once it closes.
+  applyBrowserIdentity(wc)
+  wc.on('devtools-closed', () => applyBrowserIdentity(wc))
 
   attachContextMenu(wc)
   sendTabEvent(tabId, 'wc-id', { wcId: wc.id })
