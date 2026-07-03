@@ -170,14 +170,24 @@ async function checkOllamaRunning(): Promise<{ running: boolean; models: string[
 // ── Window ─────────────────────────────────────────────────────────────────
 let mainWindow: BrowserWindow
 
-const CHROME_VERSION = '138'
+// Electron's default UA carries "aihub-browser/x" and "Electron/x" tokens
+// that make Google's sign-in reject the tab ("This browser or app may not be
+// secure"). Build a clean, plain-Chrome UA using the REAL bundled Chromium
+// version (so it stays consistent with navigator.userAgentData, which reports
+// that same version client-side and which Google also inspects).
+const CHROME_FULL_VERSION = process.versions.chrome || '120.0.0.0'
+const CHROME_MAJOR = CHROME_FULL_VERSION.split('.')[0]
 const CHROME_UA =
-  `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION}.0.0.0 Safari/537.36`
-// Full Chrome brand list for Client Hints. Chromium's default omits the
-// "Google Chrome" brand, and Google's sign-in cross-checks Sec-CH-UA against
-// the UA string — a mismatch triggers "This browser or app may not be secure".
+  `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_FULL_VERSION} Safari/537.36`
+// Client-Hint brands matching the UA, including the "Google Chrome" brand
+// Chromium's default omits. Google cross-checks Sec-CH-UA against the UA.
 const CHROME_SEC_CH_UA =
-  `"Not)A;Brand";v="8", "Chromium";v="${CHROME_VERSION}", "Google Chrome";v="${CHROME_VERSION}"`
+  `"Not)A;Brand";v="8", "Chromium";v="${CHROME_MAJOR}", "Google Chrome";v="${CHROME_MAJOR}"`
+
+// Global default UA for every webContents. Set at module load (before app is
+// ready and before any BrowserView loads), so tabs never fall back to the
+// Electron-branded default. This is what actually reaches Google's servers.
+app.userAgentFallback = CHROME_UA
 
 const ALLOWED_PERMISSIONS = new Set([
   'notifications', 'media', 'geolocation', 'fullscreen',
@@ -269,6 +279,9 @@ function createTabView(tabId: string, url: string) {
   })
   tabViews.set(tabId, view)
   const wc = view.webContents
+  // Belt-and-suspenders: force the clean Chrome UA on this view before it
+  // loads anything, so no request ever goes out with the Electron default.
+  try { wc.setUserAgent(CHROME_UA) } catch {}
 
   attachContextMenu(wc)
   sendTabEvent(tabId, 'wc-id', { wcId: wc.id })

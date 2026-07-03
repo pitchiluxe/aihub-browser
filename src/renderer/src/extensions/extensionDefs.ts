@@ -45,6 +45,13 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     document.querySelectorAll('video').forEach(function(v){
       if(v.paused||v.ended||v.readyState<=2)return;
       var r=v.getBoundingClientRect();
+      // Ignore small players — many sites (X, Reddit, Tenor) render GIFs and
+      // image-like content as tiny autoplay <video> elements. Spotlighting
+      // those reads as "dimming images". Require a real, watchable size.
+      if(r.width<320||r.height<180)return;
+      // Ignore short muted looping clips even when large — these are GIF/
+      // decoration substitutes, not videos the user is watching.
+      if(v.loop&&v.muted&&isFinite(v.duration)&&v.duration>0&&v.duration<20)return;
       var area=r.width*r.height;
       if(area>bestArea){bestArea=area;best=r;}
     });
