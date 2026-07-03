@@ -95,7 +95,10 @@ function getAIConfig() {
   const orMdl   = s.openrouterModel  || process.env.ANTHROPIC_MODEL      || OR_DEFAULT_MODEL
   // Validate stored Ollama URL — bad values (e.g. "::1:11434") cause ECONNREFUSED
   const rawOl   = s.ollamaUrl || process.env.NEXT_PUBLIC_OLLAMA_BASE_URL || ''
-  const olBase  = (rawOl && validHttpUrl(rawOl)) ? rawOl : 'http://localhost:11434'
+  // Force IPv4: on Windows, Node resolves "localhost" to ::1 (IPv6) first, but
+  // Ollama binds 127.0.0.1 only — the mismatch is ECONNREFUSED ::1:11434.
+  const olBase  = ((rawOl && validHttpUrl(rawOl)) ? rawOl : 'http://127.0.0.1:11434')
+    .replace('://localhost', '://127.0.0.1')
   return { orKey, orBase, orMdl, olBase }
 }
 
