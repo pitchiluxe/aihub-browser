@@ -4,6 +4,7 @@ import {
   Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
+import { addBookmarkWithAI } from '../../services/bookmarkService'
 
 interface Props {
   onNavigate: (url: string) => void
@@ -26,8 +27,8 @@ export default function NavigationBar({
   canGoBack, canGoForward,
 }: Props) {
   const {
-    tabs, activeTabId, toggleAIPanel, isAIPanelOpen, setAddBookmarkOpen,
-    bookmarks, toggleSidebar, isSidebarOpen,
+    tabs, activeTabId, toggleAIPanel, isAIPanelOpen,
+    bookmarks, addBookmark, removeBookmark, toggleSidebar, isSidebarOpen,
     isAnnotationMode, toggleAnnotationMode,
   } = useBrowserStore()
 
@@ -35,11 +36,22 @@ export default function NavigationBar({
 
   const [urlInput,  setUrlInput]  = useState('')
   const [isEditing, setIsEditing] = useState(false)
+  const [bmToast,   setBmToast]   = useState('')
+  const [bmBusy,    setBmBusy]    = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showBmToast = (msg: string) => {
+    setBmToast(msg)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setBmToast(''), 2200)
+  }
 
   const displayUrl    = activeTab?.url === 'home' || !activeTab?.url ? '' : activeTab.url
   const isSecure      = activeTab?.url?.startsWith('https://')
-  const isBookmarked  = bookmarks.some(b => b.url === activeTab?.url)
+  const normUrl = (u?: string) => (u || '').replace(/\/+$/, '').toLowerCase()
+  const curBookmark   = activeTab?.url ? bookmarks.find(b => normUrl(b.url) === normUrl(activeTab.url)) : undefined
+  const isBookmarked  = !!curBookmark
   const isSpecialPage = !!(activeTab?.pageType && activeTab.pageType !== 'browser')
 
   useEffect(() => { if (!isEditing) setUrlInput(displayUrl) }, [activeTab?.url, isEditing])
@@ -54,6 +66,35 @@ export default function NavigationBar({
     onNavigate(url)
     setIsEditing(false)
     inputRef.current?.blur()
+  }
+
+  // One-click add the current page to the sphere (or remove it if already in).
+  const handleToggleBookmark = async () => {
+    if (bmBusy) return
+    const url = activeTab?.url
+    if (!url || isSpecialPage) return
+
+    if (curBookmark) {
+      removeBookmark(curBookmark.id)
+      showBmToast('Removed from sphere')
+      return
+    }
+
+    setBmBusy(true)
+    showBmToast('Adding to sphere…')
+    try {
+      const result = await addBookmarkWithAI(url, activeTab?.title || '', bookmarks)
+      if (result.success && result.bookmark) {
+        addBookmark(result.bookmark)
+        showBmToast(result.warning ? 'Already in sphere — updated' : 'Added to sphere')
+      } else {
+        showBmToast(result.error || "Couldn't add page")
+      }
+    } catch (e: any) {
+      showBmToast(`Couldn't add: ${e?.message || e}`)
+    } finally {
+      setBmBusy(false)
+    }
   }
 
   useEffect(() => {
@@ -71,8 +112,26 @@ export default function NavigationBar({
   return (
     <div
       className="drag-region flex items-center ds-navbar"
-      style={{ height: 52, padding: '0 10px', gap: 8 }}
+      style={{ height: 52, padding: '0 10px', gap: 8, position: 'relative' }}
     >
+      {/* Add-to-sphere toast — rendered inside the nav-bar chrome (above the
+          BrowserView, which always paints over host HTML placed in the page
+          region), vertically centered and anchored left of the action group. */}
+      {bmToast && (
+        <div
+          className="no-drag"
+          style={{
+            position: 'absolute', top: '50%', right: 130, transform: 'translateY(-50%)',
+            zIndex: 60, pointerEvents: 'none',
+            background: 'rgba(139,92,246,0.95)', color: '#fff',
+            borderRadius: 8, padding: '5px 12px', fontSize: 11.5, fontWeight: 700,
+            boxShadow: '0 6px 22px rgba(139,92,246,0.4)', whiteSpace: 'nowrap',
+          }}
+        >
+          {bmToast}
+        </div>
+      )}
+
       {/* Sidebar toggle */}
       <div className="no-drag">
         <NavBtn onClick={toggleSidebar} title="Toggle sidebar" active={isSidebarOpen}>
@@ -172,9 +231,10 @@ export default function NavigationBar({
       {/* Right-side action buttons */}
       <div className="flex items-center gap-1 no-drag">
         <NavBtn
-          onClick={() => setAddBookmarkOpen(true)}
-          title={isBookmarked ? 'Bookmarked' : 'Bookmark page'}
+          onClick={handleToggleBookmark}
+          title={isSpecialPage ? 'Open a page to add it' : isBookmarked ? 'Remove from sphere' : 'Add this page to the sphere'}
           active={isBookmarked}
+          disabled={isSpecialPage || bmBusy}
         >
           <Bookmark size={13} fill={isBookmarked ? 'currentColor' : 'none'} />
         </NavBtn>
