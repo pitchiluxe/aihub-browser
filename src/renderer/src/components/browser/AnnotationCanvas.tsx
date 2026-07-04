@@ -125,8 +125,27 @@ const INJECT_SCRIPT = `(function(){
     sizesRow.style.opacity=pointerMode?'0.35':'1';
     sizesRow.style.pointerEvents=pointerMode?'none':'auto';
   };
-  header.appendChild(dot);header.appendChild(label);header.appendChild(spacer);header.appendChild(pointerBtn);
+  var minBtn=document.createElement('button');
+  minBtn.type='button';minBtn.title='Minimize toolbar';
+  minBtn.textContent='\\u2212';
+  minBtn.style.cssText='width:28px;height:28px;border-radius:7px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#64748b;font-size:13px;font-weight:700;cursor:pointer;line-height:1;flex-shrink:0;';
+  header.appendChild(dot);header.appendChild(label);header.appendChild(spacer);header.appendChild(pointerBtn);header.appendChild(minBtn);
   tb.appendChild(header);
+
+  // All rows live in one container so minimize is a single display toggle;
+  // the header (drag handle + pointer + restore) stays visible.
+  var content=document.createElement('div');
+  content.style.cssText='display:flex;flex-direction:column;gap:10px;';
+  tb.appendChild(content);
+  var minimized=false;
+  minBtn.onclick=function(){
+    minimized=!minimized;
+    content.style.display=minimized?'none':'flex';
+    tb.style.minWidth=minimized?'0':'240px';
+    minBtn.textContent=minimized?'\\u25A1':'\\u2212';
+    minBtn.title=minimized?'Restore toolbar':'Minimize toolbar';
+    header.style.marginBottom=minimized?'0':'2px';
+  };
 
   var toolsRow=row();
   var toolBtns={};
@@ -147,8 +166,8 @@ const INJECT_SCRIPT = `(function(){
     });
   }
   renderTools();
-  tb.appendChild(toolsRow);
-  tb.appendChild(divider());
+  content.appendChild(toolsRow);
+  content.appendChild(divider());
 
   var colorsRow=row();
   var colorEls={};
@@ -169,8 +188,8 @@ const INJECT_SCRIPT = `(function(){
     });
   }
   renderColors();
-  tb.appendChild(colorsRow);
-  tb.appendChild(divider());
+  content.appendChild(colorsRow);
+  content.appendChild(divider());
 
   var sizesRow=row();
   var sizeLbl=document.createElement('span');
@@ -194,8 +213,8 @@ const INJECT_SCRIPT = `(function(){
     });
   }
   renderSizes();
-  tb.appendChild(sizesRow);
-  tb.appendChild(divider());
+  content.appendChild(sizesRow);
+  content.appendChild(divider());
 
   var actionsRow=row();
   function actionBtn(text,onClick,color){
@@ -214,13 +233,13 @@ const INJECT_SCRIPT = `(function(){
     a.href=cv.toDataURL('image/png');
     document.body.appendChild(a); a.click(); a.remove();
   },'#22c55e'));
-  actionsRow.appendChild(actionBtn('\\uD83D\\uDDD2 Note',function(){ createNote(); },'#eab308'));
-  tb.appendChild(actionsRow);
+  actionsRow.appendChild(actionBtn('\\uD83D\\uDDD2 New Note',function(){ createNote(); },'#eab308'));
+  content.appendChild(actionsRow);
 
   var hint=document.createElement('div');
   hint.textContent='Drag \\u00B7 P H A R E X = tools \\u00B7 Ctrl+Z/Y undo/redo';
   hint.style.cssText='font-size:9px;color:#334155;text-align:center;margin-top:2px;';
-  tb.appendChild(hint);
+  content.appendChild(hint);
 
   // Drag
   var dragging=false,offX=0,offY=0;
@@ -263,27 +282,48 @@ const INJECT_SCRIPT = `(function(){
     var t=document.createElement('span');
     t.textContent='\\uD83D\\uDDD2';t.style.cssText='font-size:12px;';
     var sp=document.createElement('div');sp.style.flex='1';
+    var btnCss='width:22px;height:22px;border:none;border-radius:6px;background:rgba(0,0,0,0.08);cursor:pointer;font-size:12px;';
     var ai=document.createElement('button');
     ai.type='button';ai.textContent='\\u2728';
     ai.title='Empty note: AI summarizes this page. With text: AI answers it about this page.';
-    ai.style.cssText='width:22px;height:22px;border:none;border-radius:6px;background:rgba(0,0,0,0.08);cursor:pointer;font-size:12px;';
+    ai.style.cssText=btnCss;
+    var sv=document.createElement('button');
+    sv.type='button';sv.textContent='\\uD83D\\uDCBE';sv.title='Save note';
+    sv.style.cssText=btnCss;
+    var nm=document.createElement('button');
+    nm.type='button';nm.title='Minimize note';
+    nm.style.cssText=btnCss+'font-weight:700;color:#713f12;';
     var del=document.createElement('button');
     del.type='button';del.textContent='\\u00D7';del.title='Delete note';
-    del.style.cssText='width:22px;height:22px;border:none;border-radius:6px;background:rgba(0,0,0,0.08);cursor:pointer;font-size:14px;line-height:1;color:#713f12;';
-    head.appendChild(t);head.appendChild(sp);head.appendChild(ai);head.appendChild(del);
+    del.style.cssText=btnCss+'font-size:14px;line-height:1;color:#713f12;';
+    head.appendChild(t);head.appendChild(sp);head.appendChild(sv);head.appendChild(ai);head.appendChild(nm);head.appendChild(del);
     var body=document.createElement('div');
     body.contentEditable='true';
     body.textContent=n.text||'';
     body.style.cssText='min-height:70px;max-height:220px;overflow-y:auto;padding:8px 10px;font-size:12px;line-height:1.5;color:#422006;outline:none;white-space:pre-wrap;word-break:break-word;';
     el.appendChild(head);el.appendChild(body);
     document.body.appendChild(el);
-    noteEls[n.id]={el:el,body:body,ai:ai};
+    // n.min persists through saveNotes because the whole note object is serialized
+    function applyMin(){
+      body.style.display=n.min?'none':'block';
+      nm.textContent=n.min?'\\u25A1':'\\u2212';
+      nm.title=n.min?'Restore note':'Minimize note';
+    }
+    applyMin();
+    noteEls[n.id]={el:el,body:body,ai:ai,expand:function(){n.min=false;applyMin();}};
     var deb=null;
     body.addEventListener('input',function(){
       n.text=body.textContent||'';
       if(deb)clearTimeout(deb);
       deb=setTimeout(saveNotes,400);
     });
+    sv.onclick=function(){
+      n.text=body.textContent||'';
+      saveNotes();
+      sv.textContent='\\u2713';
+      setTimeout(function(){sv.textContent='\\uD83D\\uDCBE';},900);
+    };
+    nm.onclick=function(){ n.min=!n.min; applyMin(); saveNotes(); };
     del.onclick=function(){
       notes=notes.filter(function(x){return x.id!==n.id;});
       delete noteEls[n.id];
@@ -297,7 +337,7 @@ const INJECT_SCRIPT = `(function(){
     };
     var ndrag=false,nx=0,ny=0;
     head.addEventListener('mousedown',function(e){
-      if(e.target===ai||e.target===del)return;
+      if(e.target===ai||e.target===del||e.target===sv||e.target===nm)return;
       ndrag=true;var r=el.getBoundingClientRect();nx=e.clientX-r.left;ny=e.clientY-r.top;e.preventDefault();
     });
     window.addEventListener('mousemove',function(e){
@@ -328,6 +368,7 @@ const INJECT_SCRIPT = `(function(){
     if(!rec||!n)return;
     n.text=text;rec.body.textContent=text;
     rec.ai.disabled=false;rec.ai.textContent='\\u2728';
+    if(rec.expand)rec.expand();
     saveNotes();
   };
   loadNotes();

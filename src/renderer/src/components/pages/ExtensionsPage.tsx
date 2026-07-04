@@ -462,9 +462,13 @@ function GenerateExtModal({ existingNames, onClose, onGenerated }: {
   const generate = async () => {
     setBusy(true); setError(''); setSummary('')
     try {
-      const result = await window.electronAPI.ai.chat([
-        { role: 'user', content: buildGenerationPrompt(topic, existingNames) },
-      ])
+      // preferCloud: strict-JSON output — small local models fumble it, so
+      // route to the cloud chain first and use Ollama only as fallback.
+      const result = await window.electronAPI.ai.chat(
+        [{ role: 'user', content: buildGenerationPrompt(topic, existingNames) }],
+        undefined,
+        { preferCloud: true },
+      )
       if (!result || result.provider === 'error' || result.provider === 'none') {
         setError(result?.content || 'AI is unavailable.')
         return

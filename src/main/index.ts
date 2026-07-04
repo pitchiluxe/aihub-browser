@@ -84,9 +84,10 @@ function validHttpUrl(url: string): boolean {
 // Strip non-ASCII — HTTP headers only allow bytes 0-255
 function toAscii(s: string) { return s.replace(/[^\x00-\x7F]/g, '') }
 
-// Confirmed-working free models on OpenRouter (June 2026), ordered by quality.
-// Mirrors AIHub's FALLBACK_MODELS exactly so both apps share the same proven chain.
-const OR_DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
+// Confirmed-working free models on OpenRouter (verified live 2026-07-03).
+// OpenRouter retired most old :free variants ("unavailable for free" 404s),
+// so this list must be models that exist on the CURRENT free tier.
+const OR_DEFAULT_MODEL = 'qwen/qwen3-coder:free'
 
 function getAIConfig() {
   const s = getData().settings
@@ -908,16 +909,24 @@ ipcMain.handle('ai:categorizeBookmark', async (_e, url: string, title: string) =
   const cat = heuristic(); return { category: cat, color: cols[cat] }
 })
 
-// Exact fallback chain from AIHub (confirmed June 2026) — same key, same account.
+// Fallback chain re-verified against the live OpenRouter free tier 2026-07-03
+// (the June list was mostly retired — those slugs now 404 with "unavailable
+// for free"). Ordered by quality for code generation; 'openrouter/free' is a
+// meta-router that picks any available free model, so it terminates the chain
+// with something that practically always answers.
+// Nemotron sits last before the meta-router: it's a hidden-reasoning model
+// that burns most of the completion budget on reasoning tokens (observed
+// 4909/8192 on the extension-generation prompt), truncating the visible
+// answer mid-JSON. Non-reasoning instruct models go first.
 const OR_FREE_FALLBACKS = [
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'mistralai/mistral-small-3.1-24b-instruct:free',
-  'qwen/qwen-2.5-72b-instruct:free',
-  'google/gemma-3-27b-it:free',
-  'meta-llama/llama-3.1-8b-instruct:free',
+  'qwen/qwen3-coder:free',
   'openai/gpt-oss-120b:free',
+  'qwen/qwen3-next-80b-a3b-instruct:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'google/gemma-4-31b-it:free',
   'openai/gpt-oss-20b:free',
-  'deepseek/deepseek-r1:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'openrouter/free',
 ]
 
 // Strip DeepSeek/reasoning model chain-of-thought tags before returning content
@@ -941,7 +950,12 @@ async function openRouterChat(
       30000
     )
     if (status === 200) {
-      const raw = JSON.parse(body)?.choices?.[0]?.message?.content || ''
+      const choice = JSON.parse(body)?.choices?.[0]
+      // finish_reason 'length' at an 8192 budget means the model ran out of
+      // tokens (reasoning models burn the budget invisibly) — the reply is
+      // cut mid-sentence/mid-JSON. Fail over to the next model instead.
+      if (choice?.finish_reason === 'length') return null
+      const raw = choice?.message?.content || ''
       return stripThinkTags(raw) || null
     }
     // 404 = model not found on this account, 429 = rate-limited — skip to next model
@@ -955,58 +969,77 @@ async function openRouterChat(
 }
 
 // ── IPC: AI chat ──────────────────────────────────────────────────────────
-ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string) => {
+// Default order: Ollama first (private & free), OpenRouter as fallback.
+// opts.preferCloud flips that — structured-output features (extension
+// generation) need models that reliably emit strict JSON, which small local
+// models fumble; cloud goes first and Ollama becomes the fallback.
+ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, opts?: { preferCloud?: boolean }) => {
   const { olBase, orKey, orBase, orMdl } = getAIConfig()
 
-  // 1. Try local Ollama (preferred — private & free)
   let ollamaDiag = ''
-  try {
-    const ol = await checkOllamaRunning()
-    if (ol.running && ol.models.length > 0) {
-      const preferred = preferredModel || getData().settings.aiModel || ''
-      const model = (preferred && ol.models.includes(preferred)) ? preferred : ol.models[0]
-      try {
-        // num_ctx 8192: Ollama defaults to 4096, which truncates long
-        // responses (e.g. generating 5-10 extensions with code) mid-output,
-        // producing unparseable JSON. Raise the window so full replies fit.
-        const { status, body } = await httpPost(
-          `${olBase}/api/chat`, { model, messages, stream: false, options: { num_ctx: 8192 } }, {}, 120000
-        )
-        if (status >= 200 && status < 400) {
-          const raw = JSON.parse(body)?.message?.content || ''
-          const content = stripThinkTags(raw)
-          if (content) return { content, model, provider: 'ollama' }
-          ollamaDiag = `Ollama returned an empty response (model: ${model})`
-        } else {
-          ollamaDiag = `Ollama request failed (HTTP ${status}, model: ${model})`
+  const tryOllama = async (): Promise<{ content: string; model: string; provider: string } | null> => {
+    try {
+      const ol = await checkOllamaRunning()
+      if (ol.running && ol.models.length > 0) {
+        const preferred = preferredModel || getData().settings.aiModel || ''
+        const model = (preferred && ol.models.includes(preferred)) ? preferred : ol.models[0]
+        try {
+          // num_ctx 8192: Ollama defaults to 4096, which truncates long
+          // responses (e.g. generating 5-10 extensions with code) mid-output,
+          // producing unparseable JSON. Raise the window so full replies fit.
+          const { status, body } = await httpPost(
+            `${olBase}/api/chat`, { model, messages, stream: false, options: { num_ctx: 8192 } }, {}, 120000
+          )
+          if (status >= 200 && status < 400) {
+            const raw = JSON.parse(body)?.message?.content || ''
+            const content = stripThinkTags(raw)
+            if (content) return { content, model, provider: 'ollama' }
+            ollamaDiag = `Ollama returned an empty response (model: ${model})`
+          } else {
+            ollamaDiag = `Ollama request failed (HTTP ${status}, model: ${model})`
+          }
+        } catch (e: any) {
+          ollamaDiag = `Ollama request failed: ${e?.message || e} (model: ${model})`
         }
-      } catch (e: any) {
-        ollamaDiag = `Ollama request failed: ${e?.message || e} (model: ${model})`
       }
+    } catch (e: any) {
+      ollamaDiag = `Ollama check failed: ${e?.message || e}`
     }
-  } catch (e: any) {
-    ollamaDiag = `Ollama check failed: ${e?.message || e}`
+    if (ollamaDiag) console.warn('[aihub] ai:chat Ollama fallback:', ollamaDiag)
+    return null
   }
-  if (ollamaDiag) console.warn('[aihub] ai:chat Ollama fallback:', ollamaDiag)
 
-  // 2. Fall back to OpenRouter with a model-fallback chain
-  if (orKey) {
-    // Build candidate list: configured model first, then known-free fallbacks
+  let cloudError = ''
+  const tryCloud = async (): Promise<{ content: string; model: string; provider: string } | null> => {
+    if (!orKey) return null
+    // Candidate list: configured model first, then known-free fallbacks
     const candidates = [orMdl, ...OR_FREE_FALLBACKS.filter(m => m !== orMdl)]
-    let lastError = ''
     for (const model of candidates) {
       try {
-        const content = await openRouterChat(orBase, orKey, model, messages)
+        // 8192 tokens: long structured replies (extension generation emits
+        // 5-10 objects with code) blow through the old 2048 default and get
+        // truncated mid-JSON — same failure the Ollama path fixed via num_ctx.
+        const content = await openRouterChat(orBase, orKey, model, messages, 8192)
         if (content) return { content, model, provider: 'openrouter' }
-        // null = 404 on this model, try next
+        // null = 404/429 on this model, try next
       } catch (e: any) {
-        lastError = e.message
-        break // non-404 error — stop trying
+        cloudError = e.message
+        break // non-retryable error — stop trying
       }
     }
-    if (lastError) {
+    return null
+  }
+
+  const order = opts?.preferCloud ? [tryCloud, tryOllama] : [tryOllama, tryCloud]
+  for (const attempt of order) {
+    const result = await attempt()
+    if (result) return result
+  }
+
+  if (orKey) {
+    if (cloudError) {
       return {
-        content: `Cloud AI error: ${lastError}${ollamaDiag ? `\n\n(Local Ollama also failed: ${ollamaDiag})` : ''}\n\nTry:\n• Wait 1–2 minutes and retry\n• Install Ollama (ollama.com) for private local AI\n• Check your OpenRouter API key in Settings → AI Configuration`,
+        content: `Cloud AI error: ${cloudError}${ollamaDiag ? `\n\n(Local Ollama also failed: ${ollamaDiag})` : ''}\n\nTry:\n• Wait 1–2 minutes and retry\n• Install Ollama (ollama.com) for private local AI\n• Check your OpenRouter API key in Settings → AI Configuration`,
         model: 'error', provider: 'error',
       }
     }

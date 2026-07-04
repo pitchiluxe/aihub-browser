@@ -36,7 +36,7 @@ function e(key: string, fallback = ''): string {
 const mainDefine: Record<string, string> = {
   'process.env.ANTHROPIC_AUTH_TOKEN':           JSON.stringify(e('ANTHROPIC_AUTH_TOKEN')),
   'process.env.ANTHROPIC_BASE_URL':             JSON.stringify(e('ANTHROPIC_BASE_URL', 'https://openrouter.ai/api')),
-  'process.env.ANTHROPIC_MODEL':                JSON.stringify(e('ANTHROPIC_MODEL', 'deepseek/deepseek-v4-flash:free')),
+  'process.env.ANTHROPIC_MODEL':                JSON.stringify(e('ANTHROPIC_MODEL', 'qwen/qwen3-coder:free')),
   'process.env.NEXT_PUBLIC_OLLAMA_BASE_URL':    JSON.stringify(e('NEXT_PUBLIC_OLLAMA_BASE_URL', 'http://localhost:11434')),
 }
 

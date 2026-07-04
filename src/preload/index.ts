@@ -64,7 +64,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ai: {
     checkDuplicate:     (url:string, e:string[]) => ipcRenderer.invoke('ai:checkDuplicate', url, e),
     categorizeBookmark: (url:string, t:string)   => ipcRenderer.invoke('ai:categorizeBookmark', url, t),
-    chat:               (msgs:any[], m?:string)  => ipcRenderer.invoke('ai:chat', msgs, m),
+    chat:               (msgs:any[], m?:string, opts?:{preferCloud?:boolean}) => ipcRenderer.invoke('ai:chat', msgs, m, opts),
     summarizePage:      (t:string, url:string)   => ipcRenderer.invoke('ai:summarizePage', t, url),
     getLatestNews:      ()                       => ipcRenderer.invoke('ai:getLatestNews'),
   },

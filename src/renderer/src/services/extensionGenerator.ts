@@ -44,17 +44,26 @@ export function parseGeneratedExtensions(
   const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
   const candidate = fence ? fence[1] : raw
   const start = candidate.indexOf('[')
+  if (start === -1) return { extensions: [], discarded: 0 }
   const end = candidate.lastIndexOf(']')
-  if (start === -1 || end <= start) return { extensions: [], discarded: 0 }
 
-  let items: unknown[]
-  try {
-    const parsed = JSON.parse(candidate.slice(start, end + 1))
-    if (!Array.isArray(parsed)) return { extensions: [], discarded: 0 }
-    items = parsed
-  } catch {
-    return { extensions: [], discarded: 0 }
+  // Salvage truncated output (model hit its token limit mid-array): cut back
+  // to the last complete object and close the array ourselves. Complete
+  // extensions before the cut are still perfectly usable.
+  const salvaged = (() => {
+    const lastBrace = candidate.lastIndexOf('}')
+    return lastBrace > start ? candidate.slice(start, lastBrace + 1) + ']' : ''
+  })()
+
+  let items: unknown[] | null = null
+  for (const text of [end > start ? candidate.slice(start, end + 1) : '', salvaged]) {
+    if (!text) continue
+    try {
+      const parsed = JSON.parse(text)
+      if (Array.isArray(parsed)) { items = parsed; break }
+    } catch { /* try next candidate */ }
   }
+  if (!items) return { extensions: [], discarded: 0 }
 
   const taken = new Set(existingNames.map(n => n.toLowerCase()))
   const extensions: CustomExt[] = []
@@ -71,8 +80,17 @@ export function parseGeneratedExtensions(
       if (!name || !tagline || !injectCode || !removeCode) { discarded++; return }
       if (taken.has(name.toLowerCase())) { discarded++; return }
       // Syntax gate — constructed, never invoked in the host renderer.
-      new Function(injectCode)
-      new Function(removeCode)
+      // The renderer CSP has no 'unsafe-eval', so new Function throws
+      // EvalError here even for valid code. Only a SyntaxError means the
+      // code is actually bad; a CSP EvalError means "can't check" — accept
+      // the item (it runs via executeJavaScript in guest pages, outside
+      // this CSP).
+      try {
+        new Function(injectCode)
+        new Function(removeCode)
+      } catch (e) {
+        if (e instanceof SyntaxError) { discarded++; return }
+      }
       const icon = typeof it?.icon === 'string' && it.icon.trim()
         ? [...it.icon.trim()].slice(0, 2).join('')
         : '✨'
