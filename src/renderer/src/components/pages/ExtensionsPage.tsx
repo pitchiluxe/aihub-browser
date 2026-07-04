@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { Search, Plus, X, ChevronDown, ChevronUp, Trash2, Code2, Puzzle, Sparkles } from 'lucide-react'
 import { EXTENSION_DEFS, ExtensionDef } from '../../extensions/extensionDefs'
 import { CustomExt, loadCustomExts, saveCustomExts } from '../../extensions/customExts'
@@ -23,6 +23,14 @@ export default function ExtensionsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [showGenerate, setShowGenerate] = useState(false)
   const [customExts, setCustomExts] = useState<CustomExt[]>(loadCustomExts)
+
+  // The page stays mounted (App hides it with display:none), so re-read
+  // storage on window focus to pick up changes made while it wasn't visible.
+  useEffect(() => {
+    const sync = () => setCustomExts(loadCustomExts())
+    window.addEventListener('focus', sync)
+    return () => window.removeEventListener('focus', sync)
+  }, [])
 
   const allExts: Array<ExtensionDef | (CustomExt & { isCustom: true })> = [
     ...EXTENSION_DEFS,
@@ -169,17 +177,15 @@ export default function ExtensionsPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {/* Settings gear — only for built-in exts with settings */}
-                    {builtIn && builtIn.settings.length > 0 && (
-                      <button
-                        onClick={() => setExpanded(isOpen ? null : ext.id)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-                        style={{ background: isOpen ? 'rgba(255,255,255,0.08)' : 'transparent', color: isOpen ? '#94a3b8' : '#334155' }}
-                        title="Settings"
-                      >
-                        {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                    )}
+                    {/* Info/settings expander — every card has a how-to panel */}
+                    <button
+                      onClick={() => setExpanded(isOpen ? null : ext.id)}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+                      style={{ background: isOpen ? 'rgba(255,255,255,0.08)' : 'transparent', color: isOpen ? '#94a3b8' : '#334155' }}
+                      title={builtIn && builtIn.settings.length > 0 ? 'How to use & settings' : 'How to use'}
+                    >
+                      {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
                     {/* Delete for custom exts */}
                     {isCustom && (
                       <button
@@ -199,10 +205,20 @@ export default function ExtensionsPage() {
                 </div>
               </div>
 
-              {/* Settings panel (built-in only) */}
-              {isOpen && builtIn && builtIn.settings.length > 0 && (
+              {/* Info + settings panel */}
+              {isOpen && (
                 <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                  <p className="text-[10px] uppercase tracking-widest pt-3 font-bold" style={{ color: '#1e3a5f' }}>Settings</p>
+                  <p className="text-[10px] uppercase tracking-widest pt-3 font-bold" style={{ color: '#1e3a5f' }}>How to use</p>
+                  <p className="text-xs leading-relaxed" style={{ color: '#94a3b8' }}>
+                    {builtIn
+                      ? builtIn.howTo
+                      : (ext as CustomExt).howTo || 'Enable the toggle and the extension runs on every page you open. ' + ext.tagline}
+                  </p>
+                </div>
+              )}
+              {isOpen && builtIn && builtIn.settings.length > 0 && (
+                <div className="px-4 pb-4 space-y-3">
+                  <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: '#1e3a5f' }}>Settings</p>
                   {builtIn.settings.map(setting => {
                     const val = state?.settings?.[setting.key] ?? setting.default
                     return (
@@ -332,6 +348,7 @@ function CreateExtModal({ onClose, onCreate }: {
 }) {
   const [name, setName]         = useState('')
   const [tagline, setTagline]   = useState('')
+  const [howTo, setHowTo]       = useState('')
   const [icon, setIcon]         = useState('⚡')
   const [category, setCategory] = useState('Productivity')
   const [inject, setInject]     = useState(CODE_TEMPLATE)
@@ -340,7 +357,7 @@ function CreateExtModal({ onClose, onCreate }: {
   const handleCreate = () => {
     if (!name.trim()) return
     const id = 'custom-' + Date.now()
-    onCreate({ id, name: name.trim(), tagline: tagline.trim() || 'Custom extension', icon: icon || '⚡', category, injectCode: inject, removeCode: remove })
+    onCreate({ id, name: name.trim(), tagline: tagline.trim() || 'Custom extension', icon: icon || '⚡', category, injectCode: inject, removeCode: remove, ...(howTo.trim() ? { howTo: howTo.trim() } : {}) })
   }
 
   return (
@@ -390,6 +407,14 @@ function CreateExtModal({ onClose, onCreate }: {
           <div>
             <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>Tagline</label>
             <input value={tagline} onChange={e => setTagline(e.target.value)} placeholder="One-line description of what it does"
+              className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0' }} />
+          </div>
+
+          {/* How to use */}
+          <div>
+            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>How to use <span style={{ color: '#1e3a5f', textTransform: 'none', fontWeight: 400 }}>— optional, shown in the card's info panel</span></label>
+            <input value={howTo} onChange={e => setHowTo(e.target.value)} placeholder="e.g. Toggle on, then click the button that appears bottom-right"
               className="w-full px-3 py-2 rounded-xl text-sm outline-none"
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0' }} />
           </div>

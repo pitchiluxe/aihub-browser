@@ -14,6 +14,9 @@ export interface ExtensionDef {
   name: string
   tagline: string
   description: string
+  // Short usage instructions shown in the card's info panel — what happens
+  // when the user enables it and what (if anything) they need to click.
+  howTo: string
   icon: string
   color: string
   category: 'Media' | 'Privacy' | 'Productivity' | 'Accessibility' | 'Developer' | 'Reading'
@@ -29,6 +32,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Dime',
     tagline: 'Dims the background while video plays',
     description: 'Creates a dark overlay around playing videos to bring cinematic focus to the content. Opacity is fully adjustable. Works on YouTube, Vimeo, and any HTML5 video.',
+    howTo: 'Toggle on, then play any video — the page around it dims automatically once playback starts and lifts when you pause. Adjust dim strength with the settings arrow.',
     icon: '🎬',
     color: '#f59e0b',
     category: 'Media',
@@ -115,6 +119,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Silent Mode',
     tagline: 'Blocks autoplay audio and video everywhere',
     description: 'Mutes all media on page load and intercepts new media elements so nothing autoplays. Toggle off to restore normal behavior.',
+    howTo: 'Toggle on and every page loads muted — nothing autoplays with sound. Use a video\'s own player controls to unmute the ones you actually want to hear.',
     icon: '🔇',
     color: '#ef4444',
     category: 'Media',
@@ -145,6 +150,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Focus Reader',
     tagline: 'Strips clutter for distraction-free reading',
     description: 'Detects the main article and presents it in a clean, full-screen reading environment with adjustable font size.',
+    howTo: 'Open an article page first, then toggle on — the article reopens in a clean full-screen view. Click "Exit Reader" (top-right) to go back. Font size is in settings.',
     icon: '📖',
     color: '#10b981',
     category: 'Reading',
@@ -202,6 +208,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Link Cleaner',
     tagline: 'Strips UTM & tracking params from all links',
     description: 'Silently removes UTM, fbclid, gclid, and other tracking tokens from every link on the page. Your clicks stay private.',
+    howTo: 'Toggle on and forget it — tracking parameters (utm_*, fbclid, gclid…) are stripped from every link automatically as pages load. Nothing to click.',
     icon: '🧹',
     color: '#6366f1',
     category: 'Privacy',
@@ -235,6 +242,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Dark Force',
     tagline: 'Forces dark mode on any website',
     description: 'Applies a CSS invert+hue-rotate filter to make any bright website dark. Images and videos are re-inverted so they look natural.',
+    howTo: 'Toggle on — bright pages turn dark instantly, photos and videos keep their normal colors. Toggle off to restore the original look.',
     icon: '🌑',
     color: '#334155',
     category: 'Accessibility',
@@ -257,6 +265,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Image Inspector',
     tagline: 'Hover images to see dimensions & file name',
     description: 'Shows a tooltip with natural dimensions, displayed size, and file name whenever you hover over any image. Great for designers and developers.',
+    howTo: 'Toggle on, then hover your mouse over any image — a tooltip appears with its natural size, displayed size, and file name.',
     icon: '🔍',
     color: '#0ea5e9',
     category: 'Developer',
@@ -303,6 +312,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Word Counter',
     tagline: 'Shows live word count and reading time',
     description: 'A floating badge shows how many words are on the current page and your estimated reading time. Adjustable reading speed.',
+    howTo: 'Toggle on — a badge appears in the bottom-right corner with the page\'s word count and estimated reading time. Set your reading speed in settings.',
     icon: '📊',
     color: '#8b5cf6',
     category: 'Productivity',
@@ -337,6 +347,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Cursor Trail',
     tagline: 'Adds a glowing physics-based cursor trail',
     description: 'Renders a smooth spring-physics dot trail following your cursor. Fully customizable color and trail length.',
+    howTo: 'Toggle on and move your mouse — a glowing trail follows the cursor everywhere. Pick the color and trail length in settings.',
     icon: '✨',
     color: '#ec4899',
     category: 'Productivity',
@@ -399,6 +410,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Color Filter',
     tagline: 'Colorblind accessibility simulation filters',
     description: 'Applies SVG color matrix filters to simulate and compensate for color vision deficiencies. Choose from deuteranopia, protanopia, tritanopia, or grayscale.',
+    howTo: 'Toggle on, then open settings and pick a filter mode — the whole page re-colors to simulate that color-vision deficiency (or grayscale).',
     icon: '🎨',
     color: '#f97316',
     category: 'Accessibility',
@@ -451,6 +463,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Pixel Ruler',
     tagline: 'Crosshair overlay with pixel coordinates',
     description: 'Displays a dashed crosshair following your cursor with real-time pixel coordinates. Essential for designers checking layouts.',
+    howTo: 'Toggle on and move your mouse — a dashed crosshair with live pixel coordinates follows the cursor. Crosshair color is in settings.',
     icon: '📐',
     color: '#14b8a6',
     category: 'Developer',
@@ -509,6 +522,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'No Animations',
     tagline: 'Freezes all CSS animations and transitions',
     description: 'Instantly stops every CSS animation, transition, and scroll behavior. Reduces motion sickness, improves performance on slow machines.',
+    howTo: 'Toggle on — all animations, transitions and smooth scrolling freeze instantly on every page. Nothing else to do.',
     icon: '⏸',
     color: '#64748b',
     category: 'Accessibility',
@@ -531,6 +545,7 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     name: 'Sepia Mode',
     tagline: 'Warm sepia tone for comfortable reading',
     description: 'Applies a soft sepia filter to the page to reduce blue light and create a paper-like reading experience. Images and videos are excluded.',
+    howTo: 'Toggle on for a warm, paper-like tint on any page — great for long reading sessions. Adjust the intensity in settings.',
     icon: '☕',
     color: '#92400e',
     category: 'Reading',

@@ -10,6 +10,9 @@ export interface CustomExt {
   category: string
   injectCode: string
   removeCode: string
+  // Usage instructions shown in the card's info panel. Optional because
+  // extensions stored before this field existed don't have it.
+  howTo?: string
 }
 
 export function loadCustomExts(): CustomExt[] {

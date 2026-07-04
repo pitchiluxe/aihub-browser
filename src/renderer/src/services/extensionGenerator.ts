@@ -28,7 +28,7 @@ STRICT CONTRACT for each extension:
 - Must not break pages. Any visual element uses z-index 2147483000 or higher.
 
 Respond with ONLY a JSON array (no prose, no markdown fences) of 5 to 10 objects shaped:
-[{"name":"...","tagline":"one line, under 80 chars","icon":"one emoji","category":"Media|Privacy|Productivity|Accessibility|Developer|Reading","injectCode":"...","removeCode":"..."}]
+[{"name":"...","tagline":"one line, under 80 chars","icon":"one emoji","category":"Media|Privacy|Productivity|Accessibility|Developer|Reading","howTo":"1-2 sentences telling the user exactly how to use it: what appears on the page and what to click","injectCode":"...","removeCode":"..."}]
 
 Names must NOT duplicate any of these existing extensions: ${existingNames.join(', ') || '(none)'}
 JSON string rules: injectCode/removeCode are single-line JSON strings — use \\n escapes for newlines and escape double quotes.`
@@ -103,8 +103,9 @@ export function parseGeneratedExtensions(
       const category = VALID_CATEGORIES.includes(it?.category as string)
         ? (it.category as string)
         : 'Productivity'
+      const howTo = typeof it?.howTo === 'string' ? it.howTo.trim() : ''
       taken.add(name.toLowerCase())
-      extensions.push({ id: `custom-${now}-${i}`, name, tagline, icon, category, injectCode, removeCode })
+      extensions.push({ id: `custom-${now}-${i}`, name, tagline, icon, category, injectCode, removeCode, ...(howTo ? { howTo } : {}) })
     } catch {
       discarded++
     }
