@@ -269,6 +269,8 @@ const INJECT_SCRIPT = `(function(){
   },true);
 
   // ── Sticky notes — in-page widgets, persisted per URL in site localStorage ──
+  // Pastel pairs [top,bottom] for the note gradient; n.color indexes this.
+  var NOTE_COLORS=[['#fef08a','#fde047'],['#bbf7d0','#86efac'],['#bfdbfe','#93c5fd'],['#fbcfe8','#f9a8d4'],['#fed7aa','#fdba74'],['#e9d5ff','#d8b4fe']];
   var NOTES_KEY='__aihub_notes::'+location.origin+location.pathname;
   var notes=[];
   var noteEls={};
@@ -282,7 +284,10 @@ const INJECT_SCRIPT = `(function(){
     var t=document.createElement('span');
     t.textContent='\\uD83D\\uDDD2';t.style.cssText='font-size:12px;';
     var sp=document.createElement('div');sp.style.flex='1';
-    var btnCss='width:22px;height:22px;border:none;border-radius:6px;background:rgba(0,0,0,0.08);cursor:pointer;font-size:12px;';
+    // Fully self-contained button CSS: injected into arbitrary pages, so a
+    // site's own button rules (background:none, font-size:0, filters…) must
+    // not be able to blank these out. Emoji font stack keeps glyphs visible.
+    var btnCss='appearance:none;-webkit-appearance:none;margin:0;padding:0;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;min-width:24px;border:none;border-radius:6px;background:rgba(0,0,0,0.14);cursor:pointer;font-size:13px;line-height:1;color:#422006;font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;opacity:1;visibility:visible;text-indent:0;box-shadow:none;filter:none;';
     var ai=document.createElement('button');
     ai.type='button';ai.textContent='\\u2728';
     ai.title='Empty note: AI summarizes this page. With text: AI answers it about this page.';
@@ -290,22 +295,45 @@ const INJECT_SCRIPT = `(function(){
     var sv=document.createElement('button');
     sv.type='button';sv.textContent='\\uD83D\\uDCBE';sv.title='Save note';
     sv.style.cssText=btnCss;
+    var clr=document.createElement('button');
+    clr.type='button';clr.textContent='\\uD83C\\uDFA8';clr.title='Note color';
+    clr.style.cssText=btnCss;
     var nm=document.createElement('button');
     nm.type='button';nm.title='Minimize note';
-    nm.style.cssText=btnCss+'font-weight:700;color:#713f12;';
+    nm.style.cssText=btnCss+'font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
     var del=document.createElement('button');
     del.type='button';del.textContent='\\u00D7';del.title='Delete note';
-    del.style.cssText=btnCss+'font-size:14px;line-height:1;color:#713f12;';
-    head.appendChild(t);head.appendChild(sp);head.appendChild(sv);head.appendChild(ai);head.appendChild(nm);head.appendChild(del);
+    del.style.cssText=btnCss+'font-size:15px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
+    head.appendChild(t);head.appendChild(sp);head.appendChild(sv);head.appendChild(ai);head.appendChild(clr);head.appendChild(nm);head.appendChild(del);
+    // Color palette strip — hidden until the palette button is clicked.
+    var pal=document.createElement('div');
+    pal.style.cssText='display:none;gap:6px;padding:6px 8px;background:rgba(0,0,0,0.05);align-items:center;';
+    NOTE_COLORS.forEach(function(c,i){
+      var sw=document.createElement('button');
+      sw.type='button';sw.title='Color '+(i+1);
+      sw.style.cssText='appearance:none;-webkit-appearance:none;margin:0;padding:0;width:20px;height:20px;min-width:20px;border:2px solid rgba(0,0,0,0.25);border-radius:50%;cursor:pointer;background:linear-gradient(180deg,'+c[0]+','+c[1]+');';
+      sw.onclick=function(){
+        n.color=i;applyColor();saveNotes();
+        pal.style.display='none';
+      };
+      pal.appendChild(sw);
+    });
+    function applyColor(){
+      var c=NOTE_COLORS[(typeof n.color==='number'&&NOTE_COLORS[n.color])?n.color:0];
+      el.style.background='linear-gradient(180deg,'+c[0]+','+c[1]+')';
+    }
+    applyColor();
+    clr.onclick=function(){ pal.style.display=pal.style.display==='none'?'flex':'none'; };
     var body=document.createElement('div');
     body.contentEditable='true';
     body.textContent=n.text||'';
     body.style.cssText='min-height:70px;max-height:220px;overflow-y:auto;padding:8px 10px;font-size:12px;line-height:1.5;color:#422006;outline:none;white-space:pre-wrap;word-break:break-word;';
-    el.appendChild(head);el.appendChild(body);
+    el.appendChild(head);el.appendChild(pal);el.appendChild(body);
     document.body.appendChild(el);
     // n.min persists through saveNotes because the whole note object is serialized
     function applyMin(){
       body.style.display=n.min?'none':'block';
+      if(n.min)pal.style.display='none';
       nm.textContent=n.min?'\\u25A1':'\\u2212';
       nm.title=n.min?'Restore note':'Minimize note';
     }
@@ -337,7 +365,7 @@ const INJECT_SCRIPT = `(function(){
     };
     var ndrag=false,nx=0,ny=0;
     head.addEventListener('mousedown',function(e){
-      if(e.target===ai||e.target===del||e.target===sv||e.target===nm)return;
+      if(e.target===ai||e.target===del||e.target===sv||e.target===nm||e.target===clr)return;
       ndrag=true;var r=el.getBoundingClientRect();nx=e.clientX-r.left;ny=e.clientY-r.top;e.preventDefault();
     });
     window.addEventListener('mousemove',function(e){
