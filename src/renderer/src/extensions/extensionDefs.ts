@@ -115,6 +115,84 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
   },
 
   {
+    id: 'vdl',
+    name: 'Video Downloader',
+    tagline: 'Save direct-file videos with their real name',
+    description: 'Adds a Download button that saves the largest video on the page. It fetches the actual video bytes (not just the link) so cross-origin files save correctly, and names the file after the page title. Only works on direct-file videos (MP4/WebM) — streamed sites like YouTube protect their videos and cannot be downloaded this way.',
+    howTo: 'Toggle on, open a page whose video is a direct file (e.g. a .mp4 link), then click "⬇ Download" in the bottom-right corner — the video saves named after the page. On YouTube/Netflix/etc. the button reports the video is streamed and cannot be saved (that is a protection on their side, not a bug).',
+    icon: '⬇️',
+    color: '#0ea5e9',
+    category: 'Media',
+    version: '1.0.0',
+    settings: [],
+    inject: () => `(function(){
+  var K='__ext_vdl';
+  if(window[K])return;
+  function sanitize(name){
+    var s=(name||'video').replace(/[\\\\/:*?"<>|\\r\\n\\t]+/g,' ').replace(/\\s+/g,' ').trim();
+    s=s.replace(/\\.(mp4|webm|mov|m4v|ogg|ogv|mkv|avi)$/i,'');
+    return s.slice(0,120)||'video';
+  }
+  function pickVideo(){
+    var best=null,bestArea=-1;
+    document.querySelectorAll('video').forEach(function(v){
+      var src=v.currentSrc||v.src||'';
+      if(!src)return;
+      var r=v.getBoundingClientRect();
+      var area=r.width*r.height;
+      if(area>bestArea){bestArea=area;best=v;}
+    });
+    return best;
+  }
+  var btn=document.createElement('button');
+  btn.type='button';
+  btn.textContent='\\u2B07 Download';
+  btn.style.cssText='position:fixed;bottom:16px;right:16px;z-index:2147483000;appearance:none;-webkit-appearance:none;margin:0;padding:8px 14px;border:none;border-radius:9px;background:#0ea5e9;color:#fff;font-size:13px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,0.35);opacity:1;';
+  var busy=false;
+  function flash(txt,revert){
+    btn.textContent=txt;
+    if(revert!==false)setTimeout(function(){btn.textContent='\\u2B07 Download';busy=false;},2600);
+  }
+  btn.onclick=function(){
+    if(busy)return;
+    var v=pickVideo();
+    if(!v){flash('No video found');return;}
+    var src=v.currentSrc||v.src||'';
+    if(!src||src.lastIndexOf('blob:',0)===0||src.lastIndexOf('mediasource:',0)===0){
+      flash('Streamed \\u2013 can\\u2019t save');return;
+    }
+    busy=true;flash('Downloading\\u2026',false);
+    var fname=sanitize(document.title);
+    fetch(src).then(function(r){
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      return r.blob();
+    }).then(function(blob){
+      if(!blob||blob.size===0)throw new Error('empty');
+      var type=(blob.type&&blob.type.indexOf('/')>-1)?blob.type.split('/')[1].split(';')[0]:'mp4';
+      if(type==='quicktime')type='mov';
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url;a.download=fname+'.'+type;
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},5000);
+      flash('Saved \\u2713');
+    }).catch(function(){
+      // Same-origin fallback: let the browser handle it directly.
+      try{
+        var a2=document.createElement('a');
+        a2.href=src;a2.download=fname+'.mp4';
+        document.body.appendChild(a2);a2.click();a2.remove();
+        flash('Saved \\u2713');
+      }catch(e){flash('Download failed');}
+    });
+  };
+  if(document.body)document.body.appendChild(btn);
+  window[K]={remove:function(){try{btn.remove();}catch(e){}delete window[K];}};
+})()`,
+    remove: `window.__ext_vdl&&window.__ext_vdl.remove()`,
+  },
+
+  {
     id: 'silent',
     name: 'Silent Mode',
     tagline: 'Blocks autoplay audio and video everywhere',
