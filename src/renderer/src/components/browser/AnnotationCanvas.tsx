@@ -54,12 +54,40 @@ const INJECT_SCRIPT = `(function(){
     }else if(s.t==='ellipse'){
       var cx=(p[0][0]+p[p.length-1][0])/2,cy=(p[0][1]+p[p.length-1][1])/2,rx=Math.abs(p[p.length-1][0]-p[0][0])/2,ry=Math.abs(p[p.length-1][1]-p[0][1])/2;
       if(rx>0&&ry>0){ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.stroke();}
+    }else if(s.t==='text'&&s.text){
+      ctx.font='700 '+(s.w*5+8)+'px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+      ctx.textBaseline='middle';
+      ctx.fillText(s.text,p[0][0],p[0][1]);
     }
     ctx.restore();
+  }
+  // Text tool: click spawns an inline input; Enter (or blur) stamps the text
+  // onto the canvas as a normal stroke, so undo/redo/clear all apply to it.
+  function spawnTextInput(x,y){
+    var inp=document.createElement('input');
+    inp.type='text';
+    inp.placeholder='Type, Enter to place';
+    inp.style.cssText='position:fixed;left:'+x+'px;top:'+(y-16)+'px;z-index:2147483647;background:rgba(10,15,30,0.92);border:1.5px solid #3b82f6;border-radius:7px;color:#fff;font-size:13px;padding:5px 9px;outline:none;min-width:180px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,0.5);';
+    document.body.appendChild(inp);
+    setTimeout(function(){inp.focus();},0);
+    var done=false;
+    function commit(){
+      if(done)return;done=true;
+      var v=inp.value.trim();
+      inp.remove();
+      if(v){strokes.push({t:'text',c:st.c,w:st.w,pts:[[x,y]],text:v});redo=[];redraw();}
+    }
+    inp.addEventListener('keydown',function(ev){
+      ev.stopPropagation();
+      if(ev.key==='Enter')commit();
+      if(ev.key==='Escape'){done=true;inp.remove();}
+    });
+    inp.addEventListener('blur',commit);
   }
   cv.addEventListener('mousedown',function(e){
     if(e.button!==0||pointerMode)return;
     e.preventDefault();e.stopPropagation();
+    if(st.t==='text'){spawnTextInput(e.clientX,e.clientY);return;}
     drawing=true;sp=gp(e);cur={t:st.t,c:st.c,w:st.w,pts:[gp(e)]};
   },true);
   cv.addEventListener('mousemove',function(e){
@@ -237,7 +265,7 @@ const INJECT_SCRIPT = `(function(){
   content.appendChild(actionsRow);
 
   var hint=document.createElement('div');
-  hint.textContent='Drag \\u00B7 P H A R E X = tools \\u00B7 Ctrl+Z/Y undo/redo';
+  hint.textContent='Drag \\u00B7 P H A R E T X = tools \\u00B7 T: click page, type, Enter \\u00B7 Ctrl+Z/Y undo/redo';
   hint.style.cssText='font-size:9px;color:#334155;text-align:center;margin-top:2px;';
   content.appendChild(hint);
 
@@ -274,37 +302,56 @@ const INJECT_SCRIPT = `(function(){
   var NOTES_KEY='__aihub_notes::'+location.origin+location.pathname;
   var notes=[];
   var noteEls={};
+  // Note-header icons: inline SVGs with a hardcoded dark stroke — emoji are
+  // color fonts that ignore CSS color and render too faint on pastel notes.
+  var ICON_STROKE='#3b2405';
+  function icon(paths){return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="'+ICON_STROKE+'" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display:block;pointer-events:none;">'+paths+'</svg>';}
+  var SV_SAVE=icon('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>');
+  var SV_CHECK=icon('<polyline points="20 6 9 17 4 12"/>');
+  var SV_AI=icon('<path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"/>');
+  var SV_WAIT=icon('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>');
+  var SV_CLR=icon('<path d="M12 2.7l5.7 5.6a8 8 0 1 1-11.4 0z"/>');
   function saveNotes(){try{localStorage.setItem(NOTES_KEY,JSON.stringify(notes));}catch(e){}}
   function makeNoteEl(n){
     var el=document.createElement('div');
     el.id='__aihub_note_'+n.id;
     el.style.cssText='position:fixed;left:'+n.x+'px;top:'+n.y+'px;width:220px;z-index:2147483647;background:linear-gradient(180deg,#fef08a,#fde047);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.35);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;flex-direction:column;overflow:hidden;';
     var head=document.createElement('div');
-    head.style.cssText='display:flex;align-items:center;gap:6px;padding:6px 8px;background:rgba(0,0,0,0.07);cursor:grab;user-select:none;';
-    var t=document.createElement('span');
-    t.textContent='\\uD83D\\uDDD2';t.style.cssText='font-size:12px;';
-    var sp=document.createElement('div');sp.style.flex='1';
+    head.style.cssText='display:flex;align-items:center;gap:5px;padding:6px 8px;background:rgba(0,0,0,0.07);cursor:grab;user-select:none;';
+    // Editable title — identifies the note when minimized and in storage.
+    var ttl=document.createElement('input');
+    ttl.type='text';ttl.placeholder='Untitled note';ttl.value=n.title||'';
+    ttl.style.cssText='flex:1;min-width:0;appearance:none;-webkit-appearance:none;border:none;background:transparent;outline:none;font-size:11px;font-weight:700;color:#422006;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:0;margin:0;cursor:text;';
+    var tdeb=null;
+    ttl.addEventListener('input',function(){
+      n.title=ttl.value;
+      if(tdeb)clearTimeout(tdeb);
+      tdeb=setTimeout(saveNotes,400);
+    });
+    ttl.addEventListener('keydown',function(ev){ev.stopPropagation();});
     // Fully self-contained button CSS: injected into arbitrary pages, so a
     // site's own button rules (background:none, font-size:0, filters…) must
-    // not be able to blank these out. Emoji font stack keeps glyphs visible.
-    var btnCss='appearance:none;-webkit-appearance:none;margin:0;padding:0;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;min-width:24px;border:none;border-radius:6px;background:rgba(0,0,0,0.14);cursor:pointer;font-size:13px;line-height:1;color:#422006;font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;opacity:1;visibility:visible;text-indent:0;box-shadow:none;filter:none;';
+    // not be able to blank these out. Icons are inline SVGs with a hardcoded
+    // dark stroke — emoji are color fonts that ignore CSS color and rendered
+    // too faint on the pastel note background.
+    var btnCss='appearance:none;-webkit-appearance:none;margin:0;padding:0;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;min-width:24px;border:none;border-radius:6px;background:rgba(0,0,0,0.14);cursor:pointer;font-size:14px;line-height:1;color:'+ICON_STROKE+';font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;opacity:1;visibility:visible;text-indent:0;box-shadow:none;filter:none;';
     var ai=document.createElement('button');
-    ai.type='button';ai.textContent='\\u2728';
+    ai.type='button';ai.innerHTML=SV_AI;
     ai.title='Empty note: AI summarizes this page. With text: AI answers it about this page.';
     ai.style.cssText=btnCss;
     var sv=document.createElement('button');
-    sv.type='button';sv.textContent='\\uD83D\\uDCBE';sv.title='Save note';
+    sv.type='button';sv.innerHTML=SV_SAVE;sv.title='Save note';
     sv.style.cssText=btnCss;
     var clr=document.createElement('button');
-    clr.type='button';clr.textContent='\\uD83C\\uDFA8';clr.title='Note color';
+    clr.type='button';clr.innerHTML=SV_CLR;clr.title='Note color';
     clr.style.cssText=btnCss;
     var nm=document.createElement('button');
     nm.type='button';nm.title='Minimize note';
-    nm.style.cssText=btnCss+'font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
+    nm.style.cssText=btnCss+'font-weight:700;';
     var del=document.createElement('button');
     del.type='button';del.textContent='\\u00D7';del.title='Delete note';
-    del.style.cssText=btnCss+'font-size:15px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
-    head.appendChild(t);head.appendChild(sp);head.appendChild(sv);head.appendChild(ai);head.appendChild(clr);head.appendChild(nm);head.appendChild(del);
+    del.style.cssText=btnCss+'font-size:16px;font-weight:700;';
+    head.appendChild(ttl);head.appendChild(sv);head.appendChild(ai);head.appendChild(clr);head.appendChild(nm);head.appendChild(del);
     // Color palette strip — hidden until the palette button is clicked.
     var pal=document.createElement('div');
     pal.style.cssText='display:none;gap:6px;padding:6px 8px;background:rgba(0,0,0,0.05);align-items:center;';
@@ -348,8 +395,8 @@ const INJECT_SCRIPT = `(function(){
     sv.onclick=function(){
       n.text=body.textContent||'';
       saveNotes();
-      sv.textContent='\\u2713';
-      setTimeout(function(){sv.textContent='\\uD83D\\uDCBE';},900);
+      sv.innerHTML=SV_CHECK;
+      setTimeout(function(){sv.innerHTML=SV_SAVE;},900);
     };
     nm.onclick=function(){ n.min=!n.min; applyMin(); saveNotes(); };
     del.onclick=function(){
@@ -359,13 +406,13 @@ const INJECT_SCRIPT = `(function(){
     };
     ai.onclick=function(){
       if(ai.disabled)return;
-      ai.disabled=true;ai.textContent='\\u23F3';
+      ai.disabled=true;ai.innerHTML=SV_WAIT;
       window.__aihub_aiQueue=window.__aihub_aiQueue||[];
       window.__aihub_aiQueue.push({noteId:n.id,text:(n.text||'').trim()});
     };
     var ndrag=false,nx=0,ny=0;
     head.addEventListener('mousedown',function(e){
-      if(e.target===ai||e.target===del||e.target===sv||e.target===nm||e.target===clr)return;
+      if(e.target===ai||e.target===del||e.target===sv||e.target===nm||e.target===clr||e.target===ttl)return;
       ndrag=true;var r=el.getBoundingClientRect();nx=e.clientX-r.left;ny=e.clientY-r.top;e.preventDefault();
     });
     window.addEventListener('mousemove',function(e){
@@ -395,7 +442,7 @@ const INJECT_SCRIPT = `(function(){
     for(var i=0;i<notes.length;i++)if(notes[i].id===id)n=notes[i];
     if(!rec||!n)return;
     n.text=text;rec.body.textContent=text;
-    rec.ai.disabled=false;rec.ai.textContent='\\u2728';
+    rec.ai.disabled=false;rec.ai.innerHTML=SV_AI;
     if(rec.expand)rec.expand();
     saveNotes();
   };

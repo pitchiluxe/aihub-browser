@@ -458,33 +458,47 @@ function GenerateExtModal({ existingNames, onClose, onGenerated }: {
   const [busy, setBusy]       = useState(false)
   const [error, setError]     = useState('')
   const [summary, setSummary] = useState('')
+  const [attempt, setAttempt] = useState(0)
+
+  const MAX_ATTEMPTS = 3
 
   const generate = async () => {
     setBusy(true); setError(''); setSummary('')
     try {
-      // preferCloud: strict-JSON output — small local models fumble it, so
-      // route to the cloud chain first and use Ollama only as fallback.
-      const result = await window.electronAPI.ai.chat(
-        [{ role: 'user', content: buildGenerationPrompt(topic, existingNames) }],
-        undefined,
-        { preferCloud: true },
-      )
-      if (!result || result.provider === 'error' || result.provider === 'none') {
-        setError(result?.content || 'AI is unavailable.')
+      // Free-tier models are flaky run-to-run: the same prompt can come back
+      // truncated or malformed one minute and perfect the next. Retry the
+      // whole request a couple of times before surfacing an error — each
+      // retry re-samples and may land on a different fallback model.
+      let lastError = ''
+      for (let i = 1; i <= MAX_ATTEMPTS; i++) {
+        setAttempt(i)
+        // preferCloud: strict-JSON output — small local models fumble it, so
+        // route to the cloud chain first and use Ollama only as fallback.
+        const result = await window.electronAPI.ai.chat(
+          [{ role: 'user', content: buildGenerationPrompt(topic, existingNames) }],
+          undefined,
+          { preferCloud: true },
+        )
+        if (!result || result.provider === 'error' || result.provider === 'none') {
+          lastError = result?.content || 'AI is unavailable.'
+          continue
+        }
+        const { extensions, discarded } = parseGeneratedExtensions(result.content || '', existingNames)
+        if (extensions.length === 0) {
+          lastError = `The AI response couldn't be parsed (model: ${result.model}).`
+          continue
+        }
+        onGenerated(extensions)
+        setSummary(`Added ${extensions.length} extension${extensions.length === 1 ? '' : 's'}${discarded > 0 ? ` · ${discarded} discarded as invalid` : ''}`)
+        setTimeout(onClose, 1800)
         return
       }
-      const { extensions, discarded } = parseGeneratedExtensions(result.content || '', existingNames)
-      if (extensions.length === 0) {
-        setError("The AI response couldn't be parsed — try again (local models sometimes fumble JSON).")
-        return
-      }
-      onGenerated(extensions)
-      setSummary(`Added ${extensions.length} extension${extensions.length === 1 ? '' : 's'}${discarded > 0 ? ` · ${discarded} discarded as invalid` : ''}`)
-      setTimeout(onClose, 1800)
+      setError(`${lastError}\n\nTried ${MAX_ATTEMPTS} times — the free AI models are having a moment. Wait a minute and try again, or set a stronger model in Settings → AI Configuration.`)
     } catch (e: any) {
       setError(String(e?.message || e))
     } finally {
       setBusy(false)
+      setAttempt(0)
     }
   }
 
@@ -522,7 +536,7 @@ function GenerateExtModal({ existingNames, onClose, onGenerated }: {
 
           {busy && (
             <p className="text-xs" style={{ color: '#64748b' }}>
-              ✨ Generating 5–10 extensions… local AI can take 30–60s.
+              ✨ Generating 5–10 extensions{attempt > 1 ? ` — attempt ${attempt}/${MAX_ATTEMPTS}` : ''}… can take 30–60s.
             </p>
           )}
           {error && (

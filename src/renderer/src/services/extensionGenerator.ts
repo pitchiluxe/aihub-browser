@@ -55,8 +55,14 @@ export function parseGeneratedExtensions(
     return lastBrace > start ? candidate.slice(start, lastBrace + 1) + ']' : ''
   })()
 
+  // Trailing commas before ] or } are the most common model JSON slip —
+  // safe to strip here because valid JSON string values never end in a
+  // bare comma directly before an unescaped bracket at this position.
+  const stripTrailingCommas = (t: string) => t.replace(/,\s*([\]}])/g, '$1')
+
   let items: unknown[] | null = null
-  for (const text of [end > start ? candidate.slice(start, end + 1) : '', salvaged]) {
+  const primary = end > start ? candidate.slice(start, end + 1) : ''
+  for (const text of [primary, salvaged, stripTrailingCommas(primary), stripTrailingCommas(salvaged)]) {
     if (!text) continue
     try {
       const parsed = JSON.parse(text)
