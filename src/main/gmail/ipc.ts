@@ -1,5 +1,4 @@
 import { ipcMain, app } from 'electron'
-import os from 'os'
 import fs from 'fs'
 import { join } from 'path'
 import { beginConnect, disconnect, currentEmail } from './oauth'
@@ -7,7 +6,6 @@ import { listThreads, getThread, getAttachmentData, sendMessage } from './client
 import { loadTokens, saveTokens, isEncryptionAvailable } from './store'
 
 type Ok<T> = { ok: true } & T
-type Result<T> = Ok<T> | { ok: false; error: string }
 const ok = <T extends object>(data: T): Ok<T> => ({ ok: true, ...data })
 const fail = (error: string) => ({ ok: false, error })
 
