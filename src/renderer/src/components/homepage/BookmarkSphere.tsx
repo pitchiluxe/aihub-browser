@@ -158,6 +158,8 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   const eStartRef     = useRef(0)
   const eMapRef       = useRef<Map<string, { delay: number; dur: number }>>(new Map())
   const animMapRef    = useRef<Map<string, { t0: number; dur: number }>>(new Map())
+  // Entrance camera: zoomed-out → fitted view; cancelled by any user pan/zoom
+  const camAnimRef    = useRef<{ from: { x: number; y: number; k: number }; to: { x: number; y: number; k: number }; t0: number; dur: number } | null>(null)
   const cleanupRef    = useRef<(() => void) | null>(null)
   const queryRef      = useRef('')
 
@@ -177,6 +179,19 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // Entrance camera — ease from zoomed-out to the fitted view (dolly-in)
+    const cam = camAnimRef.current
+    if (cam) {
+      const p = Math.min(1, (performance.now() - cam.t0) / cam.dur)
+      const e = 1 - Math.pow(1 - p, 3) // easeOutCubic
+      txRef.current = {
+        k: cam.from.k + (cam.to.k - cam.from.k) * e,
+        x: cam.from.x + (cam.to.x - cam.from.x) * e,
+        y: cam.from.y + (cam.to.y - cam.from.y) * e,
+      }
+      if (p >= 1) { camAnimRef.current = null; setZoom(cam.to.k) }
+    }
+
     const { x: tx, y: ty, k } = txRef.current
     const nodes   = nodesRef.current
     const links   = linksRef.current
@@ -186,11 +201,11 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     const W       = canvas.width
     const H       = canvas.height
 
-    // Entrance timing
+    // Entrance timing — no opacity fade: nodes pop in with a spring scale and
+    // edges draw themselves on from source to target once both ends exist.
     const eActive  = eActiveRef.current
     const elapsed  = eActive ? now - eStartRef.current : Infinity
-    if (eActive && elapsed > 2000) eActiveRef.current = false
-    const edgeA    = eActive ? Math.min(1, elapsed / 1100) : 1
+    if (eActive && elapsed > 2200) eActiveRef.current = false
 
     // Background
     ctx.fillStyle = GRAPH_BG
@@ -201,11 +216,16 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       if (node.x == null || node.y == null || node.connections < HUB_THRESHOLD) continue
       const sx = node.x * k + tx
       const sy = node.y * k + ty
-      const aura = ctx.createRadialGradient(sx, sy, 0, sx, sy, 80 * k)
+      const auraR = 80 * k
+      // Skip auras fully outside the viewport, and fill only the gradient's
+      // bounding box — a fullscreen fillRect per hub was the single most
+      // expensive draw call in the frame.
+      if (sx + auraR < 0 || sx - auraR > W || sy + auraR < 0 || sy - auraR > H) continue
+      const aura = ctx.createRadialGradient(sx, sy, 0, sx, sy, auraR)
       aura.addColorStop(0, hexToRgba(node.color, 0.045))
       aura.addColorStop(1, 'rgba(0,0,0,0)')
       ctx.fillStyle = aura
-      ctx.fillRect(0, 0, W, H)
+      ctx.fillRect(sx - auraR, sy - auraR, auraR * 2, auraR * 2)
     }
 
     ctx.save()
@@ -251,23 +271,48 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
 
       const dimmed = (selId && !touching) || (matchSet && !bothMatch)
 
+      // Entrance draw-on: the edge grows from source toward target, starting
+      // once its later endpoint has begun popping in. Replaces the old
+      // whole-graph opacity fade.
+      let growth = 1
+      if (eActive) {
+        const sInfo = eMapRef.current.get(src.id)
+        const tInfo = eMapRef.current.get(tgt.id)
+        const start = Math.max(sInfo?.delay ?? 0, tInfo?.delay ?? 0) + 140
+        const p = (elapsed - start) / 430
+        if (p <= 0) continue
+        growth = p >= 1 ? 1 : 1 - Math.pow(1 - p, 3) // easeOutCubic
+      }
+      const ex = src.x! + (tgt.x! - src.x!) * growth
+      const ey = src.y! + (tgt.y! - src.y!) * growth
+
       if (dimmed) {
-        ctx.strokeStyle = `rgba(148,163,184,${(selId ? 0.04 : 0.025) * edgeA})`
+        ctx.strokeStyle = `rgba(148,163,184,${selId ? 0.04 : 0.025})`
         ctx.lineWidth   = 0.5 / k
       } else {
         // Gradient edge from src color → tgt color
         const grd = ctx.createLinearGradient(src.x!, src.y!, tgt.x!, tgt.y!)
         const alpha = touching ? 0.9 : (bothMatch && matchSet ? 0.35 : 0.22)
-        grd.addColorStop(0, hexToRgba(src.color, alpha * edgeA))
-        grd.addColorStop(1, hexToRgba(tgt.color, alpha * edgeA))
+        // Growing edges run slightly hot so the draw-on reads as energy flow
+        const boost = growth < 1 ? 1.6 : 1
+        grd.addColorStop(0, hexToRgba(src.color, Math.min(1, alpha * boost)))
+        grd.addColorStop(1, hexToRgba(tgt.color, Math.min(1, alpha * boost)))
         ctx.strokeStyle = grd
         ctx.lineWidth   = (touching ? 1.8 : bothMatch && matchSet ? 1.1 : 1) / k
       }
 
       ctx.beginPath()
       ctx.moveTo(src.x!, src.y!)
-      ctx.lineTo(tgt.x!, tgt.y!)
+      ctx.lineTo(ex, ey)
       ctx.stroke()
+
+      // Bright leading tip while the edge is still drawing itself on
+      if (growth < 1 && !dimmed) {
+        ctx.beginPath()
+        ctx.arc(ex, ey, 1.6 / k, 0, Math.PI * 2)
+        ctx.fillStyle = hexToRgba(tgt.color, 0.9)
+        ctx.fill()
+      }
     }
 
     // ── Nodes ────────────────────────────────────────────────────────────
@@ -287,13 +332,11 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
 
       // Entrance scale animation
       let scale = 1
-      if (eActive) {
-        const info = eMapRef.current.get(node.id)
-        if (info) {
-          const el = elapsed - info.delay
-          if (el < 0) scale = 0
-          else if (el < info.dur) scale = Math.max(0, easeBackOut(el / info.dur))
-        }
+      const eInfo = eActive ? eMapRef.current.get(node.id) : undefined
+      if (eInfo) {
+        const el = elapsed - eInfo.delay
+        if (el < 0) scale = 0
+        else if (el < eInfo.dur) scale = Math.max(0, easeBackOut(el / eInfo.dur))
       }
       const anim = animMapRef.current.get(node.id)
       if (anim) {
@@ -353,6 +396,18 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       ctx.strokeStyle = hexToRgba(col, isSel ? 1 : 0.85)
       ctx.lineWidth   = (isSel ? 2.5 : 1.5) / k
       ctx.stroke()
+
+      // Spawn ripple — expanding ring emitted as the node pops in
+      if (eInfo) {
+        const rp = (elapsed - eInfo.delay) / (eInfo.dur * 1.7)
+        if (rp > 0 && rp < 1) {
+          ctx.beginPath()
+          ctx.arc(nx, ny, r * (1 + rp * 2.8), 0, Math.PI * 2)
+          ctx.strokeStyle = hexToRgba(col, (1 - rp) * 0.55)
+          ctx.lineWidth   = ((1 - rp) * 1.6 + 0.4) / k
+          ctx.stroke()
+        }
+      }
 
       ctx.globalAlpha = 1
     }
@@ -422,6 +477,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   const applyZoom = useCallback((factor: number) => {
     const canvas = canvasRef.current
     if (!canvas) return
+    camAnimRef.current = null
     const { x: tx, y: ty, k } = txRef.current
     const cx = canvas.width / 2, cy = canvas.height / 2
     const newK = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, k * factor))
@@ -433,6 +489,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     const canvas = canvasRef.current
     const nodes  = nodesRef.current
     if (!canvas || nodes.length === 0) return
+    camAnimRef.current = null
     const W = canvas.width, H = canvas.height
     const xs = nodes.map(d => d.x ?? 0)
     const ys = nodes.map(d => d.y ?? 0)
@@ -503,6 +560,22 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
 
     fitView()
 
+    // Entrance camera: start pulled back around the canvas center, dolly in
+    // to the fitted view while the node cascade plays.
+    {
+      const to = { ...txRef.current }
+      const f  = 0.45
+      const k2 = to.k * f
+      const cx = W / 2, cy = H / 2
+      camAnimRef.current = {
+        from: { k: k2, x: cx - ((cx - to.x) * k2) / to.k, y: cy - ((cy - to.y) * k2) / to.k },
+        to,
+        t0: performance.now(),
+        dur: 1100,
+      }
+      txRef.current = { ...camAnimRef.current.from }
+    }
+
     // Hub-first entrance cascade
     const sorted = [...nodes].sort((a, b) => b.connections - a.connections)
     const eMap   = new Map<string, { delay: number; dur: number }>()
@@ -526,6 +599,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
 
     const onDown = (e: MouseEvent) => {
       if (e.button === 2) return
+      camAnimRef.current = null // user takes over the camera
       setCtxMenu(null)
       downPos = { x: e.clientX, y: e.clientY }
       didDrag  = false
@@ -617,6 +691,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
+      camAnimRef.current = null
       const rect = canvas.getBoundingClientRect()
       const mx = e.clientX - rect.left
       const my = e.clientY - rect.top
@@ -652,9 +727,17 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   }, [bookmarks])
 
   useEffect(() => {
-    const ro = new ResizeObserver(() => buildGraph())
+    // Debounced — a rebuild restarts the whole simulation, so doing it on
+    // every ResizeObserver tick during a window drag froze the graph.
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let first = true
+    const ro = new ResizeObserver(() => {
+      if (first) { first = false; return } // initial observe fires immediately; buildGraph already ran
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => buildGraph(), 180)
+    })
     if (mountRef.current) ro.observe(mountRef.current)
-    return () => ro.disconnect()
+    return () => { ro.disconnect(); if (timer) clearTimeout(timer) }
   }, [bookmarks])
 
   const activeCategories = Array.from(new Set(bookmarks.map(b => b.category)))

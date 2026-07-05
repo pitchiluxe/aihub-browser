@@ -1,13 +1,41 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { X, Plus, Home, Minus, Square } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBrowserStore, Tab } from '../../store/browserStore'
 
 export default function TabBar() {
-  const { tabs, activeTabId, addTab, closeTab, setActiveTab, reorderTabs } = useBrowserStore()
+  const { tabs, activeTabId, addTab, closeTab, closeOtherTabs, closeTabsToRight, setActiveTab, reorderTabs } = useBrowserStore()
+
+  // Native context menu — an HTML dropdown would be clipped by the 40px bar
+  // and painted over by the active tab's BrowserView.
+  const handleContextMenu = async (e: React.MouseEvent, tab: Tab) => {
+    e.preventDefault()
+    const idx = tabs.findIndex(t => t.id === tab.id)
+    const action = await window.electronAPI.tabs.showContextMenu({
+      isBrowser: !tab.isHome && tab.pageType === 'browser',
+      hasRight: idx !== -1 && idx < tabs.length - 1,
+      count: tabs.length,
+    })
+    switch (action) {
+      case 'new-tab':      addTab(); break
+      case 'duplicate':    addTab(tab.isHome ? 'home' : tab.url, tab.pageType); break
+      case 'reload':       window.electronAPI.tabView.reload(tab.id); break
+      case 'close':        closeTab(tab.id); break
+      case 'close-others': closeOtherTabs(tab.id); break
+      case 'close-right':  closeTabsToRight(tab.id); break
+    }
+  }
 
   const dragTabId  = useRef<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const stripRef = useRef<HTMLDivElement>(null)
+
+  // Keep the active tab visible — with many tabs open the strip scrolls, and
+  // without this a newly opened or switched-to tab could sit off-screen.
+  useEffect(() => {
+    const el = stripRef.current?.querySelector<HTMLElement>(`[data-tab-id="${activeTabId}"]`)
+    el?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
+  }, [activeTabId, tabs.length])
 
   const handleDragStart = (e: React.DragEvent, tabId: string) => {
     dragTabId.current = tabId
@@ -28,41 +56,54 @@ export default function TabBar() {
 
   return (
     <div
-      className="flex items-end px-2 gap-1 overflow-x-auto no-scrollbar drag-region ds-tabbar"
+      className="flex items-stretch px-2 drag-region ds-tabbar relative"
       style={{ minHeight: 40, height: 40 }}
     >
       {/* Purple ambient glow strip along top */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, height: 1, pointerEvents: 'none',
-        background: 'linear-gradient(90deg, transparent 0%, rgba(107,78,255,0.4) 50%, transparent 100%)',
+        background: 'linear-gradient(90deg, transparent 0%, rgb(var(--ds-accent) / 0.4) 50%, transparent 100%)',
         zIndex: 1,
       }} />
 
-      <AnimatePresence initial={false}>
-        {tabs.map(tab => (
-          <TabItem
-            key={tab.id}
-            tab={tab}
-            isActive={tab.id === activeTabId}
-            isDropTarget={dropTarget === tab.id && dragTabId.current !== tab.id}
-            onActivate={() => setActiveTab(tab.id)}
-            onClose={() => closeTab(tab.id)}
-            onDragStart={e => handleDragStart(e, tab.id)}
-            onDragOver={e => handleDragOver(e, tab.id)}
-            onDrop={e => handleDrop(e, tab.id)}
-            onDragEnd={handleDragEnd}
-          />
-        ))}
-      </AnimatePresence>
+      {/* Scrollable tab strip — tabs shrink to fit and only scroll once they
+          hit their minimum width, so none get pushed off behind the window
+          controls (which now live outside this container and stay pinned). */}
+      <div
+        ref={stripRef}
+        className="flex items-end gap-1 overflow-x-auto no-scrollbar min-w-0 flex-1"
+        onWheel={e => {
+          // Vertical wheel scrolls the strip horizontally (scrollbar is hidden)
+          if (e.deltaY !== 0 && stripRef.current) stripRef.current.scrollLeft += e.deltaY
+        }}
+      >
+        <AnimatePresence initial={false}>
+          {tabs.map(tab => (
+            <TabItem
+              key={tab.id}
+              tab={tab}
+              isActive={tab.id === activeTabId}
+              isDropTarget={dropTarget === tab.id && dragTabId.current !== tab.id}
+              onActivate={() => setActiveTab(tab.id)}
+              onClose={() => closeTab(tab.id)}
+              onContextMenu={e => handleContextMenu(e, tab)}
+              onDragStart={e => handleDragStart(e, tab.id)}
+              onDragOver={e => handleDragOver(e, tab.id)}
+              onDrop={e => handleDrop(e, tab.id)}
+              onDragEnd={handleDragEnd}
+            />
+          ))}
+        </AnimatePresence>
 
-      {/* New tab button */}
-      <NewTabBtn onClick={() => addTab()} />
+        {/* New tab button */}
+        <NewTabBtn onClick={() => addTab()} />
 
-      {/* Spacer */}
-      <div style={{ flex: 1, minWidth: 12 }} className="drag-region" />
+        {/* Draggable filler — collapses to 0 once tabs fill the strip */}
+        <div style={{ flex: '1 0 12px', minWidth: 12, alignSelf: 'stretch' }} className="drag-region" />
+      </div>
 
-      {/* Window controls — self-center so they don't inherit the bar's items-end and sink to the tab line */}
-      <div className="flex items-center self-center gap-1.5 pr-1 no-drag shrink-0">
+      {/* Window controls — pinned right, always visible regardless of tab count */}
+      <div className="flex items-center self-center gap-1.5 pl-2 pr-1 no-drag shrink-0">
         <WinBtn onClick={() => window.electronAPI.window.minimize()} bg="#f59e0b" title="Minimize">
           <Minus size={7} />
         </WinBtn>
@@ -77,12 +118,13 @@ export default function TabBar() {
   )
 }
 
-function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onDragStart, onDragOver, onDrop, onDragEnd }: {
+function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMenu, onDragStart, onDragOver, onDrop, onDragEnd }: {
   tab: Tab
   isActive: boolean
   isDropTarget: boolean
   onActivate: () => void
   onClose: () => void
+  onContextMenu: (e: React.MouseEvent) => void
   onDragStart: (e: React.DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
@@ -92,9 +134,10 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onDragStart
 
   return (
     <motion.div
-      initial={{ width: 0, opacity: 0, y: 4 }}
-      animate={{ width: 176, opacity: 1, y: 0 }}
-      exit={{ width: 0, opacity: 0, y: 4 }}
+      data-tab-id={tab.id}
+      initial={{ maxWidth: 0, minWidth: 0, opacity: 0, y: 4 }}
+      animate={{ maxWidth: 176, minWidth: 46, opacity: 1, y: 0 }}
+      exit={{ maxWidth: 0, minWidth: 0, opacity: 0, y: 4 }}
       transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
       draggable
       onDragStart={onDragStart}
@@ -104,13 +147,19 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onDragStart
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onActivate}
-      className={`shrink-0 ds-tab no-drag select-none ${isActive ? 'ds-tab-active' : isDropTarget ? 'ds-tab-inactive' : 'ds-tab-inactive'}`}
+      onContextMenu={onContextMenu}
+      className={`ds-tab no-drag select-none ${isActive ? 'ds-tab-active' : isDropTarget ? 'ds-tab-inactive' : 'ds-tab-inactive'}`}
       style={{
+        // Flexible width: grow toward 176px, shrink to the 46px minimum
+        // (favicon + close still visible) as more tabs open; the strip
+        // scrolls only once every tab is at its minimum.
+        flex: '1 1 176px',
+        overflow: 'hidden',
         marginBottom: 2,
         ...(isDropTarget && !isActive ? {
-          background: 'rgba(107,78,255,0.10)',
-          borderColor: 'rgba(107,78,255,0.28)',
-          color: 'rgb(159,132,255)',
+          background: 'rgb(var(--ds-accent) / 0.10)',
+          borderColor: 'rgb(var(--ds-accent) / 0.28)',
+          color: 'rgb(var(--ds-accent-soft))',
         } : {}),
         ...(isActive ? { animation: 'tabGlow 3s ease-in-out infinite' } : {}),
       }}
@@ -118,13 +167,13 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onDragStart
       {/* Favicon */}
       <span className="shrink-0 flex items-center">
         {tab.isHome ? (
-          <Home size={11} style={{ color: isActive ? 'rgb(159,132,255)' : 'inherit' }} />
+          <Home size={11} style={{ color: isActive ? 'rgb(var(--ds-accent-soft))' : 'inherit' }} />
         ) : tab.favicon ? (
           <img src={tab.favicon} style={{ width: 13, height: 13, borderRadius: 3, objectFit: 'contain' }} />
         ) : (
           <span style={{
             width: 13, height: 13, borderRadius: 3, display: 'inline-block',
-            background: isActive ? 'rgba(107,78,255,0.3)' : 'rgba(255,255,255,0.08)',
+            background: isActive ? 'rgb(var(--ds-accent) / 0.3)' : 'var(--ds-glass-md)',
           }} />
         )}
       </span>
@@ -133,7 +182,7 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onDragStart
       <span style={{
         flex: 1, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis',
         whiteSpace: 'nowrap', userSelect: 'none',
-        color: isActive ? 'rgb(215,215,228)' : undefined,
+        color: isActive ? 'rgb(var(--ds-text-2))' : undefined,
       }}>
         {tab.title || 'Loading…'}
       </span>
@@ -142,8 +191,8 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onDragStart
       {tab.isLoading && (
         <span className="shrink-0" style={{
           width: 11, height: 11, borderRadius: '50%',
-          border: '1.5px solid rgba(107,78,255,0.3)',
-          borderTopColor: 'rgb(159,132,255)',
+          border: '1.5px solid rgb(var(--ds-accent) / 0.3)',
+          borderTopColor: 'rgb(var(--ds-accent-soft))',
           animation: 'spin 0.65s linear infinite',
           display: 'inline-block', flexShrink: 0,
         }} />
@@ -158,7 +207,7 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onDragStart
           background: 'transparent',
           opacity: hovered || isActive ? 1 : 0,
           transition: 'all 0.12s',
-          color: 'rgba(184,184,199,0.6)',
+          color: 'rgb(var(--ds-text-3) / 0.6)',
         }}
         onMouseEnter={e => {
           const el = e.currentTarget as HTMLElement
@@ -168,7 +217,7 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onDragStart
         onMouseLeave={e => {
           const el = e.currentTarget as HTMLElement
           el.style.background = 'transparent'
-          el.style.color = 'rgba(184,184,199,0.6)'
+          el.style.color = 'rgb(var(--ds-text-3) / 0.6)'
         }}
       >
         <X size={8} />
@@ -187,11 +236,11 @@ function NewTabBtn({ onClick }: { onClick: () => void }) {
       className="shrink-0 no-drag flex items-center justify-center"
       style={{
         width: 28, height: 26, marginBottom: 2,
-        borderRadius: 9, border: `1px solid ${hovered ? 'rgba(107,78,255,0.28)' : 'transparent'}`,
+        borderRadius: 9, border: `1px solid ${hovered ? 'rgb(var(--ds-accent) / 0.28)' : 'transparent'}`,
         cursor: 'pointer',
-        color: hovered ? 'rgb(159,132,255)' : 'rgb(96,102,130)',
-        background: hovered ? 'rgba(107,78,255,0.10)' : 'transparent',
-        boxShadow: hovered ? '0 0 12px rgba(107,78,255,0.18)' : 'none',
+        color: hovered ? 'rgb(var(--ds-accent-soft))' : 'rgb(var(--ds-text-4))',
+        background: hovered ? 'rgb(var(--ds-accent) / 0.10)' : 'transparent',
+        boxShadow: hovered ? '0 0 12px rgb(var(--ds-accent) / 0.18)' : 'none',
         transition: 'all 0.15s',
       }}
     >

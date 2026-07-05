@@ -328,31 +328,31 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
             {/* Top Aero highlight */}
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 1, pointerEvents: 'none',
-              background: 'linear-gradient(90deg, transparent 5%, rgba(96,165,250,0.45) 50%, transparent 95%)',
+              background: 'linear-gradient(90deg, transparent 5%, rgb(var(--ds-accent-soft) / 0.45) 50%, transparent 95%)',
             }} />
 
             {/* ── Header ── */}
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '12px 16px 10px', borderBottom: '1px solid rgba(59,130,246,0.1)', flexShrink: 0,
+              padding: '12px 16px 10px', borderBottom: '1px solid rgb(var(--ds-accent) / 0.1)', flexShrink: 0,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{
                   width: 32, height: 32, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  background: 'linear-gradient(135deg, rgba(59,130,246,0.28), rgba(139,92,246,0.18))',
-                  border: '1px solid rgba(59,130,246,0.28)', boxShadow: '0 0 16px rgba(59,130,246,0.18)',
+                  background: 'linear-gradient(135deg, rgb(var(--ds-accent) / 0.28), rgb(var(--ds-accent-2) / 0.18))',
+                  border: '1px solid rgb(var(--ds-accent) / 0.28)', boxShadow: '0 0 16px rgb(var(--ds-accent) / 0.18)',
                 }}>
-                  <Bot size={16} style={{ color: '#60a5fa' }} />
+                  <Bot size={16} style={{ color: 'rgb(var(--ds-accent-soft))' }} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', lineHeight: 1 }}>AIHub Assistant</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'rgb(var(--ds-text-2))', lineHeight: 1 }}>AIHub Assistant</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
                     {ollamaStatus === null ? (
-                      <><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#475569', display: 'inline-block' }} /><span style={{ fontSize: 11, color: '#475569' }}>Connecting…</span></>
+                      <><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgb(var(--ds-text-4))', display: 'inline-block' }} /><span style={{ fontSize: 11, color: 'rgb(var(--ds-text-4))' }}>Connecting…</span></>
                     ) : ollamaStatus.running ? (
                       <><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399', display: 'inline-block', boxShadow: '0 0 6px #34d399' }} /><span style={{ fontSize: 11, color: '#34d399' }}>Local · Ollama</span></>
                     ) : (
-                      <><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#60a5fa', display: 'inline-block', boxShadow: '0 0 6px #60a5fa' }} /><span style={{ fontSize: 11, color: '#60a5fa' }}>Cloud · OpenRouter</span></>
+                      <><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgb(var(--ds-accent-soft))', display: 'inline-block', boxShadow: '0 0 6px rgb(var(--ds-accent-soft))' }} /><span style={{ fontSize: 11, color: 'rgb(var(--ds-accent-soft))' }}>Cloud · OpenRouter</span></>
                     )}
                   </div>
                 </div>
@@ -367,19 +367,19 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
             {bookmarks.length > 0 && (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '5px 14px',
-                background: 'rgba(59,130,246,0.06)', borderBottom: '1px solid rgba(59,130,246,0.08)',
+                background: 'rgb(var(--ds-accent) / 0.06)', borderBottom: '1px solid rgb(var(--ds-accent) / 0.08)',
                 flexShrink: 0,
               }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#3b82f6', boxShadow: '0 0 6px #3b82f6' }} />
-                <span style={{ fontSize: 10, color: '#334155' }}>
-                  Agent aware of <span style={{ color: '#60a5fa' }}>{bookmarks.length} bookmarks</span>
-                  {browseHistory.length > 0 && <> · <span style={{ color: '#a78bfa' }}>{browseHistory.length} recent sites</span></>}
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgb(var(--ds-accent))', boxShadow: '0 0 6px rgb(var(--ds-accent))' }} />
+                <span style={{ fontSize: 10, color: 'rgb(var(--ds-text-4) / 0.75)' }}>
+                  Agent aware of <span style={{ color: 'rgb(var(--ds-accent-soft))' }}>{bookmarks.length} bookmarks</span>
+                  {browseHistory.length > 0 && <> · <span style={{ color: 'rgb(var(--ds-accent-2))' }}>{browseHistory.length} recent sites</span></>}
                 </span>
               </div>
             )}
 
             {/* ── Quick actions ── */}
-            <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--ds-glass-sm)', flexShrink: 0 }}>
               <div style={{ display: 'flex', gap: 6 }}>
                 <QuickBtn onClick={summarizePage} disabled={!hasUrl || isAILoading} color="blue" icon={<FileText size={12} />} label="Summarize" title="Summarize current page" />
                 <QuickBtn onClick={attachPage} disabled={!hasUrl || isAILoading || !getPageContent} color="purple" icon={<Paperclip size={12} />} label="Attach Page" title="Attach page content" />
@@ -424,12 +424,12 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
             {ollamaStatus && !ollamaStatus.running && (
               <div style={{
                 margin: '8px 12px 0', padding: '8px 12px', borderRadius: 10, flexShrink: 0,
-                background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.13)',
+                background: 'rgb(var(--ds-accent) / 0.07)', border: '1px solid rgb(var(--ds-accent) / 0.13)',
                 display: 'flex', alignItems: 'flex-start', gap: 8,
               }}>
-                <AlertCircle size={13} style={{ color: '#60a5fa', flexShrink: 0, marginTop: 1 }} />
-                <span style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
-                  Using <b style={{ color: '#93c5fd' }}>OpenRouter</b> (cloud). Install Ollama for private local AI.
+                <AlertCircle size={13} style={{ color: 'rgb(var(--ds-accent-soft))', flexShrink: 0, marginTop: 1 }} />
+                <span style={{ fontSize: 11, color: 'rgb(var(--ds-text-4))', lineHeight: 1.5 }}>
+                  Using <b style={{ color: 'rgb(var(--ds-accent-soft))' }}>OpenRouter</b> (cloud). Install Ollama for private local AI.
                 </span>
               </div>
             )}
@@ -456,14 +456,14 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, padding: '24px 0', textAlign: 'center' }}>
                   <div style={{
                     width: 56, height: 56, borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.1))',
-                    border: '1px solid rgba(59,130,246,0.2)', boxShadow: '0 0 28px rgba(59,130,246,0.12)',
+                    background: 'linear-gradient(135deg, rgb(var(--ds-accent) / 0.15), rgb(var(--ds-accent-2) / 0.1))',
+                    border: '1px solid rgb(var(--ds-accent) / 0.2)', boxShadow: '0 0 28px rgb(var(--ds-accent) / 0.12)',
                   }}>
-                    <Sparkles size={24} style={{ color: '#60a5fa' }} />
+                    <Sparkles size={24} style={{ color: 'rgb(var(--ds-accent-soft))' }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0', marginBottom: 6 }}>Your AI Browser Agent</div>
-                    <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, maxWidth: 240 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'rgb(var(--ds-text-2))', marginBottom: 6 }}>Your AI Browser Agent</div>
+                    <div style={{ fontSize: 12, color: 'rgb(var(--ds-text-4))', lineHeight: 1.6, maxWidth: 240 }}>
                       Ask me to open sites, summarize pages, research topics, or get AI news. I know your {bookmarks.length} bookmarks.
                     </div>
                   </div>
@@ -472,12 +472,12 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                       <button key={s} onClick={() => { setInput(s); setTimeout(() => inputRef.current?.focus(), 50) }}
                         style={{
                           textAlign: 'left', padding: '9px 12px', borderRadius: 10, fontSize: 12,
-                          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
-                          color: '#64748b', cursor: 'pointer', transition: 'all 0.12s', userSelect: 'none',
+                          background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
+                          color: 'rgb(var(--ds-text-4))', cursor: 'pointer', transition: 'all 0.12s', userSelect: 'none',
                         }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(59,130,246,0.09)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.2)'; (e.currentTarget as HTMLElement).style.color = '#94a3b8' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'; (e.currentTarget as HTMLElement).style.color = '#64748b' }}>
-                        <span style={{ color: '#3b82f6', marginRight: 6 }}>›</span>{s}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--ds-accent) / 0.09)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgb(var(--ds-accent) / 0.2)'; (e.currentTarget as HTMLElement).style.color = 'rgb(var(--ds-text-3))' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-sm)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-glass-md)'; (e.currentTarget as HTMLElement).style.color = 'rgb(var(--ds-text-4))' }}>
+                        <span style={{ color: 'rgb(var(--ds-accent))', marginRight: 6 }}>›</span>{s}
                       </button>
                     ))}
                   </div>
@@ -493,22 +493,22 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                     {msg.role === 'assistant' && (
                       <div style={{
                         width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2,
-                        background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.2)',
+                        background: 'rgb(var(--ds-accent) / 0.15)', border: '1px solid rgb(var(--ds-accent) / 0.2)',
                       }}>
-                        <Zap size={11} style={{ color: '#60a5fa' }} />
+                        <Zap size={11} style={{ color: 'rgb(var(--ds-accent-soft))' }} />
                       </div>
                     )}
                     <div style={msg.role === 'user' ? {
                       maxWidth: '82%', borderRadius: 14, borderTopRightRadius: 4,
                       padding: '9px 12px', fontSize: 12, lineHeight: 1.55, whiteSpace: 'pre-wrap',
-                      background: 'linear-gradient(135deg, rgba(59,130,246,0.82), rgba(99,102,241,0.72))',
-                      color: '#fff', boxShadow: '0 2px 14px rgba(59,130,246,0.28)',
+                      background: 'linear-gradient(135deg, rgb(var(--ds-accent) / 0.82), rgb(var(--ds-accent-2) / 0.72))',
+                      color: '#fff', boxShadow: '0 2px 14px rgb(var(--ds-accent) / 0.28)',
                       userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text',
                     } : {
                       maxWidth: '82%', borderRadius: 14, borderTopLeftRadius: 4,
                       padding: '9px 12px', fontSize: 12, lineHeight: 1.55, whiteSpace: 'pre-wrap',
-                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
-                      color: '#cbd5e1', userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text',
+                      background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
+                      color: 'rgb(var(--ds-text-2))', userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text',
                     }}>
                       {msg.content && <MdMessage content={msg.content} onNavigate={url => addTab(url, 'browser')} />}
                       {msg.steps && msg.steps.length > 0 && (
@@ -518,7 +518,7 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                               <span style={{ color: s.status === 'done' ? '#34d399' : s.status === 'error' ? '#f87171' : '#facc15', flexShrink: 0 }}>
                                 {s.status === 'done' ? '✓' : s.status === 'error' ? '✕' : '⏳'}
                               </span>
-                              <span style={{ color: '#94a3b8' }}>{s.label}</span>
+                              <span style={{ color: 'rgb(var(--ds-text-3))' }}>{s.label}</span>
                             </div>
                           ))}
                         </div>
@@ -532,17 +532,17 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
                   <div style={{
                     width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.2)',
+                    background: 'rgb(var(--ds-accent) / 0.15)', border: '1px solid rgb(var(--ds-accent) / 0.2)',
                   }}>
-                    <Zap size={11} style={{ color: '#60a5fa' }} />
+                    <Zap size={11} style={{ color: 'rgb(var(--ds-accent-soft))' }} />
                   </div>
                   <div style={{
                     display: 'flex', gap: 4, padding: '9px 14px', borderRadius: 14, borderTopLeftRadius: 4,
-                    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
                   }}>
                     {[0, 1, 2].map(n => (
                       <span key={n} style={{
-                        width: 6, height: 6, borderRadius: '50%', background: '#60a5fa', display: 'inline-block',
+                        width: 6, height: 6, borderRadius: '50%', background: 'rgb(var(--ds-accent-soft))', display: 'inline-block',
                         animation: `aiDotBounce 1.3s ease-in-out ${n * 0.18}s infinite`,
                       }} />
                     ))}
@@ -552,16 +552,16 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
             </div>
 
             {/* ── Input ── */}
-            <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+            <div style={{ padding: 12, borderTop: '1px solid var(--ds-border-sm)', flexShrink: 0 }}>
               <div
                 style={{
                   display: 'flex', alignItems: 'flex-end', gap: 8,
                   padding: '8px 12px', borderRadius: 14,
-                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)',
+                  background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
                   transition: 'border-color 0.12s',
                 }}
-                onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.4)'}
-                onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.09)'}
+                onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgb(var(--ds-accent) / 0.4)'}
+                onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-border-sm)'}
               >
                 <textarea
                   ref={inputRef}
@@ -572,20 +572,20 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                   rows={1}
                   style={{
                     flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
-                    fontSize: 12, color: '#e2e8f0', lineHeight: 1.5, maxHeight: 96, overflowY: 'auto',
+                    fontSize: 12, color: 'rgb(var(--ds-text-2))', lineHeight: 1.5, maxHeight: 96, overflowY: 'auto',
                     userSelect: 'text',
                   }}
                 />
                 <button onClick={sendMessage} disabled={!input.trim() || isAILoading} style={{
                   width: 30, height: 30, borderRadius: 10, border: 'none', cursor: input.trim() ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  background: input.trim() && !isAILoading ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : 'rgba(255,255,255,0.06)',
+                  background: input.trim() && !isAILoading ? 'linear-gradient(135deg, rgb(var(--ds-accent)), rgb(var(--ds-accent-2)))' : 'var(--ds-glass-sm)',
                   opacity: !input.trim() || isAILoading ? 0.35 : 1,
-                  boxShadow: input.trim() && !isAILoading ? '0 2px 14px rgba(59,130,246,0.4)' : 'none',
+                  boxShadow: input.trim() && !isAILoading ? '0 2px 14px rgb(var(--ds-accent) / 0.4)' : 'none',
                   transition: 'all 0.15s',
                 }}>
                   {isAILoading
-                    ? <Loader2 size={13} style={{ color: '#60a5fa', animation: 'spin 0.7s linear infinite' }} />
+                    ? <Loader2 size={13} style={{ color: 'rgb(var(--ds-accent-soft))', animation: 'spin 0.7s linear infinite' }} />
                     : <Send size={13} style={{ color: '#fff' }} />}
                 </button>
                 {isAILoading && (
@@ -599,7 +599,7 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                 )}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, padding: '0 2px' }}>
-                <span style={{ fontSize: 10, color: '#334155' }}>↵ send · Shift+↵ newline · Ctrl+Shift+A toggle</span>
+                <span style={{ fontSize: 10, color: 'rgb(var(--ds-text-4) / 0.75)' }}>↵ send · Shift+↵ newline · Ctrl+Shift+A toggle</span>
                 {ollamaStatus?.running
                   ? <span style={{ fontSize: 10, color: 'rgba(52,211,153,0.5)' }}>● local</span>
                   : <span style={{ fontSize: 10, color: 'rgba(96,165,250,0.4)' }}>● cloud</span>}
@@ -620,10 +620,10 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
           style={{
             position: 'fixed', right: 14, top: 92, bottom: 14, width: 360, zIndex: 200,
             display: 'flex', flexDirection: 'column', borderRadius: 16, overflow: 'hidden',
-            background: 'linear-gradient(180deg, rgba(10,18,36,0.95) 0%, rgba(7,12,26,0.97) 100%)',
+            background: 'var(--ds-panel-bg)',
             backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
-            border: '1px solid rgba(59,130,246,0.18)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07), 0 8px 48px rgba(0,0,0,0.65), 0 0 80px rgba(59,130,246,0.05)',
+            border: '1px solid rgb(var(--ds-accent) / 0.18)',
+            boxShadow: 'inset 0 1px 0 var(--ds-glass-md), var(--ds-panel-shadow)',
           }}
         >
           {chatBody}
@@ -662,7 +662,7 @@ function renderLine(line: string, onNavigate: (url: string) => void): React.Reac
   while ((m = re.exec(line)) !== null) {
     if (m.index > last) segments.push(<span key={key++}>{line.slice(last, m.index)}</span>)
     if (m[1]) {
-      segments.push(<strong key={key++} style={{ color: '#e2e8f0', fontWeight: 600 }}>{m[2]}</strong>)
+      segments.push(<strong key={key++} style={{ color: 'rgb(var(--ds-text-2))', fontWeight: 600 }}>{m[2]}</strong>)
     } else {
       const url = m[0]
       segments.push(
@@ -699,7 +699,7 @@ function QuickBtn({ onClick, disabled, color, icon, label, title }: {
     <button onClick={onClick} disabled={disabled} title={title} style={{
       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
       padding: '7px 6px', borderRadius: 10, border: `1px solid ${c.border}`,
-      background: disabled ? 'rgba(255,255,255,0.03)' : c.normal,
+      background: disabled ? 'var(--ds-glass-xs)' : c.normal,
       cursor: disabled ? 'not-allowed' : 'pointer',
       color: disabled ? '#4a5568' : c.text, fontSize: 10, fontWeight: 500,
       opacity: disabled ? 0.5 : 1, transition: 'all 0.12s',
@@ -719,8 +719,8 @@ function HeaderBtn({ onClick, title, children }: { onClick: () => void; title?: 
       style={{
         width: 28, height: 28, borderRadius: 8, border: 'none', cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: hovered ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)',
-        color: hovered ? '#e2e8f0' : '#475569', transition: 'all 0.12s',
+        background: hovered ? 'var(--ds-glass-md)' : 'var(--ds-glass-xs)',
+        color: hovered ? 'rgb(var(--ds-text-2))' : 'rgb(var(--ds-text-4))', transition: 'all 0.12s',
       }}>
       {children}
     </button>

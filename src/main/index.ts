@@ -2,12 +2,20 @@ import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, 
 import { join } from 'path'
 import http from 'http'
 import https from 'https'
+import dns from 'dns'
 import os from 'os'
 import fs from 'fs'
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 
 const isDev = process.env.NODE_ENV === 'development'
+
+// Prefer IPv4 when a host resolves to both. openrouter.ai returns IPv6
+// addresses first, and Node 17+ hands them to connect() in that order —
+// on networks with broken or blocked IPv6 that surfaces as getaddrinfo
+// ENOTFOUND / connection failures even though a working IPv4 exists. This
+// mirrors the IPv4-forcing we already do for Ollama's localhost.
+try { dns.setDefaultResultOrder('ipv4first') } catch {}
 
 // ── Set paths BEFORE app is ready ─────────────────────────────────────────
 // Must run before app.whenReady() — setting after has no effect on Chromium.
@@ -64,7 +72,10 @@ function getData(): any {
 }
 function defaultSettings() {
   return {
-    theme: 'dark', aiModel: 'llama3', transparency: 'none',
+    // First run follows the OS appearance — users who run Windows in light
+    // mode get the light theme by default; either can be changed in Settings.
+    theme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
+    aiModel: 'llama3', transparency: 'none', glassIntensity: 'medium',
     sidebarVisible: true, searchEngine: 'google',
     // AI API config — set via Settings page or baked from .env.local at build time
     openrouterKey:   '',
@@ -103,11 +114,40 @@ function getAIConfig() {
   return { orKey, orBase, orMdl, olBase }
 }
 
+// ── DNS fallback lookup ────────────────────────────────────────────────────
+// getaddrinfo ENOTFOUND with a working connection usually means the system
+// resolver is broken/blocked (ISP DNS outage, captive portal, aggressive
+// filtering). Fall back to well-known public resolvers, which use Node's
+// c-ares network resolver instead of the OS getaddrinfo path.
+const publicResolver = new dns.promises.Resolver()
+publicResolver.setServers(['1.1.1.1', '8.8.8.8'])
+const dnsCache = new Map<string, { addr: string; ts: number }>()
+const DNS_CACHE_TTL = 5 * 60_000
+
+function fallbackLookup(
+  hostname: string,
+  options: any,
+  callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void
+): void {
+  dns.lookup(hostname, options, (err, address, family) => {
+    if (!err && address) return callback(null, address as string, family as number)
+    const cached = dnsCache.get(hostname)
+    if (cached && Date.now() - cached.ts < DNS_CACHE_TTL) return callback(null, cached.addr, 4)
+    publicResolver.resolve4(hostname)
+      .then(addrs => {
+        if (!addrs.length) return callback(err, '', 4)
+        dnsCache.set(hostname, { addr: addrs[0], ts: Date.now() })
+        callback(null, addrs[0], 4)
+      })
+      .catch(() => callback(err, '', 4)) // surface the ORIGINAL getaddrinfo error
+  })
+}
+
 // ── Native HTTP helpers (more reliable than axios in packaged Electron) ────
 function httpGet(url: string, timeoutMs = 5000): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https') ? https : http
-    const req = lib.get(url, { timeout: timeoutMs }, (res) => {
+    const req = lib.get(url, { timeout: timeoutMs, lookup: fallbackLookup }, (res) => {
       let body = ''
       res.on('data', c => { body += c })
       res.on('end', () => resolve({ status: res.statusCode ?? 0, body }))
@@ -115,6 +155,27 @@ function httpGet(url: string, timeoutMs = 5000): Promise<{ status: number; body:
     req.on('error', reject)
     req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
   })
+}
+
+// Transient network failures (DNS blips, dropped connections, IPv6 fallbacks)
+// that are worth retrying rather than failing the whole request on.
+const TRANSIENT_NET_CODES = ['ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH']
+function isTransientNetError(e: any): boolean {
+  return !!e && (TRANSIENT_NET_CODES.includes(e.code) || e.message === 'timeout')
+}
+
+// Retry an async network op a few times on transient errors, with linear backoff.
+async function withNetRetry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 700): Promise<T> {
+  let lastErr: any
+  for (let i = 0; i < attempts; i++) {
+    try { return await fn() }
+    catch (e: any) {
+      lastErr = e
+      if (!isTransientNetError(e) || i === attempts - 1) throw e
+      await new Promise(r => setTimeout(r, delayMs * (i + 1)))
+    }
+  }
+  throw lastErr
 }
 
 function httpPost(url: string, data: object, headers: Record<string, string> = {}, timeoutMs = 60000): Promise<{ status: number; body: string }> {
@@ -128,6 +189,7 @@ function httpPost(url: string, data: object, headers: Record<string, string> = {
       path:     parsed.pathname + parsed.search,
       method:   'POST',
       timeout:  timeoutMs,
+      lookup:   fallbackLookup,
       headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...headers },
     }, (res) => {
       let b = ''
@@ -136,6 +198,58 @@ function httpPost(url: string, data: object, headers: Record<string, string> = {
     })
     req.on('error', reject)
     req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
+    req.write(body)
+    req.end()
+  })
+}
+
+// ── Streaming Ollama chat ──────────────────────────────────────────────────
+// stream:false keeps the socket silent for the ENTIRE generation, and Node's
+// `timeout` is an IDLE timeout — so a slow machine loading a cold model
+// looked like "timeout" even though Ollama was working fine. Streaming keeps
+// tokens flowing, so the idle timer only fires when Ollama truly stalls.
+function ollamaChatStream(
+  base: string, model: string, messages: any[], idleTimeoutMs = 120000
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(`${base}/api/chat`)
+    const body = JSON.stringify({ model, messages, stream: true, options: { num_ctx: 8192 } })
+    const req = http.request({
+      hostname: parsed.hostname,
+      port:     parsed.port || 80,
+      path:     parsed.pathname,
+      method:   'POST',
+      timeout:  idleTimeoutMs,
+      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    }, (res) => {
+      if ((res.statusCode ?? 0) >= 400) {
+        let eb = ''
+        res.on('data', c => { eb += c })
+        res.on('end', () => reject(new Error(`HTTP ${res.statusCode}: ${eb.slice(0, 200)}`)))
+        return
+      }
+      let content = ''
+      let buf = ''
+      res.on('data', c => {
+        buf += c
+        // NDJSON: one {"message":{"content":"…"},"done":false} object per line
+        let nl: number
+        while ((nl = buf.indexOf('\n')) !== -1) {
+          const line = buf.slice(0, nl).trim()
+          buf = buf.slice(nl + 1)
+          if (!line) continue
+          try {
+            const j = JSON.parse(line)
+            if (j.message?.content) content += j.message.content
+            if (j.error) return reject(new Error(String(j.error)))
+          } catch { /* partial line — wait for more */ }
+        }
+      })
+      res.on('end', () => resolve(content))
+      res.on('error', reject)
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout — Ollama stopped responding mid-generation')) })
     req.write(body)
     req.end()
   })
@@ -176,16 +290,52 @@ let mainWindow: BrowserWindow
 // secure"). Build a clean, plain-Chrome UA.
 //
 // We deliberately claim a CURRENT Chrome version, NOT the bundled Chromium
-// version (Electron 28 ships Chromium 120, ~1.5 years old — old enough that
-// Google's sign-in flags it).
-const CHROME_FULL_VERSION = '131.0.6778.140'
+// version (Electron 28 ships Chromium 120, old enough that Google's sign-in
+// flags it). This value goes stale the same way — bump it every few months
+// to the latest stable (https://chromiumdash.appspot.com/releases?platform=Windows).
+// 149.0.7827.201 = Windows stable as of 2026-07-04.
+const CHROME_FULL_VERSION = '149.0.7827.201'
 const CHROME_MAJOR = CHROME_FULL_VERSION.split('.')[0]
+// Real Chrome sends a REDUCED UA — minor/build/patch frozen to 0.0.0. Sending
+// the full build number here is itself a tell (no real Chrome does it); the
+// full version only travels via Client Hints / userAgentData.
 const CHROME_UA =
-  `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_FULL_VERSION} Safari/537.36`
+  `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_MAJOR}.0.0.0 Safari/537.36`
 // Client-Hint brands matching the UA, including the "Google Chrome" brand
 // Chromium's default omits. Google cross-checks Sec-CH-UA against the UA.
 const CHROME_SEC_CH_UA =
   `"Not)A;Brand";v="8", "Chromium";v="${CHROME_MAJOR}", "Google Chrome";v="${CHROME_MAJOR}"`
+const CHROME_SEC_CH_UA_FULL_VERSION_LIST =
+  `"Not)A;Brand";v="8.0.0.0", "Chromium";v="${CHROME_FULL_VERSION}", "Google Chrome";v="${CHROME_FULL_VERSION}"`
+
+// X-Client-Data: a Google-proprietary header that ONLY real Chrome/Chromium
+// (built with Google's variations service) sends, and ONLY to Google-owned
+// domains. Electron omits it entirely — and its absence on a request that
+// otherwise claims to be Chrome is a cheap, reliable "embedded browser" tell
+// that Google's sign-in uses to bounce the flow to /v3/signin/rejected right
+// after email entry (confirmed 2026-07-04: identity was otherwise flawless —
+// UA, brands, high-entropy hints, webdriver:false — yet still rejected, and the
+// only missing header vs. real Chrome was this one).
+//
+// The value is a base64 ClientVariations protobuf (schema: repeated int32
+// variation_id = 1; repeated int32 trigger_variation_id = 3). We ship a small
+// set of real, currently-active variation IDs so it decodes cleanly server-side
+// rather than looking like forged garbage. Google tolerates stale/partial seeds
+// (every Chrome install sends a different subset), so an exact match isn't
+// required — only that it's a valid, plausible protobuf.
+function buildXClientData(): string {
+  const varIds = [3300118, 3300130, 3313321, 3324960, 3330198, 3362821]
+  const trigIds = [3313321, 3324960]
+  const bytes: number[] = []
+  const putVarint = (n: number) => { while (n > 0x7f) { bytes.push((n & 0x7f) | 0x80); n >>>= 7 } bytes.push(n) }
+  for (const id of varIds)  { bytes.push(0x08); putVarint(id) } // field 1, wire type 0 (varint)
+  for (const id of trigIds) { bytes.push(0x18); putVarint(id) } // field 3, wire type 0 (varint)
+  return Buffer.from(bytes).toString('base64')
+}
+const X_CLIENT_DATA = buildXClientData()
+// Google sends X-Client-Data only to these eTLD+1s; scope it the same way so we
+// never leak the header to non-Google origins (that itself would be anomalous).
+const GOOGLE_XCD_HOSTS = /(^|\.)(google\.com|google\.[a-z.]+|youtube\.com|gstatic\.com|googleapis\.com|googleusercontent\.com|ggpht\.com|doubleclick\.net)$/i
 
 // The header rewrite fixes network requests, but Google's sign-in ALSO reads
 // navigator.userAgentData in page JS — plain setUserAgent leaves that reporting
@@ -214,21 +364,24 @@ const CHROME_UA_METADATA = {
   wow64: false,
 }
 
-// Push userAgentData via CDP, then detach right away — the override is
-// target-scoped and survives detach, so there's no need to hold the debugger
-// session open (a lingering CDP session was ruled out as the WebAuthn-step
-// blocker separately; that failure has a different, still-unknown cause).
+// Push userAgentData via CDP and KEEP the debugger attached for the life of
+// the webContents. Detaching clears the override: verified 2026-07-04 with a
+// standalone Electron 28 test — after detach() the very next navigation
+// reverted to the default Electron UA and empty userAgentData. (The old
+// detach-immediately version only appeared to work because the first
+// navigation raced ahead of the async detach; every LATER page — Google's
+// password/challenge steps — saw the bare "Chromium" brand and got blocked.)
 function applyBrowserIdentity(wc: Electron.WebContents) {
   try {
     if (!wc.debugger.isAttached()) wc.debugger.attach('1.3')
     wc.debugger.sendCommand('Emulation.setUserAgentOverride', {
       userAgent: CHROME_UA,
-      acceptLanguage: 'en-US,en;q=0.9',
+      // No explicit q-values — Chromium appends them itself; passing
+      // "en;q=0.9" here produced the malformed "en;q=0.9;q=0.9" on the wire.
+      acceptLanguage: 'en-US,en',
       platform: 'Windows',
       userAgentMetadata: CHROME_UA_METADATA,
-    }).catch(() => {}).finally(() => {
-      try { if (wc.debugger.isAttached()) wc.debugger.detach() } catch {}
-    })
+    }).catch(() => {})
   } catch {}
 }
 
@@ -255,9 +408,47 @@ function safelySend(channel: string, ...args: any[]) {
 function applyTransparency(win: BrowserWindow, mode: string) {
   if (process.platform !== 'win32') return
   try {
-    const mat = mode === 'acrylic' ? 'acrylic' : mode === 'mica' ? 'mica' : 'none'
+    const mat = ['acrylic', 'mica', 'tabbed', 'auto'].includes(mode) ? mode : 'none'
     ;(win as any).setBackgroundMaterial(mat)
   } catch {}
+}
+
+// Whole-window opacity (0.7–1). Independent of the DWM material — dims the
+// entire window including tab content, unlike glass which only fades the UI.
+function applyWindowOpacity(win: BrowserWindow, opacity: number) {
+  try {
+    const v = Math.min(1, Math.max(0.7, Number(opacity) || 1))
+    win.setOpacity(v)
+  } catch {}
+}
+
+// ── Browser keyboard shortcuts ─────────────────────────────────────────────
+// Handled in the main process via before-input-event so they work no matter
+// what has focus — the host UI or a page inside a tab's BrowserView (renderer
+// keydown listeners never see keys typed into a BrowserView).
+function matchAppShortcut(input: Electron.Input): string | null {
+  if (input.type !== 'keyDown') return null
+  const ctrl = input.control || input.meta
+  if (!ctrl || input.alt) return null
+  const key = input.key.toLowerCase()
+  if (key === 't' && !input.shift) return 'new-tab'
+  if (key === 'w' && !input.shift) return 'close-tab'
+  if (key === 'tab') return input.shift ? 'prev-tab' : 'next-tab'
+  if (key === 'l' && !input.shift) return 'focus-url'
+  if (key === 'r' && !input.shift) return 'reload-tab'
+  return null
+}
+
+function attachAppShortcuts(wc: Electron.WebContents) {
+  wc.on('before-input-event', (e, input) => {
+    const action = matchAppShortcut(input)
+    if (!action) return
+    e.preventDefault()
+    // Focusing the URL bar needs keyboard focus back on the host UI first —
+    // otherwise the input focuses but keys keep going to the BrowserView.
+    if (action === 'focus-url') mainWindow?.webContents.focus()
+    safelySend('app-shortcut', action)
+  })
 }
 
 function attachContextMenu(wc: Electron.WebContents) {
@@ -341,6 +532,7 @@ function createTabView(tabId: string, url: string) {
   wc.on('devtools-closed', () => applyBrowserIdentity(wc))
 
   attachContextMenu(wc)
+  attachAppShortcuts(wc)
   sendTabEvent(tabId, 'wc-id', { wcId: wc.id })
 
   // Scripted popups (window.open with features — OAuth flows like
@@ -429,8 +621,11 @@ function createWindow(): void {
     show: false, frame: false, titleBarStyle: 'hidden',
     // Windows 11 native DWM rounded corners (no-op on older Windows/macOS)
     roundedCorners: true,
+    // NOTE: never set transparent:true here — a transparent window drops the
+    // DWM frame entirely (square corners, no shadow) and conflicts with
+    // setBackgroundMaterial. Mica/acrylic only need the fully transparent
+    // backgroundColor to show through.
     backgroundColor: glassMode ? '#00000000' : '#17182B',
-    transparent: glassMode,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false, webviewTag: false,
@@ -447,6 +642,7 @@ function createWindow(): void {
   applyTransparency(mainWindow, settings.transparency)
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+    applyWindowOpacity(mainWindow, settings.windowOpacity ?? 1)
     safelySend('theme:transparency', settings.transparency)
   })
 
@@ -467,14 +663,27 @@ function createWindow(): void {
   // Spoof Chrome UA so sites serve full content (many degrade or block Electron's default UA).
   webviewSession.setUserAgent(CHROME_UA)
 
-  // Rewrite Client-Hint brand headers to match the spoofed UA — setUserAgent
-  // alone doesn't change Sec-CH-UA, and Google's sign-in blocks on the mismatch.
+  // Force Client-Hint headers to match the spoofed UA. Rewriting existing
+  // headers isn't enough: Electron 28 doesn't emit Sec-CH-UA at all (verified
+  // on the wire 2026-07-04 via httpbingo.org/headers), while every real Chrome
+  // sends the low-entropy hints on ALL HTTPS requests — their absence is
+  // exactly the kind of mismatch Google's "secure browser" check keys on.
   webviewSession.webRequest.onBeforeSendHeaders((details, callback) => {
     const headers = details.requestHeaders
-    for (const key of Object.keys(headers)) {
-      const k = key.toLowerCase()
-      if (k === 'sec-ch-ua') headers[key] = CHROME_SEC_CH_UA
-      else if (k === 'sec-ch-ua-full-version-list') delete headers[key]
+    if (details.url.startsWith('https://')) {
+      for (const key of Object.keys(headers)) {
+        const k = key.toLowerCase()
+        if (k.startsWith('sec-ch-ua')) delete headers[key]
+        else if (k === 'x-client-data') delete headers[key]
+      }
+      headers['sec-ch-ua'] = CHROME_SEC_CH_UA
+      headers['sec-ch-ua-mobile'] = '?0'
+      headers['sec-ch-ua-platform'] = '"Windows"'
+      // Add X-Client-Data only for Google-owned hosts, matching real Chrome.
+      try {
+        const host = new URL(details.url).hostname
+        if (GOOGLE_XCD_HOSTS.test(host)) headers['X-Client-Data'] = X_CLIENT_DATA
+      } catch {}
     }
     callback({ requestHeaders: headers })
   })
@@ -514,6 +723,7 @@ function createWindow(): void {
 
   // ── Right-click context menu (copy / paste / cut / select-all) ──────────
   attachContextMenu(mainWindow.webContents)
+  attachAppShortcuts(mainWindow.webContents)
 
   // ── Download tracking — covers mainWindow + all webviews ──────────────
   const handleDownload = (_e: any, item: any) => {
@@ -677,12 +887,39 @@ ipcMain.handle('window:minimize',    () => mainWindow?.minimize())
 ipcMain.handle('window:maximize',    () => { mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow?.maximize() })
 ipcMain.handle('window:close',       () => mainWindow?.close())
 ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized())
+
+// ── IPC: Tab context menu ───────────────────────────────────────────────────
+// Native menu — an HTML menu in the tab strip would be clipped by the 40px
+// bar and painted over by the active tab's BrowserView. Resolves with the
+// chosen action id, or '' if dismissed.
+ipcMain.handle('tabs:showContextMenu', (_e, info: { isBrowser: boolean; hasRight: boolean; count: number }) => {
+  return new Promise<string>((resolve) => {
+    let resolved = false
+    const done = (action: string) => { if (!resolved) { resolved = true; resolve(action) } }
+    const menu = Menu.buildFromTemplate([
+      { label: 'New Tab',                 click: () => done('new-tab') },
+      { label: 'Duplicate Tab',           click: () => done('duplicate') },
+      { type: 'separator' },
+      { label: 'Reload',                  enabled: info.isBrowser, click: () => done('reload') },
+      { type: 'separator' },
+      { label: 'Close Tab',               click: () => done('close') },
+      { label: 'Close Other Tabs',        enabled: info.count > 1, click: () => done('close-others') },
+      { label: 'Close Tabs to the Right', enabled: info.hasRight,  click: () => done('close-right') },
+    ])
+    // callback fires on dismiss too; defer so a click handler wins the race
+    menu.popup({ window: mainWindow ?? undefined, callback: () => setTimeout(() => done(''), 0) })
+  })
+})
 ipcMain.handle('window:setTransparency', (_e, mode: string) => {
   const d = getData(); d.settings.transparency = mode; saveData()
   if (mainWindow) {
     applyTransparency(mainWindow, mode)
     safelySend('theme:transparency', mode)
   }
+})
+ipcMain.handle('window:setOpacity', (_e, opacity: number) => {
+  const d = getData(); d.settings.windowOpacity = opacity; saveData()
+  if (mainWindow) applyWindowOpacity(mainWindow, opacity)
 })
 
 // ── IPC: Tab content views (BrowserView) ────────────────────────────────────
@@ -751,7 +988,20 @@ ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?
 })
 
 // ── IPC: Downloads ─────────────────────────────────────────────────────────
-ipcMain.handle('downloads:getAll',       () => readJson(DL_FILE, []))
+ipcMain.handle('downloads:getAll',       () => {
+  // A download can only be "progressing" while its BrowserView is alive. If any
+  // entry is still marked progressing on read, its download died with a previous
+  // app session (crash / quit mid-transfer) and will never emit 'done' — left
+  // as-is it shows a spinner that buffers forever on the Downloads page. Settle
+  // these stale rows to 'interrupted' once, on load.
+  const dls = readJson(DL_FILE, []) as any[]
+  let changed = false
+  for (const dl of dls) {
+    if (dl.state === 'progressing') { dl.state = 'interrupted'; changed = true }
+  }
+  if (changed) writeJson(DL_FILE, dls)
+  return dls
+})
 ipcMain.handle('downloads:clear',        () => { writeJson(DL_FILE, []); return true })
 ipcMain.handle('downloads:openFile',     (_e, p: string) => shell.openPath(p))
 ipcMain.handle('downloads:showInFolder', (_e, p: string) => shell.showItemInFolder(p))
@@ -760,13 +1010,27 @@ ipcMain.handle('downloads:showInFolder', (_e, p: string) => shell.showItemInFold
 ipcMain.handle('cache:clear', async () => {
   // Tabs load in the 'persist:main' partition, not defaultSession — clearing
   // only defaultSession left tab cookies/site-data (incl. Google's) untouched.
+  // defaultSession is the HOST UI's session: its localStorage holds app data
+  // (custom extensions, toggle states), so clear only its HTTP cache — wiping
+  // its storage deleted every installed extension. Web-content storage lives
+  // in the tab partition, which still gets the full clear.
   const tabSession = session.fromPartition('persist:main')
   await Promise.all([
     session.defaultSession.clearCache(),
-    session.defaultSession.clearStorageData(),
     tabSession.clearCache(),
     tabSession.clearStorageData(),
   ])
+  return true
+})
+
+// ── IPC: Extension store — disk copy of custom extensions + toggle states ──
+// localStorage alone proved fragile (one storage clear deleted everything);
+// this file is the durable source the renderer re-hydrates from on boot.
+const EXT_FILE = join(APP_DIR, 'extensions.json')
+ipcMain.handle('extstore:load', () => readJson(EXT_FILE, { customExts: [], states: {} }))
+ipcMain.handle('extstore:save', (_e, patch: { customExts?: any[]; states?: any }) => {
+  const cur = readJson(EXT_FILE, { customExts: [], states: {} })
+  writeJson(EXT_FILE, { ...cur, ...patch })
   return true
 })
 
@@ -828,11 +1092,47 @@ ipcMain.handle('wifi:scan', async () => {
     return { networks: parseWifiNetworks(raw) }
   } catch (e: any) { return { networks: [], error: e.message } }
 })
-ipcMain.handle('wifi:connect', async (_e, ssid: string) => {
+ipcMain.handle('wifi:connect', async (_e, ssid: string, open?: boolean) => {
   if (process.platform !== 'win32') return { success: false, error: 'Windows only' }
-  try { execSync(`netsh wlan connect name="${ssid}"`, { timeout: 10000 }); return { success: true } }
-  catch (e: any) { return { success: false, error: e.message } }
+  // netsh can only "connect name=" to an SSID that already has a saved WLAN
+  // profile. Open networks the user has never joined have none, so the bare
+  // connect silently fails — that's the "nothing happens" bug. For open
+  // networks, write a minimal open-auth profile, import it, THEN connect.
+  try {
+    if (open) {
+      // SSID → hex, so exotic characters in the name can't break the XML.
+      const hex = Buffer.from(ssid, 'utf-8').toString('hex').toUpperCase()
+      const xml = `<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+  <name>${escapeXml(ssid)}</name>
+  <SSIDConfig><SSID><hex>${hex}</hex><name>${escapeXml(ssid)}</name></SSID></SSIDConfig>
+  <connectionType>ESS</connectionType>
+  <connectionMode>manual</connectionMode>
+  <MSM><security>
+    <authEncryption><authentication>open</authentication><encryption>none</encryption><useOneX>false</useOneX></authEncryption>
+  </security></MSM>
+</WLANProfile>`
+      const tmp = join(os.tmpdir(), `aihub-wifi-${Date.now()}.xml`)
+      fs.writeFileSync(tmp, xml, 'utf-8')
+      // execFileSync (no shell) — the SSID is an untrusted AP-supplied string,
+      // so it must never be interpolated into a shell command line.
+      try { execFileSync('netsh', ['wlan', 'add', 'profile', `filename=${tmp}`, 'user=all'], { timeout: 8000 }) }
+      finally { try { fs.unlinkSync(tmp) } catch {} }
+    }
+    execFileSync('netsh', ['wlan', 'connect', `name=${ssid}`], { timeout: 12000 })
+    return { success: true }
+  } catch (e: any) {
+    // netsh writes the useful message to stdout, not the thrown Error.
+    const detail = (e.stdout?.toString?.() || '').trim() || e.message
+    return { success: false, error: detail }
+  }
 })
+
+function escapeXml(s: string) {
+  return s.replace(/[<>&'"]/g, c => (
+    { '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c] as string
+  ))
+}
 
 function parseWifiNetworks(raw: string) {
   const networks: any[] = []
@@ -939,7 +1239,7 @@ async function openRouterChat(
   messages: any[], maxTokens = 2048
 ): Promise<string | null> {
   try {
-    const { status, body } = await httpPost(
+    const { status, body } = await withNetRetry(() => httpPost(
       `${orBase}/chat/completions`,
       { model, messages, max_tokens: maxTokens, temperature: 0.7, include_reasoning: false },
       {
@@ -948,7 +1248,7 @@ async function openRouterChat(
         'X-Title': 'AIHub Browser',
       },
       30000
-    )
+    ))
     if (status === 200) {
       const choice = JSON.parse(body)?.choices?.[0]
       // finish_reason 'length' at an 8192 budget means the model ran out of
@@ -984,20 +1284,13 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, o
         const preferred = preferredModel || getData().settings.aiModel || ''
         const model = (preferred && ol.models.includes(preferred)) ? preferred : ol.models[0]
         try {
-          // num_ctx 8192: Ollama defaults to 4096, which truncates long
-          // responses (e.g. generating 5-10 extensions with code) mid-output,
-          // producing unparseable JSON. Raise the window so full replies fit.
-          const { status, body } = await httpPost(
-            `${olBase}/api/chat`, { model, messages, stream: false, options: { num_ctx: 8192 } }, {}, 120000
-          )
-          if (status >= 200 && status < 400) {
-            const raw = JSON.parse(body)?.message?.content || ''
-            const content = stripThinkTags(raw)
-            if (content) return { content, model, provider: 'ollama' }
-            ollamaDiag = `Ollama returned an empty response (model: ${model})`
-          } else {
-            ollamaDiag = `Ollama request failed (HTTP ${status}, model: ${model})`
-          }
+          // Streamed so slow hardware / cold model loads can't trip the idle
+          // timeout mid-generation; num_ctx 8192 so long replies aren't
+          // truncated (Ollama's 4096 default cut extension JSON mid-output).
+          const raw = await ollamaChatStream(olBase, model, messages)
+          const content = stripThinkTags(raw)
+          if (content) return { content, model, provider: 'ollama' }
+          ollamaDiag = `Ollama returned an empty response (model: ${model})`
         } catch (e: any) {
           ollamaDiag = `Ollama request failed: ${e?.message || e} (model: ${model})`
         }
@@ -1038,8 +1331,12 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, o
 
   if (orKey) {
     if (cloudError) {
+      const isNetIssue = /ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|ECONNRESET|timeout/i.test(cloudError)
+      const tips = isNetIssue
+        ? `Try:\n• Check your internet connection — the DNS lookup / connection to the AI server failed\n• If you're on a VPN or proxy, try disabling it\n• Wait 1–2 minutes and retry`
+        : `Try:\n• Wait 1–2 minutes and retry\n• Install Ollama (ollama.com) for private local AI\n• Check your OpenRouter API key in Settings → AI Configuration`
       return {
-        content: `Cloud AI error: ${cloudError}${ollamaDiag ? `\n\n(Local Ollama also failed: ${ollamaDiag})` : ''}\n\nTry:\n• Wait 1–2 minutes and retry\n• Install Ollama (ollama.com) for private local AI\n• Check your OpenRouter API key in Settings → AI Configuration`,
+        content: `Cloud AI error: ${cloudError}${ollamaDiag ? `\n\n(Local Ollama also failed: ${ollamaDiag})` : ''}\n\n${tips}`,
         model: 'error', provider: 'error',
       }
     }

@@ -23,9 +23,9 @@ export default function WifiPage() {
     setScanning(false)
   }
 
-  const connect = async (ssid: string) => {
-    setConnecting(ssid)
-    const res = await window.electronAPI.wifi.connect(ssid)
+  const connect = async (ssid: string, open: boolean) => {
+    setConnecting(ssid); setError('')
+    const res = await window.electronAPI.wifi.connect(ssid, open)
     setConnecting('')
     if (res.success) setConnected(ssid)
     else setError(`Failed to connect to ${ssid}: ${res.error}`)
@@ -88,7 +88,7 @@ export default function WifiPage() {
                 <div className="space-y-2">
                   {openNetworks.map((n, i) => (
                     <NetworkCard key={i} network={n} connecting={connecting===n.ssid} isConnected={connected===n.ssid}
-                      onConnect={() => connect(n.ssid)} signalBars={signalBars(n.signal)} />
+                      onConnect={() => connect(n.ssid, true)} signalBars={signalBars(n.signal)} />
                   ))}
                 </div>
               </div>

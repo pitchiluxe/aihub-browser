@@ -79,9 +79,9 @@ export default function ExtensionsPage() {
   }, [customExts, setExtensionEnabled])
 
   return (
-    <div className="h-full w-full overflow-y-auto" style={{ background: 'linear-gradient(180deg, #06080f 0%, #080c1a 100%)', color: '#e2e8f0' }}>
+    <div className="h-full w-full overflow-y-auto" style={{ background: 'var(--ds-page-bg)', color: 'rgb(var(--ds-text-2))' }}>
       {/* Header */}
-      <div className="sticky top-0 z-10 px-6 pt-6 pb-4" style={{ background: 'linear-gradient(180deg,rgba(6,8,15,0.98) 80%,transparent)', backdropFilter: 'blur(12px)' }}>
+      <div className="sticky top-0 z-10 px-6 pt-6 pb-4" style={{ background: 'var(--ds-page-header)', backdropFilter: 'blur(12px)' }}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center"
@@ -90,7 +90,7 @@ export default function ExtensionsPage() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-white">Extensions</h1>
-              <p className="text-xs" style={{ color: '#475569' }}>{activeCount} active · {allExts.length} installed</p>
+              <p className="text-xs" style={{ color: 'rgb(var(--ds-text-4))' }}>{activeCount} active · {allExts.length} installed</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -117,13 +117,13 @@ export default function ExtensionsPage() {
 
         {/* Search */}
         <div className="relative mb-3">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#334155' }} />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }} />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search extensions…"
             className="w-full pl-9 pr-4 py-2 rounded-xl text-sm outline-none"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#cbd5e1' }}
+            style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-2))' }}
           />
         </div>
 
@@ -134,7 +134,7 @@ export default function ExtensionsPage() {
               className="px-3 py-1 rounded-lg text-xs font-medium transition-all"
               style={category === c
                 ? { background: 'rgba(245,158,11,0.18)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.28)' }
-                : { background: 'rgba(255,255,255,0.04)', color: '#475569', border: '1px solid rgba(255,255,255,0.06)' }}>
+                : { background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))', border: '1px solid var(--ds-border-sm)' }}>
               {c}
             </button>
           ))}
@@ -153,15 +153,27 @@ export default function ExtensionsPage() {
           return (
             <div key={ext.id}
               className="rounded-2xl overflow-hidden transition-all"
-              style={{ background: enabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.025)', border: `1px solid ${enabled ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.06)'}` }}>
+              style={{ background: enabled ? 'var(--ds-glass-sm)' : 'var(--ds-glass-xs)', border: `1px solid ${enabled ? 'var(--ds-glass-lg)' : 'var(--ds-glass-sm)'}` }}>
               {/* Card header */}
               <div className="p-4">
                 <div className="flex items-start gap-3">
-                  {/* Icon */}
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
-                    style={{ background: `${isCustom ? '#6366f1' : (ext as ExtensionDef).color}18`, border: `1px solid ${isCustom ? '#6366f1' : (ext as ExtensionDef).color}28` }}>
-                    {ext.icon}
-                  </div>
+                  {/* Icon — dark solid tile + strong border so the emoji reads
+                      clearly instead of washing out into the card background */}
+                  {(() => {
+                    const accent = isCustom ? '#6366f1' : (ext as ExtensionDef).color
+                    return (
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+                        style={{
+                          background: `linear-gradient(145deg, ${accent}38 0%, ${accent}14 100%), #0a0e1a`,
+                          border: `1.5px solid ${accent}80`,
+                          boxShadow: `0 2px 10px rgba(0,0,0,0.55), inset 0 1px 0 ${accent}30`,
+                          textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,0.6)',
+                          filter: 'saturate(1.25)',
+                        }}>
+                        {ext.icon}
+                      </div>
+                    )
+                  })()}
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
@@ -172,7 +184,7 @@ export default function ExtensionsPage() {
                         {isCustom ? 'Custom' : ext.category}
                       </span>
                     </div>
-                    <p className="text-xs mt-0.5 leading-snug" style={{ color: '#64748b' }}>{ext.tagline}</p>
+                    <p className="text-xs mt-0.5 leading-snug" style={{ color: 'rgb(var(--ds-text-4))' }}>{ext.tagline}</p>
                   </div>
 
                   {/* Actions */}
@@ -181,7 +193,7 @@ export default function ExtensionsPage() {
                     <button
                       onClick={() => setExpanded(isOpen ? null : ext.id)}
                       className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-                      style={{ background: isOpen ? 'rgba(255,255,255,0.08)' : 'transparent', color: isOpen ? '#94a3b8' : '#334155' }}
+                      style={{ background: isOpen ? 'var(--ds-glass-md)' : 'transparent', color: isOpen ? 'rgb(var(--ds-text-3))' : 'rgb(var(--ds-text-4) / 0.75)' }}
                       title={builtIn && builtIn.settings.length > 0 ? 'How to use & settings' : 'How to use'}
                     >
                       {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -191,9 +203,9 @@ export default function ExtensionsPage() {
                       <button
                         onClick={() => deleteCustom(ext.id)}
                         className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-                        style={{ color: '#334155' }}
+                        style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f87171'; (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.1)' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#334155'; (e.currentTarget as HTMLElement).style.background = '' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgb(var(--ds-text-4) / 0.75)'; (e.currentTarget as HTMLElement).style.background = '' }}
                         title="Delete extension"
                       >
                         <Trash2 size={13} />
@@ -207,9 +219,9 @@ export default function ExtensionsPage() {
 
               {/* Info + settings panel */}
               {isOpen && (
-                <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                  <p className="text-[10px] uppercase tracking-widest pt-3 font-bold" style={{ color: '#1e3a5f' }}>How to use</p>
-                  <p className="text-xs leading-relaxed" style={{ color: '#94a3b8' }}>
+                <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'var(--ds-glass-sm)' }}>
+                  <p className="text-[10px] uppercase tracking-widest pt-3 font-bold" style={{ color: 'rgb(var(--ds-text-4) / 0.8)' }}>How to use</p>
+                  <p className="text-xs leading-relaxed" style={{ color: 'rgb(var(--ds-text-3))' }}>
                     {builtIn
                       ? builtIn.howTo
                       : (ext as CustomExt).howTo || 'Enable the toggle and the extension runs on every page you open. ' + ext.tagline}
@@ -218,13 +230,13 @@ export default function ExtensionsPage() {
               )}
               {isOpen && builtIn && builtIn.settings.length > 0 && (
                 <div className="px-4 pb-4 space-y-3">
-                  <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: '#1e3a5f' }}>Settings</p>
+                  <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: 'rgb(var(--ds-text-4) / 0.8)' }}>Settings</p>
                   {builtIn.settings.map(setting => {
                     const val = state?.settings?.[setting.key] ?? setting.default
                     return (
                       <div key={setting.key}>
                         <div className="flex justify-between items-center mb-1.5">
-                          <label className="text-xs" style={{ color: '#64748b' }}>{setting.label}</label>
+                          <label className="text-xs" style={{ color: 'rgb(var(--ds-text-4))' }}>{setting.label}</label>
                           {setting.type === 'range' && (
                             <span className="text-xs font-mono" style={{ color: '#60a5fa' }}>{typeof val === 'number' ? (setting.step && setting.step < 1 ? (val * 100).toFixed(0) + '%' : val) : val}</span>
                           )}
@@ -244,7 +256,7 @@ export default function ExtensionsPage() {
                             value={val}
                             onChange={e => updateSetting(ext.id, setting.key, e.target.value)}
                             className="w-full px-3 py-1.5 rounded-lg text-xs outline-none"
-                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#cbd5e1' }}
+                            style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-2))' }}
                           >
                             {setting.options?.map(opt => (
                               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -261,7 +273,7 @@ export default function ExtensionsPage() {
         })}
 
         {filtered.length === 0 && (
-          <div className="col-span-full flex flex-col items-center justify-center py-20" style={{ color: '#1e3a5f' }}>
+          <div className="col-span-full flex flex-col items-center justify-center py-20" style={{ color: 'rgb(var(--ds-text-4) / 0.8)' }}>
             <Puzzle size={40} className="mb-4 opacity-30" />
             <p className="text-sm">No extensions match your search</p>
           </div>
@@ -306,7 +318,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       className="shrink-0 relative"
       style={{
         width: 38, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
-        background: checked ? '#3b82f6' : 'rgba(255,255,255,0.08)',
+        background: checked ? '#3b82f6' : 'var(--ds-glass-md)',
         transition: 'background 0.2s',
         boxShadow: checked ? '0 0 10px rgba(59,130,246,0.35)' : 'none',
       }}
@@ -364,16 +376,16 @@ function CreateExtModal({ onClose, onCreate }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}>
       <div className="w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: '#0d1526', border: '1px solid rgba(255,255,255,0.08)', maxHeight: '90vh' }}>
+        style={{ background: 'rgb(var(--ds-bg-2))', border: '1px solid var(--ds-border-sm)', maxHeight: '90vh' }}>
         {/* Modal header */}
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--ds-border-sm)' }}>
           <div className="flex items-center gap-2.5">
             <Code2 size={18} style={{ color: '#f59e0b' }} />
             <span className="text-sm font-semibold text-white">Create Extension</span>
           </div>
           <button onClick={onClose}
             className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ color: '#475569', background: 'rgba(255,255,255,0.05)' }}>
+            style={{ color: 'rgb(var(--ds-text-4))', background: 'var(--ds-glass-sm)' }}>
             <X size={14} />
           </button>
         </div>
@@ -382,22 +394,22 @@ function CreateExtModal({ onClose, onCreate }: {
           {/* Row 1: icon + name + category */}
           <div className="flex gap-3">
             <div>
-              <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>Icon</label>
+              <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}>Icon</label>
               <input value={icon} onChange={e => setIcon(e.target.value)} maxLength={2}
                 className="w-14 h-9 text-center text-xl rounded-xl outline-none"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff' }} />
+                style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: '#fff' }} />
             </div>
             <div className="flex-1">
-              <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>Name *</label>
+              <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}>Name *</label>
               <input value={name} onChange={e => setName(e.target.value)} placeholder="My Extension"
                 className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0' }} />
+                style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-2))' }} />
             </div>
             <div className="w-36">
-              <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>Category</label>
+              <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}>Category</label>
               <select value={category} onChange={e => setCategory(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0' }}>
+                style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-2))' }}>
                 {CATEGORIES.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
@@ -405,63 +417,63 @@ function CreateExtModal({ onClose, onCreate }: {
 
           {/* Tagline */}
           <div>
-            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>Tagline</label>
+            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}>Tagline</label>
             <input value={tagline} onChange={e => setTagline(e.target.value)} placeholder="One-line description of what it does"
               className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0' }} />
+              style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-2))' }} />
           </div>
 
           {/* How to use */}
           <div>
-            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>How to use <span style={{ color: '#1e3a5f', textTransform: 'none', fontWeight: 400 }}>— optional, shown in the card's info panel</span></label>
+            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}>How to use <span style={{ color: 'rgb(var(--ds-text-4) / 0.8)', textTransform: 'none', fontWeight: 400 }}>— optional, shown in the card's info panel</span></label>
             <input value={howTo} onChange={e => setHowTo(e.target.value)} placeholder="e.g. Toggle on, then click the button that appears bottom-right"
               className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0' }} />
+              style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-2))' }} />
           </div>
 
           {/* Inject code */}
           <div>
-            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>Inject Code <span style={{ color: '#1e3a5f', textTransform: 'none', fontWeight: 400 }}>— runs on every page when enabled</span></label>
+            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}>Inject Code <span style={{ color: 'rgb(var(--ds-text-4) / 0.8)', textTransform: 'none', fontWeight: 400 }}>— runs on every page when enabled</span></label>
             <textarea
               value={inject}
               onChange={e => setInject(e.target.value)}
               rows={12}
               spellCheck={false}
               className="w-full px-4 py-3 rounded-xl text-xs font-mono outline-none resize-none"
-              style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.07)', color: '#94a3b8', lineHeight: 1.7 }}
+              style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))', lineHeight: 1.7 }}
             />
           </div>
 
           {/* Remove code */}
           <div>
-            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>Remove Code <span style={{ color: '#1e3a5f', textTransform: 'none', fontWeight: 400 }}>— runs when extension is toggled off</span></label>
+            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}>Remove Code <span style={{ color: 'rgb(var(--ds-text-4) / 0.8)', textTransform: 'none', fontWeight: 400 }}>— runs when extension is toggled off</span></label>
             <textarea
               value={remove}
               onChange={e => setRemove(e.target.value)}
               rows={2}
               spellCheck={false}
               className="w-full px-4 py-3 rounded-xl text-xs font-mono outline-none resize-none"
-              style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.07)', color: '#94a3b8', lineHeight: 1.7 }}
+              style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))', lineHeight: 1.7 }}
             />
           </div>
 
-          <p className="text-xs" style={{ color: '#1e3a5f' }}>
+          <p className="text-xs" style={{ color: 'rgb(var(--ds-text-4) / 0.8)' }}>
             ⚠ Extension code runs in the context of every web page you visit. Only install extensions you trust.
           </p>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="flex justify-end gap-3 px-6 py-4" style={{ borderTop: '1px solid var(--ds-border-sm)' }}>
           <button onClick={onClose}
             className="px-4 py-2 rounded-xl text-sm transition-all"
-            style={{ background: 'rgba(255,255,255,0.05)', color: '#64748b', border: '1px solid rgba(255,255,255,0.07)' }}>
+            style={{ background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))', border: '1px solid var(--ds-border-sm)' }}>
             Cancel
           </button>
           <button onClick={handleCreate} disabled={!name.trim()}
             className="px-4 py-2 rounded-xl text-sm font-semibold transition-all"
             style={{
-              background: name.trim() ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.05)',
-              color: name.trim() ? '#fff' : '#334155',
+              background: name.trim() ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'var(--ds-glass-sm)',
+              color: name.trim() ? '#fff' : 'rgb(var(--ds-text-4) / 0.75)',
               border: 'none', cursor: name.trim() ? 'pointer' : 'not-allowed',
               boxShadow: name.trim() ? '0 0 16px rgba(245,158,11,0.3)' : 'none',
             }}>
@@ -531,23 +543,23 @@ function GenerateExtModal({ existingNames, onClose, onGenerated }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}>
       <div className="w-full max-w-md rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: '#0d1526', border: '1px solid rgba(255,255,255,0.08)' }}>
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        style={{ background: 'rgb(var(--ds-bg-2))', border: '1px solid var(--ds-border-sm)' }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--ds-border-sm)' }}>
           <div className="flex items-center gap-2.5">
             <Sparkles size={18} style={{ color: '#a78bfa' }} />
             <span className="text-sm font-semibold text-white">Generate Extensions with AI</span>
           </div>
           <button onClick={onClose} disabled={busy}
             className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ color: '#475569', background: 'rgba(255,255,255,0.05)' }}>
+            style={{ color: 'rgb(var(--ds-text-4))', background: 'var(--ds-glass-sm)' }}>
             <X size={14} />
           </button>
         </div>
 
         <div className="p-6 space-y-4">
           <div>
-            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: '#334155' }}>
-              Topic <span style={{ color: '#1e3a5f', textTransform: 'none', fontWeight: 400 }}>— optional</span>
+            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}>
+              Topic <span style={{ color: 'rgb(var(--ds-text-4) / 0.8)', textTransform: 'none', fontWeight: 400 }}>— optional</span>
             </label>
             <input
               value={topic}
@@ -555,12 +567,12 @@ function GenerateExtModal({ existingNames, onClose, onGenerated }: {
               disabled={busy}
               placeholder="e.g. tools for reading articles — leave empty and I'll pick useful ones"
               className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0' }}
+              style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-2))' }}
             />
           </div>
 
           {busy && (
-            <p className="text-xs" style={{ color: '#64748b' }}>
+            <p className="text-xs" style={{ color: 'rgb(var(--ds-text-4))' }}>
               ✨ Generating 5–10 extensions{attempt > 1 ? ` — attempt ${attempt}/${MAX_ATTEMPTS}` : ''}… can take 30–60s.
             </p>
           )}
@@ -571,22 +583,22 @@ function GenerateExtModal({ existingNames, onClose, onGenerated }: {
             <p className="text-xs font-semibold" style={{ color: '#4ade80' }}>{summary}</p>
           )}
 
-          <p className="text-xs" style={{ color: '#1e3a5f' }}>
+          <p className="text-xs" style={{ color: 'rgb(var(--ds-text-4) / 0.8)' }}>
             ⚠ Generated code runs in the context of every web page you visit. New extensions start disabled — review, then enable the ones you want.
           </p>
         </div>
 
-        <div className="flex justify-end gap-3 px-6 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="flex justify-end gap-3 px-6 py-4" style={{ borderTop: '1px solid var(--ds-border-sm)' }}>
           <button onClick={onClose} disabled={busy}
             className="px-4 py-2 rounded-xl text-sm transition-all"
-            style={{ background: 'rgba(255,255,255,0.05)', color: '#64748b', border: '1px solid rgba(255,255,255,0.07)' }}>
+            style={{ background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))', border: '1px solid var(--ds-border-sm)' }}>
             Close
           </button>
           <button onClick={generate} disabled={busy}
             className="px-4 py-2 rounded-xl text-sm font-semibold transition-all"
             style={{
-              background: busy ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
-              color: busy ? '#334155' : '#fff',
+              background: busy ? 'var(--ds-glass-sm)' : 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
+              color: busy ? 'rgb(var(--ds-text-4) / 0.75)' : '#fff',
               border: 'none', cursor: busy ? 'not-allowed' : 'pointer',
               boxShadow: busy ? 'none' : '0 0 16px rgba(139,92,246,0.3)',
             }}>

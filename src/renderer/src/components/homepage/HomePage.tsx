@@ -8,10 +8,12 @@ import {
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { loadBookmarks, removeBookmark } from '../../services/bookmarkService'
-import BookmarkSphere from './BookmarkSphere'
 import SearchBar from './SearchBar'
 import AddBookmarkModal from './AddBookmarkModal'
 import { useTheme } from '../../hooks/useTheme'
+
+// Code-split: the sphere pulls in d3 (~100KB+) — load it only when opened
+const BookmarkSphere = React.lazy(() => import('./BookmarkSphere'))
 
 interface Recommendation { url: string; title: string; reason: string; category: string; score: number; favicon: string }
 interface Props { onNavigate: (url: string) => void }
@@ -36,7 +38,12 @@ export default function HomePage({ onNavigate }: Props) {
   const [bmToast,         setBmToast]         = useState<{ msg: string; ok: boolean } | null>(null)
 
   useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000)
+    // Clock shows HH:MM — returning the same reference when the minute hasn't
+    // changed skips ~59 of every 60 full-homepage re-renders.
+    const t = setInterval(() => setTime(prev => {
+      const now = new Date()
+      return prev.getMinutes() === now.getMinutes() && prev.getHours() === now.getHours() ? prev : now
+    }), 1000)
     return () => clearInterval(t)
   }, [])
 
@@ -111,30 +118,32 @@ export default function HomePage({ onNavigate }: Props) {
   if (view === 'sphere') {
     return (
       <div className="absolute inset-0 z-50">
-        <BookmarkSphere bookmarks={bookmarks} onNavigate={onNavigate} onRemove={handleRemove} onClose={() => setView('grid')} />
+        <React.Suspense fallback={<div className="w-full h-full" style={{ background: 'rgb(var(--ds-bg))' }} />}>
+          <BookmarkSphere bookmarks={bookmarks} onNavigate={onNavigate} onRemove={handleRemove} onClose={() => setView('grid')} />
+        </React.Suspense>
       </div>
     )
   }
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden"
-      style={{ background: isLight ? 'linear-gradient(160deg,#f0f0f8 0%,#ededf8 100%)' : 'linear-gradient(160deg,#17182B 0%,#1E2140 100%)' }}>
+      style={{ background: 'linear-gradient(160deg, rgb(var(--ds-bg)) 0%, rgb(var(--ds-bg-3)) 100%)' }}>
 
       {/* ── Aurora background orbs ── */}
       {!isLight && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
           {/* Purple main orb */}
           <div className="aurora-orb-1 absolute rounded-full"
-            style={{ width: 700, height: 450, top: '-100px', left: '5%', background: 'radial-gradient(ellipse, rgba(107,78,255,0.18) 0%, rgba(107,78,255,0.05) 50%, transparent 70%)', filter: 'blur(50px)' }} />
+            style={{ width: 700, height: 450, top: '-100px', left: '5%', background: 'radial-gradient(ellipse, rgb(var(--ds-accent) / 0.18) 0%, rgb(var(--ds-accent) / 0.05) 50%, transparent 70%)', filter: 'blur(50px)' }} />
           {/* Soft violet orb */}
           <div className="aurora-orb-2 absolute rounded-full"
-            style={{ width: 500, height: 380, top: '25%', right: '0%', background: 'radial-gradient(ellipse, rgba(159,132,255,0.10) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+            style={{ width: 500, height: 380, top: '25%', right: '0%', background: 'radial-gradient(ellipse, rgb(var(--ds-accent-soft) / 0.10) 0%, transparent 70%)', filter: 'blur(60px)' }} />
           {/* Indigo accent at bottom */}
           <div className="aurora-orb-3 absolute rounded-full"
-            style={{ width: 450, height: 320, bottom: '5%', left: '20%', background: 'radial-gradient(ellipse, rgba(107,78,255,0.08) 0%, rgba(194,175,255,0.04) 50%, transparent 70%)', filter: 'blur(70px)' }} />
+            style={{ width: 450, height: 320, bottom: '5%', left: '20%', background: 'radial-gradient(ellipse, rgb(var(--ds-accent) / 0.08) 0%, rgba(194,175,255,0.04) 50%, transparent 70%)', filter: 'blur(70px)' }} />
           {/* Subtle dot grid */}
           <div className="absolute inset-0" style={{
-            backgroundImage: 'radial-gradient(rgba(107,78,255,0.06) 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(rgb(var(--ds-accent) / 0.06) 1px, transparent 1px)',
             backgroundSize: '32px 32px',
           }} />
         </div>
@@ -147,7 +156,7 @@ export default function HomePage({ onNavigate }: Props) {
           <motion.div className="text-center mb-1"
             initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <div className={`font-extralight tracking-tight tabular-nums ${isLight ? 'text-slate-800' : 'text-white'}`}
-              style={{ fontSize: 72, lineHeight: 1, textShadow: isLight ? 'none' : '0 0 40px rgba(107,78,255,0.30), 0 0 80px rgba(107,78,255,0.12)' }}>
+              style={{ fontSize: 72, lineHeight: 1, textShadow: isLight ? 'none' : '0 0 40px rgb(var(--ds-accent) / 0.30), 0 0 80px rgb(var(--ds-accent) / 0.12)' }}>
               {timeStr}
             </div>
             <div className={`text-xs mt-2 font-medium tracking-wide ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>

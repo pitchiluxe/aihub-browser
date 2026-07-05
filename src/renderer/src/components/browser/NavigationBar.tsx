@@ -97,16 +97,15 @@ export default function NavigationBar({
     }
   }
 
+  // Ctrl+L now arrives via the main process (works even when a page inside
+  // the BrowserView has focus) as this custom event — see App.tsx.
   useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
-        e.preventDefault()
-        inputRef.current?.focus()
-        inputRef.current?.select()
-      }
+    const h = () => {
+      inputRef.current?.focus()
+      setTimeout(() => inputRef.current?.select(), 10)
     }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
+    document.addEventListener('aihub-focus-url', h)
+    return () => document.removeEventListener('aihub-focus-url', h)
   }, [])
 
   return (
@@ -180,15 +179,15 @@ export default function NavigationBar({
           <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
             {isSpecialPage ? (
               <span style={{
-                fontSize: 9, color: 'rgb(159,132,255)',
-                textShadow: '0 0 8px rgba(107,78,255,0.6)',
+                fontSize: 9, color: 'rgb(var(--ds-accent-soft))',
+                textShadow: '0 0 8px rgb(var(--ds-accent) / 0.6)',
               }}>◆</span>
             ) : activeTab?.url && activeTab.url !== 'home' ? (
               isSecure
                 ? <Lock size={10} style={{ color: 'rgba(52,211,153,0.80)' }} />
                 : <AlertTriangle size={10} style={{ color: 'rgba(251,191,36,0.80)' }} />
             ) : (
-              <Globe size={11} style={{ color: 'rgba(96,102,130,0.7)' }} />
+              <Globe size={11} style={{ color: 'rgb(var(--ds-text-4) / 0.7)' }} />
             )}
           </span>
 
@@ -210,10 +209,10 @@ export default function NavigationBar({
               fontSize: 12.5, fontWeight: 450,
               textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               color: isEditing
-                ? 'rgb(248,248,248)'
+                ? 'rgb(var(--ds-text-1))'
                 : displayUrl
-                  ? 'rgb(184,184,199)'
-                  : 'rgb(96,102,130)',
+                  ? 'rgb(var(--ds-text-3))'
+                  : 'rgb(var(--ds-text-4))',
               letterSpacing: isEditing ? '0' : '0.01em',
               userSelect: 'text',
             }}
@@ -222,7 +221,7 @@ export default function NavigationBar({
           {/* Search icon visible when editing */}
           {isEditing && (
             <span style={{ flexShrink: 0 }}>
-              <Search size={10} style={{ color: 'rgba(107,78,255,0.6)' }} />
+              <Search size={10} style={{ color: 'rgb(var(--ds-accent) / 0.6)' }} />
             </span>
           )}
         </div>
@@ -267,13 +266,13 @@ function AIButton({ onClick, active }: { onClick: () => void; active?: boolean }
       style={{
         height: 32, padding: '0 12px', cursor: 'pointer',
         background: lit
-          ? 'linear-gradient(135deg, rgb(107,78,255), rgb(126,92,255))'
-          : 'linear-gradient(135deg, rgba(107,78,255,0.22), rgba(126,92,255,0.16))',
-        border: `1px solid ${lit ? 'rgba(159,132,255,0.50)' : 'rgba(107,78,255,0.32)'}`,
-        color: lit ? '#fff' : 'rgb(159,132,255)',
+          ? 'linear-gradient(135deg, rgb(var(--ds-accent)), rgb(var(--ds-accent-2)))'
+          : 'linear-gradient(135deg, rgb(var(--ds-accent) / 0.22), rgba(126,92,255,0.16))',
+        border: `1px solid ${lit ? 'rgb(var(--ds-accent-soft) / 0.50)' : 'rgb(var(--ds-accent) / 0.32)'}`,
+        color: lit ? '#fff' : 'rgb(var(--ds-accent-soft))',
         boxShadow: lit
-          ? '0 4px 20px rgba(107,78,255,0.45), 0 0 0 1px rgba(159,132,255,0.2)'
-          : '0 2px 10px rgba(107,78,255,0.20)',
+          ? '0 4px 20px rgb(var(--ds-accent) / 0.45), 0 0 0 1px rgb(var(--ds-accent-soft) / 0.2)'
+          : '0 2px 10px rgb(var(--ds-accent) / 0.20)',
         transition: 'all 0.18s cubic-bezier(0.34,1.2,0.64,1)',
         transform: hovered ? 'translateY(-1px) scale(1.02)' : 'translateY(0) scale(1)',
       }}
@@ -295,21 +294,19 @@ function NavBtn({ onClick, disabled, title, children, active = false }: {
       title={title}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="ds-navbtn"
+      className={`ds-navbtn${active ? ' active' : ''}`}
       style={{
         opacity: disabled ? 0.2 : 1,
-        color: active
-          ? 'rgb(159,132,255)'
-          : hovered && !disabled
-            ? 'rgb(159,132,255)'
-            : 'rgb(96,102,130)',
+        color: active || (hovered && !disabled)
+          ? 'rgb(var(--ds-accent-soft))'
+          : 'rgb(var(--ds-text-4))',
         background: active
-          ? 'rgba(107,78,255,0.16)'
+          ? 'rgb(var(--ds-accent) / 0.16)'
           : hovered && !disabled
-            ? 'rgba(107,78,255,0.10)'
+            ? 'rgb(var(--ds-accent) / 0.10)'
             : 'transparent',
-        border: `1px solid ${active ? 'rgba(107,78,255,0.28)' : 'transparent'}`,
-        boxShadow: active ? '0 0 14px rgba(107,78,255,0.22)' : 'none',
+        border: `1px solid ${active ? 'rgb(var(--ds-accent) / 0.28)' : 'transparent'}`,
+        boxShadow: active ? '0 0 14px rgb(var(--ds-accent) / 0.22)' : 'none',
       }}
     >
       {children}
@@ -321,7 +318,7 @@ function Divider() {
   return (
     <div style={{
       width: 1, height: 18, flexShrink: 0, margin: '0 2px',
-      background: 'linear-gradient(180deg, transparent, rgba(107,78,255,0.25), transparent)',
+      background: 'linear-gradient(180deg, transparent, rgb(var(--ds-accent) / 0.25), transparent)',
     }} />
   )
 }

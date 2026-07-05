@@ -70,7 +70,7 @@ export default function ResearchPage({ onNavigate }: Props) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden page-enter"
-      style={{ background: 'linear-gradient(160deg,#060a16 0%,#070b18 100%)' }}>
+      style={{ background: 'var(--ds-page-bg)' }}>
 
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 shrink-0"
@@ -87,7 +87,7 @@ export default function ResearchPage({ onNavigate }: Props) {
         </div>
 
         {/* Mode selector */}
-        <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)' }}>
           {(['summary', 'compare', 'bibliography'] as const).map(m => (
             <button key={m} onClick={() => setMode(m)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize"
@@ -96,7 +96,7 @@ export default function ResearchPage({ onNavigate }: Props) {
               } : {
                 color: '#4a6080', border: '1px solid transparent',
               }}
-              onMouseEnter={e => { if (mode !== m) (e.currentTarget as HTMLElement).style.color = '#94a3b8' }}
+              onMouseEnter={e => { if (mode !== m) (e.currentTarget as HTMLElement).style.color = 'rgb(var(--ds-text-3))' }}
               onMouseLeave={e => { if (mode !== m) (e.currentTarget as HTMLElement).style.color = '#4a6080' }}
             >
               {m}
@@ -131,7 +131,7 @@ export default function ResearchPage({ onNavigate }: Props) {
                 <div className="text-[10px] text-slate-700 uppercase tracking-wider mb-2">Added URLs</div>
                 <div className="space-y-1.5">
                   {extraUrls.map(u => (
-                    <div key={u} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div key={u} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)' }}>
                       <img src={`https://www.google.com/s2/favicons?domain=${u}&sz=16`} className="w-3.5 h-3.5 rounded shrink-0"
                         onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
                       <span className="flex-1 text-xs text-slate-500 truncate">{u.replace(/^https?:\/\//, '').slice(0, 30)}</span>
@@ -152,7 +152,7 @@ export default function ResearchPage({ onNavigate }: Props) {
                 onKeyDown={e => { if (e.key === 'Enter') addUrl() }}
                 placeholder="Add URL…"
                 className="flex-1 px-2.5 py-1.5 rounded-lg text-xs text-slate-300 placeholder:text-slate-700 outline-none"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', userSelect: 'text' }}
+                style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', userSelect: 'text' }}
               />
               <button onClick={addUrl}
                 className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
@@ -195,7 +195,7 @@ export default function ResearchPage({ onNavigate }: Props) {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Report toolbar */}
           <div className="flex items-center justify-between px-5 py-3 shrink-0"
-            style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            style={{ borderBottom: '1px solid var(--ds-glass-sm)' }}>
             <div className="flex items-center gap-2">
               <FileText size={13} className="text-slate-600" />
               <span className="text-xs text-slate-600 font-medium">Research Report</span>
@@ -204,7 +204,7 @@ export default function ResearchPage({ onNavigate }: Props) {
               <div className="flex items-center gap-2">
                 <button onClick={runResearch} disabled={loading}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                  style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+                  style={{ border: '1px solid var(--ds-border-sm)' }}>
                   <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
                   Regenerate
                 </button>
@@ -254,7 +254,7 @@ export default function ResearchPage({ onNavigate }: Props) {
                 <motion.div
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
                   className="prose prose-sm max-w-none"
-                  style={{ '--tw-prose-body': '#94a3b8', '--tw-prose-headings': '#e2e8f0', '--tw-prose-code': '#38bdf8' } as any}>
+                  style={{ '--tw-prose-body': 'rgb(var(--ds-text-3))', '--tw-prose-headings': 'rgb(var(--ds-text-2))', '--tw-prose-code': '#38bdf8' } as any}>
                   <ReportRenderer content={report} onNavigate={onNavigate} />
                 </motion.div>
               )}
@@ -269,9 +269,9 @@ export default function ResearchPage({ onNavigate }: Props) {
 function SourceRow({ url, title, onNavigate }: { url: string; title: string; onNavigate?: (u: string) => void }) {
   return (
     <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg group transition-all"
-      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+      style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(56,189,248,0.18)' }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)' }}>
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-glass-sm)' }}>
       <img src={`https://www.google.com/s2/favicons?domain=${url}&sz=16`} className="w-3.5 h-3.5 rounded shrink-0"
         onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
       <span className="flex-1 text-xs text-slate-500 truncate">{title.slice(0, 28)}</span>
@@ -290,14 +290,14 @@ function ReportRenderer({ content, onNavigate }: { content: string; onNavigate?:
   return (
     <div style={{ fontFamily: 'inherit' }}>
       {lines.map((line, i) => {
-        if (line.startsWith('# '))       return <h1 key={i} style={{ fontSize: 20, fontWeight: 700, color: '#e2e8f0', marginBottom: 12, marginTop: i > 0 ? 24 : 0 }}>{line.slice(2)}</h1>
-        if (line.startsWith('## '))      return <h2 key={i} style={{ fontSize: 15, fontWeight: 600, color: '#cbd5e1', marginBottom: 8, marginTop: 20 }}>{line.slice(3)}</h2>
-        if (line.startsWith('### '))     return <h3 key={i} style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 6, marginTop: 16 }}>{line.slice(4)}</h3>
-        if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} style={{ fontSize: 13, color: '#64748b', marginBottom: 4, marginLeft: 16 }}>{renderInline(line.slice(2))}</li>
-        if (line.startsWith('**') && line.endsWith('**')) return <p key={i} style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>{line.slice(2, -2)}</p>
-        if (line.startsWith('---'))      return <hr key={i} style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.07)', margin: '16px 0' }} />
+        if (line.startsWith('# '))       return <h1 key={i} style={{ fontSize: 20, fontWeight: 700, color: 'rgb(var(--ds-text-2))', marginBottom: 12, marginTop: i > 0 ? 24 : 0 }}>{line.slice(2)}</h1>
+        if (line.startsWith('## '))      return <h2 key={i} style={{ fontSize: 15, fontWeight: 600, color: 'rgb(var(--ds-text-2))', marginBottom: 8, marginTop: 20 }}>{line.slice(3)}</h2>
+        if (line.startsWith('### '))     return <h3 key={i} style={{ fontSize: 13, fontWeight: 600, color: 'rgb(var(--ds-text-3))', marginBottom: 6, marginTop: 16 }}>{line.slice(4)}</h3>
+        if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} style={{ fontSize: 13, color: 'rgb(var(--ds-text-4))', marginBottom: 4, marginLeft: 16 }}>{renderInline(line.slice(2))}</li>
+        if (line.startsWith('**') && line.endsWith('**')) return <p key={i} style={{ fontSize: 13, fontWeight: 600, color: 'rgb(var(--ds-text-3))', marginBottom: 6 }}>{line.slice(2, -2)}</p>
+        if (line.startsWith('---'))      return <hr key={i} style={{ border: 'none', borderTop: '1px solid var(--ds-border-sm)', margin: '16px 0' }} />
         if (line.trim() === '')          return <div key={i} style={{ height: 6 }} />
-        return <p key={i} style={{ fontSize: 13, color: '#64748b', lineHeight: 1.7, marginBottom: 6 }}>{renderInline(line)}</p>
+        return <p key={i} style={{ fontSize: 13, color: 'rgb(var(--ds-text-4))', lineHeight: 1.7, marginBottom: 6 }}>{renderInline(line)}</p>
       })}
     </div>
   )
@@ -307,7 +307,7 @@ function renderInline(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
   return parts.map((p, i) => {
     if (p.startsWith('**') && p.endsWith('**')) {
-      return <strong key={i} style={{ color: '#94a3b8', fontWeight: 600 }}>{p.slice(2, -2)}</strong>
+      return <strong key={i} style={{ color: 'rgb(var(--ds-text-3))', fontWeight: 600 }}>{p.slice(2, -2)}</strong>
     }
     return p
   })

@@ -58,7 +58,7 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
           <div style={{
             width: 30, height: 30, borderRadius: 10, flexShrink: 0,
             background: 'linear-gradient(135deg, #6B4EFF, #9F84FF)',
-            boxShadow: '0 0 16px rgba(107,78,255,0.50), inset 0 1px 0 rgba(255,255,255,0.20)',
+            boxShadow: '0 0 16px rgb(var(--ds-accent) / 0.50), inset 0 1px 0 rgba(255,255,255,0.20)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             <Sparkles size={13} color="#fff" />
@@ -79,13 +79,13 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
       </div>
 
       {/* Divider with purple gradient */}
-      <div style={{ height: 1, margin: '0 12px 8px', background: 'linear-gradient(90deg, transparent, rgba(107,78,255,0.25), transparent)' }} />
+      <div style={{ height: 1, margin: '0 12px 8px', background: 'linear-gradient(90deg, transparent, rgb(var(--ds-accent) / 0.25), transparent)' }} />
 
       {/* ── Navigation ── */}
       <nav style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
         {NAV_ITEMS.map(({ icon: Icon, label, page, type, accent }) => {
           const active = isActive(type)
-          const activeColor = accent || 'rgb(159,132,255)'
+          const activeColor = accent || 'rgb(var(--ds-accent-soft))'
           return (
             <button
               key={type}
@@ -93,9 +93,9 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
               className="ds-sidebar-item"
               style={active ? {
                 color: activeColor,
-                background: accent ? `${accent}18` : 'rgba(107,78,255,0.14)',
-                borderColor: accent ? `${accent}30` : 'rgba(107,78,255,0.28)',
-                boxShadow: `0 0 20px ${accent || 'rgba(107,78,255,0.1)'}20`,
+                background: accent ? `${accent}18` : 'rgb(var(--ds-accent) / 0.14)',
+                borderColor: accent ? `${accent}30` : 'rgb(var(--ds-accent) / 0.28)',
+                boxShadow: `0 0 20px ${accent || 'rgb(var(--ds-accent) / 0.1)'}20`,
               } : undefined}
             >
               <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
@@ -115,7 +115,7 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
       </nav>
 
       {/* Divider */}
-      <div style={{ height: 1, margin: '8px 12px', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)' }} />
+      <div style={{ height: 1, margin: '8px 12px', background: 'linear-gradient(90deg, transparent, var(--ds-border-sm), transparent)' }} />
 
       {/* ── Bookmarks section ── */}
       <div style={{ padding: '0 10px 6px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -128,21 +128,21 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
         <button
           onClick={() => setAddBookmarkOpen(true)}
           style={{
-            width: 20, height: 20, borderRadius: 7, border: '1px solid rgba(107,78,255,0.20)',
+            width: 20, height: 20, borderRadius: 7, border: '1px solid rgb(var(--ds-accent) / 0.20)',
             background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: 'rgb(96,102,130)', transition: 'all 0.14s',
           }}
           onMouseEnter={e => {
             const el = e.currentTarget as HTMLElement
-            el.style.background = 'rgba(107,78,255,0.14)'
-            el.style.borderColor = 'rgba(107,78,255,0.35)'
-            el.style.color = 'rgb(159,132,255)'
-            el.style.boxShadow = '0 0 10px rgba(107,78,255,0.20)'
+            el.style.background = 'rgb(var(--ds-accent) / 0.14)'
+            el.style.borderColor = 'rgb(var(--ds-accent) / 0.35)'
+            el.style.color = 'rgb(var(--ds-accent-soft))'
+            el.style.boxShadow = '0 0 10px rgb(var(--ds-accent) / 0.20)'
           }}
           onMouseLeave={e => {
             const el = e.currentTarget as HTMLElement
             el.style.background = 'transparent'
-            el.style.borderColor = 'rgba(107,78,255,0.20)'
+            el.style.borderColor = 'rgb(var(--ds-accent) / 0.20)'
             el.style.color = 'rgb(96,102,130)'
             el.style.boxShadow = 'none'
           }}
@@ -172,8 +172,8 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
             }}
             onMouseEnter={e => {
               const el = e.currentTarget as HTMLElement
-              el.style.background = 'rgba(107,78,255,0.07)'
-              el.style.borderColor = 'rgba(107,78,255,0.14)'
+              el.style.background = 'rgb(var(--ds-accent) / 0.07)'
+              el.style.borderColor = 'rgb(var(--ds-accent) / 0.14)'
               el.style.color = 'rgb(184,184,199)'
             }}
             onMouseLeave={e => {
@@ -186,9 +186,9 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
             {/* Favicon with color-tinted bg */}
             <div style={{
               width: 18, height: 18, borderRadius: 6, flexShrink: 0,
-              background: `${bm.color || 'rgb(107,78,255)'}1a`,
+              background: `${bm.color || 'rgb(var(--ds-accent))'}1a`,
               display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-              border: `1px solid ${bm.color || 'rgba(107,78,255,0.2)'}30`,
+              border: `1px solid ${bm.color || 'rgb(var(--ds-accent) / 0.2)'}30`,
             }}>
               <img
                 src={`https://www.google.com/s2/favicons?domain=${bm.url}&sz=16`}
@@ -206,7 +206,7 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
       {/* ── Footer ── */}
       <div style={{
         padding: '8px 14px',
-        borderTop: '1px solid rgba(107,78,255,0.10)',
+        borderTop: '1px solid rgb(var(--ds-accent) / 0.10)',
         flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
@@ -215,7 +215,7 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
         </span>
         <span style={{
           fontSize: 9,
-          background: 'linear-gradient(90deg, rgb(107,78,255), rgb(159,132,255))',
+          background: 'linear-gradient(90deg, rgb(var(--ds-accent)), rgb(var(--ds-accent-soft)))',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
         }}>
           AI OS

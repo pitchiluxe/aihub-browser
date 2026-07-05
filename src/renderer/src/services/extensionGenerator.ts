@@ -30,6 +30,8 @@ STRICT CONTRACT for each extension:
 Respond with ONLY a JSON array (no prose, no markdown fences) of 5 to 10 objects shaped:
 [{"name":"...","tagline":"one line, under 80 chars","icon":"one emoji","category":"Media|Privacy|Productivity|Accessibility|Developer|Reading","howTo":"1-2 sentences telling the user exactly how to use it: what appears on the page and what to click","injectCode":"...","removeCode":"..."}]
 
+icon rules: pick ONE bold, solid, saturated emoji that stays clearly visible on a dark UI (good: 🔥 🛡️ 📌 🎯 ⚡ 🧲 🔍 📖 🎨 🔒). Avoid pale, thin-line, or mostly-white emojis (bad: 🤍 💭 🕊️ ◻️ 🌫️) — they wash out on dark backgrounds.
+
 Names must NOT duplicate any of these existing extensions: ${existingNames.join(', ') || '(none)'}
 JSON string rules: injectCode/removeCode are single-line JSON strings — use \\n escapes for newlines and escape double quotes.`
 }

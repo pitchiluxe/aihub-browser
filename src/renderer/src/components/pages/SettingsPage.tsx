@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react'
-import { Palette, Bot, Shield, Info, CheckCircle2, Loader2, RefreshCw, Download, Wifi, Brain, Globe } from 'lucide-react'
+import { Palette, Bot, Shield, Info, CheckCircle2, Loader2, RefreshCw, Download, Wifi, Brain, Globe, Sparkles, Trash2 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
+import {
+  THEMES, loadCustomThemes, deleteCustomTheme, generateThemes, CustomTheme,
+} from '../../services/themeService'
+import {
+  WINDOW_STYLES, loadCustomWindowStyles, deleteCustomWindowStyle, generateWindowStyles,
+  CustomWindowStyle, WindowStyle,
+} from '../../services/windowStyleService'
+
+const PAGE_SIZE = 40
 
 const S = 'px-8 py-6 border-b border-aihub-border/20'
 const LBL = 'text-sm font-semibold text-aihub-text mb-0.5'
@@ -8,9 +17,24 @@ const DESC = 'text-xs text-aihub-muted mb-3'
 const ROW = 'flex items-center justify-between py-3 border-b border-aihub-border/15 last:border-0'
 
 const TRANSPARENCY = [
-  { value: 'none',   label: 'Solid',   desc: 'Standard window' },
+  { value: 'none',    label: 'Solid',  desc: 'Standard window' },
   { value: 'acrylic', label: 'Aero',   desc: 'Frosted glass blur (Win 10/11)' },
-  { value: 'mica',   label: 'Mica',    desc: 'Tinted material (Win 11 only)' },
+  { value: 'mica',    label: 'Mica',   desc: 'Tinted material (Win 11 only)' },
+  { value: 'tabbed',  label: 'Tabbed', desc: 'Layered Mica variant (Win 11)' },
+  { value: 'auto',    label: 'Auto',   desc: 'Let Windows pick the material' },
+]
+
+const OPACITY_LEVELS = [
+  { value: 1,    label: '100%', desc: 'Fully opaque' },
+  { value: 0.95, label: '95%',  desc: 'Slight fade' },
+  { value: 0.9,  label: '90%',  desc: 'Soft see-through' },
+  { value: 0.85, label: '85%',  desc: 'Ghost window' },
+]
+
+const GLASS_LEVELS = [
+  { value: 'subtle', label: 'Subtle', desc: 'Barely see-through' },
+  { value: 'medium', label: 'Medium', desc: 'Balanced glass' },
+  { value: 'strong', label: 'Strong', desc: 'Maximum transparency' },
 ]
 
 const SEARCH_ENGINES = [
@@ -39,6 +63,14 @@ export default function SettingsPage() {
   const [aiOllamaUrl, setAiOllamaUrl] = useState('')
   const [savingAI, setSavingAI] = useState(false)
   const [aiSaved, setAiSaved] = useState(false)
+  // Custom themes
+  const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => loadCustomThemes())
+  const [genBusy, setGenBusy] = useState(false)
+  const [themePage, setThemePage] = useState(0)
+  // Custom window styles
+  const [customWindowStyles, setCustomWindowStyles] = useState<CustomWindowStyle[]>(() => loadCustomWindowStyles())
+  const [winGenBusy, setWinGenBusy] = useState(false)
+  const [winStylePage, setWinStylePage] = useState(0)
 
   useEffect(() => {
     window.electronAPI.settings.get().then(setSettings)
@@ -74,8 +106,7 @@ export default function SettingsPage() {
   }
 
   const update = async (key: string, value: any) => {
-    const updated = { ...settings, [key]: value }
-    setSettings(updated)
+    setSettings((prev: any) => ({ ...prev, [key]: value }))
     await window.electronAPI.settings.set({ [key]: value })
   }
 
@@ -84,9 +115,67 @@ export default function SettingsPage() {
     await window.electronAPI.window.setTransparency(mode)
   }
 
+  const applyGlassIntensity = async (level: string) => {
+    await update('glassIntensity', level)
+    document.body.dataset.glass = level
+  }
+
+  const applyOpacity = async (value: number) => {
+    await update('windowOpacity', value)
+    await window.electronAPI.window.setOpacity?.(value)
+  }
+
+  // Apply a bundled window-style preset — all three chrome settings at once.
+  const applyWindowStyle = async (s: WindowStyle) => {
+    await applyTransparency(s.transparency)
+    await applyGlassIntensity(s.glassIntensity)
+    await applyOpacity(s.opacity)
+  }
+
+  const handleGenerateWindowStyles = async () => {
+    setWinGenBusy(true)
+    try {
+      await generateWindowStyles(6)
+      setCustomWindowStyles(loadCustomWindowStyles())
+    } finally {
+      setWinGenBusy(false)
+    }
+  }
+
+  const handleDeleteWindowStyle = (id: string) => {
+    setCustomWindowStyles(deleteCustomWindowStyle(id))
+  }
+
+  // Which built-in preset (if any) matches the current settings — used to
+  // highlight the active card since presets aren't stored by id.
+  const activeWindowStyleId = (): string | undefined => {
+    const all: WindowStyle[] = [...WINDOW_STYLES, ...customWindowStyles]
+    const match = all.find(s =>
+      s.transparency === (settings?.transparency || 'none') &&
+      s.glassIntensity === (settings?.glassIntensity || 'medium') &&
+      s.opacity === (settings?.windowOpacity ?? 1))
+    return match?.id
+  }
+
   const applyTheme = async (theme: string) => {
     await update('theme', theme)
     document.dispatchEvent(new CustomEvent('aihub-theme-change', { detail: theme }))
+  }
+
+  const handleGenerateThemes = async () => {
+    setGenBusy(true)
+    try {
+      const count = 5 + Math.floor(Math.random() * 6) // 5–10
+      await generateThemes(count)
+      setCustomThemes(loadCustomThemes())
+    } finally {
+      setGenBusy(false)
+    }
+  }
+
+  const handleDeleteTheme = async (id: string) => {
+    setCustomThemes(deleteCustomTheme(id))
+    if (settings.theme === id) applyTheme('dark') // active theme removed — fall back
   }
 
   const clearCache = async () => {
@@ -134,43 +223,159 @@ export default function SettingsPage() {
       {/* Appearance */}
       <Section icon={<Palette size={15} />} title="Appearance">
         <div className="mb-5">
-          <div className={LBL}>Color Theme</div>
-          <div className={DESC}>Choose between dark and light interface</div>
-          <div className="flex gap-2">
-            {[
-              { value: 'dark',  label: 'Dark',  icon: '🌙', desc: 'Deep navy, easy on eyes' },
-              { value: 'light', label: 'Light', icon: '☀️', desc: 'Clean white, high contrast' },
-            ].map(opt => {
-              const active = (settings.theme || 'dark') === opt.value
-              const isLight = settings.theme === 'light'
+          <div className="flex items-center justify-between mb-0.5">
+            <div className={LBL} style={{ marginBottom: 0 }}>Color Theme</div>
+            <button
+              onClick={handleGenerateThemes}
+              disabled={genBusy}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+              style={{
+                background: 'rgb(var(--ds-accent) / 0.12)', color: 'rgb(var(--ds-accent-soft))',
+                border: '1px solid rgb(var(--ds-accent) / 0.25)',
+                cursor: genBusy ? 'wait' : 'pointer', opacity: genBusy ? 0.7 : 1,
+              }}
+            >
+              {genBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {genBusy ? 'Designing…' : 'Generate with AI'}
+            </button>
+          </div>
+          <div className={DESC}>
+            {THEMES.length + customThemes.length} themes — AI generates 5–10 new non-duplicate palettes per click (works offline too)
+          </div>
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))' }}>
+            {[...THEMES, ...customThemes].slice(themePage * PAGE_SIZE, themePage * PAGE_SIZE + PAGE_SIZE).map(t => {
+              const active = (settings.theme || 'dark') === t.id
+              const isCustom = 'custom' in t
               return (
-                <button key={opt.value} onClick={() => applyTheme(opt.value)}
+                <div key={t.id} style={{ position: 'relative' }}>
+                  {isCustom && (
+                    <button
+                      onClick={e => { e.stopPropagation(); handleDeleteTheme(t.id) }}
+                      title="Delete theme"
+                      style={{
+                        position: 'absolute', top: 6, right: 6, zIndex: 2,
+                        width: 22, height: 22, borderRadius: 7, border: 'none', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'transparent', color: 'rgb(var(--ds-text-4) / 0.6)',
+                        transition: 'all 0.12s',
+                      }}
+                      onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = '#f87171'; el.style.background = 'rgba(239,68,68,0.12)' }}
+                      onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.color = 'rgb(var(--ds-text-4) / 0.6)'; el.style.background = 'transparent' }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                <button onClick={() => applyTheme(t.id)}
                   style={{
-                    flex: 1, padding: '10px 12px', borderRadius: 12, textAlign: 'left',
-                    border: active
-                      ? `1.5px solid ${isLight ? '#2563eb' : '#3b82f6'}`
-                      : `1px solid ${isLight ? 'rgba(15,23,42,0.12)' : 'rgba(255,255,255,0.1)'}`,
-                    background: active
-                      ? isLight
-                        ? 'linear-gradient(135deg, rgba(37,99,235,0.1), rgba(124,58,237,0.07))'
-                        : 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.1))'
-                      : isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.03)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
+                    width: '100%', padding: '10px 12px', borderRadius: 12, textAlign: 'left',
+                    border: active ? `1.5px solid ${t.swatch[1]}` : '1px solid var(--ds-border-sm)',
+                    background: 'var(--ds-glass-xs)',
+                    boxShadow: active ? `0 0 14px ${t.swatch[1]}40` : 'none',
+                    cursor: 'pointer', transition: 'all 0.15s',
                   }}
+                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-sm)' }}
+                  onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-xs)' }}
                 >
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6,
-                    color: active ? (isLight ? '#2563eb' : '#60a5fa') : (isLight ? '#374151' : '#e2e8f0') }}>
-                    <span>{opt.icon}</span>{opt.label}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    {/* Swatch: theme background disc with accent core */}
+                    <span style={{
+                      width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                      background: t.swatch[0],
+                      border: `1.5px solid ${t.swatch[1]}`,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: t.swatch[1], display: 'inline-block' }} />
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: active ? t.swatch[1] : 'rgb(var(--ds-text-2))' }}>{t.name}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: active ? (isLight ? '#3b82f6' : '#93c5fd') : (isLight ? '#94a3b8' : '#475569') }}>{opt.desc}</div>
+                  <div style={{ fontSize: 10.5, color: 'rgb(var(--ds-text-4))' }}>{t.desc}</div>
                 </button>
+                </div>
               )
             })}
           </div>
+          <Pager total={THEMES.length + customThemes.length} page={themePage} setPage={setThemePage} />
         </div>
+
+        {/* ── Window Style presets ── */}
         <div className="mb-4">
-          <div className={LBL}>Window Style</div>
+          <div className="flex items-center justify-between mb-0.5">
+            <div className={LBL} style={{ marginBottom: 0 }}>Window Style</div>
+            <button
+              onClick={handleGenerateWindowStyles}
+              disabled={winGenBusy}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+              style={{
+                background: 'rgb(var(--ds-accent) / 0.12)', color: 'rgb(var(--ds-accent-soft))',
+                border: '1px solid rgb(var(--ds-accent) / 0.25)',
+                cursor: winGenBusy ? 'wait' : 'pointer', opacity: winGenBusy ? 0.7 : 1,
+              }}
+            >
+              {winGenBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {winGenBusy ? 'Designing…' : 'Generate with AI'}
+            </button>
+          </div>
+          <div className={DESC}>
+            {WINDOW_STYLES.length + customWindowStyles.length} presets — bundles material, glass level & opacity. Material change needs a restart to fully apply.
+          </div>
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))' }}>
+            {[...WINDOW_STYLES, ...customWindowStyles]
+              .slice(winStylePage * PAGE_SIZE, winStylePage * PAGE_SIZE + PAGE_SIZE)
+              .map(s => {
+                const active = activeWindowStyleId() === s.id
+                const isCustom = 'custom' in s
+                return (
+                  <div key={s.id} style={{ position: 'relative' }}>
+                    {isCustom && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDeleteWindowStyle(s.id) }}
+                        title="Delete style"
+                        style={{
+                          position: 'absolute', top: 6, right: 6, zIndex: 2,
+                          width: 22, height: 22, borderRadius: 7, border: 'none', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'transparent', color: 'rgb(var(--ds-text-4) / 0.6)', transition: 'all 0.12s',
+                        }}
+                        onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = '#f87171'; el.style.background = 'rgba(239,68,68,0.12)' }}
+                        onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.color = 'rgb(var(--ds-text-4) / 0.6)'; el.style.background = 'transparent' }}
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    )}
+                    <button onClick={() => applyWindowStyle(s)}
+                      style={{
+                        width: '100%', padding: '10px 12px', borderRadius: 12, textAlign: 'left',
+                        border: active ? '1.5px solid rgb(var(--ds-accent))' : '1px solid var(--ds-border-sm)',
+                        background: 'var(--ds-glass-xs)',
+                        boxShadow: active ? '0 0 14px rgb(var(--ds-accent) / 0.25)' : 'none',
+                        cursor: 'pointer', transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-sm)' }}
+                      onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-xs)' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{
+                          width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                          border: '1.5px solid rgb(var(--ds-accent) / 0.5)',
+                          background: s.transparency === 'none'
+                            ? 'rgb(var(--ds-bg-3))'
+                            : `rgb(var(--ds-accent) / ${0.10 + (1 - s.opacity) * 2})`,
+                          backdropFilter: 'blur(2px)',
+                        }} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: active ? 'rgb(var(--ds-accent-soft))' : 'rgb(var(--ds-text-2))' }}>{s.name}</span>
+                      </div>
+                      <div style={{ fontSize: 10.5, color: 'rgb(var(--ds-text-4))' }}>{s.desc}</div>
+                    </button>
+                  </div>
+                )
+              })}
+          </div>
+          <Pager total={WINDOW_STYLES.length + customWindowStyles.length} page={winStylePage} setPage={setWinStylePage} />
+        </div>
+
+        {/* ── Legacy per-setting material picker (kept for fine control) ── */}
+        <div className="mb-4">
+          <div className={LBL}>Material (advanced)</div>
           <div className={DESC}>Glass transparency effect — requires restart to fully apply</div>
           <div className="flex gap-2">
             {TRANSPARENCY.map(opt => {
@@ -179,23 +384,73 @@ export default function SettingsPage() {
                 <button key={opt.value} onClick={() => applyTransparency(opt.value)}
                   style={{
                     flex: 1, padding: '10px 12px', borderRadius: 12, textAlign: 'left',
-                    border: active ? '1.5px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                    border: active ? '1.5px solid #3b82f6' : '1px solid var(--ds-border)',
                     background: active
                       ? 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.1))'
-                      : 'rgba(255,255,255,0.03)',
+                      : 'var(--ds-glass-xs)',
                     cursor: 'pointer',
                     boxShadow: active ? '0 0 16px rgba(59,130,246,0.18)' : 'none',
                     transition: 'all 0.15s',
                   }}
                   onMouseEnter={e => {
-                    if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'
+                    if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-sm)'
                   }}
                   onMouseLeave={e => {
-                    if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'
+                    if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-xs)'
                   }}
                 >
-                  <div style={{ fontSize: 13, fontWeight: 600, color: active ? '#60a5fa' : '#e2e8f0', marginBottom: 2 }}>{opt.label}</div>
-                  <div style={{ fontSize: 11, color: active ? '#93c5fd' : '#475569' }}>{opt.desc}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: active ? '#60a5fa' : 'rgb(var(--ds-text-2))', marginBottom: 2 }}>{opt.label}</div>
+                  <div style={{ fontSize: 11, color: active ? '#93c5fd' : 'rgb(var(--ds-text-4))' }}>{opt.desc}</div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        {settings.transparency && settings.transparency !== 'none' && (
+          <div className="mb-4">
+            <div className={LBL}>Glass Intensity</div>
+            <div className={DESC}>How see-through the window is when a glass style is active</div>
+            <div className="flex gap-2">
+              {GLASS_LEVELS.map(opt => {
+                const active = (settings.glassIntensity || 'medium') === opt.value
+                return (
+                  <button key={opt.value} onClick={() => applyGlassIntensity(opt.value)}
+                    style={{
+                      flex: 1, padding: '10px 12px', borderRadius: 12, textAlign: 'left',
+                      border: active ? '1.5px solid #3b82f6' : '1px solid var(--ds-border)',
+                      background: active
+                        ? 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.1))'
+                        : 'var(--ds-glass-xs)',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600, color: active ? '#60a5fa' : 'rgb(var(--ds-text-2))', marginBottom: 2 }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: active ? '#93c5fd' : 'rgb(var(--ds-text-4))' }}>{opt.desc}</div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        <div className="mb-4">
+          <div className={LBL}>Window Opacity</div>
+          <div className={DESC}>Fades the entire window, tab content included — applies instantly</div>
+          <div className="flex gap-2">
+            {OPACITY_LEVELS.map(opt => {
+              const active = (settings.windowOpacity ?? 1) === opt.value
+              return (
+                <button key={opt.value} onClick={() => applyOpacity(opt.value)}
+                  style={{
+                    flex: 1, padding: '10px 12px', borderRadius: 12, textAlign: 'left',
+                    border: active ? '1.5px solid #3b82f6' : '1px solid var(--ds-border)',
+                    background: active
+                      ? 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.1))'
+                      : 'var(--ds-glass-xs)',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600, color: active ? '#60a5fa' : 'rgb(var(--ds-text-2))', marginBottom: 2 }}>{opt.label}</div>
+                  <div style={{ fontSize: 11, color: active ? '#93c5fd' : 'rgb(var(--ds-text-4))' }}>{opt.desc}</div>
                 </button>
               )
             })}
@@ -411,6 +666,33 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
         {icon}<h2 className="text-xs font-bold uppercase tracking-wider">{title}</h2>
       </div>
       {children}
+    </div>
+  )
+}
+
+// Pager — keeps big theme / window-style grids from growing the page vertically.
+// Hidden entirely when everything fits on one page.
+function Pager({ total, page, setPage }: { total: number; page: number; setPage: (p: number) => void }) {
+  const pages = Math.ceil(total / PAGE_SIZE)
+  if (pages <= 1) return null
+  const clamp = (p: number) => Math.max(0, Math.min(pages - 1, p))
+  const btn = (label: string, target: number, disabled: boolean) => (
+    <button
+      onClick={() => setPage(clamp(target))}
+      disabled={disabled}
+      style={{
+        padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+        border: '1px solid var(--ds-border-sm)', background: 'var(--ds-glass-xs)',
+        color: disabled ? 'rgb(var(--ds-text-4) / 0.4)' : 'rgb(var(--ds-text-3))',
+        cursor: disabled ? 'default' : 'pointer', transition: 'all 0.12s',
+      }}
+    >{label}</button>
+  )
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 }}>
+      {btn('‹ Prev', page - 1, page === 0)}
+      <span style={{ fontSize: 11, color: 'rgb(var(--ds-text-4))' }}>Page {page + 1} of {pages}</span>
+      {btn('Next ›', page + 1, page >= pages - 1)}
     </div>
   )
 }

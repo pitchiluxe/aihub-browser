@@ -18,6 +18,8 @@ interface BrowserState {
   activeTabId: string | null
   addTab: (url?: string, pageType?: Tab['pageType']) => string
   closeTab: (id: string) => void
+  closeOtherTabs: (id: string) => void
+  closeTabsToRight: (id: string) => void
   setActiveTab: (id: string) => void
   updateTab: (id: string, u: Partial<Tab>) => void
   reorderTabs: (fromId: string, toId: string) => void
@@ -56,6 +58,7 @@ interface BrowserState {
   extensionStates: Record<string, { enabled: boolean; settings: Record<string, any> }>
   setExtensionEnabled: (id: string, enabled: boolean) => void
   setExtensionSettings: (id: string, settings: Record<string, any>) => void
+  hydrateExtensionStates: (states: Record<string, { enabled: boolean; settings: Record<string, any> }>) => void
 
   // WebContentsId per browser tab (for extension injection)
   tabWcIds: Record<string, number>
@@ -70,6 +73,8 @@ function loadExtStates(): Record<string, { enabled: boolean; settings: Record<st
 }
 function saveExtStates(s: Record<string, { enabled: boolean; settings: Record<string, any> }>) {
   try { localStorage.setItem('aihub-extensions', JSON.stringify(s)) } catch {}
+  // Mirror to disk (main process) — survives storage clears and reinstalls.
+  try { (window as any).electronAPI?.extStore?.save?.({ states: s }) } catch {}
 }
 
 export const useBrowserStore = create<BrowserState>((set, get) => ({
@@ -113,6 +118,26 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     const newTabs = tabs.filter(t => t.id !== id)
     const newActive = activeTabId === id ? newTabs[Math.max(0, idx - 1)].id : activeTabId
     set({ tabs: newTabs, activeTabId: newActive, tabWcIds: newWcIds })
+  },
+
+  closeOtherTabs: (id) => {
+    const { tabs, tabWcIds } = get()
+    const keep = tabs.find(t => t.id === id)
+    if (!keep || tabs.length === 1) return
+    const newWcIds: Record<string, number> = {}
+    if (tabWcIds[id] != null) newWcIds[id] = tabWcIds[id]
+    set({ tabs: [keep], activeTabId: id, tabWcIds: newWcIds, canGoBack: false, canGoForward: false })
+  },
+
+  closeTabsToRight: (id) => {
+    const { tabs, activeTabId, tabWcIds } = get()
+    const idx = tabs.findIndex(t => t.id === id)
+    if (idx === -1 || idx === tabs.length - 1) return
+    const kept = tabs.slice(0, idx + 1)
+    const newWcIds = { ...tabWcIds }
+    for (const t of tabs.slice(idx + 1)) delete newWcIds[t.id]
+    const newActive = kept.some(t => t.id === activeTabId) ? activeTabId : id
+    set({ tabs: kept, activeTabId: newActive, tabWcIds: newWcIds, canGoBack: false, canGoForward: false })
   },
 
   setActiveTab: (id) => {
@@ -176,6 +201,10 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   }),
 
   extensionStates: loadExtStates(),
+  hydrateExtensionStates: (states) => {
+    try { localStorage.setItem('aihub-extensions', JSON.stringify(states)) } catch {}
+    set({ extensionStates: states })
+  },
   setExtensionEnabled: (id, enabled) => set(s => {
     const updated = { ...s.extensionStates, [id]: { ...s.extensionStates[id], enabled, settings: s.extensionStates[id]?.settings || {} } }
     saveExtStates(updated)

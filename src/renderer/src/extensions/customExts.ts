@@ -21,4 +21,6 @@ export function loadCustomExts(): CustomExt[] {
 
 export function saveCustomExts(exts: CustomExt[]) {
   try { localStorage.setItem('aihub-custom-exts', JSON.stringify(exts)) } catch {}
+  // Mirror to disk (main process) — survives storage clears and reinstalls.
+  try { (window as any).electronAPI?.extStore?.save?.({ customExts: exts }) } catch {}
 }

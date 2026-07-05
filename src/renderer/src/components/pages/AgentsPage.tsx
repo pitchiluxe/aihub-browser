@@ -147,7 +147,7 @@ export default function AgentsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden page-enter"
-      style={{ background: 'linear-gradient(160deg,#060a16 0%,#070b18 100%)' }}>
+      style={{ background: 'var(--ds-page-bg)' }}>
 
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 shrink-0"
@@ -205,7 +205,7 @@ export default function AgentsPage() {
             <div className="flex flex-col h-full">
               {/* Agent header */}
               <div className="flex items-center justify-between px-5 py-3 shrink-0"
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                style={{ borderBottom: '1px solid var(--ds-glass-sm)' }}>
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
                     style={{ background: `${selected.color}18`, border: `1px solid ${selected.color}28`, color: selected.color }}>
@@ -224,9 +224,9 @@ export default function AgentsPage() {
                         <React.Fragment key={i}>
                           <div className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px]"
                             style={{
-                              background: step.done ? `${selected.color}18` : 'rgba(255,255,255,0.03)',
+                              background: step.done ? `${selected.color}18` : 'var(--ds-glass-xs)',
                               color: step.done ? selected.color : '#2d4060',
-                              border: `1px solid ${step.done ? `${selected.color}25` : 'rgba(255,255,255,0.05)'}`,
+                              border: `1px solid ${step.done ? `${selected.color}25` : 'var(--ds-glass-sm)'}`,
                             }}>
                             {step.done ? <CheckCircle size={9} /> : <div className="w-2 h-2 rounded-full bg-current opacity-30" />}
                             <span className="hidden lg:inline">{step.text.split(' ').slice(0, 2).join(' ')}</span>
@@ -238,7 +238,7 @@ export default function AgentsPage() {
                   )}
                   <button onClick={() => { setSelected(null); setRun(null); setChatHistory([]) }}
                     className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 hover:text-slate-300 transition-colors"
-                    style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                    style={{ border: '1px solid var(--ds-border-sm)' }}>
                     <X size={13} />
                   </button>
                 </div>
@@ -262,8 +262,8 @@ export default function AgentsPage() {
                           background: 'linear-gradient(135deg,rgba(139,92,246,0.7),rgba(99,102,241,0.65))',
                           color: '#fff', borderTopRightRadius: 4,
                         } : {
-                          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
-                          color: '#94a3b8', borderTopLeftRadius: 4,
+                          background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
+                          color: 'rgb(var(--ds-text-3))', borderTopLeftRadius: 4,
                         }}
                       >
                         {msg.content}
@@ -278,7 +278,7 @@ export default function AgentsPage() {
                       <Bot size={12} />
                     </div>
                     <div className="px-3 py-2 rounded-xl flex gap-1 items-center"
-                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                      style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)' }}>
                       {[0, 1, 2].map(n => (
                         <span key={n} style={{
                           width: 5, height: 5, borderRadius: '50%', background: selected.color, display: 'inline-block',
@@ -291,7 +291,7 @@ export default function AgentsPage() {
               </div>
 
               {/* Chat input */}
-              <div className="px-5 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <div className="px-5 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid var(--ds-glass-sm)' }}>
                 <div className="flex gap-2">
                   <input
                     value={chatInput}
@@ -300,15 +300,15 @@ export default function AgentsPage() {
                     placeholder="Reply to the agent…"
                     disabled={loading}
                     className="flex-1 px-3 py-2 rounded-xl text-xs text-slate-300 placeholder:text-slate-700 outline-none transition-all"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', userSelect: 'text' }}
+                    style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', userSelect: 'text' }}
                     onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = `${selected.color}45` }}
-                    onBlur={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)' }}
+                    onBlur={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-glass-md)' }}
                   />
                   <button onClick={sendMessage} disabled={!chatInput.trim() || loading}
                     className="w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0"
                     style={{
-                      background: chatInput.trim() && !loading ? `${selected.color}22` : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${chatInput.trim() && !loading ? `${selected.color}35` : 'rgba(255,255,255,0.07)'}`,
+                      background: chatInput.trim() && !loading ? `${selected.color}22` : 'var(--ds-glass-sm)',
+                      border: `1px solid ${chatInput.trim() && !loading ? `${selected.color}35` : 'var(--ds-glass-md)'}`,
                       color: chatInput.trim() && !loading ? selected.color : '#2d4060',
                       cursor: chatInput.trim() && !loading ? 'pointer' : 'not-allowed',
                     }}>
@@ -337,7 +337,7 @@ export default function AgentsPage() {
               transition={{ type: 'spring', damping: 30, stiffness: 360 }}
               className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
               <div className="w-[400px] rounded-2xl p-5 pointer-events-auto"
-                style={{ background: 'linear-gradient(160deg,#0c1628,#080f20)', border: '1px solid rgba(167,139,250,0.25)', boxShadow: '0 24px 80px rgba(0,0,0,0.9)' }}>
+                style={{ background: 'var(--ds-page-bg)', border: '1px solid rgba(167,139,250,0.25)', boxShadow: '0 24px 80px rgba(0,0,0,0.9)' }}>
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-sm font-bold text-slate-200">Custom Agent</div>
                   <button onClick={() => setShowCustom(false)} className="text-slate-600 hover:text-slate-300 transition-colors"><X size={15} /></button>
@@ -348,7 +348,7 @@ export default function AgentsPage() {
                     <input value={customName} onChange={e => setCustomName(e.target.value)}
                       placeholder="e.g., LinkedIn Scraper"
                       className="w-full px-3 py-2 rounded-xl text-sm text-slate-300 placeholder:text-slate-700 outline-none"
-                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', userSelect: 'text' }} />
+                      style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', userSelect: 'text' }} />
                   </div>
                   <div>
                     <label className="text-xs text-slate-600 mb-1.5 block">Task Description</label>
@@ -356,13 +356,13 @@ export default function AgentsPage() {
                       placeholder="Describe what this agent should do…"
                       rows={3}
                       className="w-full px-3 py-2 rounded-xl text-sm text-slate-300 placeholder:text-slate-700 outline-none resize-none"
-                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', userSelect: 'text' }} />
+                      style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', userSelect: 'text' }} />
                   </div>
                   <button onClick={startCustomAgent} disabled={!customName.trim()}
                     className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
                     style={{
-                      background: customName.trim() ? 'linear-gradient(135deg,rgba(167,139,250,0.25),rgba(139,92,246,0.18))' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${customName.trim() ? 'rgba(167,139,250,0.35)' : 'rgba(255,255,255,0.07)'}`,
+                      background: customName.trim() ? 'linear-gradient(135deg,rgba(167,139,250,0.25),rgba(139,92,246,0.18))' : 'var(--ds-glass-sm)',
+                      border: `1px solid ${customName.trim() ? 'rgba(167,139,250,0.35)' : 'var(--ds-glass-md)'}`,
                       color: customName.trim() ? '#a78bfa' : '#2d4060',
                       cursor: customName.trim() ? 'pointer' : 'not-allowed',
                     }}>
@@ -392,11 +392,11 @@ function AgentCard({ agent, index, selected, onStart }: {
         border: `1px solid ${agent.color}28`,
         boxShadow: `0 0 20px ${agent.color}0a`,
       } : {
-        background: 'rgba(255,255,255,0.025)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'var(--ds-glass-xs)',
+        border: '1px solid var(--ds-border-sm)',
       }}
-      onMouseEnter={e => { if (!selected) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; (e.currentTarget as HTMLElement).style.borderColor = `${agent.color}18` } }}
-      onMouseLeave={e => { if (!selected) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.025)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)' } }}
+      onMouseEnter={e => { if (!selected) { (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-sm)'; (e.currentTarget as HTMLElement).style.borderColor = `${agent.color}18` } }}
+      onMouseLeave={e => { if (!selected) { (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-xs)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-glass-sm)' } }}
     >
       <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
         style={{ background: `${agent.color}18`, border: `1px solid ${agent.color}25`, color: agent.color }}>

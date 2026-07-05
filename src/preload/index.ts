@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     close:           () => ipcRenderer.invoke('window:close'),
     isMaximized:     () => ipcRenderer.invoke('window:isMaximized'),
     setTransparency: (m:string) => ipcRenderer.invoke('window:setTransparency', m),
+    setOpacity:      (o:number) => ipcRenderer.invoke('window:setOpacity', o),
   },
   bookmarks: {
     getAll:  () => ipcRenderer.invoke('bookmarks:getAll'),
@@ -34,6 +35,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
   cache:    { clear: () => ipcRenderer.invoke('cache:clear') },
+  extStore: {
+    load: () => ipcRenderer.invoke('extstore:load'),
+    save: (patch: { customExts?: any[]; states?: any }) => ipcRenderer.invoke('extstore:save', patch),
+  },
   settings: {
     get:           () => ipcRenderer.invoke('settings:get'),
     set:           (u:any) => ipcRenderer.invoke('settings:set', u),
@@ -56,7 +61,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   wifi: {
     scan:    () => ipcRenderer.invoke('wifi:scan'),
-    connect: (ssid:string) => ipcRenderer.invoke('wifi:connect', ssid),
+    connect: (ssid:string, open?:boolean) => ipcRenderer.invoke('wifi:connect', ssid, open),
   },
   file: {
     saveMd: (opts: { title: string; content: string }) => ipcRenderer.invoke('file:saveMd', opts),
@@ -81,6 +86,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   webview: {
     capture:     (wcId: number)                 => ipcRenderer.invoke('webview:capture', wcId),
     execScript:  (wcId: number, script: string) => ipcRenderer.invoke('webview:execScript', wcId, script),
+  },
+  tabs: {
+    showContextMenu: (info: { isBrowser: boolean; hasRight: boolean; count: number }): Promise<string> =>
+      ipcRenderer.invoke('tabs:showContextMenu', info),
   },
   tabView: {
     create:          (tabId: string, url: string)                                              => ipcRenderer.invoke('tabview:create', tabId, url),

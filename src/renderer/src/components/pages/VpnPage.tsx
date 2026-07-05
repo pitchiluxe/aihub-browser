@@ -83,8 +83,8 @@ function inp(overrides: Record<string, any>) {
   return {
     className: 'w-full rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 outline-none transition-all',
     style: {
-      background: 'rgba(255,255,255,0.06)',
-      border: '1px solid rgba(255,255,255,0.1)',
+      background: 'var(--ds-glass-sm)',
+      border: '1px solid var(--ds-border)',
       userSelect: 'text' as const,
     },
     ...overrides,
@@ -232,7 +232,7 @@ export default function VpnPage() {
   return (
     <div
       className="h-full overflow-y-auto"
-      style={{ background: 'linear-gradient(160deg,#070810 0%,#060710 100%)', scrollbarWidth: 'thin', scrollbarColor: 'rgba(59,130,246,0.2) transparent' }}
+      style={{ background: 'var(--ds-page-bg)', scrollbarWidth: 'thin', scrollbarColor: 'rgba(59,130,246,0.2) transparent' }}
     >
       <div className="max-w-2xl mx-auto pb-20">
 
@@ -265,25 +265,25 @@ export default function VpnPage() {
             borderRadius: 20, padding: '20px 24px',
             background: connected
               ? 'linear-gradient(135deg,rgba(52,211,153,0.1),rgba(16,185,129,0.05))'
-              : 'rgba(255,255,255,0.03)',
-            border: `1.5px solid ${connected ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.08)'}`,
+              : 'var(--ds-glass-xs)',
+            border: `1.5px solid ${connected ? 'rgba(52,211,153,0.3)' : 'var(--ds-glass-md)'}`,
           }}>
             {/* Status row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div style={{
                   width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
-                  background: connected ? '#34d399' : '#334155',
+                  background: connected ? '#34d399' : 'rgb(var(--ds-text-4) / 0.75)',
                   boxShadow: connected ? '0 0 12px #34d399' : 'none',
                   transition: 'all 0.3s',
                 }} />
                 <div>
-                  <div className="font-semibold" style={{ color: connected ? '#6ee7b7' : '#94a3b8', fontSize: 15 }}>
+                  <div className="font-semibold" style={{ color: connected ? '#6ee7b7' : 'rgb(var(--ds-text-3))', fontSize: 15 }}>
                     {connected && activeProfileObj
                       ? `${activeProfileObj.flag} ${activeProfileObj.name}`
                       : 'Not Connected'}
                   </div>
-                  <div className="text-xs mt-0.5" style={{ color: connected ? 'rgba(110,231,183,0.6)' : '#475569' }}>
+                  <div className="text-xs mt-0.5" style={{ color: connected ? 'rgba(110,231,183,0.6)' : 'rgb(var(--ds-text-4))' }}>
                     {connected && activeProfileObj
                       ? `${activeProfileObj.protocol.toUpperCase()} → ${activeProfileObj.host}:${activeProfileObj.port}`
                       : 'Direct connection — your real IP'}
@@ -310,7 +310,7 @@ export default function VpnPage() {
             </div>
 
             {/* IP row */}
-            <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${connected ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.05)'}` }}>
+            <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${connected ? 'rgba(52,211,153,0.15)' : 'var(--ds-glass-sm)'}` }}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5 text-xs text-slate-500">
                   <Globe size={12} style={{ color: '#60a5fa' }} />
@@ -378,26 +378,26 @@ export default function VpnPage() {
                   disabled={connecting}
                   style={{
                     borderRadius: 16, padding: '16px 12px', textAlign: 'center', cursor: 'pointer',
-                    border: `2px solid ${isActive || isDirectActive ? '#3b82f6' : hasProfile ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.07)'}`,
+                    border: `2px solid ${isActive || isDirectActive ? '#3b82f6' : hasProfile ? 'rgba(59,130,246,0.25)' : 'var(--ds-glass-md)'}`,
                     background: isActive || isDirectActive
                       ? 'linear-gradient(135deg,rgba(59,130,246,0.22),rgba(99,102,241,0.12))'
                       : hasProfile
                         ? 'rgba(59,130,246,0.07)'
-                        : 'rgba(255,255,255,0.03)',
+                        : 'var(--ds-glass-xs)',
                     boxShadow: isActive || isDirectActive ? '0 0 20px rgba(59,130,246,0.25)' : 'none',
                     transition: 'all 0.18s',
                     position: 'relative',
                   }}
                   onMouseEnter={e => { if (!isActive && !isDirectActive) (e.currentTarget as HTMLElement).style.background = 'rgba(59,130,246,0.1)' }}
-                  onMouseLeave={e => { if (!isActive && !isDirectActive) (e.currentTarget as HTMLElement).style.background = hasProfile ? 'rgba(59,130,246,0.07)' : 'rgba(255,255,255,0.03)' }}
+                  onMouseLeave={e => { if (!isActive && !isDirectActive) (e.currentTarget as HTMLElement).style.background = hasProfile ? 'rgba(59,130,246,0.07)' : 'var(--ds-glass-xs)' }}
                 >
                   {(isActive || isDirectActive) && (
                     <div style={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: '50%', background: '#34d399', boxShadow: '0 0 8px #34d399' }} />
                   )}
                   <div style={{ fontSize: 32, marginBottom: 8 }}>{preset.flag}</div>
-                  <div className="text-xs font-bold" style={{ color: isActive || isDirectActive ? '#93c5fd' : '#cbd5e1', lineHeight: 1.3 }}>{preset.country}</div>
+                  <div className="text-xs font-bold" style={{ color: isActive || isDirectActive ? '#93c5fd' : 'rgb(var(--ds-text-2))', lineHeight: 1.3 }}>{preset.country}</div>
                   <div className="text-[10px] mt-1.5 font-medium" style={{
-                    color: isActive || isDirectActive ? '#60a5fa' : hasProfile ? 'rgba(59,130,246,0.7)' : '#334155',
+                    color: isActive || isDirectActive ? '#60a5fa' : hasProfile ? 'rgba(59,130,246,0.7)' : 'rgb(var(--ds-text-4) / 0.75)',
                   }}>
                     {isActive || isDirectActive ? '● Active'
                       : isDirect ? 'No proxy'
@@ -417,11 +417,11 @@ export default function VpnPage() {
               }}
               style={{
                 borderRadius: 16, padding: '16px 12px', textAlign: 'center', cursor: 'pointer',
-                border: '2px dashed rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)',
+                border: '2px dashed var(--ds-glass-md)', background: 'rgba(255,255,255,0.02)',
                 transition: 'all 0.18s',
               }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.15)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-sm)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-border)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-glass-md)' }}
             >
               <div style={{ fontSize: 28, marginBottom: 8 }}>➕</div>
               <div className="text-xs font-bold text-slate-500">Custom</div>
@@ -443,7 +443,7 @@ export default function VpnPage() {
                     <div className="text-xs text-slate-500 mt-1">{selectedPreset.hint}</div>
                   )}
                 </div>
-                <button onClick={cancelForm} style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                <button onClick={cancelForm} style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgb(var(--ds-text-4))' }}>
                   <X size={13} />
                 </button>
               </div>
@@ -481,7 +481,7 @@ export default function VpnPage() {
                     <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Password <span className="text-slate-700 font-normal">(optional)</span></label>
                     <div className="relative">
                       <input {...inp({ type: showPassword ? 'text' : 'password', placeholder: 'Password', value: form.password || '', onChange: (e: any) => setForm(f => ({ ...f, password: e.target.value })), style: { userSelect: 'text', paddingRight: 40 } })} />
-                      <button onClick={() => setShowPassword(v => !v)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#475569' }}>
+                      <button onClick={() => setShowPassword(v => !v)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgb(var(--ds-text-4))' }}>
                         {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
                     </div>
@@ -505,12 +505,12 @@ export default function VpnPage() {
                     border: '1.5px solid rgba(99,102,241,0.6)',
                     color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    boxShadow: '0 4px 24px rgba(59,130,246,0.45), 0 1px 0 rgba(255,255,255,0.1) inset',
+                    boxShadow: '0 4px 24px rgba(59,130,246,0.45), 0 1px 0 var(--ds-glass-lg) inset',
                     transition: 'all 0.15s',
                     marginTop: 4,
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 32px rgba(59,130,246,0.6), 0 1px 0 rgba(255,255,255,0.1) inset'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(59,130,246,0.45), 0 1px 0 rgba(255,255,255,0.1) inset'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 32px rgba(59,130,246,0.6), 0 1px 0 var(--ds-glass-lg) inset'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(59,130,246,0.45), 0 1px 0 var(--ds-glass-lg) inset'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)' }}
                 >
                   <Shield size={17} />
                   {editingId ? 'Save & Connect' : `Connect to ${selectedPreset ? selectedPreset.country : 'Proxy'}`}
@@ -520,11 +520,11 @@ export default function VpnPage() {
                   onClick={cancelForm}
                   style={{
                     width: '100%', padding: '10px', borderRadius: 12, cursor: 'pointer',
-                    fontSize: 13, background: 'transparent', border: '1px solid rgba(255,255,255,0.07)', color: '#475569',
+                    fontSize: 13, background: 'transparent', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-4))',
                     transition: 'all 0.12s',
                   }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#94a3b8'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#475569'}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'rgb(var(--ds-text-3))'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgb(var(--ds-text-4))'}
                 >
                   Cancel
                 </button>
@@ -545,8 +545,8 @@ export default function VpnPage() {
                     key={p.id}
                     style={{
                       borderRadius: 16, padding: '14px 16px',
-                      background: isActive ? 'rgba(52,211,153,0.07)' : 'rgba(255,255,255,0.03)',
-                      border: `1.5px solid ${isActive ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.07)'}`,
+                      background: isActive ? 'rgba(52,211,153,0.07)' : 'var(--ds-glass-xs)',
+                      border: `1.5px solid ${isActive ? 'rgba(52,211,153,0.3)' : 'var(--ds-glass-md)'}`,
                       transition: 'all 0.15s',
                     }}
                   >
@@ -602,9 +602,9 @@ export default function VpnPage() {
                           </button>
                         )}
 
-                        <button onClick={() => editProfile(p)} style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s' }}
-                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#94a3b8'}
-                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#475569'}>
+                        <button onClick={() => editProfile(p)} style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-4))', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s' }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'rgb(var(--ds-text-3))'}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgb(var(--ds-text-4))'}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         </button>
                         <button onClick={() => removeProfile(p.id)} style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.15)', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s' }}
@@ -629,11 +629,11 @@ export default function VpnPage() {
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
             <div className="text-sm font-bold text-slate-400">How to get proxy details from your VPN</div>
-            {showInstructions ? <ChevronDown size={14} style={{ color: '#475569' }} /> : <ChevronRight size={14} style={{ color: '#475569' }} />}
+            {showInstructions ? <ChevronDown size={14} style={{ color: 'rgb(var(--ds-text-4))' }} /> : <ChevronRight size={14} style={{ color: 'rgb(var(--ds-text-4))' }} />}
           </button>
 
           {showInstructions && (
-            <div style={{ borderRadius: 16, padding: '20px 24px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ borderRadius: 16, padding: '20px 24px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--ds-border-sm)' }}>
               <div className="space-y-4">
                 {[
                   { vpn: 'NordVPN', steps: 'Settings → Advanced → Enable "Custom DNS" or find SOCKS5 under Manual Setup. Server: XX.nordvpn.com Port: 1080. Username/password = NordVPN credentials.' },
@@ -649,7 +649,7 @@ export default function VpnPage() {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 pt-4 flex items-start gap-2" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <div className="mt-4 pt-4 flex items-start gap-2" style={{ borderTop: '1px solid var(--ds-glass-sm)' }}>
                 <AlertTriangle size={12} style={{ color: '#fbbf24', flexShrink: 0, marginTop: 2 }} />
                 <p className="text-xs text-amber-300/60 leading-relaxed">
                   All traffic from AIHub Browser will route through the proxy when connected. Your VPN app must be running for the proxy to work.

@@ -1,24 +1,28 @@
-import React, { useRef, useEffect, useLayoutEffect, useCallback } from 'react'
+import React, { Suspense, lazy, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import { useBrowserStore, type Tab } from './store/browserStore'
 import TabBar from './components/browser/TabBar'
 import NavigationBar from './components/browser/NavigationBar'
 import Sidebar from './components/browser/Sidebar'
 import HomePage from './components/homepage/HomePage'
-import SettingsPage from './components/pages/SettingsPage'
-import HistoryPage from './components/pages/HistoryPage'
-import DownloadsPage from './components/pages/DownloadsPage'
-import WifiPage from './components/pages/WifiPage'
-import VpnPage from './components/pages/VpnPage'
-import ResearchPage from './components/pages/ResearchPage'
-import AgentsPage from './components/pages/AgentsPage'
-import ExtensionsPage from './components/pages/ExtensionsPage'
 import { EXTENSION_DEFS } from './extensions/extensionDefs'
+
+// Special pages are code-split — none are needed at startup, so keeping them
+// out of the entry chunk makes first paint faster.
+const SettingsPage   = lazy(() => import('./components/pages/SettingsPage'))
+const HistoryPage    = lazy(() => import('./components/pages/HistoryPage'))
+const DownloadsPage  = lazy(() => import('./components/pages/DownloadsPage'))
+const WifiPage       = lazy(() => import('./components/pages/WifiPage'))
+const VpnPage        = lazy(() => import('./components/pages/VpnPage'))
+const ResearchPage   = lazy(() => import('./components/pages/ResearchPage'))
+const AgentsPage     = lazy(() => import('./components/pages/AgentsPage'))
+const ExtensionsPage = lazy(() => import('./components/pages/ExtensionsPage'))
 import AddBookmarkModal from './components/homepage/AddBookmarkModal'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import AIAssistant from './components/ai/AIAssistant'
 import { loadBookmarks } from './services/bookmarkService'
 import { buildPageExtractionScript } from './services/pageExtractor'
 import { loadCustomExts } from './extensions/customExts'
+import { applyThemeToDom } from './services/themeService'
 
 declare global {
   interface Window {
@@ -117,17 +121,61 @@ export default function App() {
   // ── Bookmarks + theme + IPC ────────────────────────────────────────────────
   useEffect(() => { loadBookmarks().then(setBookmarks) }, [])
 
+  // ── Extension re-hydration — if renderer storage was cleared (cache clear,
+  // profile wipe), restore custom extensions + toggle states from the disk
+  // mirror so installed extensions survive restarts until the user deletes
+  // them. Disk only fills gaps; live localStorage stays authoritative. ──────
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const disk = await window.electronAPI.extStore?.load?.()
+        if (!disk) return
+        const localExts = loadCustomExts()
+        if (Array.isArray(disk.customExts) && disk.customExts.length > 0 && localExts.length === 0) {
+          localStorage.setItem('aihub-custom-exts', JSON.stringify(disk.customExts))
+        } else if (localExts.length > 0 && (!disk.customExts || disk.customExts.length === 0)) {
+          // Backfill: extensions created before the disk mirror existed live
+          // only in localStorage — push them to disk now, not on next save.
+          window.electronAPI.extStore?.save?.({ customExts: localExts })
+        }
+        const localStates = localStorage.getItem('aihub-extensions')
+        if (disk.states && Object.keys(disk.states).length > 0 && !localStates) {
+          useBrowserStore.getState().hydrateExtensionStates(disk.states)
+        }
+        // Custom themes: same restore/backfill dance, then re-apply the saved
+        // theme — it may BE one of these customs, unresolvable until now.
+        const localThemes = JSON.parse(localStorage.getItem('aihub-custom-themes') || '[]')
+        if (Array.isArray(disk.customThemes) && disk.customThemes.length > 0 && localThemes.length === 0) {
+          localStorage.setItem('aihub-custom-themes', JSON.stringify(disk.customThemes))
+          const s = await window.electronAPI.settings.get()
+          applyThemeToDom(s.theme || 'dark')
+        } else if (localThemes.length > 0 && (!disk.customThemes || disk.customThemes.length === 0)) {
+          window.electronAPI.extStore?.save?.({ customThemes: localThemes })
+        }
+        // Custom window styles: same restore/backfill dance as themes.
+        const localWinStyles = JSON.parse(localStorage.getItem('aihub-custom-window-styles') || '[]')
+        if (Array.isArray(disk.customWindowStyles) && disk.customWindowStyles.length > 0 && localWinStyles.length === 0) {
+          localStorage.setItem('aihub-custom-window-styles', JSON.stringify(disk.customWindowStyles))
+        } else if (localWinStyles.length > 0 && (!disk.customWindowStyles || disk.customWindowStyles.length === 0)) {
+          window.electronAPI.extStore?.save?.({ customWindowStyles: localWinStyles })
+        }
+      } catch { /* mirror unavailable — localStorage path still works */ }
+    })()
+  }, [])
+
   useEffect(() => {
     const applyMode = (mode: string) => document.body.classList.toggle('glass-mode', mode !== 'none')
-    window.electronAPI.settings.get().then((s: any) => applyMode(s.transparency || 'none'))
+    window.electronAPI.settings.get().then((s: any) => {
+      applyMode(s.transparency || 'none')
+      document.body.dataset.glass = s.glassIntensity || 'medium'
+    })
     const off = window.electronAPI.theme?.onTransparency?.(applyMode)
     return () => { try { off?.() } catch {} }
   }, [])
 
   useEffect(() => {
-    const applyTheme = (theme: string) => document.body.classList.toggle('light-mode', theme === 'light')
-    window.electronAPI.settings.get().then((s: any) => applyTheme(s.theme || 'dark'))
-    const handler = (e: Event) => applyTheme((e as CustomEvent).detail)
+    window.electronAPI.settings.get().then((s: any) => applyThemeToDom(s.theme || 'dark'))
+    const handler = (e: Event) => applyThemeToDom((e as CustomEvent).detail)
     document.addEventListener('aihub-theme-change', handler)
     return () => document.removeEventListener('aihub-theme-change', handler)
   }, [])
@@ -135,6 +183,43 @@ export default function App() {
   useEffect(() => {
     const off = window.electronAPI?.ipc?.on?.('open-in-new-tab', (_e: any, url: string) => {
       if (url) useBrowserStore.getState().addTab(url, 'browser')
+    })
+    return () => { try { off?.() } catch {} }
+  }, [])
+
+  // ── Browser keyboard shortcuts, forwarded from main (work even while a
+  // BrowserView page has focus): Ctrl+T/W, Ctrl+Tab, Ctrl+L, Ctrl+R ────────
+  useEffect(() => {
+    const off = window.electronAPI?.ipc?.on?.('app-shortcut', (_e: any, action: string) => {
+      const store = useBrowserStore.getState()
+      switch (action) {
+        case 'new-tab':
+          store.addTab()
+          break
+        case 'close-tab':
+          if (store.activeTabId) store.closeTab(store.activeTabId)
+          break
+        case 'next-tab':
+        case 'prev-tab': {
+          const { tabs: t, activeTabId: cur } = store
+          const idx = t.findIndex(tb => tb.id === cur)
+          if (idx === -1 || t.length < 2) break
+          const next = action === 'next-tab' ? (idx + 1) % t.length : (idx - 1 + t.length) % t.length
+          store.setActiveTab(t[next].id)
+          break
+        }
+        case 'focus-url':
+          document.dispatchEvent(new CustomEvent('aihub-focus-url'))
+          break
+        case 'reload-tab': {
+          const id = store.activeTabId
+          const tab = store.tabs.find(tb => tb.id === id)
+          if (id && tab && !tab.isHome && tab.pageType === 'browser') {
+            window.electronAPI.tabView.reload(id)
+          }
+          break
+        }
+      }
     })
     return () => { try { off?.() } catch {} }
   }, [])
@@ -321,10 +406,7 @@ export default function App() {
   }, [])
 
   return (
-    <div
-      className="flex flex-col h-screen w-screen overflow-hidden select-none"
-      style={{ background: 'linear-gradient(180deg, rgb(23,24,43) 0%, rgb(19,20,38) 100%)' }}
-    >
+    <div className="ds-app-root flex flex-col h-screen w-screen overflow-hidden select-none">
       <div className="drag-region">
         <TabBar />
       </div>
@@ -360,14 +442,16 @@ export default function App() {
               tab.pageType && tab.pageType !== 'browser' && (
                 <div key={`page-${tab.id}`} className="absolute inset-0 overflow-auto"
                   style={{ display: tab.id === activeTabId ? 'block' : 'none' }}>
-                  {tab.pageType === 'settings'   && <SettingsPage />}
-                  {tab.pageType === 'history'    && <HistoryPage onNavigate={navigate} />}
-                  {tab.pageType === 'downloads'  && <DownloadsPage />}
-                  {tab.pageType === 'wifi'       && <WifiPage />}
-                  {tab.pageType === 'vpn'        && <VpnPage />}
-                  {tab.pageType === 'research'   && <ResearchPage onNavigate={navigate} />}
-                  {tab.pageType === 'agents'     && <AgentsPage />}
-                  {tab.pageType === 'extensions' && <ExtensionsPage />}
+                  <Suspense fallback={null}>
+                    {tab.pageType === 'settings'   && <SettingsPage />}
+                    {tab.pageType === 'history'    && <HistoryPage onNavigate={navigate} />}
+                    {tab.pageType === 'downloads'  && <DownloadsPage />}
+                    {tab.pageType === 'wifi'       && <WifiPage />}
+                    {tab.pageType === 'vpn'        && <VpnPage />}
+                    {tab.pageType === 'research'   && <ResearchPage onNavigate={navigate} />}
+                    {tab.pageType === 'agents'     && <AgentsPage />}
+                    {tab.pageType === 'extensions' && <ExtensionsPage />}
+                  </Suspense>
                 </div>
               )
             ))}

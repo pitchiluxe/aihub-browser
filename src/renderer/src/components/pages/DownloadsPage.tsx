@@ -69,7 +69,7 @@ export default function DownloadsPage() {
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-sm font-medium text-aihub-text truncate">{dl.filename}</span>
                     {dl.state === 'completed' && <CheckCircle2 size={13} className="text-green-400 shrink-0" />}
-                    {dl.state === 'cancelled' && <XCircle size={13} className="text-red-400 shrink-0" />}
+                    {(dl.state === 'cancelled' || dl.state === 'interrupted') && <XCircle size={13} className="text-red-400 shrink-0" />}
                     {dl.state === 'progressing' && <Loader2 size={13} className="text-aihub-accent animate-spin shrink-0" />}
                   </div>
 
@@ -82,7 +82,7 @@ export default function DownloadsPage() {
                   <div className="flex items-center gap-3 text-xs text-aihub-muted">
                     <span>{formatProgress(dl)}</span>
                     <span>·</span>
-                    <span>{dl.state === 'completed' ? 'Complete' : dl.state === 'cancelled' ? 'Cancelled' : 'Downloading…'}</span>
+                    <span>{dl.state === 'completed' ? 'Complete' : dl.state === 'cancelled' ? 'Cancelled' : dl.state === 'interrupted' ? 'Interrupted' : 'Downloading…'}</span>
                     {dl.completedAt && <><span>·</span><span>{new Date(dl.completedAt).toLocaleDateString()}</span></>}
                   </div>
                 </div>

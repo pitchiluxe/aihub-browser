@@ -39,15 +39,15 @@
   --ds-glass-lg:  rgba(255,255,255,0.12);
 
   /* Purple-tinted glass (for special panels) */
-  --ds-glass-purple-xs: rgba(107,78,255,0.04);
-  --ds-glass-purple-sm: rgba(107,78,255,0.08);
-  --ds-glass-purple-md: rgba(107,78,255,0.13);
+  --ds-glass-purple-xs: rgb(var(--ds-accent) / 0.04);
+  --ds-glass-purple-sm: rgb(var(--ds-accent) / 0.08);
+  --ds-glass-purple-md: rgb(var(--ds-accent) / 0.13);
 
   /* ── Borders ── */
   --ds-border:     rgba(255,255,255,0.10);
   --ds-border-sm:  rgba(255,255,255,0.07);
-  --ds-border-accent: rgba(107,78,255,0.35);
-  --ds-border-accent-sm: rgba(107,78,255,0.18);
+  --ds-border-accent: rgb(var(--ds-accent) / 0.35);
+  --ds-border-accent-sm: rgb(var(--ds-accent) / 0.18);
 
   /* ── Blur ── */
   --ds-blur-sm: 12px;
@@ -66,13 +66,25 @@
   --ds-shadow-sm:  0 2px 12px rgba(0,0,0,0.40);
   --ds-shadow-md:  0 8px 32px rgba(0,0,0,0.50), 0 0 0 1px rgba(255,255,255,0.06);
   --ds-shadow-lg:  0 16px 64px rgba(0,0,0,0.60), 0 0 0 1px rgba(255,255,255,0.08);
-  --ds-shadow-accent: 0 8px 32px rgba(107,78,255,0.30);
-  --ds-shadow-glow:   0 0 48px rgba(107,78,255,0.18), 0 0 80px rgba(107,78,255,0.08);
+  --ds-shadow-accent: 0 8px 32px rgb(var(--ds-accent) / 0.30);
+  --ds-shadow-glow:   0 0 48px rgb(var(--ds-accent) / 0.18), 0 0 80px rgb(var(--ds-accent) / 0.08);
 
   /* ── Transitions ── */
   --ds-ease:    cubic-bezier(0.32, 0, 0.67, 0);
   --ds-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
   --ds-smooth:  cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Page surfaces (special pages: extensions, agents, vpn, research…) ── */
+  --ds-page-bg:     linear-gradient(180deg, rgb(var(--ds-bg) / 0.55) 0%, rgb(var(--ds-bg-2) / 0.45) 100%), #0e0f20;
+  --ds-page-header: linear-gradient(180deg, rgb(var(--ds-bg) / 0.98) 80%, transparent);
+
+  /* ── App / panel surfaces ── */
+  --ds-app-bg:       linear-gradient(180deg, rgb(var(--ds-bg)) 0%, rgb(var(--ds-bg) / 0.92) 100%), #101120;
+  --ds-panel-bg:     linear-gradient(180deg, rgb(var(--ds-bg-2) / 0.65) 0%, rgb(var(--ds-bg) / 0.75) 100%), rgba(8,10,22,0.95);
+  --ds-panel-shadow: 0 8px 48px rgba(0,0,0,0.65), 0 0 80px rgb(var(--ds-accent) / 0.05);
+
+  /* Accent as readable ink (light bases flip this to a dark accent tone) */
+  --ds-accent-ink: rgb(var(--ds-accent-soft));
 
   /* ── Tailwind-compat aliases (used by bg-aihub-* classes) ── */
   --aihub-bg:           23 24 43;
@@ -89,21 +101,80 @@
   --aihub-muted:        184 184 199;
 }
 
-/* ── Light mode overrides ── */
+/* ── Light mode overrides ──────────────────────────────────────────
+   Full variable remap — every --ds-* token components reference must
+   flip, or light mode renders dark-theme text/borders on light
+   surfaces (the old bug: only --aihub-* flipped).
+   Contrast targets: body text ≥ 7:1, muted/secondary ≥ 4.5:1. */
 body.light-mode {
+  /* Backgrounds */
+  --ds-bg:   245 245 250;   /* #F5F5FA */
+  --ds-bg-2: 237 238 248;   /* #EDEEF8 */
+  --ds-bg-3: 228 229 244;   /* #E4E5F4 */
+
+  /* Text — dark ink with a violet undertone to stay on-brand */
+  --ds-text-1:  18 18 36;   /* #121224  ~15:1 on #F5F5FA */
+  --ds-text-2:  43 45 82;   /* #2B2D52  ~10:1 */
+  --ds-text-3:  72 76 112;  /* #484C70  ~6.5:1 */
+  --ds-text-4:  88 90 124;  /* #585A7C  ~5:1 — muted yet readable */
+
+  /* Glass surfaces — ink-tinted, and strong enough to be visible on white */
+  --ds-glass-xs: rgba(18,18,36,0.03);
+  --ds-glass-sm: rgba(18,18,36,0.05);
+  --ds-glass-md: rgba(18,18,36,0.08);
+  --ds-glass-lg: rgba(18,18,36,0.11);
+
+  --ds-glass-purple-xs: rgb(var(--ds-accent) / 0.05);
+  --ds-glass-purple-sm: rgb(var(--ds-accent) / 0.09);
+  --ds-glass-purple-md: rgb(var(--ds-accent) / 0.14);
+
+  /* Borders — must remain visible on light surfaces */
+  --ds-border:    rgba(18,18,36,0.13);
+  --ds-border-sm: rgba(18,18,36,0.09);
+  --ds-border-accent: rgb(var(--ds-accent) / 0.40);
+  --ds-border-accent-sm: rgb(var(--ds-accent) / 0.22);
+
+  /* Elevation — soft violet-grey, never heavy black */
+  --ds-shadow-sm:  0 2px 12px rgba(31,27,73,0.08);
+  --ds-shadow-md:  0 8px 32px rgba(31,27,73,0.12), 0 0 0 1px rgba(31,27,73,0.04);
+  --ds-shadow-lg:  0 16px 64px rgba(31,27,73,0.16), 0 0 0 1px rgba(31,27,73,0.05);
+  --ds-shadow-accent: 0 8px 32px rgb(var(--ds-accent) / 0.22);
+  --ds-shadow-glow:   0 0 48px rgb(var(--ds-accent) / 0.10), 0 0 80px rgb(var(--ds-accent) / 0.04);
+
+  /* Page surfaces */
+  --ds-page-bg:     linear-gradient(180deg, rgb(var(--ds-bg)) 0%, rgb(var(--ds-bg-2)) 100%);
+  --ds-page-header: linear-gradient(180deg, rgb(var(--ds-bg) / 0.98) 80%, transparent);
+
+  /* App / panel surfaces */
+  --ds-app-bg:       linear-gradient(180deg, rgb(var(--ds-bg)) 0%, rgb(var(--ds-bg-2)) 100%);
+  --ds-panel-bg:     linear-gradient(180deg, rgb(var(--aihub-card) / 0.96) 0%, rgb(var(--ds-bg) / 0.97) 100%);
+  --ds-panel-shadow: 0 8px 48px rgba(31,27,73,0.18), 0 0 80px rgb(var(--ds-accent) / 0.05);
+
+  /* Accent ink — dark enough to read on light surfaces */
+  --ds-accent-ink: #4534a8;
+
+  /* Tailwind-compat aliases */
   --aihub-bg:           245 245 250;
   --aihub-surface:      235 236 248;
   --aihub-card:         255 255 255;
   --aihub-accent:       107 78 255;
-  --aihub-text:         15 15 30;
-  --aihub-muted:        100 100 140;
-  --ds-glass-sm:  rgba(0,0,0,0.04);
-  --ds-glass-md:  rgba(0,0,0,0.07);
-  --ds-border:    rgba(0,0,0,0.10);
+  --aihub-text:         18 18 36;
+  --aihub-muted:        88 90 124;
 }
 
 /* ── Reset ── */
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Native widget theming — without this Chromium paints <select> popups,
+   scrollbars, and pickers in LIGHT mode regardless of the app theme. */
+:root { color-scheme: dark; }
+body.light-mode { color-scheme: light; }
+
+/* Dropdown option lists follow the app surface, not the OS default */
+select option {
+  background: rgb(var(--ds-bg-2));
+  color: rgb(var(--ds-text-2));
+}
 
 html, body, #root {
   height: 100%; width: 100%; overflow: hidden;
@@ -115,11 +186,195 @@ html, body, #root {
   user-select: none;
 }
 
-/* ── Glass mode ── */
+/* ── App root surface (themed) ── */
+.ds-app-root { background: var(--ds-app-bg); }
+
+/* ── Glass mode — window transparency, intensity via data-glass ── */
+:root { --ds-glass-window: 0.72; --ds-glass-window-light: 0.78; }
+body[data-glass="subtle"] { --ds-glass-window: 0.86; --ds-glass-window-light: 0.90; }
+body[data-glass="strong"] { --ds-glass-window: 0.55; --ds-glass-window-light: 0.62; }
 body.glass-mode:not(.light-mode),
-body.glass-mode:not(.light-mode) #root { background: rgba(23,24,43,0.72) !important; }
+body.glass-mode:not(.light-mode) #root { background: rgb(var(--ds-bg) / var(--ds-glass-window)) !important; }
 body.glass-mode.light-mode,
-body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important; }
+body.glass-mode.light-mode #root { background: rgb(var(--ds-bg) / var(--ds-glass-window-light)) !important; }
+
+/* ══════════════════════════════════════════════════════════════════
+   THEME VARIANTS — body[data-theme] recolors accents + surface tints.
+   Base inversion (text/borders/glass) comes from .light-mode; these
+   blocks only swap the color identity. 'dark' and 'light' are the
+   defaults defined in :root / body.light-mode above.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Ocean — abyss blue · cyan */
+body[data-theme="ocean"] {
+  --ds-bg: 12 22 38; --ds-bg-2: 16 29 51; --ds-bg-3: 21 37 64;
+  --ds-accent: 56 189 248; --ds-accent-2: 96 165 250; --ds-accent-3: 125 211 252;
+  --ds-accent-soft: 125 211 252; --ds-accent-pale: 186 230 253;
+  --ds-accent-hex: #38BDF8; --ds-accent-2-hex: #60A5FA; --ds-accent-soft-hex: #7DD3FC;
+  --aihub-bg: 12 22 38; --aihub-surface: 16 29 51; --aihub-card: 21 37 64;
+  --aihub-accent: 56 189 248; --aihub-violet: 125 211 252;
+}
+
+/* Forest — pine dark · emerald */
+body[data-theme="forest"] {
+  --ds-bg: 13 27 22; --ds-bg-2: 18 36 29; --ds-bg-3: 23 46 37;
+  --ds-accent: 52 211 153; --ds-accent-2: 16 185 129; --ds-accent-3: 110 231 183;
+  --ds-accent-soft: 110 231 183; --ds-accent-pale: 167 243 208;
+  --ds-accent-hex: #34D399; --ds-accent-2-hex: #10B981; --ds-accent-soft-hex: #6EE7B7;
+  --aihub-bg: 13 27 22; --aihub-surface: 18 36 29; --aihub-card: 23 46 37;
+  --aihub-accent: 52 211 153; --aihub-violet: 110 231 183;
+}
+
+/* Sunset — ember dark · amber */
+body[data-theme="sunset"] {
+  --ds-bg: 28 18 16; --ds-bg-2: 36 23 21; --ds-bg-3: 44 28 26;
+  --ds-accent: 251 146 60; --ds-accent-2: 249 115 22; --ds-accent-3: 253 186 116;
+  --ds-accent-soft: 253 186 116; --ds-accent-pale: 254 215 170;
+  --ds-accent-hex: #FB923C; --ds-accent-2-hex: #F97316; --ds-accent-soft-hex: #FDBA74;
+  --aihub-bg: 28 18 16; --aihub-surface: 36 23 21; --aihub-card: 44 28 26;
+  --aihub-accent: 251 146 60; --aihub-violet: 253 186 116;
+}
+
+/* Crimson — noir · scarlet */
+body[data-theme="crimson"] {
+  --ds-bg: 26 15 20; --ds-bg-2: 34 20 26; --ds-bg-3: 42 25 32;
+  --ds-accent: 244 63 94; --ds-accent-2: 225 29 72; --ds-accent-3: 251 113 133;
+  --ds-accent-soft: 251 113 133; --ds-accent-pale: 253 164 175;
+  --ds-accent-hex: #F43F5E; --ds-accent-2-hex: #E11D48; --ds-accent-soft-hex: #FB7185;
+  --aihub-bg: 26 15 20; --aihub-surface: 34 20 26; --aihub-card: 42 25 32;
+  --aihub-accent: 244 63 94; --aihub-violet: 251 113 133;
+}
+
+/* Cyber — carbon · neon lime */
+body[data-theme="cyber"] {
+  --ds-bg: 10 13 10; --ds-bg-2: 17 22 17; --ds-bg-3: 24 31 24;
+  --ds-accent: 163 230 53; --ds-accent-2: 132 204 22; --ds-accent-3: 190 242 100;
+  --ds-accent-soft: 190 242 100; --ds-accent-pale: 217 249 157;
+  --ds-accent-hex: #A3E635; --ds-accent-2-hex: #84CC16; --ds-accent-soft-hex: #BEF264;
+  --aihub-bg: 10 13 10; --aihub-surface: 17 22 17; --aihub-card: 24 31 24;
+  --aihub-accent: 163 230 53; --aihub-violet: 190 242 100;
+}
+
+/* Royal — indigo · gold */
+body[data-theme="royal"] {
+  --ds-bg: 20 18 42; --ds-bg-2: 26 24 54; --ds-bg-3: 32 30 66;
+  --ds-accent: 251 191 36; --ds-accent-2: 245 158 11; --ds-accent-3: 252 211 77;
+  --ds-accent-soft: 252 211 77; --ds-accent-pale: 253 230 138;
+  --ds-accent-hex: #FBBF24; --ds-accent-2-hex: #F59E0B; --ds-accent-soft-hex: #FCD34D;
+  --aihub-bg: 20 18 42; --aihub-surface: 26 24 54; --aihub-card: 32 30 66;
+  --aihub-accent: 251 191 36; --aihub-violet: 252 211 77;
+}
+
+/* Rose — plum dark · pink */
+body[data-theme="rose"] {
+  --ds-bg: 25 15 24; --ds-bg-2: 34 20 32; --ds-bg-3: 42 26 40;
+  --ds-accent: 244 114 182; --ds-accent-2: 236 72 153; --ds-accent-3: 249 168 212;
+  --ds-accent-soft: 249 168 212; --ds-accent-pale: 251 207 232;
+  --ds-accent-hex: #F472B6; --ds-accent-2-hex: #EC4899; --ds-accent-soft-hex: #F9A8D4;
+  --aihub-bg: 25 15 24; --aihub-surface: 34 20 32; --aihub-card: 42 26 40;
+  --aihub-accent: 244 114 182; --aihub-violet: 249 168 212;
+}
+
+/* Lavender — soft lilac · purple (light base) */
+body[data-theme="lavender"] {
+  --ds-bg: 243 240 252; --ds-bg-2: 235 230 249; --ds-bg-3: 226 219 245;
+  --aihub-bg: 243 240 252; --aihub-surface: 235 230 249; --aihub-card: 255 255 255;
+}
+
+/* Mint — fresh green · teal (light base) */
+body[data-theme="mint"] {
+  --ds-bg: 239 248 244; --ds-bg-2: 228 242 236; --ds-bg-3: 216 235 227;
+  --ds-accent: 5 150 105; --ds-accent-2: 4 120 87; --ds-accent-3: 16 185 129;
+  --ds-accent-soft: 16 185 129; --ds-accent-pale: 110 231 183;
+  --ds-accent-hex: #059669; --ds-accent-2-hex: #047857; --ds-accent-soft-hex: #10B981;
+  --ds-accent-ink: #065F46;
+  --aihub-bg: 239 248 244; --aihub-surface: 228 242 236; --aihub-card: 255 255 255;
+  --aihub-accent: 5 150 105; --aihub-violet: 16 185 129;
+}
+
+/* Sand — warm cream · amber (light base) */
+body[data-theme="sand"] {
+  --ds-bg: 250 246 238; --ds-bg-2: 243 236 221; --ds-bg-3: 235 226 206;
+  --ds-accent: 217 119 6; --ds-accent-2: 180 83 9; --ds-accent-3: 245 158 11;
+  --ds-accent-soft: 245 158 11; --ds-accent-pale: 252 211 77;
+  --ds-accent-hex: #D97706; --ds-accent-2-hex: #B45309; --ds-accent-soft-hex: #F59E0B;
+  --ds-accent-ink: #92400E;
+  --aihub-bg: 250 246 238; --aihub-surface: 243 236 221; --aihub-card: 255 255 255;
+  --aihub-accent: 217 119 6; --aihub-violet: 245 158 11;
+}
+
+/* Graphite — carbon mono · silver */
+body[data-theme="graphite"] {
+  --ds-bg: 16 17 20; --ds-bg-2: 23 24 28; --ds-bg-3: 30 32 37;
+  --ds-accent: 161 161 170; --ds-accent-2: 113 113 122; --ds-accent-3: 212 212 216;
+  --ds-accent-soft: 212 212 216; --ds-accent-pale: 228 228 231;
+  --ds-accent-hex: #A1A1AA; --ds-accent-2-hex: #71717A; --ds-accent-soft-hex: #D4D4D8;
+  --aihub-bg: 16 17 20; --aihub-surface: 23 24 28; --aihub-card: 30 32 37;
+  --aihub-accent: 161 161 170; --aihub-violet: 212 212 216;
+}
+
+/* Nordic — arctic slate · ice blue */
+body[data-theme="nordic"] {
+  --ds-bg: 30 34 43; --ds-bg-2: 37 42 53; --ds-bg-3: 46 52 64;
+  --ds-accent: 136 192 208; --ds-accent-2: 129 161 193; --ds-accent-3: 143 188 187;
+  --ds-accent-soft: 143 188 187; --ds-accent-pale: 216 222 233;
+  --ds-accent-hex: #88C0D0; --ds-accent-2-hex: #81A1C1; --ds-accent-soft-hex: #8FBCBB;
+  --aihub-bg: 30 34 43; --aihub-surface: 37 42 53; --aihub-card: 46 52 64;
+  --aihub-accent: 136 192 208; --aihub-violet: 143 188 187;
+}
+
+/* Espresso — roasted brown · caramel */
+body[data-theme="espresso"] {
+  --ds-bg: 24 18 14; --ds-bg-2: 32 24 19; --ds-bg-3: 40 30 24;
+  --ds-accent: 212 161 95; --ds-accent-2: 180 130 70; --ds-accent-3: 229 190 135;
+  --ds-accent-soft: 229 190 135; --ds-accent-pale: 241 216 176;
+  --ds-accent-hex: #D4A15F; --ds-accent-2-hex: #B48246; --ds-accent-soft-hex: #E5BE87;
+  --aihub-bg: 24 18 14; --aihub-surface: 32 24 19; --aihub-card: 40 30 24;
+  --aihub-accent: 212 161 95; --aihub-violet: 229 190 135;
+}
+
+/* Aurora — polar night · teal + violet dual accent */
+body[data-theme="aurora"] {
+  --ds-bg: 12 20 24; --ds-bg-2: 16 27 33; --ds-bg-3: 21 35 42;
+  --ds-accent: 45 212 191; --ds-accent-2: 167 139 250; --ds-accent-3: 94 234 212;
+  --ds-accent-soft: 94 234 212; --ds-accent-pale: 153 246 228;
+  --ds-accent-hex: #2DD4BF; --ds-accent-2-hex: #A78BFA; --ds-accent-soft-hex: #5EEAD4;
+  --aihub-bg: 12 20 24; --aihub-surface: 16 27 33; --aihub-card: 21 35 42;
+  --aihub-accent: 45 212 191; --aihub-violet: 167 139 250;
+}
+
+/* Sky — airy blue · azure (light base) */
+body[data-theme="sky"] {
+  --ds-bg: 238 245 252; --ds-bg-2: 226 238 249; --ds-bg-3: 213 230 245;
+  --ds-accent: 2 132 199; --ds-accent-2: 3 105 161; --ds-accent-3: 14 165 233;
+  --ds-accent-soft: 14 165 233; --ds-accent-pale: 125 211 252;
+  --ds-accent-hex: #0284C7; --ds-accent-2-hex: #0369A1; --ds-accent-soft-hex: #0EA5E9;
+  --ds-accent-ink: #075985;
+  --aihub-bg: 238 245 252; --aihub-surface: 226 238 249; --aihub-card: 255 255 255;
+  --aihub-accent: 2 132 199; --aihub-violet: 14 165 233;
+}
+
+/* Blossom — petal pink · rose (light base) */
+body[data-theme="blossom"] {
+  --ds-bg: 252 241 246; --ds-bg-2: 249 231 240; --ds-bg-3: 245 219 232;
+  --ds-accent: 219 39 119; --ds-accent-2: 190 24 93; --ds-accent-3: 236 72 153;
+  --ds-accent-soft: 236 72 153; --ds-accent-pale: 249 168 212;
+  --ds-accent-hex: #DB2777; --ds-accent-2-hex: #BE185D; --ds-accent-soft-hex: #EC4899;
+  --ds-accent-ink: #9D174D;
+  --aihub-bg: 252 241 246; --aihub-surface: 249 231 240; --aihub-card: 255 255 255;
+  --aihub-accent: 219 39 119; --aihub-violet: 236 72 153;
+}
+
+/* Paper — neutral white · slate ink (light base) */
+body[data-theme="paper"] {
+  --ds-bg: 248 248 247; --ds-bg-2: 240 240 238; --ds-bg-3: 231 231 228;
+  --ds-accent: 71 85 105; --ds-accent-2: 51 65 85; --ds-accent-3: 100 116 139;
+  --ds-accent-soft: 100 116 139; --ds-accent-pale: 148 163 184;
+  --ds-accent-hex: #475569; --ds-accent-2-hex: #334155; --ds-accent-soft-hex: #64748B;
+  --ds-accent-ink: #1E293B;
+  --aihub-bg: 248 248 247; --aihub-surface: 240 240 238; --aihub-card: 255 255 255;
+  --aihub-accent: 71 85 105; --aihub-violet: 100 116 139;
+}
 
 /* ══════════════════════════════════════════════════════════════════
    PREMIUM CHROME COMPONENTS
@@ -127,8 +382,8 @@ body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important
 
 /* ── Tab bar container ── */
 .ds-tabbar {
-  background: linear-gradient(180deg, rgb(23,24,43) 0%, rgb(19,20,38) 100%);
-  border-bottom: 1px solid rgba(107,78,255,0.15);
+  background: linear-gradient(180deg, rgb(var(--ds-bg)) 0%, rgb(var(--ds-bg) / 0.94) 100%), #0d0e1c;
+  border-bottom: 1px solid rgb(var(--ds-accent) / 0.15);
   box-shadow: 0 1px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
@@ -162,23 +417,23 @@ body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important
 }
 .ds-tab-inactive:hover {
   color: rgb(var(--ds-text-3));
-  background: rgba(107,78,255,0.07);
-  border-color: rgba(107,78,255,0.12);
+  background: rgb(var(--ds-accent) / 0.07);
+  border-color: rgb(var(--ds-accent) / 0.12);
 }
 .ds-tab-active {
-  background: linear-gradient(180deg, rgba(107,78,255,0.20) 0%, rgba(30,33,64,0.98) 55%);
-  border-color: rgba(107,78,255,0.35);
+  background: linear-gradient(180deg, rgb(var(--ds-accent) / 0.20) 0%, rgba(30,33,64,0.98) 55%);
+  border-color: rgb(var(--ds-accent) / 0.35);
   color: rgb(var(--ds-text-2));
   box-shadow:
-    inset 0 1px 0 rgba(159,132,255,0.18),
-    0 -2px 12px rgba(107,78,255,0.08);
+    inset 0 1px 0 rgb(var(--ds-accent-soft) / 0.18),
+    0 -2px 12px rgb(var(--ds-accent) / 0.08);
 }
 /* Active tab purple top-edge glow */
 .ds-tab-active::after {
   content: '';
   position: absolute;
   top: 0; left: 12px; right: 12px; height: 1.5px;
-  background: linear-gradient(90deg, transparent, rgba(159,132,255,0.9), transparent);
+  background: linear-gradient(90deg, transparent, rgb(var(--ds-accent-soft) / 0.9), transparent);
   border-radius: 0 0 4px 4px;
   pointer-events: none;
 }
@@ -186,11 +441,11 @@ body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important
 /* ── Navigation bar (below tabs) ── */
 .ds-navbar {
   background: linear-gradient(180deg,
-    rgba(19,20,38,0.97) 0%,
-    rgba(23,24,43,0.99) 100%);
-  border-bottom: 1px solid rgba(107,78,255,0.10);
+    rgb(var(--ds-bg) / 0.90) 0%,
+    rgb(var(--ds-bg) / 0.97) 100%), #0d0e1c;
+  border-bottom: 1px solid rgb(var(--ds-accent) / 0.10);
   box-shadow:
-    inset 0 1px 0 rgba(159,132,255,0.05),
+    inset 0 1px 0 rgb(var(--ds-accent-soft) / 0.05),
     0 2px 20px rgba(0,0,0,0.40);
   backdrop-filter: blur(var(--ds-blur-md));
   -webkit-backdrop-filter: blur(var(--ds-blur-md));
@@ -213,12 +468,12 @@ body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important
     box-shadow 0.18s var(--ds-smooth);
 }
 .ds-urlbar:focus-within {
-  background: rgba(107,78,255,0.09);
-  border-color: rgba(107,78,255,0.50);
+  background: rgb(var(--ds-accent) / 0.09);
+  border-color: rgb(var(--ds-accent) / 0.50);
   box-shadow:
-    0 0 0 3px rgba(107,78,255,0.13),
-    inset 0 1px 0 rgba(159,132,255,0.10),
-    0 4px 20px rgba(107,78,255,0.18);
+    0 0 0 3px rgb(var(--ds-accent) / 0.13),
+    inset 0 1px 0 rgb(var(--ds-accent-soft) / 0.10),
+    0 4px 20px rgb(var(--ds-accent) / 0.18);
 }
 
 /* ── Nav button ── */
@@ -235,22 +490,22 @@ body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important
 }
 .ds-navbtn:not(:disabled):hover {
   color: rgb(var(--ds-accent-soft));
-  background: rgba(107,78,255,0.12);
-  box-shadow: 0 0 12px rgba(107,78,255,0.15);
+  background: rgb(var(--ds-accent) / 0.12);
+  box-shadow: 0 0 12px rgb(var(--ds-accent) / 0.15);
 }
 .ds-navbtn:disabled { opacity: 0.22; cursor: not-allowed; }
 .ds-navbtn.active {
   color: rgb(var(--ds-accent-soft));
-  background: rgba(107,78,255,0.15);
-  box-shadow: 0 0 14px rgba(107,78,255,0.20);
+  background: rgb(var(--ds-accent) / 0.15);
+  box-shadow: 0 0 14px rgb(var(--ds-accent) / 0.20);
 }
 
 /* ── Sidebar ── */
 .ds-sidebar {
   background: linear-gradient(180deg,
-    rgba(19,20,38,0.97) 0%,
-    rgba(17,18,36,0.99) 100%);
-  border-right: 1px solid rgba(107,78,255,0.12);
+    rgb(var(--ds-bg) / 0.90) 0%,
+    rgb(var(--ds-bg) / 0.96) 100%), #0c0d1a;
+  border-right: 1px solid rgb(var(--ds-accent) / 0.12);
   box-shadow:
     inset -1px 0 0 rgba(255,255,255,0.03),
     4px 0 24px rgba(0,0,0,0.35);
@@ -272,14 +527,14 @@ body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important
 }
 .ds-sidebar-item:hover {
   color: rgb(var(--ds-text-3));
-  background: rgba(107,78,255,0.08);
-  border-color: rgba(107,78,255,0.14);
+  background: rgb(var(--ds-accent) / 0.08);
+  border-color: rgb(var(--ds-accent) / 0.14);
 }
 .ds-sidebar-item.active {
   color: rgb(var(--ds-accent-soft));
-  background: rgba(107,78,255,0.14);
-  border-color: rgba(107,78,255,0.28);
-  box-shadow: inset 0 1px 0 rgba(159,132,255,0.12), 0 0 20px rgba(107,78,255,0.10);
+  background: rgb(var(--ds-accent) / 0.14);
+  border-color: rgb(var(--ds-accent) / 0.28);
+  box-shadow: inset 0 1px 0 rgb(var(--ds-accent-soft) / 0.12), 0 0 20px rgb(var(--ds-accent) / 0.10);
 }
 
 /* ── Glass panel / card ── */
@@ -318,26 +573,26 @@ body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important
   -webkit-backdrop-filter: blur(8px);
 }
 .ds-glass-btn:hover {
-  background: rgba(107,78,255,0.12);
-  border-color: rgba(107,78,255,0.28);
+  background: rgb(var(--ds-accent) / 0.12);
+  border-color: rgb(var(--ds-accent) / 0.28);
   color: rgb(var(--ds-accent-soft));
-  box-shadow: 0 0 16px rgba(107,78,255,0.18);
+  box-shadow: 0 0 16px rgb(var(--ds-accent) / 0.18);
 }
 
 /* ── Accent button ── */
 .ds-accent-btn {
   background: linear-gradient(135deg, rgb(var(--ds-accent)), rgb(var(--ds-accent-2)));
-  border: 1px solid rgba(159,132,255,0.30);
+  border: 1px solid rgb(var(--ds-accent-soft) / 0.30);
   border-radius: var(--ds-r-sm);
   color: #fff;
   cursor: pointer;
   transition: all 0.15s var(--ds-smooth);
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 18px rgba(107,78,255,0.35);
+  box-shadow: 0 4px 18px rgb(var(--ds-accent) / 0.35);
 }
 .ds-accent-btn:hover {
   background: linear-gradient(135deg, rgb(var(--ds-accent-2)), rgb(var(--ds-accent-3)));
-  box-shadow: 0 6px 28px rgba(107,78,255,0.50);
+  box-shadow: 0 6px 28px rgb(var(--ds-accent) / 0.50);
   transform: translateY(-1px);
 }
 
@@ -347,25 +602,25 @@ body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important
 
 .aero-bar {
   background: linear-gradient(180deg, rgba(19,20,38,0.98) 0%, rgba(23,24,43,0.99) 100%);
-  border-bottom: 1px solid rgba(107,78,255,0.12);
+  border-bottom: 1px solid rgb(var(--ds-accent) / 0.12);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 0 rgba(0,0,0,0.4);
 }
 .aero-panel {
   background: linear-gradient(160deg, rgba(22,24,50,0.94) 0%, rgba(14,15,32,0.97) 100%);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(107,78,255,0.18);
+  border: 1px solid rgb(var(--ds-accent) / 0.18);
   box-shadow:
-    inset 0 1px 0 rgba(159,132,255,0.08),
+    inset 0 1px 0 rgb(var(--ds-accent-soft) / 0.08),
     0 8px 32px rgba(0,0,0,0.55),
-    0 0 60px rgba(107,78,255,0.07);
+    0 0 60px rgb(var(--ds-accent) / 0.07);
 }
 .aero-tab-active {
-  background: linear-gradient(180deg, rgba(107,78,255,0.20) 0%, rgba(19,20,38,0.97) 55%);
-  border-top: 1px solid rgba(107,78,255,0.45);
-  border-left: 1px solid rgba(107,78,255,0.15);
-  border-right: 1px solid rgba(107,78,255,0.15);
-  box-shadow: inset 0 1px 0 rgba(159,132,255,0.12);
+  background: linear-gradient(180deg, rgb(var(--ds-accent) / 0.20) 0%, rgba(19,20,38,0.97) 55%);
+  border-top: 1px solid rgb(var(--ds-accent) / 0.45);
+  border-left: 1px solid rgb(var(--ds-accent) / 0.15);
+  border-right: 1px solid rgb(var(--ds-accent) / 0.15);
+  box-shadow: inset 0 1px 0 rgb(var(--ds-accent-soft) / 0.12);
 }
 .aero-urlbar {
   background: rgba(255,255,255,0.05);
@@ -375,9 +630,9 @@ body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important
   -webkit-backdrop-filter: blur(12px);
 }
 .aero-urlbar:focus-within {
-  background: rgba(107,78,255,0.09);
-  border-color: rgba(107,78,255,0.50);
-  box-shadow: 0 0 0 3px rgba(107,78,255,0.13), inset 0 1px 0 rgba(255,255,255,0.06);
+  background: rgb(var(--ds-accent) / 0.09);
+  border-color: rgb(var(--ds-accent) / 0.50);
+  box-shadow: 0 0 0 3px rgb(var(--ds-accent) / 0.13), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 /* ── Glass / card ── */
@@ -400,26 +655,104 @@ body.glass-mode.light-mode #root { background: rgba(245,245,250,0.76) !important
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
-/* ── Light mode chrome overrides ── */
-body.light-mode .ds-tabbar { background: linear-gradient(180deg,#ededf6,#e8e9f4) !important; border-bottom-color: rgba(107,78,255,0.15) !important; }
-body.light-mode .ds-tab-active { background: linear-gradient(180deg,rgba(107,78,255,0.14) 0%,#f2f2fb 55%) !important; color: #3a2f7a !important; }
-body.light-mode .ds-tab-inactive { color: #8080a8 !important; }
-body.light-mode .ds-navbar { background: linear-gradient(180deg,rgba(240,240,252,0.98),rgba(235,235,250,0.99)) !important; }
-body.light-mode .ds-urlbar { background: rgba(255,255,255,0.85) !important; border-color: rgba(107,78,255,0.18) !important; }
-body.light-mode .ds-urlbar:focus-within { background: rgba(255,255,255,0.95) !important; border-color: rgba(107,78,255,0.45) !important; }
-body.light-mode .ds-sidebar { background: linear-gradient(180deg,#ededf6,#e8e9f4) !important; border-right-color: rgba(107,78,255,0.12) !important; }
-body.light-mode .ds-sidebar-item { color: #8080a8 !important; }
-body.light-mode .ds-sidebar-item:hover { background: rgba(107,78,255,0.07) !important; color: #5040b0 !important; }
-body.light-mode .ds-sidebar-item.active { background: rgba(107,78,255,0.12) !important; color: #5040b0 !important; }
-body.light-mode .ds-navbtn { color: #8080a8 !important; }
-body.light-mode .ds-navbtn:not(:disabled):hover { color: #5040b0 !important; background: rgba(107,78,255,0.10) !important; }
-body.light-mode .aero-panel {
-  background: linear-gradient(160deg,rgba(255,255,255,0.96) 0%,rgba(245,245,252,0.98) 100%) !important;
-  border-color: rgba(107,78,255,0.18) !important;
+/* ── Light mode chrome overrides ──────────────────────────────────
+   Contrast per WCAG: inactive chrome text #52547A (≥4.6:1 on #EDEDF6);
+   active/hover #4534A8. Glass surfaces ≥85% opaque so they read as
+   surfaces, not smudges. */
+body.light-mode .ds-tabbar {
+  background: linear-gradient(180deg, rgb(var(--ds-bg)), rgb(var(--ds-bg-2))) !important;
+  border-bottom-color: rgb(var(--ds-accent) / 0.16) !important;
+  box-shadow: 0 1px 0 rgba(31,27,73,0.06), inset 0 1px 0 rgba(255,255,255,0.8) !important;
 }
-body.light-mode .glass { background: linear-gradient(135deg,rgba(255,255,255,0.88),rgba(245,245,252,0.75)) !important; border-color: rgba(107,78,255,0.12) !important; }
-body.light-mode .glass-card { background: rgba(255,255,255,0.9) !important; border-color: rgba(107,78,255,0.10) !important; }
-body.light-mode ::-webkit-scrollbar-thumb { background: rgba(107,78,255,0.20) !important; }
+body.light-mode .ds-tab-active {
+  background: linear-gradient(180deg,rgb(var(--ds-accent) / 0.12) 0%,rgb(var(--aihub-card)) 55%) !important;
+  border-color: rgb(var(--ds-accent) / 0.35) !important;
+  color: var(--ds-accent-ink) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 -2px 12px rgb(var(--ds-accent) / 0.08) !important;
+}
+body.light-mode .ds-tab-inactive { color: #52547a !important; }
+body.light-mode .ds-tab-inactive:hover { color: var(--ds-accent-ink) !important; background: rgb(var(--ds-accent) / 0.08) !important; }
+body.light-mode .ds-navbar {
+  background: linear-gradient(180deg, rgb(var(--ds-bg) / 0.98), rgb(var(--ds-bg-2) / 0.99)) !important;
+  border-bottom-color: rgba(31,27,73,0.08) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 2px 16px rgba(31,27,73,0.06) !important;
+}
+body.light-mode .ds-urlbar {
+  background: rgba(255,255,255,0.92) !important;
+  border-color: rgba(31,27,73,0.14) !important;
+  box-shadow: inset 0 1px 2px rgba(31,27,73,0.05), 0 1px 3px rgba(31,27,73,0.06) !important;
+}
+body.light-mode .ds-urlbar:focus-within {
+  background: #ffffff !important;
+  border-color: rgb(var(--ds-accent) / 0.50) !important;
+  box-shadow: 0 0 0 3px rgb(var(--ds-accent) / 0.12), 0 2px 12px rgb(var(--ds-accent) / 0.10) !important;
+}
+body.light-mode .ds-sidebar {
+  background: linear-gradient(180deg, rgb(var(--ds-bg)), rgb(var(--ds-bg-2))) !important;
+  border-right-color: rgba(31,27,73,0.09) !important;
+  box-shadow: inset -1px 0 0 rgba(255,255,255,0.7), 4px 0 24px rgba(31,27,73,0.05) !important;
+}
+body.light-mode .ds-sidebar-item { color: #52547a !important; }
+body.light-mode .ds-sidebar-item:hover { background: rgb(var(--ds-accent) / 0.08) !important; color: var(--ds-accent-ink) !important; }
+body.light-mode .ds-sidebar-item.active {
+  background: rgb(var(--ds-accent) / 0.13) !important;
+  color: var(--ds-accent-ink) !important;
+  border-color: rgb(var(--ds-accent) / 0.30) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6) !important;
+}
+body.light-mode .ds-navbtn { color: #52547a !important; }
+body.light-mode .ds-navbtn:not(:disabled):hover { color: var(--ds-accent-ink) !important; background: rgb(var(--ds-accent) / 0.10) !important; }
+body.light-mode .ds-navbtn.active { color: var(--ds-accent-ink) !important; background: rgb(var(--ds-accent) / 0.14) !important; }
+body.light-mode .ds-glass-panel {
+  background: rgba(255,255,255,0.90) !important;
+  border-color: rgba(31,27,73,0.10) !important;
+}
+body.light-mode .ds-glass-card { background: rgba(255,255,255,0.88) !important; border-color: rgba(31,27,73,0.09) !important; }
+body.light-mode .ds-glass-btn { background: rgba(255,255,255,0.85) !important; border-color: rgba(31,27,73,0.12) !important; color: #484c70 !important; }
+body.light-mode .ds-glass-btn:hover { background: rgb(var(--ds-accent) / 0.10) !important; border-color: rgb(var(--ds-accent) / 0.30) !important; color: var(--ds-accent-ink) !important; }
+body.light-mode .aero-bar {
+  background: linear-gradient(180deg,rgba(246,247,252,0.98),rgba(240,241,250,0.99)) !important;
+  border-bottom-color: rgba(31,27,73,0.08) !important;
+}
+body.light-mode .aero-panel {
+  background: linear-gradient(160deg,rgba(255,255,255,0.97) 0%,rgba(246,246,252,0.98) 100%) !important;
+  border-color: rgb(var(--ds-accent) / 0.18) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 8px 32px rgba(31,27,73,0.10) !important;
+}
+body.light-mode .glass { background: linear-gradient(135deg,rgba(255,255,255,0.92),rgba(246,246,252,0.85)) !important; border-color: rgba(31,27,73,0.09) !important; }
+body.light-mode .glass-card { background: rgba(255,255,255,0.92) !important; border-color: rgba(31,27,73,0.08) !important; }
+body.light-mode .glass-card:hover { border-color: rgb(var(--ds-accent) / 0.25) !important; box-shadow: 0 4px 20px rgba(31,27,73,0.10) !important; }
+body.light-mode .feature-pill {
+  background: rgba(255,255,255,0.85) !important;
+  border-color: rgba(31,27,73,0.10) !important;
+  color: #52547a !important;
+}
+body.light-mode .feature-pill:hover {
+  background: rgb(var(--ds-accent) / 0.10) !important;
+  border-color: rgb(var(--ds-accent) / 0.35) !important;
+  color: var(--ds-accent-ink) !important;
+}
+body.light-mode .sidebar-item { color: #52547a; }
+body.light-mode .sidebar-item:hover { color: var(--ds-accent-ink); }
+body.light-mode .sidebar-item.active { color: var(--ds-accent-ink); }
+body.light-mode .vault-nav-item { color: #52547a; }
+body.light-mode .vault-nav-active { color: var(--ds-accent-ink); }
+body.light-mode .gradient-border {
+  background: linear-gradient(rgb(var(--aihub-card)),rgb(var(--aihub-card))) padding-box,
+              linear-gradient(135deg,var(--ds-accent-hex),var(--ds-accent-soft-hex),var(--ds-accent-hex)) border-box !important;
+}
+body.light-mode ::-webkit-scrollbar-thumb { background: rgb(var(--ds-accent) / 0.25) !important; }
+body.light-mode ::selection { background: rgb(var(--ds-accent) / 0.22); }
+
+/* Tailwind text-color utilities flipped for light surfaces. Deliberately NOT
+   !important — elements that must stay light (white text on purple buttons)
+   set color inline, which still wins over these. */
+body.light-mode .text-white     { color: rgb(var(--ds-text-1)); }
+body.light-mode .text-slate-200,
+body.light-mode .text-slate-300 { color: rgb(var(--ds-text-2)); }
+body.light-mode .text-slate-400 { color: rgb(var(--ds-text-3)); }
+body.light-mode .text-slate-500,
+body.light-mode .text-slate-600 { color: rgb(var(--ds-text-4)); }
 
 /* ── Sidebar items (legacy) ── */
 .sidebar-item {
@@ -430,8 +763,8 @@ body.light-mode ::-webkit-scrollbar-thumb { background: rgba(107,78,255,0.20) !i
   transition: all 0.15s; cursor: pointer;
   border: 1px solid transparent;
 }
-.sidebar-item:hover { background: rgba(107,78,255,0.08); color: rgb(var(--ds-text-3)); }
-.sidebar-item.active { background: rgba(107,78,255,0.14); color: rgb(var(--ds-accent-soft)); border-color: rgba(107,78,255,0.28); }
+.sidebar-item:hover { background: rgb(var(--ds-accent) / 0.08); color: rgb(var(--ds-text-3)); }
+.sidebar-item.active { background: rgb(var(--ds-accent) / 0.14); color: rgb(var(--ds-accent-soft)); border-color: rgb(var(--ds-accent) / 0.28); }
 
 /* ── Vault nav ── */
 .vault-nav-item {
@@ -440,8 +773,8 @@ body.light-mode ::-webkit-scrollbar-thumb { background: rgba(107,78,255,0.20) !i
   font-size: 12px; font-weight: 500;
   color: rgb(var(--ds-text-4)); transition: all 0.15s; cursor: pointer;
 }
-.vault-nav-item:hover { background: rgba(107,78,255,0.08); color: rgb(var(--ds-text-3)); }
-.vault-nav-active { background: rgba(107,78,255,0.15); color: rgb(var(--ds-accent-soft)); border: 1px solid rgba(107,78,255,0.25); }
+.vault-nav-item:hover { background: rgb(var(--ds-accent) / 0.08); color: rgb(var(--ds-text-3)); }
+.vault-nav-active { background: rgb(var(--ds-accent) / 0.15); color: rgb(var(--ds-accent-soft)); border: 1px solid rgb(var(--ds-accent) / 0.25); }
 
 /* ── Feature pills ── */
 .feature-pill {
@@ -450,17 +783,17 @@ body.light-mode ::-webkit-scrollbar-thumb { background: rgba(107,78,255,0.20) !i
   font-size: 12px; font-weight: 600;
   cursor: pointer;
   border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(107,78,255,0.07);
+  background: rgb(var(--ds-accent) / 0.07);
   color: rgb(var(--ds-text-4));
   transition: all 0.18s; backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px); white-space: nowrap;
 }
 .feature-pill:hover {
-  background: rgba(107,78,255,0.15);
-  border-color: rgba(107,78,255,0.35);
+  background: rgb(var(--ds-accent) / 0.15);
+  border-color: rgb(var(--ds-accent) / 0.35);
   color: rgb(var(--ds-accent-soft));
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(107,78,255,0.20);
+  box-shadow: 0 4px 16px rgb(var(--ds-accent) / 0.20);
 }
 
 /* ── Bookmark tiles ── */
@@ -499,15 +832,15 @@ body.light-mode ::-webkit-scrollbar-thumb { background: rgba(107,78,255,0.20) !i
 
 /* ── Gradient border ── */
 .gradient-border {
-  background: linear-gradient(rgb(23,24,43),rgb(23,24,43)) padding-box,
-              linear-gradient(135deg,#6B4EFF,#9F84FF,#6B4EFF) border-box;
+  background: linear-gradient(rgb(var(--ds-bg)),rgb(var(--ds-bg))) padding-box,
+              linear-gradient(135deg,var(--ds-accent-hex),var(--ds-accent-soft-hex),var(--ds-accent-hex)) border-box;
   border: 1px solid transparent;
 }
 
 /* ── Glow utilities ── */
-.glow-purple { box-shadow: 0 0 20px rgba(107,78,255,0.35); }
-.glow-accent  { box-shadow: 0 0 20px rgba(107,78,255,0.30); }
-.glow-violet  { box-shadow: 0 0 20px rgba(159,132,255,0.30); }
+.glow-purple { box-shadow: 0 0 20px rgb(var(--ds-accent) / 0.35); }
+.glow-accent  { box-shadow: 0 0 20px rgb(var(--ds-accent) / 0.30); }
+.glow-violet  { box-shadow: 0 0 20px rgb(var(--ds-accent-soft) / 0.30); }
 .glow-cyan    { box-shadow: 0 0 15px rgba(6,182,212,0.35); }
 .glow-green   { box-shadow: 0 0 15px rgba(16,185,129,0.35); }
 .glow-amber   { box-shadow: 0 0 15px rgba(245,158,11,0.25); }
@@ -515,8 +848,8 @@ body.light-mode ::-webkit-scrollbar-thumb { background: rgba(107,78,255,0.20) !i
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(107,78,255,0.25); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(107,78,255,0.45); }
+::-webkit-scrollbar-thumb { background: rgb(var(--ds-accent) / 0.25); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--ds-accent) / 0.45); }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
@@ -532,9 +865,22 @@ webview {
 }
 
 /* ── Selection / focus ── */
-::selection { background: rgba(107,78,255,0.35); }
-:focus-visible { outline: none; }
+::selection { background: rgb(var(--ds-accent) / 0.35); }
+/* Keyboard-visible focus ring (a11y) — text fields opt out because their
+   containers (e.g. .ds-urlbar) already show a focus treatment. */
+:focus-visible { outline: 2px solid rgb(var(--ds-accent) / 0.55); outline-offset: 2px; }
+input:focus-visible, textarea:focus-visible { outline: none; }
 input, textarea { user-select: text; }
+
+/* ── Reduced motion — collapse decorative animation for users who ask ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* ── Aurora orbs ── */
 .aurora-orb-1 { animation: aurora-1 14s ease-in-out infinite; }
@@ -549,8 +895,8 @@ input, textarea { user-select: text; }
    ══════════════════════════════════════════════════════════════════ */
 
 @keyframes aiBtnPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(107,78,255,0.5), 0 8px 28px rgba(107,78,255,0.45); }
-  50%       { box-shadow: 0 0 0 8px rgba(107,78,255,0), 0 8px 28px rgba(107,78,255,0.20); }
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--ds-accent) / 0.5), 0 8px 28px rgb(var(--ds-accent) / 0.45); }
+  50%       { box-shadow: 0 0 0 8px rgb(var(--ds-accent) / 0), 0 8px 28px rgb(var(--ds-accent) / 0.20); }
 }
 @keyframes aiDotBounce {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
@@ -566,12 +912,12 @@ input, textarea { user-select: text; }
   50%       { transform: translateY(-6px); }
 }
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 12px rgba(107,78,255,0.3); }
-  50%       { box-shadow: 0 0 24px rgba(107,78,255,0.6), 0 0 48px rgba(107,78,255,0.2); }
+  0%, 100% { box-shadow: 0 0 12px rgb(var(--ds-accent) / 0.3); }
+  50%       { box-shadow: 0 0 24px rgb(var(--ds-accent) / 0.6), 0 0 48px rgb(var(--ds-accent) / 0.2); }
 }
 @keyframes pulse-glow-sm {
-  0%, 100% { box-shadow: 0 0 8px rgba(107,78,255,0.25); }
-  50%       { box-shadow: 0 0 18px rgba(107,78,255,0.50); }
+  0%, 100% { box-shadow: 0 0 8px rgb(var(--ds-accent) / 0.25); }
+  50%       { box-shadow: 0 0 18px rgb(var(--ds-accent) / 0.50); }
 }
 @keyframes fadeSlideIn {
   from { opacity: 0; transform: translateY(12px); }
@@ -596,8 +942,8 @@ input, textarea { user-select: text; }
   50%       { transform: translate(40px,40px) scale(1.20); opacity: 0.50; }
 }
 @keyframes tabGlow {
-  0%, 100% { box-shadow: 0 -1px 8px rgba(107,78,255,0.20); }
-  50%       { box-shadow: 0 -2px 16px rgba(107,78,255,0.40); }
+  0%, 100% { box-shadow: 0 -1px 8px rgb(var(--ds-accent) / 0.20); }
+  50%       { box-shadow: 0 -2px 16px rgb(var(--ds-accent) / 0.40); }
 }
 @keyframes accentPulse {
   0%, 100% { opacity: 0.7; }
@@ -606,5 +952,5 @@ input, textarea { user-select: text; }
 
 @layer utilities {
   .text-shadow-glow  { text-shadow: 0 0 20px currentColor; }
-  .text-shadow-purple { text-shadow: 0 0 32px rgba(159,132,255,0.6); }
+  .text-shadow-purple { text-shadow: 0 0 32px rgb(var(--ds-accent-soft) / 0.6); }
 }
