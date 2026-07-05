@@ -79,6 +79,7 @@ export default function SettingsPage() {
   const [showGmailCreds, setShowGmailCreds] = useState(false)
   const [gClientId, setGClientId] = useState('')
   const [gClientSecret, setGClientSecret] = useState('')
+  const [gmailError, setGmailError] = useState('')
 
   useEffect(() => {
     window.electronAPI.settings.get().then(setSettings)
@@ -96,10 +97,12 @@ export default function SettingsPage() {
 
   const connectGmail = async () => {
     setGmailBusy(true)
+    setGmailError('')
     if (gClientId.trim()) await mailSetCredentials(gClientId.trim(), gClientSecret.trim())
     const r = await mailConnect()
     setGmailBusy(false)
     if (r.ok) { setGmailConnected(true); setGmailEmail(r.email || null) }
+    else { setGmailError(r.error || 'Could not connect to Gmail') }
   }
   const disconnectGmail = async () => { await mailDisconnect(); setGmailConnected(false); setGmailEmail(null) }
 
@@ -648,6 +651,7 @@ export default function SettingsPage() {
                     className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none" />
                 </div>
               )}
+              {gmailError && <div style={{ fontSize: 11, color: '#f87171', marginTop: 6 }}>{gmailError}</div>}
             </>
           )}
         </div>
