@@ -14,9 +14,13 @@ export function registerGmailIpc(safelySend: (channel: string, ...args: any[]) =
 
   ipcMain.handle('gmail:setCredentials', (_e, clientId: string, clientSecret: string) => {
     if (!isEncryptionAvailable()) return fail('OS secure storage unavailable')
-    // seed a store entry (email empty) so beginConnect uses these creds
     const existing = loadTokens()
-    saveTokens({ email: existing?.email || '', refreshToken: existing?.refreshToken || '', clientId, clientSecret })
+    const sameClient = existing?.clientId === clientId
+    saveTokens({
+      email: sameClient ? (existing?.email || '') : '',
+      refreshToken: sameClient ? (existing?.refreshToken || '') : '',
+      clientId, clientSecret,
+    })
     return ok({})
   })
 
