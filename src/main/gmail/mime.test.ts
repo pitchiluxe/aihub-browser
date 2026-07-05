@@ -50,4 +50,31 @@ describe('buildRawMessage', () => {
     expect(decoded).toContain('In-Reply-To: <abc@mail.example.com>')
     expect(decoded).toContain('\r\n\r\nreply text')
   })
+
+  it('sanitizes CRLF in header values to prevent header injection', () => {
+    const raw = buildRawMessage({ from: 'me@example.com', to: 'you@example.com', subject: 'Hi\r\nBcc: evil@example.com', body: 'reply text' })
+    const decoded = b64urlDecode(raw).toString('utf-8')
+    expect(decoded).not.toMatch(/^Bcc:/m)
+  })
+})
+
+describe('parseGmailMessage inline attachments', () => {
+  it('captures inline image attachments that have an attachmentId but no filename', () => {
+    const withInlineImage = {
+      id: 'm3', threadId: 't3', snippet: 's', labelIds: ['INBOX'],
+      payload: {
+        mimeType: 'multipart/mixed',
+        headers: [{ name: 'Subject', value: 'Inline image test' }],
+        parts: [
+          { mimeType: 'text/plain', body: { data: b64urlEncode('body text') } },
+          { mimeType: 'image/png', body: { attachmentId: 'img1', size: 99 } },
+        ],
+      },
+    }
+    const p = parseGmailMessage(withInlineImage)
+    expect(p.attachments).toHaveLength(1)
+    expect(p.attachments[0].attachmentId).toBe('img1')
+    expect(p.attachments[0].mimeType).toBe('image/png')
+    expect(p.attachments[0].filename).toBeTruthy()
+  })
 })
