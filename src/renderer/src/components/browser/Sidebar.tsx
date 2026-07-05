@@ -1,19 +1,19 @@
 import React, { memo } from 'react'
 import {
   Home, History, Download, Settings, Plus, Sparkles,
-  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid,
+  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
 interface Props {
   onNavigate: (url: string) => void
-  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions') => void
+  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail') => void
 }
 
 interface NavItem {
   icon: React.ElementType
   label: string
-  page: null | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions'
+  page: null | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail'
   type: string
   accent?: string
 }
@@ -27,6 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Puzzle,       label: 'Extensions',   page: 'extensions',   type: 'extensions', accent: '#fb923c' },
   { icon: Wifi,         label: 'Free WiFi',    page: 'wifi',         type: 'wifi'       },
   { icon: Shield,       label: 'VPN / Proxy',  page: 'vpn',          type: 'vpn'        },
+  { icon: Mail,         label: 'Mail',         page: 'mail',         type: 'mail'       },
   { icon: Settings,     label: 'Settings',     page: 'settings',     type: 'settings'   },
 ]
 

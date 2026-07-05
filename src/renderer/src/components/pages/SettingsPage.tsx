@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Palette, Bot, Shield, Info, CheckCircle2, Loader2, RefreshCw, Download, Wifi, Brain, Globe, Sparkles, Trash2 } from 'lucide-react'
+import { Palette, Bot, Shield, Info, CheckCircle2, Loader2, RefreshCw, Download, Wifi, Brain, Globe, Sparkles, Trash2, Mail } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import {
   THEMES, loadCustomThemes, deleteCustomTheme, generateThemes, CustomTheme,
@@ -8,6 +8,7 @@ import {
   WINDOW_STYLES, loadCustomWindowStyles, deleteCustomWindowStyle, generateWindowStyles,
   CustomWindowStyle, WindowStyle,
 } from '../../services/windowStyleService'
+import { mailStatus, mailConnect, mailDisconnect, mailSetCredentials } from '../../services/mailService'
 
 const PAGE_SIZE = 40
 
@@ -71,6 +72,14 @@ export default function SettingsPage() {
   const [customWindowStyles, setCustomWindowStyles] = useState<CustomWindowStyle[]>(() => loadCustomWindowStyles())
   const [winGenBusy, setWinGenBusy] = useState(false)
   const [winStylePage, setWinStylePage] = useState(0)
+  // Gmail account
+  const [gmailConnected, setGmailConnected] = useState(false)
+  const [gmailEmail, setGmailEmail] = useState<string | null>(null)
+  const [gmailBusy, setGmailBusy] = useState(false)
+  const [showGmailCreds, setShowGmailCreds] = useState(false)
+  const [gClientId, setGClientId] = useState('')
+  const [gClientSecret, setGClientSecret] = useState('')
+  const [gmailError, setGmailError] = useState('')
 
   useEffect(() => {
     window.electronAPI.settings.get().then(setSettings)
@@ -83,7 +92,19 @@ export default function SettingsPage() {
       setAiModelInput(cfg?.openrouterModel || '')
       setAiOllamaUrl(cfg?.ollamaUrl || '')
     })
+    mailStatus().then(s => { setGmailConnected(s.connected); setGmailEmail(s.email) })
   }, [])
+
+  const connectGmail = async () => {
+    setGmailBusy(true)
+    setGmailError('')
+    if (gClientId.trim()) await mailSetCredentials(gClientId.trim(), gClientSecret.trim())
+    const r = await mailConnect()
+    setGmailBusy(false)
+    if (r.ok) { setGmailConnected(true); setGmailEmail(r.email || null) }
+    else { setGmailError(r.error || 'Could not connect to Gmail') }
+  }
+  const disconnectGmail = async () => { await mailDisconnect(); setGmailConnected(false); setGmailEmail(null) }
 
   const handleSetDefault = async () => {
     setSettingDefault(true)
@@ -601,6 +622,38 @@ export default function SettingsPage() {
         <div className={ROW}>
           <div><div className={LBL}>Clear AI Memory</div><div className="text-xs text-aihub-muted">Reset personalization data</div></div>
           <button onClick={() => clearHistory()} className="px-4 py-1.5 rounded-xl text-xs bg-aihub-card hover:bg-aihub-border/40 text-aihub-muted transition-all">Reset</button>
+        </div>
+      </Section>
+
+      {/* Gmail */}
+      <Section icon={<Mail size={15} />} title="Gmail">
+        <div className="mb-2">
+          {gmailConnected ? (
+            <div className="flex items-center justify-between">
+              <div className={LBL} style={{ marginBottom: 0 }}>Connected: {gmailEmail}</div>
+              <button onClick={disconnectGmail} className="px-3 py-1.5 rounded-xl text-xs font-medium" style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>Disconnect</button>
+            </div>
+          ) : (
+            <>
+              <div className={DESC}>Sign-in opens once in your system browser, then mail lives here. Advanced: use your own Google OAuth client below.</div>
+              <button onClick={connectGmail} disabled={gmailBusy}
+                className="px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: 'rgb(var(--ds-accent))', color: '#fff', border: 'none', opacity: gmailBusy ? 0.7 : 1 }}>
+                {gmailBusy ? 'Waiting…' : 'Connect Gmail'}
+              </button>
+              <button onClick={() => setShowGmailCreds(v => !v)} className="ml-3 text-xs" style={{ color: 'rgb(var(--ds-accent-soft))', background: 'none', border: 'none', cursor: 'pointer' }}>
+                {showGmailCreds ? 'Hide' : 'Use my own Google credentials'}
+              </button>
+              {showGmailCreds && (
+                <div className="mt-3 flex flex-col gap-2" style={{ maxWidth: 460 }}>
+                  <input value={gClientId} onChange={e => setGClientId(e.target.value)} placeholder="OAuth client_id"
+                    className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none" />
+                  <input value={gClientSecret} onChange={e => setGClientSecret(e.target.value)} placeholder="OAuth client_secret (optional for desktop clients)"
+                    className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none" />
+                </div>
+              )}
+              {gmailError && <div style={{ fontSize: 11, color: '#f87171', marginTop: 6 }}>{gmailError}</div>}
+            </>
+          )}
         </div>
       </Section>
 
