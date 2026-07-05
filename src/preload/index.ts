@@ -9,17 +9,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setTransparency: (m:string) => ipcRenderer.invoke('window:setTransparency', m),
     setOpacity:      (o:number) => ipcRenderer.invoke('window:setOpacity', o),
   },
-  gmail: {
-    status:         () => ipcRenderer.invoke('gmail:status'),
-    connect:        () => ipcRenderer.invoke('gmail:connect'),
-    disconnect:     () => ipcRenderer.invoke('gmail:disconnect'),
-    setCredentials: (clientId: string, clientSecret: string) => ipcRenderer.invoke('gmail:setCredentials', clientId, clientSecret),
-    listThreads:    (q: string, pageToken?: string) => ipcRenderer.invoke('gmail:listThreads', { q, pageToken }),
-    getThread:      (id: string) => ipcRenderer.invoke('gmail:getThread', { id }),
-    getAttachment:  (messageId: string, attachmentId: string, filename: string) => ipcRenderer.invoke('gmail:getAttachment', { messageId, attachmentId, filename }),
-    send:           (opts: any) => ipcRenderer.invoke('gmail:send', opts),
-    onConnected:    (cb: (e: { email: string }) => void) => { const h = (_: any, d: any) => cb(d); ipcRenderer.on('gmail:connected', h); return () => ipcRenderer.removeListener('gmail:connected', h) },
-  },
   bookmarks: {
     getAll:  () => ipcRenderer.invoke('bookmarks:getAll'),
     add:     (b:any)            => ipcRenderer.invoke('bookmarks:add', b),
