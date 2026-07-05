@@ -12,6 +12,7 @@ import {
 let accessToken = ''
 let accessExpiry = 0 // epoch ms
 let pendingServer: http.Server | null = null
+let pendingFinish: ((r: { ok: true; email: string } | { ok: false; error: string }) => void) | null = null
 
 function creds() {
   const stored = loadTokens()
@@ -37,6 +38,8 @@ export async function beginConnect(): Promise<{ ok: true; email: string } | { ok
   const clientSecret = loadTokens()?.clientSecret || DEFAULT_CLIENT_SECRET
   if (!clientId) return { ok: false, error: 'No Google client configured. Add your OAuth client_id in Settings → Gmail.' }
 
+  if (pendingFinish) { const prev = pendingFinish; pendingFinish = null; prev({ ok: false, error: 'superseded by a new connect' }) }
+
   const verifier = b64urlEncode(crypto.randomBytes(32))
   const challenge = b64urlEncode(crypto.createHash('sha256').update(verifier).digest())
   const state = b64urlEncode(crypto.randomBytes(16))
@@ -45,10 +48,12 @@ export async function beginConnect(): Promise<{ ok: true; email: string } | { ok
     let settled = false
     const finish = (r: { ok: true; email: string } | { ok: false; error: string }) => {
       if (settled) return; settled = true
+      if (pendingFinish === finish) pendingFinish = null
       try { pendingServer?.close() } catch {}; pendingServer = null
       clearTimeout(timer)
       resolve(r)
     }
+    pendingFinish = finish
     // cancel any prior pending flow
     try { pendingServer?.close() } catch {}
     const server = http.createServer(async (req, res) => {
@@ -73,13 +78,15 @@ export async function beginConnect(): Promise<{ ok: true; email: string } | { ok
             redirect_uri: `http://127.0.0.1:${port}`, grant_type: 'authorization_code', code_verifier: verifier,
           }),
         })
-        const tok = JSON.parse(tokenRes.body)
+        let tok: any
+        try { tok = JSON.parse(tokenRes.body) } catch { throw new Error(`token endpoint returned HTTP ${tokenRes.status} (non-JSON body)`) }
         if (!tok.access_token || !tok.refresh_token) { finish({ ok: false, error: tok.error_description || 'token exchange failed' }); return }
         accessToken = tok.access_token
         accessExpiry = Date.now() + (tok.expires_in ?? 3600) * 1000
         // fetch profile for the account email
         const prof = await httpJson('GET', `${GMAIL_API_BASE}/users/me/profile`, { headers: { Authorization: `Bearer ${accessToken}` } })
-        const email = JSON.parse(prof.body).emailAddress || 'unknown'
+        let email = 'unknown'
+        try { email = JSON.parse(prof.body).emailAddress || 'unknown' } catch {}
         saveTokens({ email, refreshToken: tok.refresh_token, clientId, clientSecret })
         finish({ ok: true, email })
       } catch (e: any) {
@@ -112,7 +119,8 @@ export async function getAccessToken(): Promise<string> {
       refresh_token: stored.refreshToken, grant_type: 'refresh_token',
     }),
   })
-  const tok = JSON.parse(res.body)
+  let tok: any
+  try { tok = JSON.parse(res.body) } catch { throw new Error(`token endpoint returned HTTP ${res.status} (non-JSON body)`) }
   if (!tok.access_token) {
     if (tok.error === 'invalid_grant') { clearTokens(); accessToken = ''; throw new Error('needs-reconnect') }
     throw new Error(tok.error_description || 'token refresh failed')
