@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string }
-export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; pageType?: 'browser'|'settings'|'history'|'downloads'|'wifi'|'vpn'|'research'|'agents'|'extensions' }
+export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; pageType?: 'browser'|'settings'|'history'|'downloads'|'wifi'|'vpn'|'research'|'agents'|'extensions'|'mail' }
 export interface AIMessage { role: 'user'|'assistant'|'system'; content: string; steps?: { label: string; status: 'pending' | 'done' | 'error' }[] }
 export interface HistoryItem { id: string; url: string; title: string; favicon?: string; timestamp: number }
 export interface DownloadItem { id: string; filename: string; url: string; savePath: string; totalBytes: number; receivedBytes: number; state: string; startedAt: number; completedAt?: number }
