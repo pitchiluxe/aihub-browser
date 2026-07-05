@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Mail, RefreshCw, Loader2, LogOut, Search } from 'lucide-react'
 import {
-  mailStatus, mailConnect, mailDisconnect, mailListThreads, onMailConnected, ThreadRow,
+  mailStatus, mailConnect, mailDisconnect, mailListThreads, onMailConnected, ThreadRow, ParsedMessage,
 } from '../../services/mailService'
 import ThreadReader from './mail/ThreadReader'
+import Compose from './mail/Compose'
 
 export default function MailPage() {
   const [connected, setConnected] = useState<boolean | null>(null)
@@ -15,6 +16,7 @@ export default function MailPage() {
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [compose, setCompose] = useState<null | { to: string; subject: string; body: string; inReplyTo?: string; references?: string; threadId?: string }>(null)
 
   const refreshStatus = useCallback(async () => {
     const s = await mailStatus()
@@ -44,6 +46,15 @@ export default function MailPage() {
   }
 
   const disconnect = async () => { await mailDisconnect(); setConnected(false); setEmail(null); setThreads([]); setActiveId(null) }
+
+  const handleReply = (m: ParsedMessage) => setCompose({
+    to: m.from,
+    subject: m.subject.startsWith('Re:') ? m.subject : `Re: ${m.subject}`,
+    body: `\n\n---- On ${m.date}, ${m.from} wrote: ----\n${m.textPlain}`,
+    inReplyTo: m.messageIdHeader,
+    references: (m.references ? m.references + ' ' : '') + m.messageIdHeader,
+    threadId: m.threadId,
+  })
 
   if (connected === null) {
     return <div className="flex items-center justify-center h-full text-aihub-muted"><Loader2 className="animate-spin" /></div>
@@ -75,6 +86,7 @@ export default function MailPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 12, color: 'rgb(var(--ds-text-4))' }}>{email}</span>
             <div style={{ display: 'flex', gap: 6 }}>
+              <button title="Compose" onClick={() => setCompose({ to: '', subject: '', body: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgb(var(--ds-accent-soft))' }}>✎</button>
               <button title="Refresh" onClick={() => load(q)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgb(var(--ds-text-4))' }}><RefreshCw size={14} /></button>
               <button title="Disconnect" onClick={disconnect} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgb(var(--ds-text-4))' }}><LogOut size={14} /></button>
             </div>
@@ -106,8 +118,9 @@ export default function MailPage() {
       </div>
       {/* Right: reader */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {activeId ? <ThreadReader threadId={activeId} accountEmail={email || ''} /> : <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: 'rgb(var(--ds-text-4))' }}>Select a message</div>}
+        {activeId ? <ThreadReader threadId={activeId} accountEmail={email || ''} onReply={handleReply} /> : <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: 'rgb(var(--ds-text-4))' }}>Select a message</div>}
       </div>
+      {compose && <Compose initial={compose} onClose={() => setCompose(null)} onSent={() => load(q)} />}
     </div>
   )
 }
