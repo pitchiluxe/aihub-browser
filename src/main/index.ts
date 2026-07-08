@@ -7,6 +7,7 @@ import os from 'os'
 import fs from 'fs'
 import { execSync, execFileSync } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
+import { registerGmailIpc } from './gmail/ipc'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -957,6 +958,8 @@ ipcMain.handle('window:setOpacity', (_e, opacity: number) => {
   const d = getData(); d.settings.windowOpacity = opacity; saveData()
   if (mainWindow) applyWindowOpacity(mainWindow, opacity)
 })
+
+registerGmailIpc(safelySend)
 
 // ── IPC: Tab content views (BrowserView) ────────────────────────────────────
 ipcMain.handle('tabview:create', (_e, tabId: string, url: string) => createTabView(tabId, url))
