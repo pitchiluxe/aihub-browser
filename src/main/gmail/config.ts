@@ -2,9 +2,8 @@
 // your Google Cloud "Desktop app" OAuth client. A user-provided client in
 // Settings overrides them at runtime. For a desktop PKCE client the secret is
 // not treated as confidential; leave it empty unless using a classic client.
-export const DEFAULT_CLIENT_ID = '' // TODO(owner): paste Desktop OAuth client_id
-export const DEFAULT_CLIENT_SECRET = ''
-
+export const DEFAULT_CLIENT_ID = '' // intentionally blank — paste your Desktop OAuth
+export const DEFAULT_CLIENT_SECRET = '' // client_id/secret into Settings > Gmail instead (not tracked by git)
 export const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
