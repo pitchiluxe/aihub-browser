@@ -17,7 +17,21 @@ function restoreImages(html: string): string {
 
 export default function EmailFrame({ html, plain }: { html: string; plain: string }) {
   const [showImages, setShowImages] = useState(false)
+  const [height, setHeight] = useState(200)
   const hasHtml = !!html.trim()
+
+  // Iframes never auto-size to their content, so without this every email
+  // gets clipped to the fallback minHeight. `allow-same-origin` (still no
+  // allow-scripts) is what lets us read contentDocument at all — sandbox=""
+  // alone makes the frame an opaque origin the parent can't introspect.
+  // CSP inside the doc (default-src 'none') means nothing executes either way.
+  const measure = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
+    try {
+      const doc = e.currentTarget.contentDocument
+      const h = doc?.documentElement?.scrollHeight || doc?.body?.scrollHeight || 0
+      if (h) setHeight(h + 24)
+    } catch { /* cross-origin read blocked — keep fallback height */ }
+  }
 
   const srcDoc = useMemo(() => {
     if (!hasHtml) return ''
@@ -43,9 +57,10 @@ export default function EmailFrame({ html, plain }: { html: string; plain: strin
       )}
       <iframe
         title="email-body"
-        sandbox=""
+        sandbox="allow-same-origin"
         srcDoc={srcDoc}
-        style={{ width: '100%', minHeight: 200, border: 'none', background: '#fff', borderRadius: 8 }}
+        onLoad={measure}
+        style={{ width: '100%', height, border: 'none', background: '#fff', borderRadius: 8 }}
       />
     </div>
   )
