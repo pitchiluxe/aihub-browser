@@ -256,10 +256,8 @@ const INJECT_SCRIPT = `(function(){
   actionsRow.appendChild(actionBtn('\\u21AA Redo',function(){ if(redo.length){strokes.push(redo.pop());redraw();} }));
   actionsRow.appendChild(actionBtn('\\uD83D\\uDDD1 Clear',function(){ strokes=[];redo=[];ctx.clearRect(0,0,cv.width,cv.height); }));
   actionsRow.appendChild(actionBtn('\\uD83D\\uDCBE Save',function(){
-    var a=document.createElement('a');
-    a.download='annotation-'+Date.now()+'.png';
-    a.href=cv.toDataURL('image/png');
-    document.body.appendChild(a); a.click(); a.remove();
+    window.__aihub_shotQueue=window.__aihub_shotQueue||[];
+    window.__aihub_shotQueue.push({strokesDataUrl:cv.toDataURL('image/png')});
   },'#22c55e'));
   actionsRow.appendChild(actionBtn('\\uD83D\\uDDD2 New Note',function(){ createNote(); },'#eab308'));
   content.appendChild(actionsRow);
@@ -460,8 +458,38 @@ const INJECT_SCRIPT = `(function(){
   return 'injected';
 })()`
 
-// Drains pending note-AI requests enqueued by ✨ buttons inside the page.
-const DRAIN_SCRIPT = `(function(){var q=window.__aihub_aiQueue||[];window.__aihub_aiQueue=[];return JSON.stringify(q);})()`
+// Drains pending note-AI requests AND pending screenshot requests in one
+// round trip — both are queued by in-page buttons and can only be reached
+// from the host via execScript.
+const DRAIN_SCRIPT = `(function(){
+  var ai=window.__aihub_aiQueue||[];window.__aihub_aiQueue=[];
+  var shots=window.__aihub_shotQueue||[];window.__aihub_shotQueue=[];
+  return JSON.stringify({ai:ai,shots:shots});
+})()`
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('image load failed'))
+    img.src = src
+  })
+}
+
+// Composites the captured page (actual pixels) under the drawn strokes
+// layer (transparent PNG). Scales the strokes image to the page image's
+// pixel dimensions so a HiDPI mismatch between capturePage()'s device
+// pixels and the strokes canvas's CSS pixels doesn't misalign the overlay.
+async function compositeScreenshot(pageDataUrl: string, strokesDataUrl: string): Promise<string> {
+  const [pageImg, strokesImg] = await Promise.all([loadImage(pageDataUrl), loadImage(strokesDataUrl)])
+  const canvas = document.createElement('canvas')
+  canvas.width = pageImg.naturalWidth
+  canvas.height = pageImg.naturalHeight
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(pageImg, 0, 0)
+  ctx.drawImage(strokesImg, 0, 0, canvas.width, canvas.height)
+  return canvas.toDataURL('image/png')
+}
 
 export default function AnnotationCanvas() {
   const { activeTabId, tabWcIds } = useBrowserStore()
@@ -481,28 +509,42 @@ export default function AnnotationCanvas() {
       try {
         const res = await window.electronAPI.webview.execScript(id, DRAIN_SCRIPT)
         if (!res?.ok) return
-        const queue = JSON.parse(String(res.result || '[]'))
-        if (!Array.isArray(queue) || queue.length === 0) return
-        const pageRes = await window.electronAPI.webview.execScript(id, buildPageExtractionScript())
-        const pageText = pageRes?.ok ? String(pageRes.result || '').trim() : ''
-        for (const req of queue) {
-          if (!req || typeof req.noteId !== 'string') continue
-          const prompt = req.text
-            ? `Answer briefly based on this page.\nQUESTION/INSTRUCTION: ${req.text}\n\nPAGE CONTENT:\n${pageText}`
-            : `Summarize this page in 3-5 short bullet points.\n\nPAGE CONTENT:\n${pageText}`
-          let answer = ''
-          try {
-            const result = await window.electronAPI.ai.chat([{ role: 'user', content: prompt }])
-            answer = result?.content || 'No response from AI.'
-          } catch (e: any) {
-            answer = `AI error: ${e?.message || e}`
+        const drained = JSON.parse(String(res.result || '{}'))
+        const aiQueue: any[] = Array.isArray(drained.ai) ? drained.ai : []
+        const shotQueue: any[] = Array.isArray(drained.shots) ? drained.shots : []
+
+        if (aiQueue.length > 0) {
+          const pageRes = await window.electronAPI.webview.execScript(id, buildPageExtractionScript())
+          const pageText = pageRes?.ok ? String(pageRes.result || '').trim() : ''
+          for (const req of aiQueue) {
+            if (!req || typeof req.noteId !== 'string') continue
+            const prompt = req.text
+              ? `Answer briefly based on this page.\nQUESTION/INSTRUCTION: ${req.text}\n\nPAGE CONTENT:\n${pageText}`
+              : `Summarize this page in 3-5 short bullet points.\n\nPAGE CONTENT:\n${pageText}`
+            let answer = ''
+            try {
+              const result = await window.electronAPI.ai.chat([{ role: 'user', content: prompt }])
+              answer = result?.content || 'No response from AI.'
+            } catch (e: any) {
+              answer = `AI error: ${e?.message || e}`
+            }
+            const target = wcIdRef.current
+            if (target === null) break
+            await window.electronAPI.webview.execScript(
+              target,
+              `window.__aihub_setNoteText&&window.__aihub_setNoteText(${JSON.stringify(req.noteId)},${JSON.stringify(answer)})`
+            ).catch(() => {})
           }
-          const target = wcIdRef.current
-          if (target === null) break
-          await window.electronAPI.webview.execScript(
-            target,
-            `window.__aihub_setNoteText&&window.__aihub_setNoteText(${JSON.stringify(req.noteId)},${JSON.stringify(answer)})`
-          ).catch(() => {})
+        }
+
+        for (const shot of shotQueue) {
+          if (!shot || typeof shot.strokesDataUrl !== 'string') continue
+          try {
+            const pageDataUrl = await window.electronAPI.webview.capture(id)
+            if (!pageDataUrl) continue
+            const composited = await compositeScreenshot(pageDataUrl, shot.strokesDataUrl)
+            await (window.electronAPI as any).file.saveImage({ dataUrl: composited, baseName: 'annotation' })
+          } catch { /* one failed shot shouldn't block the next poll tick */ }
         }
       } catch {}
     }, 1000)
