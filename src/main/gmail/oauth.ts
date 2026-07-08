@@ -1,6 +1,8 @@
 import { shell } from 'electron'
 import crypto from 'crypto'
 import http from 'http'
+import fs from 'fs'
+import { spawn } from 'child_process'
 import { b64urlEncode } from './base64url'
 import { httpJson } from './http'
 import { saveTokens, loadTokens, clearTokens } from './store'
@@ -19,6 +21,46 @@ function creds() {
   const clientId = stored?.clientId || DEFAULT_CLIENT_ID
   const clientSecret = stored?.clientSecret || DEFAULT_CLIENT_SECRET
   return { clientId, clientSecret }
+}
+
+// Google's OAuth consent screen rejects AIHub's embedded BrowserView at the
+// TLS/JA3 layer (see memory: ghsignin-websecurity) — every header/UA spoof
+// was exhausted and it's not fixable there. shell.openExternal() normally
+// dodges that by handing off to the OS default browser, but if AIHub itself
+// is registered as the Windows default browser (its own "open links from
+// other apps" feature), openExternal just loops back into the same blocked
+// embedded view. Launch a real installed browser binary directly so this one
+// OAuth popup always escapes AIHub, regardless of the default-browser setting.
+function realBrowserCandidates(): string[] {
+  const pf = process.env['ProgramFiles'] || 'C:\\Program Files'
+  const pf86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
+  const local = process.env['LOCALAPPDATA'] || ''
+  if (process.platform === 'win32') {
+    return [
+      `${pf86}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      `${pf}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      `${pf}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${pf86}\\Google\\Chrome\\Application\\chrome.exe`,
+      ...(local ? [`${local}\\Google\\Chrome\\Application\\chrome.exe`] : []),
+    ]
+  }
+  if (process.platform === 'darwin') {
+    return [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+    ]
+  }
+  return ['google-chrome', 'microsoft-edge', 'chromium-browser']
+}
+
+function openInRealBrowser(url: string): void {
+  const bin = realBrowserCandidates().find(p => process.platform === 'linux' || fs.existsSync(p))
+  if (!bin) { shell.openExternal(url); return }
+  try {
+    spawn(bin, [url], { detached: true, stdio: 'ignore' }).unref()
+  } catch {
+    shell.openExternal(url)
+  }
 }
 
 function form(obj: Record<string, string>): string {
@@ -101,7 +143,7 @@ export async function beginConnect(): Promise<{ ok: true; email: string } | { ok
         scope: GMAIL_SCOPES, access_type: 'offline', prompt: 'consent',
         code_challenge: challenge, code_challenge_method: 'S256', state,
       })
-      shell.openExternal(authUrl)
+      openInRealBrowser(authUrl)
     })
     const timer = setTimeout(() => finish({ ok: false, error: 'consent timed out' }), 5 * 60_000)
   })
