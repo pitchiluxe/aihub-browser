@@ -1,6 +1,6 @@
 import { ipcMain, app } from 'electron'
 import fs from 'fs'
-import { join } from 'path'
+import path, { join } from 'path'
 import { beginConnect, disconnect, currentEmail } from './oauth'
 import { listThreads, getThread, getAttachmentData, sendMessage } from './client'
 import { loadTokens, saveTokens, isEncryptionAvailable } from './store'
@@ -46,9 +46,13 @@ export function registerGmailIpc(safelySend: (channel: string, ...args: any[]) =
     try {
       const buf = await getAttachmentData(args.messageId, args.attachmentId)
       const dir = app.getPath('downloads')
-      let dest = join(dir, args.filename)
+      // args.filename is attacker-controlled (comes from the email's own MIME
+      // headers via the Gmail API) — strip any path components before joining
+      // so a crafted "../../.." name can't escape the Downloads folder.
+      const safeName = path.basename(args.filename).replace(/[\\/\x00]/g, '_') || 'attachment'
+      let dest = join(dir, safeName)
       let n = 1
-      while (fs.existsSync(dest)) { const dot = args.filename.lastIndexOf('.'); const base = dot > 0 ? args.filename.slice(0, dot) : args.filename; const ext = dot > 0 ? args.filename.slice(dot) : ''; dest = join(dir, `${base} (${n++})${ext}`) }
+      while (fs.existsSync(dest)) { const dot = safeName.lastIndexOf('.'); const base = dot > 0 ? safeName.slice(0, dot) : safeName; const ext = dot > 0 ? safeName.slice(dot) : ''; dest = join(dir, `${base} (${n++})${ext}`) }
       fs.writeFileSync(dest, buf)
       return ok({ savedPath: dest })
     } catch (e: any) { return fail(e.message) }
