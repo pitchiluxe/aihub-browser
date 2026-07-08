@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, RotateCw, Home, Bookmark, Bot,
-  Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe,
+  Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe, Camera, Video, Square,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { addBookmarkWithAI } from '../../services/bookmarkService'
@@ -29,7 +29,7 @@ export default function NavigationBar({
   const {
     tabs, activeTabId, toggleAIPanel, isAIPanelOpen,
     bookmarks, addBookmark, removeBookmark, toggleSidebar, isSidebarOpen,
-    isAnnotationMode, toggleAnnotationMode,
+    isAnnotationMode, toggleAnnotationMode, tabWcIds,
   } = useBrowserStore()
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -106,6 +106,78 @@ export default function NavigationBar({
     }
     document.addEventListener('aihub-focus-url', h)
     return () => document.removeEventListener('aihub-focus-url', h)
+  }, [])
+
+  // ── Screenshot ────────────────────────────────────────────────────────
+  const takeScreenshot = async () => {
+    const wcId = activeTabId ? tabWcIds[activeTabId] : null
+    if (!wcId) { showBmToast("No page to capture"); return }
+    try {
+      const dataUrl = await window.electronAPI.webview.capture(wcId)
+      if (!dataUrl) { showBmToast("Couldn't capture screenshot"); return }
+      const result = await (window.electronAPI as any).file.saveImage({ dataUrl, baseName: 'screenshot' })
+      if (result?.success) showBmToast('Screenshot saved')
+      else if (result?.error) showBmToast(`Couldn't save: ${result.error}`)
+      // canceled dialog: silent, matches file:saveMd behavior
+    } catch (e: any) {
+      showBmToast(`Couldn't capture: ${e?.message || e}`)
+    }
+  }
+
+  // ── Tab recording ────────────────────────────────────────────────────
+  const [isRecording, setIsRecording] = useState(false)
+  const [recSeconds,  setRecSeconds]  = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recStreamRef     = useRef<MediaStream | null>(null)
+  const recChunksRef     = useRef<Blob[]>([])
+  const recTimerRef      = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const formatRecTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+
+  const startRecording = async () => {
+    try {
+      const sourceId = await (window.electronAPI as any).recorder.getSourceId()
+      if (!sourceId) { showBmToast("Couldn't start recording"); return }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } },
+      } as any)
+      recStreamRef.current = stream
+      recChunksRef.current = []
+      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' })
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) recChunksRef.current.push(e.data) }
+      recorder.onstop = async () => {
+        const blob = new Blob(recChunksRef.current, { type: 'video/webm' })
+        recChunksRef.current = []
+        const buffer = await blob.arrayBuffer()
+        const result = await (window.electronAPI as any).file.saveVideo({ buffer })
+        if (result?.success) showBmToast('Recording saved')
+        else if (result?.error) showBmToast(`Couldn't save: ${result.error}`)
+        recStreamRef.current?.getTracks().forEach(t => t.stop())
+        recStreamRef.current = null
+      }
+      recorder.start()
+      mediaRecorderRef.current = recorder
+      setIsRecording(true)
+      setRecSeconds(0)
+      recTimerRef.current = setInterval(() => setRecSeconds(s => s + 1), 1000)
+    } catch (e: any) {
+      showBmToast(`Couldn't start recording: ${e?.message || e}`)
+    }
+  }
+
+  const stopRecording = () => {
+    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null }
+    setIsRecording(false)
+    mediaRecorderRef.current?.stop()
+    mediaRecorderRef.current = null
+  }
+
+  // Safety net: if the nav bar unmounts mid-recording, stop the stream
+  // rather than leaking an active capture.
+  useEffect(() => () => {
+    if (recTimerRef.current) clearInterval(recTimerRef.current)
+    recStreamRef.current?.getTracks().forEach(t => t.stop())
   }, [])
 
   return (
@@ -245,6 +317,30 @@ export default function NavigationBar({
         >
           <Pencil size={13} />
         </NavBtn>
+
+        <NavBtn onClick={takeScreenshot} title="Screenshot" disabled={isSpecialPage || !activeTabId}>
+          <Camera size={13} />
+        </NavBtn>
+
+        {isRecording ? (
+          <button
+            onClick={stopRecording}
+            title="Stop recording"
+            className="no-drag flex items-center gap-1.5 rounded-xl"
+            style={{
+              height: 32, padding: '0 10px', cursor: 'pointer',
+              background: 'rgba(239,68,68,0.16)', border: '1px solid rgba(239,68,68,0.4)',
+              color: '#f87171',
+            }}
+          >
+            <Square size={11} fill="currentColor" />
+            <span style={{ fontSize: 11, fontWeight: 700 }}>{formatRecTime(recSeconds)}</span>
+          </button>
+        ) : (
+          <NavBtn onClick={startRecording} title="Record tab" disabled={isSpecialPage || !activeTabId}>
+            <Video size={13} />
+          </NavBtn>
+        )}
 
         {/* AI assistant button — purple accent — opens the full docked panel */}
         <AIButton onClick={toggleAIPanel} active={isAIPanelOpen} />
