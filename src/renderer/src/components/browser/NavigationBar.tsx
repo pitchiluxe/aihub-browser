@@ -138,13 +138,17 @@ export default function NavigationBar({
     try {
       const sourceId = await (window.electronAPI as any).recorder.getSourceId()
       if (!sourceId) { showBmToast("Couldn't start recording"); return }
+      // Electron's desktopCapturer audio has no per-window/per-tab scoping —
+      // 'desktop' is the only source and it's a system-wide loopback of
+      // whatever's playing through the output device, not isolated to this
+      // window. Video stays scoped to the window via sourceId; audio can't be.
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
+        audio: { mandatory: { chromeMediaSource: 'desktop' } },
         video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } },
       } as any)
       recStreamRef.current = stream
       recChunksRef.current = []
-      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' })
+      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' })
       recorder.ondataavailable = (e) => { if (e.data.size > 0) recChunksRef.current.push(e.data) }
       recorder.onstop = async () => {
         const blob = new Blob(recChunksRef.current, { type: 'video/webm' })
