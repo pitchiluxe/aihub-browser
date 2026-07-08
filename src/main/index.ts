@@ -282,6 +282,18 @@ async function checkOllamaRunning(): Promise<{ running: boolean; models: string[
   return { running: false, models: [] }
 }
 
+// ── Default-browser launch URL ──────────────────────────────────────────────
+// When Windows launches us as the default browser (user clicked a link in
+// another app), the URL arrives as a plain argv token — either on our own
+// process.argv (cold start) or via the 'second-instance' commandLine (already
+// running). Filter for the first http(s) URL rather than assuming position,
+// since packaged vs. dev argv layouts differ (extra flags, exe path, etc).
+function extractLaunchUrl(argv: string[]): string | null {
+  for (const a of argv) if (/^https?:\/\//i.test(a)) return a
+  return null
+}
+let pendingOpenUrl: string | null = extractLaunchUrl(process.argv)
+
 // ── Window ─────────────────────────────────────────────────────────────────
 let mainWindow: BrowserWindow
 
@@ -767,6 +779,16 @@ function createWindow(): void {
   if (isDev && process.env['ELECTRON_RENDERER_URL']) mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   else mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
 
+  // Flush a URL we were launched with (cold start as default browser) once the
+  // renderer has actually mounted its 'open-in-new-tab' listener — sending any
+  // earlier is a silent no-op since nothing is listening yet.
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (pendingOpenUrl) {
+      safelySend('open-in-new-tab', pendingOpenUrl)
+      pendingOpenUrl = null
+    }
+  })
+
   // Background AI recommendation refresh
   setTimeout(async () => {
     try {
@@ -776,16 +798,30 @@ function createWindow(): void {
       safelySend('brain:recommendations', recs)
     } catch {}
   }, 8000)
+
+  // Warm the OpenRouter live-model cache so the FIRST real chat/summarize
+  // request doesn't pay the ~6s catalog-fetch latency inline — without this
+  // buildOrCandidates() would block the user's first message on a cold cache.
+  setTimeout(() => {
+    const { orBase } = getAIConfig()
+    getLiveFreeModelIds(orBase).catch(() => {})
+  }, 3000)
 }
 
-// Focus existing window when second instance tries to open
-app.on('second-instance', () => {
+// Focus existing window when second instance tries to open, and — this is the
+// actual default-browser flow on Windows — forward whatever URL it was
+// launched with. Without this the OS successfully relaunches us with the
+// clicked URL on the command line, we just never read it, so the window pops
+// up on whatever tab was already open.
+app.on('second-instance', (_event, commandLine) => {
   const wins = BrowserWindow.getAllWindows()
   if (wins.length > 0) {
     const win = wins[0]
     if (win.isMinimized()) win.restore()
     win.focus()
   }
+  const url = extractLaunchUrl(commandLine)
+  if (url) safelySend('open-in-new-tab', url)
 })
 
 app.whenReady().then(() => {
@@ -1229,6 +1265,54 @@ const OR_FREE_FALLBACKS = [
   'openrouter/free',
 ]
 
+// ── Live OpenRouter model catalog ───────────────────────────────────────────
+// The hardcoded list above is exactly the problem it warns about in its own
+// comment: OpenRouter retires free-tier slugs without notice, so any fixed
+// list drifts stale and starts eating 404s ("unavailable for free") that cost
+// a full round-trip per dead model before falling through. Pull the live
+// catalog (GET /models, no auth needed) and use it to drop retired slugs
+// before we ever request them, and to pick up new free models automatically.
+// Cached for 6h — the catalog doesn't churn hourly, and this keeps it off the
+// hot path of every chat request. A failed/slow fetch degrades to the last
+// good cache, or to the raw hardcoded list if we've never fetched successfully
+// — offline shouldn't mean "no AI", it means "can't verify, so just try".
+let orModelsCache: { ids: string[]; ts: number } | null = null
+const OR_MODELS_TTL = 6 * 60 * 60_000
+
+async function getLiveFreeModelIds(orBase: string): Promise<string[]> {
+  if (orModelsCache && Date.now() - orModelsCache.ts < OR_MODELS_TTL) return orModelsCache.ids
+  try {
+    const { status, body } = await httpGet(`${orBase}/models`, 6000)
+    if (status !== 200) return orModelsCache?.ids ?? []
+    const data = JSON.parse(body)?.data || []
+    const ids: string[] = data
+      .filter((m: any) => m.id?.endsWith(':free') || (m.pricing?.prompt === '0' && m.pricing?.completion === '0'))
+      .map((m: any) => m.id)
+    if (ids.length) orModelsCache = { ids, ts: Date.now() }
+    return ids.length ? ids : (orModelsCache?.ids ?? [])
+  } catch {
+    return orModelsCache?.ids ?? []
+  }
+}
+
+// Build the ordered candidate chain for a chat request: the user's configured
+// model first (if it's actually still alive), then the hand-tuned fallbacks
+// filtered against the live catalog (retired ones silently drop out), then
+// any other live free models as a last resort. If the catalog fetch failed
+// entirely (empty, no cache), fall back to the old static behavior rather
+// than refusing to try anything.
+async function buildOrCandidates(orBase: string, orMdl: string): Promise<string[]> {
+  const live = await getLiveFreeModelIds(orBase)
+  if (!live.length) return [...new Set([orMdl, ...OR_FREE_FALLBACKS])]
+  const liveSet = new Set(live)
+  const ordered = [
+    ...(liveSet.has(orMdl) ? [orMdl] : []),
+    ...OR_FREE_FALLBACKS.filter(m => liveSet.has(m)),
+    ...live.filter(m => m !== orMdl),
+  ]
+  return [...new Set(ordered)]
+}
+
 // Strip DeepSeek/reasoning model chain-of-thought tags before returning content
 function stripThinkTags(s: string): string {
   return s.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
@@ -1305,8 +1389,8 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, o
   let cloudError = ''
   const tryCloud = async (): Promise<{ content: string; model: string; provider: string } | null> => {
     if (!orKey) return null
-    // Candidate list: configured model first, then known-free fallbacks
-    const candidates = [orMdl, ...OR_FREE_FALLBACKS.filter(m => m !== orMdl)]
+    // Candidate list: configured model first, then live-verified free fallbacks
+    const candidates = await buildOrCandidates(orBase, orMdl)
     for (const model of candidates) {
       try {
         // 8192 tokens: long structured replies (extension generation emits
@@ -1391,7 +1475,7 @@ ipcMain.handle('ai:summarizePage', async (_e, pageText: string, url: string) => 
   if (ollamaDiag) console.warn('[aihub] ai:summarizePage Ollama fallback:', ollamaDiag)
 
   if (orKey) {
-    const candidates = [...new Set([orMdl, ...OR_FREE_FALLBACKS])]
+    const candidates = await buildOrCandidates(orBase, orMdl)
     for (const model of candidates) {
       try {
         const summary = await openRouterChat(orBase, orKey, model, msgs, 800)
@@ -1422,6 +1506,49 @@ ipcMain.handle('file:saveMd', async (_e, { title, content }: { title: string; co
   } catch (e: any) {
     return { success: false, error: e.message }
   }
+})
+
+// ── IPC: Save screenshot as PNG ────────────────────────────────────────────
+ipcMain.handle('file:saveImage', async (_e, { dataUrl, baseName }: { dataUrl: string; baseName?: string }) => {
+  const safeName = (baseName || 'screenshot').replace(/[^a-z0-9\s-]/gi, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'screenshot'
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save Screenshot',
+    defaultPath: join(os.homedir(), 'Documents', `${safeName}-${Date.now()}.png`),
+    filters: [{ name: 'PNG Image', extensions: ['png'] }],
+  })
+  if (canceled || !filePath) return { success: false }
+  try {
+    const base64 = dataUrl.replace(/^data:image\/png;base64,/, '')
+    fs.writeFileSync(filePath, Buffer.from(base64, 'base64'))
+    return { success: true, filePath }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// ── IPC: Save tab recording as WebM ────────────────────────────────────────
+ipcMain.handle('file:saveVideo', async (_e, { buffer }: { buffer: ArrayBuffer }) => {
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save Recording',
+    defaultPath: join(os.homedir(), 'Documents', `recording-${Date.now()}.webm`),
+    filters: [{ name: 'WebM Video', extensions: ['webm'] }],
+  })
+  if (canceled || !filePath) return { success: false }
+  try {
+    fs.writeFileSync(filePath, Buffer.from(buffer))
+    return { success: true, filePath }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// ── IPC: Media source id for tab/window recording ─────────────────────────
+// getMediaSourceId() (no-arg BrowserWindow method) hands back an id usable
+// directly as chromeMediaSourceId in a renderer-side getUserMedia call,
+// scoped to this app's own window — no desktopCapturer.getSources() call or
+// OS screen-picker permission dance needed for capturing our own window.
+ipcMain.handle('recorder:getSourceId', () => {
+  try { return mainWindow.getMediaSourceId() } catch { return null }
 })
 
 // ── IPC: Live AI news from Hacker News ────────────────────────────────────

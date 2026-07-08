@@ -64,7 +64,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     connect: (ssid:string, open?:boolean) => ipcRenderer.invoke('wifi:connect', ssid, open),
   },
   file: {
-    saveMd: (opts: { title: string; content: string }) => ipcRenderer.invoke('file:saveMd', opts),
+    saveMd:    (opts: { title: string; content: string })      => ipcRenderer.invoke('file:saveMd', opts),
+    saveImage: (opts: { dataUrl: string; baseName?: string })  => ipcRenderer.invoke('file:saveImage', opts),
+    saveVideo: (opts: { buffer: ArrayBuffer })                  => ipcRenderer.invoke('file:saveVideo', opts),
   },
   ai: {
     checkDuplicate:     (url:string, e:string[]) => ipcRenderer.invoke('ai:checkDuplicate', url, e),
@@ -86,6 +88,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   webview: {
     capture:     (wcId: number)                 => ipcRenderer.invoke('webview:capture', wcId),
     execScript:  (wcId: number, script: string) => ipcRenderer.invoke('webview:execScript', wcId, script),
+  },
+  recorder: {
+    getSourceId: (): Promise<string | null> => ipcRenderer.invoke('recorder:getSourceId'),
   },
   tabs: {
     showContextMenu: (info: { isBrowser: boolean; hasRight: boolean; count: number }): Promise<string> =>
