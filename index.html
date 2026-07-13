@@ -35,7 +35,7 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "AIHub Browser",
-    "operatingSystem": "Windows 10, Windows 11",
+    "operatingSystem": "Windows 10, Windows 11, macOS",
     "applicationCategory": "BrowserApplication",
     "offers": {
       "@type": "Offer",
@@ -44,7 +44,7 @@
     },
     "description": "AI-native web browser with built-in AI assistant, 3D bookmark knowledge graph, local Ollama AI, and OpenRouter cloud model support.",
     "downloadUrl": "https://github.com/pitchiluxe/aihub-browser/releases/latest",
-    "softwareVersion": "1.1.0",
+    "softwareVersion": "1.2.2",
     "author": {
       "@type": "Person",
       "name": "Erick OMARI",
@@ -806,7 +806,7 @@
   <div class="wrap">
     <div class="hero-inner">
       <div>
-        <div class="hero-eyebrow">✦ v1.1.0 — Free for Windows</div>
+        <div class="hero-eyebrow">✦ v1.2.2 — Free for Windows &amp; macOS</div>
         <h1 class="hero-title">
           The browser<br/>
           that <span class="underline-chalk">thinks</span><br/>
@@ -1067,7 +1067,7 @@
         <span class="btn-label">Download for Windows — Free</span>
       </a>
       <div class="dl-meta">
-        <span><span class="ck">✓</span>Windows 10/11 x64</span>
+        <span id="dl-meta-os"><span class="ck">✓</span>Windows 10/11 x64</span>
         <span><span class="ck">✓</span>No account</span>
         <span><span class="ck">✓</span>No telemetry</span>
         <span><span class="ck">✓</span>76 MB</span>
@@ -1199,6 +1199,23 @@
     })
   },{threshold:.4})
   const sr=document.getElementById('stats-row'); if(sr) cObs.observe(sr)
+
+  /* ── OS detection: swap download copy for macOS visitors ── */
+  ;(function(){
+    const isMac = /Mac/.test(navigator.platform) || /Macintosh/.test(navigator.userAgent)
+    if(!isMac) return
+    document.querySelectorAll('#btn-hero .btn-label, #btn-dl-main .btn-label').forEach(el=>{
+      el.textContent = el.textContent.replace('Windows','macOS')
+    })
+    const metaOs = document.getElementById('dl-meta-os')
+    if(metaOs) metaOs.innerHTML = '<span class="ck">✓</span>macOS 11+ · Intel &amp; Apple Silicon'
+    const toastBody = document.querySelector('#dl-toast .dl-toast-body')
+    if(toastBody) toastBody.textContent = 'AIHub Browser for macOS — open the .dmg to install'
+    const steps = document.querySelectorAll('#dl-toast .dl-toast-step span:last-child')
+    if(steps.length >= 2){
+      steps[1].innerHTML = 'Open the DMG and drag <strong style="color:#e2fdf0">AIHub Browser</strong> into <strong style="color:#e2fdf0">Applications</strong>. First launch: right-click the app → <strong style="color:#e2fdf0">Open</strong>.'
+    }
+  })()
 
   /* ── Smooth scroll ── */
   document.querySelectorAll('a[href^="#"]').forEach(a=>{

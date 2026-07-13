@@ -63,23 +63,43 @@
   <div class="card">
     <div class="logo">A</div>
     <h1>AIHub Browser</h1>
-    <p class="sub">Windows 10 / 11 · Free · No account required</p>
+    <p class="sub" id="sub">Windows 10 / 11 &amp; macOS · Free · No account required</p>
 
-    <div class="info">
+    <div class="info" id="info-win">
       <p>
         Run the installer — follow the setup wizard and AIHub Browser will be added to your Start Menu and Desktop.
         If Chrome warns about the file, click the <strong>arrow ›</strong> next to it and choose <strong>Keep</strong>.
       </p>
     </div>
 
-    <!-- Primary: always redirects to the latest release's .exe -->
-    <a class="btn btn-primary" href="/api/get">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-      Download Installer for Windows
-    </a>
+    <div class="info" id="info-mac" style="display:none">
+      <p>
+        Open the DMG and drag <strong>AIHub Browser</strong> into <strong>Applications</strong>.
+        The first time, <strong>right-click the app → Open → Open</strong> — macOS shows a warning
+        because the app isn't notarized by Apple yet. You only need to do this once.
+      </p>
+    </div>
+
+    <!-- Buttons are reordered by the script below so the visitor's OS comes first -->
+    <div id="dl-buttons">
+      <!-- Redirects to the latest release's .exe -->
+      <a class="btn btn-primary" id="btn-win" href="/api/get" data-os="win">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Download for Windows
+      </a>
+
+      <!-- Redirects to the latest release's .dmg -->
+      <a class="btn btn-secondary" id="btn-mac" href="/api/get?os=mac" data-os="mac">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Download for macOS
+      </a>
+    </div>
 
     <div class="divider">or download from</div>
 
@@ -91,5 +111,25 @@
 
     <a href="/" class="back">← Back to AIHub Browser</a>
   </div>
+
+  <script>
+    (function () {
+      var isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform) ||
+                  /Macintosh/.test(navigator.userAgent)
+      if (!isMac) return
+
+      var winBtn = document.getElementById('btn-win')
+      var macBtn = document.getElementById('btn-mac')
+
+      // Promote the macOS button, demote Windows, and put macOS first
+      macBtn.className = 'btn btn-primary'
+      winBtn.className = 'btn btn-secondary'
+      document.getElementById('dl-buttons').insertBefore(macBtn, winBtn)
+
+      document.getElementById('sub').textContent = 'macOS 11+ · Universal (Intel & Apple Silicon) · Free'
+      document.getElementById('info-win').style.display = 'none'
+      document.getElementById('info-mac').style.display = ''
+    })()
+  </script>
 </body>
 </html>
