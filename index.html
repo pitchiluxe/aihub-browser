@@ -653,6 +653,16 @@
       transition: all .14s;
     }
     .btn-dl:hover { background: var(--yellow2); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,.35); }
+    .dl-btn-row { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .btn-dl-ghost {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 15px 26px; border-radius: 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 15px; font-weight: 600; color: var(--chalk2);
+      border: 1px solid rgba(245,241,227,.25);
+      text-decoration: none; background: transparent; transition: all .13s;
+    }
+    .btn-dl-ghost:hover { border-color: rgba(245,241,227,.5); color: var(--chalk); background: rgba(245,241,227,.05); }
     .dl-meta {
       display: flex; justify-content: center; flex-wrap: wrap; gap: 16px; margin-top: 20px;
     }
@@ -828,7 +838,7 @@
           <span>Free forever</span><span class="sep"></span>
           <span>No account</span><span class="sep"></span>
           <span>No telemetry</span><span class="sep"></span>
-          <span>76 MB</span>
+          <a href="/api/get?os=mac" id="hero-alt-os" style="color:var(--chalk2);text-decoration:underline dotted">Also for macOS ⬇</a>
         </div>
       </div>
 
@@ -1062,10 +1072,16 @@
       <div class="dl-eyebrow">✦ Assignment Due: Now ✦</div>
       <h2>Download.<br/>Browse smarter.</h2>
       <p>Free download. No account. No subscription.<br/>No tracking. Just a better browser.</p>
-      <a href="/download" class="btn-dl" id="btn-dl-main">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span class="btn-label">Download for Windows — Free</span>
-      </a>
+      <div class="dl-btn-row">
+        <a href="/download" class="btn-dl" id="btn-dl-main">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="btn-label">Download for Windows — Free</span>
+        </a>
+        <a href="/api/get?os=mac" class="btn-dl-ghost" id="btn-dl-alt">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="btn-label">Download for macOS</span>
+        </a>
+      </div>
       <div class="dl-meta">
         <span id="dl-meta-os"><span class="ck">✓</span>Windows 10/11 x64</span>
         <span><span class="ck">✓</span>No account</span>
@@ -1209,6 +1225,16 @@
     })
     const metaOs = document.getElementById('dl-meta-os')
     if(metaOs) metaOs.innerHTML = '<span class="ck">✓</span>macOS 11+ · Intel &amp; Apple Silicon'
+    const altBtn = document.getElementById('btn-dl-alt')
+    if(altBtn){
+      altBtn.href = '/api/get'
+      altBtn.querySelector('.btn-label').textContent = 'Download for Windows'
+    }
+    const heroAlt = document.getElementById('hero-alt-os')
+    if(heroAlt){
+      heroAlt.href = '/api/get'
+      heroAlt.textContent = 'Also for Windows ⬇'
+    }
     const toastBody = document.querySelector('#dl-toast .dl-toast-body')
     if(toastBody) toastBody.textContent = 'AIHub Browser for macOS — open the .dmg to install'
     const steps = document.querySelectorAll('#dl-toast .dl-toast-step span:last-child')
