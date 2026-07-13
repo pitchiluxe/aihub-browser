@@ -832,13 +832,17 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span class="btn-label">Download for Windows</span>
           </a>
+          <a href="/api/get?os=mac" class="btn-ghost-chalk" id="btn-hero-alt">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span class="btn-label">Download for macOS</span>
+          </a>
           <a href="#features" class="btn-ghost-chalk">See features →</a>
         </div>
         <div class="hero-meta">
           <span>Free forever</span><span class="sep"></span>
           <span>No account</span><span class="sep"></span>
           <span>No telemetry</span><span class="sep"></span>
-          <a href="/api/get?os=mac" id="hero-alt-os" style="color:var(--chalk2);text-decoration:underline dotted">Also for macOS ⬇</a>
+          <span>Windows &amp; macOS</span>
         </div>
       </div>
 
@@ -1230,10 +1234,10 @@
       altBtn.href = '/api/get'
       altBtn.querySelector('.btn-label').textContent = 'Download for Windows'
     }
-    const heroAlt = document.getElementById('hero-alt-os')
+    const heroAlt = document.getElementById('btn-hero-alt')
     if(heroAlt){
       heroAlt.href = '/api/get'
-      heroAlt.textContent = 'Also for Windows ⬇'
+      heroAlt.querySelector('.btn-label').textContent = 'Download for Windows'
     }
     const toastBody = document.querySelector('#dl-toast .dl-toast-body')
     if(toastBody) toastBody.textContent = 'AIHub Browser for macOS — open the .dmg to install'
