@@ -97,9 +97,25 @@
       "deleteAppDataOnUninstall": false
     },
     "mac": {
-      "target": "dmg",
-      "icon": "resources/icon.icns",
-      "category": "public.app-category.productivity"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "resources/icon.png",
+      "category": "public.app-category.productivity",
+      "artifactName": "AIHub-Browser-${version}-${os}-${arch}.${ext}",
+      "identity": null,
+      "darkModeSupport": true
     },
     "linux": {
       "target": "AppImage",

@@ -214,4 +214,13 @@ const outPath = path.join(__dirname, '..', 'resources', 'icon.ico')
 fs.mkdirSync(path.dirname(outPath), { recursive: true })
 fs.writeFileSync(outPath, ico)
 
-console.log(`\n✓  Saved ${outPath}  (${Math.ceil(ico.length / 1024)} KB)\n`)
+console.log(`\n✓  Saved ${outPath}  (${Math.ceil(ico.length / 1024)} KB)`)
+
+// macOS / Linux: single large PNG — electron-builder derives .icns from it
+process.stdout.write('  Rendering 1024×1024 PNG... ')
+const macPng = buildPNG(1024)
+const pngPath = path.join(__dirname, '..', 'resources', 'icon.png')
+fs.writeFileSync(pngPath, macPng)
+console.log(`${macPng.length} bytes`)
+
+console.log(`✓  Saved ${pngPath}  (${Math.ceil(macPng.length / 1024)} KB)\n`)

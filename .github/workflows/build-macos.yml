@@ -1,0 +1,51 @@
+name: Build macOS
+
+# Builds the unsigned universal (Intel + Apple Silicon) DMG and ZIP on a
+# macOS runner — macOS apps cannot be compiled on Windows/Linux — and
+# attaches them to the GitHub release matching the package.json version.
+#
+# Trigger by pushing any v* tag, or manually from the Actions tab.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate icons
+        run: npm run generate-icon
+
+      - name: Build renderer and main
+        run: npm run build
+
+      - name: Package macOS app
+        run: npx electron-builder --mac --publish never
+        env:
+          # No Apple Developer certificate — skip identity discovery so the
+          # build stays unsigned instead of failing.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload artifacts to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$(node -p "require('./package.json').version")"
+          echo "Uploading macOS artifacts to release $TAG"
+          gh release upload "$TAG" dist/*.dmg dist/*-mac-*.zip --clobber
