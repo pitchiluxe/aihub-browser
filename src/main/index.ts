@@ -1,5 +1,6 @@
 import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, webContents as electronWebContents } from 'electron'
-import { join } from 'path'
+import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname } from 'path'
+import zlib from 'zlib'
 import http from 'http'
 import https from 'https'
 import dns from 'dns'
@@ -43,9 +44,10 @@ if (!gotLock) {
 }
 
 // ── SimpleStore ────────────────────────────────────────────────────────────
-const DATA_FILE = join(APP_DIR, 'data.json')
-const HIST_FILE = join(APP_DIR, 'history.json')
-const DL_FILE   = join(APP_DIR, 'downloads.json')
+const DATA_FILE   = join(APP_DIR, 'data.json')
+const HIST_FILE   = join(APP_DIR, 'history.json')
+const DL_FILE     = join(APP_DIR, 'downloads.json')
+const AGENTS_FILE = join(APP_DIR, 'agents.json')
 
 const DEFAULT_BOOKMARKS = [
   { id: 'bm-g',  url: 'https://www.google.com',                        title: 'Google',           favicon: '', category: 'Search',        addedAt: 0, color: '#4285F4' },
@@ -995,6 +997,19 @@ ipcMain.handle('tabview:getNavState', (_e, tabId: string) => {
   try { return { canGoBack: wc?.canGoBack() ?? false, canGoForward: wc?.canGoForward() ?? false } }
   catch { return { canGoBack: false, canGoForward: false } }
 })
+// Runs a script inside a tab's page and returns its completion value — the
+// agent layer uses this to read pages and drive forms (fill fields, click).
+// userGesture=true so synthesized clicks count as real user interaction.
+ipcMain.handle('tabview:execJs', async (_e, tabId: string, script: string) => {
+  const wc = tabViews.get(tabId)?.webContents
+  if (!wc || wc.isDestroyed()) return { error: 'tab not found — it may be a home/app tab, not a web page' }
+  try {
+    const result = await wc.executeJavaScript(script, true)
+    return { result }
+  } catch (e: any) {
+    return { error: e?.message || String(e) }
+  }
+})
 
 // ── IPC: Bookmarks ─────────────────────────────────────────────────────────
 ipcMain.handle('bookmarks:getAll', () => getData().bookmarks)
@@ -1540,6 +1555,285 @@ ipcMain.handle('file:saveVideo', async (_e, { buffer }: { buffer: ArrayBuffer })
   try {
     fs.writeFileSync(filePath, Buffer.from(buffer))
     return { success: true, filePath }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// ── Agent store: saved custom agents + archived conversations ─────────────
+function readAgentsStore(): { customAgents: any[]; conversations: any[] } {
+  const s = readJson(AGENTS_FILE, null)
+  return {
+    customAgents:  Array.isArray(s?.customAgents)  ? s.customAgents  : [],
+    conversations: Array.isArray(s?.conversations) ? s.conversations : [],
+  }
+}
+
+ipcMain.handle('agents:load', () => readAgentsStore())
+
+ipcMain.handle('agents:saveAgent', (_e, agent: any) => {
+  if (!agent?.id || !agent?.name) return false
+  const s = readAgentsStore()
+  const i = s.customAgents.findIndex(a => a.id === agent.id)
+  if (i >= 0) s.customAgents[i] = agent
+  else s.customAgents.unshift(agent)
+  writeJson(AGENTS_FILE, s)
+  return true
+})
+
+ipcMain.handle('agents:deleteAgent', (_e, id: string) => {
+  const s = readAgentsStore()
+  s.customAgents = s.customAgents.filter(a => a.id !== id)
+  writeJson(AGENTS_FILE, s)
+  return true
+})
+
+ipcMain.handle('agents:saveConversation', (_e, convo: any) => {
+  if (!convo?.id) return false
+  const s = readAgentsStore()
+  const i = s.conversations.findIndex(c => c.id === convo.id)
+  if (i >= 0) s.conversations[i] = convo
+  else s.conversations.unshift(convo)
+  // Newest first, capped so the archive can't grow unbounded
+  s.conversations.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  s.conversations = s.conversations.slice(0, 100)
+  writeJson(AGENTS_FILE, s)
+  return true
+})
+
+ipcMain.handle('agents:deleteConversation', (_e, id: string) => {
+  const s = readAgentsStore()
+  s.conversations = s.conversations.filter(c => c.id !== id)
+  writeJson(AGENTS_FILE, s)
+  return true
+})
+
+// ── Agent file-system access ───────────────────────────────────────────────
+// Agents may read/write files ONLY inside the user's home folder. Every path
+// is resolved and containment-checked with path.relative so "..", absolute
+// paths outside home, and drive changes are all rejected.
+function resolveAgentPath(p: string): { path: string } | { error: string } {
+  if (!p || typeof p !== 'string') return { error: 'path is required' }
+  let raw = p.trim().replace(/^["']|["']$/g, '')
+  if (raw === '~' || raw.startsWith('~/') || raw.startsWith('~\\')) raw = join(os.homedir(), raw.slice(1))
+  const resolved = pathResolve(raw)
+  const rel = pathRelative(pathResolve(os.homedir()), resolved)
+  if (rel.startsWith('..') || pathIsAbsolute(rel)) {
+    return { error: 'access denied — agents can only access files inside your user folder' }
+  }
+  return { path: resolved }
+}
+
+// Minimal ZIP entry extraction (stored + deflate) — enough to pull
+// word/document.xml out of a .docx without adding a zip dependency.
+function extractZipEntry(buf: Buffer, wantedName: string): Buffer | null {
+  let eocd = -1
+  const stop = Math.max(0, buf.length - 22 - 65535)
+  for (let i = buf.length - 22; i >= stop; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break }
+  }
+  if (eocd === -1) return null
+  const count = buf.readUInt16LE(eocd + 10)
+  let ptr = buf.readUInt32LE(eocd + 16)
+  for (let n = 0; n < count; n++) {
+    if (ptr + 46 > buf.length || buf.readUInt32LE(ptr) !== 0x02014b50) return null
+    const method     = buf.readUInt16LE(ptr + 10)
+    const compSize   = buf.readUInt32LE(ptr + 20)
+    const nameLen    = buf.readUInt16LE(ptr + 28)
+    const extraLen   = buf.readUInt16LE(ptr + 30)
+    const commentLen = buf.readUInt16LE(ptr + 32)
+    const localOff   = buf.readUInt32LE(ptr + 42)
+    const name = buf.toString('utf-8', ptr + 46, ptr + 46 + nameLen)
+    if (name === wantedName) {
+      const lNameLen  = buf.readUInt16LE(localOff + 26)
+      const lExtraLen = buf.readUInt16LE(localOff + 28)
+      const dataStart = localOff + 30 + lNameLen + lExtraLen
+      const data = buf.subarray(dataStart, dataStart + compSize)
+      if (method === 0) return Buffer.from(data)
+      if (method === 8) { try { return zlib.inflateRawSync(data) } catch { return null } }
+      return null
+    }
+    ptr += 46 + nameLen + extraLen + commentLen
+  }
+  return null
+}
+
+function docxToText(buf: Buffer): string | null {
+  const xml = extractZipEntry(buf, 'word/document.xml')
+  if (!xml) return null
+  return xml.toString('utf-8')
+    .replace(/<w:tab[^>]*\/>/g, '\t')
+    .replace(/<w:br[^>]*\/>/g, '\n')
+    .replace(/<\/w:p>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+ipcMain.handle('agentfs:listDir', (_e, p: string) => {
+  const r = resolveAgentPath(p)
+  if ('error' in r) return r
+  try {
+    const stat = fs.statSync(r.path)
+    if (!stat.isDirectory()) return { error: 'not a folder — use read_file for files' }
+    const entries = fs.readdirSync(r.path, { withFileTypes: true }).slice(0, 200).map(d => {
+      let size = 0, modified = 0
+      try { const s = fs.statSync(join(r.path, d.name)); size = s.size; modified = s.mtimeMs } catch {}
+      return { name: d.name, dir: d.isDirectory(), size, modified }
+    })
+    return { path: r.path, entries }
+  } catch (e: any) {
+    return { error: e?.code === 'ENOENT' ? 'folder not found' : (e?.message || String(e)) }
+  }
+})
+
+ipcMain.handle('agentfs:readFile', (_e, p: string) => {
+  const r = resolveAgentPath(p)
+  if ('error' in r) return r
+  try {
+    const stat = fs.statSync(r.path)
+    if (stat.isDirectory()) return { error: 'that is a folder — use list_dir' }
+    if (stat.size > 10 * 1024 * 1024) return { error: 'file too large (over 10 MB)' }
+    const ext = extname(r.path).toLowerCase()
+    if (ext === '.docx') {
+      const text = docxToText(fs.readFileSync(r.path))
+      if (!text) return { error: 'could not extract text from this .docx file' }
+      return { path: r.path, text: text.slice(0, 60000) }
+    }
+    if (ext === '.pdf' || ext === '.doc') {
+      return { error: `cannot read ${ext} directly — ask the user for a .docx, .txt or .md version of the document` }
+    }
+    const buf = fs.readFileSync(r.path)
+    // Reject binary content: a real text file has no NUL bytes
+    const probe = buf.subarray(0, 4096)
+    if (probe.includes(0)) return { error: 'this looks like a binary file, not text' }
+    return { path: r.path, text: buf.toString('utf-8').slice(0, 60000) }
+  } catch (e: any) {
+    return { error: e?.code === 'ENOENT' ? 'file not found' : (e?.message || String(e)) }
+  }
+})
+
+ipcMain.handle('agentfs:writeFile', (_e, p: string, content: string, overwrite?: boolean) => {
+  const r = resolveAgentPath(p)
+  if ('error' in r) return r
+  if (typeof content !== 'string') return { error: 'content is required' }
+  try {
+    if (fs.existsSync(r.path) && !overwrite) {
+      return { error: 'file already exists — pass overwrite:true to replace it' }
+    }
+    fs.mkdirSync(dirname(r.path), { recursive: true })
+    fs.writeFileSync(r.path, content, 'utf-8')
+    return { ok: true, path: r.path }
+  } catch (e: any) {
+    return { error: e?.message || String(e) }
+  }
+})
+
+// ── IPC: Save any text file the agent produced (resume, code, csv…) ───────
+function sanitizeFilename(name: string, fallback: string): string {
+  const clean = (name || '').replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim().slice(0, 80)
+  return clean || fallback
+}
+
+ipcMain.handle('file:saveText', async (_e, { filename, content }: { filename: string; content: string }) => {
+  const safe = sanitizeFilename(filename, 'agent-output.txt')
+  const ext = extname(safe).replace('.', '') || 'txt'
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save File',
+    defaultPath: join(os.homedir(), 'Downloads', safe),
+    filters: [{ name: ext.toUpperCase() + ' File', extensions: [ext] }, { name: 'All Files', extensions: ['*'] }],
+  })
+  if (canceled || !filePath) return { success: false, canceled: true }
+  try {
+    fs.writeFileSync(filePath, content ?? '', 'utf-8')
+    return { success: true, filePath }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// ── IPC: Bundle generated files into a downloadable ZIP ────────────────────
+// Hand-rolled ZIP writer (deflate via zlib + CRC-32) — no dependency needed.
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256)
+  for (let n = 0; n < 256; n++) {
+    let c = n
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1
+    t[n] = c >>> 0
+  }
+  return t
+})()
+
+function crc32(buf: Buffer): number {
+  let c = 0xFFFFFFFF
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8)
+  return (c ^ 0xFFFFFFFF) >>> 0
+}
+
+function buildZip(files: { path: string; content: string }[]): Buffer {
+  const chunks: Buffer[] = []
+  const central: Buffer[] = []
+  let offset = 0
+  for (const f of files) {
+    const entryName = (f.path || 'file.txt').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\.\.(\/|$)/g, '')
+    const nameBuf = Buffer.from(entryName, 'utf-8')
+    const data = Buffer.from(f.content ?? '', 'utf-8')
+    const deflated = zlib.deflateRawSync(data)
+    const useDeflate = deflated.length < data.length
+    const payload = useDeflate ? deflated : data
+    const method = useDeflate ? 8 : 0
+    const crc = crc32(data)
+
+    const local = Buffer.alloc(30)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)          // version needed to extract
+    local.writeUInt16LE(0x0800, 6)      // flags: UTF-8 filenames
+    local.writeUInt16LE(method, 8)
+    local.writeUInt32LE(crc, 14)
+    local.writeUInt32LE(payload.length, 18)
+    local.writeUInt32LE(data.length, 22)
+    local.writeUInt16LE(nameBuf.length, 26)
+    chunks.push(local, nameBuf, payload)
+
+    const cd = Buffer.alloc(46)
+    cd.writeUInt32LE(0x02014b50, 0)
+    cd.writeUInt16LE(20, 4)
+    cd.writeUInt16LE(20, 6)
+    cd.writeUInt16LE(0x0800, 8)
+    cd.writeUInt16LE(method, 10)
+    cd.writeUInt32LE(crc, 16)
+    cd.writeUInt32LE(payload.length, 20)
+    cd.writeUInt32LE(data.length, 24)
+    cd.writeUInt16LE(nameBuf.length, 28)
+    cd.writeUInt32LE(offset, 42)
+    central.push(Buffer.concat([cd, nameBuf]))
+    offset += 30 + nameBuf.length + payload.length
+  }
+  const cdBuf = Buffer.concat(central)
+  const eocd = Buffer.alloc(22)
+  eocd.writeUInt32LE(0x06054b50, 0)
+  eocd.writeUInt16LE(files.length, 8)
+  eocd.writeUInt16LE(files.length, 10)
+  eocd.writeUInt32LE(cdBuf.length, 12)
+  eocd.writeUInt32LE(offset, 16)
+  return Buffer.concat([...chunks, cdBuf, eocd])
+}
+
+ipcMain.handle('file:saveZip', async (_e, { filename, files }: { filename?: string; files: { path: string; content: string }[] }) => {
+  if (!Array.isArray(files) || files.length === 0) return { success: false, error: 'no files to zip' }
+  let safe = sanitizeFilename(filename || '', 'agent-files.zip')
+  if (!safe.toLowerCase().endsWith('.zip')) safe += '.zip'
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save ZIP Archive',
+    defaultPath: join(os.homedir(), 'Downloads', safe),
+    filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+  })
+  if (canceled || !filePath) return { success: false, canceled: true }
+  try {
+    fs.writeFileSync(filePath, buildZip(files.slice(0, 200)))
+    return { success: true, filePath, fileCount: files.length }
   } catch (e: any) {
     return { success: false, error: e.message }
   }

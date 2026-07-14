@@ -78,6 +78,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveMd:    (opts: { title: string; content: string })      => ipcRenderer.invoke('file:saveMd', opts),
     saveImage: (opts: { dataUrl: string; baseName?: string })  => ipcRenderer.invoke('file:saveImage', opts),
     saveVideo: (opts: { buffer: ArrayBuffer })                  => ipcRenderer.invoke('file:saveVideo', opts),
+    saveText:  (opts: { filename: string; content: string })   => ipcRenderer.invoke('file:saveText', opts),
+    saveZip:   (opts: { filename?: string; files: { path: string; content: string }[] }) => ipcRenderer.invoke('file:saveZip', opts),
+  },
+  agents: {
+    load:               () => ipcRenderer.invoke('agents:load'),
+    saveAgent:          (a: any) => ipcRenderer.invoke('agents:saveAgent', a),
+    deleteAgent:        (id: string) => ipcRenderer.invoke('agents:deleteAgent', id),
+    saveConversation:   (c: any) => ipcRenderer.invoke('agents:saveConversation', c),
+    deleteConversation: (id: string) => ipcRenderer.invoke('agents:deleteConversation', id),
+  },
+  agentFs: {
+    listDir:   (p: string) => ipcRenderer.invoke('agentfs:listDir', p),
+    readFile:  (p: string) => ipcRenderer.invoke('agentfs:readFile', p),
+    writeFile: (p: string, content: string, overwrite?: boolean) => ipcRenderer.invoke('agentfs:writeFile', p, content, overwrite),
   },
   ai: {
     checkDuplicate:     (url:string, e:string[]) => ipcRenderer.invoke('ai:checkDuplicate', url, e),
@@ -118,6 +132,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     goForward:       (tabId: string)                                                             => ipcRenderer.invoke('tabview:goForward', tabId),
     reload:          (tabId: string)                                                             => ipcRenderer.invoke('tabview:reload', tabId),
     getNavState:     (tabId: string): Promise<{ canGoBack: boolean; canGoForward: boolean }>     => ipcRenderer.invoke('tabview:getNavState', tabId),
+    execJs:          (tabId: string, script: string)                                             => ipcRenderer.invoke('tabview:execJs', tabId, script),
     onEvent: (cb: (tabId: string, type: string, payload: any) => void) => {
       const handler = (_e: any, tabId: string, type: string, payload: any) => cb(tabId, type, payload)
       ipcRenderer.on('tabview:event', handler)
