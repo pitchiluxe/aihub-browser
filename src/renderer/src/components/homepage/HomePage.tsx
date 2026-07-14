@@ -480,7 +480,7 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
       initial={{ opacity: 0, scale: 0.82 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: index * 0.018, duration: 0.22, ease: [0.34, 1.56, 0.64, 1] }}
-      className="flex flex-col items-center gap-2 group no-drag relative"
+      className="flex flex-col items-center gap-2 group no-drag relative shrink-0"
       style={{ width: 88 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -527,8 +527,11 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
         <div className="absolute inset-0 rounded-[17px] bg-white/0 group-hover:bg-white/[0.05] transition-all duration-200" />
       </button>
 
-      <button onClick={() => onNavigate(bm.url)} className="w-full text-center">
-        <span className={`text-[11px] text-center leading-tight line-clamp-1 block transition-colors ${
+      <button onClick={() => onNavigate(bm.url)} className="w-full max-w-full min-w-0 text-center" title={bm.title}>
+        {/* truncate (nowrap + ellipsis) guarantees the label can never widen or
+            heighten the fixed-width tile, so the grid stays aligned no matter
+            how long the title is. */}
+        <span className={`text-[11px] text-center leading-tight truncate block w-full max-w-full transition-colors ${
           isLight ? 'text-slate-400 group-hover:text-slate-700' : 'text-slate-600 group-hover:text-slate-300'
         }`}>
           {bm.title}
