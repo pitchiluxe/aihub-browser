@@ -75,9 +75,12 @@ function getData(): any {
 }
 function defaultSettings() {
   return {
-    // First run follows the OS appearance — users who run Windows in light
-    // mode get the light theme by default; either can be changed in Settings.
-    theme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
+    // AIHub's own UI defaults to its dark theme (its colors come from CSS
+    // variables, not prefers-color-scheme). Changeable in Settings. Note: the
+    // global nativeTheme.themeSource is set to 'light' (see createWindow) so
+    // that *web pages* render in their natural light colors — that must not be
+    // read here as the app's own default, or the app would start light.
+    theme: 'dark',
     aiModel: 'llama3', transparency: 'none', glassIntensity: 'medium',
     sidebarVisible: true, searchEngine: 'google',
     // AI API config — set via Settings page or baked from .env.local at build time
@@ -316,89 +319,20 @@ const CHROME_MAJOR = CHROME_FULL_VERSION.split('.')[0]
 // full version only travels via Client Hints / userAgentData.
 const CHROME_UA =
   `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_MAJOR}.0.0.0 Safari/537.36`
-// Client-Hint brands matching the UA, including the "Google Chrome" brand
-// Chromium's default omits. Google cross-checks Sec-CH-UA against the UA.
-const CHROME_SEC_CH_UA =
-  `"Not)A;Brand";v="8", "Chromium";v="${CHROME_MAJOR}", "Google Chrome";v="${CHROME_MAJOR}"`
-const CHROME_SEC_CH_UA_FULL_VERSION_LIST =
-  `"Not)A;Brand";v="8.0.0.0", "Chromium";v="${CHROME_FULL_VERSION}", "Google Chrome";v="${CHROME_FULL_VERSION}"`
 
-// X-Client-Data: a Google-proprietary header that ONLY real Chrome/Chromium
-// (built with Google's variations service) sends, and ONLY to Google-owned
-// domains. Electron omits it entirely — and its absence on a request that
-// otherwise claims to be Chrome is a cheap, reliable "embedded browser" tell
-// that Google's sign-in uses to bounce the flow to /v3/signin/rejected right
-// after email entry (confirmed 2026-07-04: identity was otherwise flawless —
-// UA, brands, high-entropy hints, webdriver:false — yet still rejected, and the
-// only missing header vs. real Chrome was this one).
-//
-// The value is a base64 ClientVariations protobuf (schema: repeated int32
-// variation_id = 1; repeated int32 trigger_variation_id = 3). We ship a small
-// set of real, currently-active variation IDs so it decodes cleanly server-side
-// rather than looking like forged garbage. Google tolerates stale/partial seeds
-// (every Chrome install sends a different subset), so an exact match isn't
-// required — only that it's a valid, plausible protobuf.
-function buildXClientData(): string {
-  const varIds = [3300118, 3300130, 3313321, 3324960, 3330198, 3362821]
-  const trigIds = [3313321, 3324960]
-  const bytes: number[] = []
-  const putVarint = (n: number) => { while (n > 0x7f) { bytes.push((n & 0x7f) | 0x80); n >>>= 7 } bytes.push(n) }
-  for (const id of varIds)  { bytes.push(0x08); putVarint(id) } // field 1, wire type 0 (varint)
-  for (const id of trigIds) { bytes.push(0x18); putVarint(id) } // field 3, wire type 0 (varint)
-  return Buffer.from(bytes).toString('base64')
-}
-const X_CLIENT_DATA = buildXClientData()
-// Google sends X-Client-Data only to these eTLD+1s; scope it the same way so we
-// never leak the header to non-Google origins (that itself would be anomalous).
-const GOOGLE_XCD_HOSTS = /(^|\.)(google\.com|google\.[a-z.]+|youtube\.com|gstatic\.com|googleapis\.com|googleusercontent\.com|ggpht\.com|doubleclick\.net)$/i
-
-// The header rewrite fixes network requests, but Google's sign-in ALSO reads
-// navigator.userAgentData in page JS — plain setUserAgent leaves that reporting
-// bare "Chromium" (no "Google Chrome" brand), which trips the identifier-page
-// block. Confirmed load-bearing 2026-07-03: removing this regressed the app
-// from reaching the passkey step back to blocking right after email entry.
-// Only CDP's Emulation.setUserAgentOverride sets userAgentData consistently.
-const CHROME_UA_METADATA = {
-  brands: [
-    { brand: 'Not)A;Brand', version: '8' },
-    { brand: 'Chromium', version: CHROME_MAJOR },
-    { brand: 'Google Chrome', version: CHROME_MAJOR },
-  ],
-  fullVersionList: [
-    { brand: 'Not)A;Brand', version: '8.0.0.0' },
-    { brand: 'Chromium', version: CHROME_FULL_VERSION },
-    { brand: 'Google Chrome', version: CHROME_FULL_VERSION },
-  ],
-  fullVersion: CHROME_FULL_VERSION,
-  platform: 'Windows',
-  platformVersion: '15.0.0',
-  architecture: 'x86',
-  model: '',
-  mobile: false,
-  bitness: '64',
-  wow64: false,
-}
-
-// Push userAgentData via CDP and KEEP the debugger attached for the life of
-// the webContents. Detaching clears the override: verified 2026-07-04 with a
-// standalone Electron 28 test — after detach() the very next navigation
-// reverted to the default Electron UA and empty userAgentData. (The old
-// detach-immediately version only appeared to work because the first
-// navigation raced ahead of the async detach; every LATER page — Google's
-// password/challenge steps — saw the bare "Chromium" brand and got blocked.)
-function applyBrowserIdentity(wc: Electron.WebContents) {
-  try {
-    if (!wc.debugger.isAttached()) wc.debugger.attach('1.3')
-    wc.debugger.sendCommand('Emulation.setUserAgentOverride', {
-      userAgent: CHROME_UA,
-      // No explicit q-values — Chromium appends them itself; passing
-      // "en;q=0.9" here produced the malformed "en;q=0.9;q=0.9" on the wire.
-      acceptLanguage: 'en-US,en',
-      platform: 'Windows',
-      userAgentMetadata: CHROME_UA_METADATA,
-    }).catch(() => {})
-  } catch {}
-}
+// ── Google sign-in identity: keep it SIMPLE (regression fix, 2026-07-14) ────
+// This app used to sign in to Gmail/Google fine. It regressed after a stack of
+// "secure browser" spoofing was layered on: a per-tab CDP debugger held
+// attached for the webContents' lifetime (Emulation.setUserAgentOverride +
+// userAgentData), plus forced Sec-CH-UA and X-Client-Data request headers.
+// None of it ever actually got Google sign-in through — but a permanently
+// attached DevTools-Protocol session is itself a textbook automation/insecure
+// signal, and hand-forged client hints that don't match the real network stack
+// add mismatches, not authenticity. The old, working version (see
+// src_backup/main/index.ts) did NONE of this: it just set a clean Chrome UA and
+// let Chromium send its own natural headers. We deliberately revert to that
+// minimal identity — a plain modern Chrome UA, no CDP, no header forgery — so
+// the browser presents exactly as it did when login worked.
 
 // Global default UA for every webContents. Set at module load (before app is
 // ready and before any BrowserView loads), so tabs never fall back to the
@@ -466,26 +400,117 @@ function attachAppShortcuts(wc: Electron.WebContents) {
   })
 }
 
-function attachContextMenu(wc: Electron.WebContents) {
+// Full page right-click menu. `opts.tabId` is set only for real browsing tabs
+// (BrowserViews) — page-specific actions (reload, print, save, QR, Add to
+// Sphere, page-level AI) are shown only then. Edit/link/image/selection actions
+// are always available. App-feature actions (AI, Research, Agent, Annotation,
+// Sphere) are forwarded to the renderer via the 'page-context-action' channel.
+function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) {
   wc.on('context-menu', (_e, params) => {
+    const tabId = opts?.tabId
+    const onPage = !!tabId
+    let pageUrl = ''
+    try { pageUrl = wc.getURL() } catch {}
+    const isWebPage = /^https?:\/\//i.test(pageUrl)
+    const sel = (params.selectionText || '').trim()
+    const isImage = params.mediaType === 'image'
+
+    const sendAction = (action: string, extra?: Record<string, any>) =>
+      safelySend('page-context-action', { action, tabId, url: pageUrl, selection: sel, ...extra })
+
     const menu = new Menu()
-    if (params.editFlags.canUndo) menu.append(new MenuItem({ label: 'Undo', role: 'undo', accelerator: 'Ctrl+Z' }))
-    if (params.editFlags.canRedo) menu.append(new MenuItem({ label: 'Redo', role: 'redo', accelerator: 'Ctrl+Y' }))
-    if (params.editFlags.canUndo || params.editFlags.canRedo) menu.append(new MenuItem({ type: 'separator' }))
-    if (params.editFlags.canCut)  menu.append(new MenuItem({ label: 'Cut',  role: 'cut',  accelerator: 'Ctrl+X' }))
-    if (params.editFlags.canCopy || params.selectionText) menu.append(new MenuItem({ label: 'Copy', role: 'copy', accelerator: 'Ctrl+C' }))
-    if (params.editFlags.canPaste) menu.append(new MenuItem({ label: 'Paste', role: 'paste', accelerator: 'Ctrl+V' }))
-    if (params.editFlags.canSelectAll) {
-      menu.append(new MenuItem({ type: 'separator' }))
-      menu.append(new MenuItem({ label: 'Select All', role: 'selectAll', accelerator: 'Ctrl+A' }))
+    const sep = () => { if (menu.items.length && menu.items[menu.items.length - 1].type !== 'separator') menu.append(new MenuItem({ type: 'separator' })) }
+
+    // ── Navigation (browsing tabs only) ──
+    if (onPage) {
+      let canBack = false, canFwd = false
+      try { canBack = wc.canGoBack() } catch {}
+      try { canFwd = wc.canGoForward() } catch {}
+      menu.append(new MenuItem({ label: 'Back',    enabled: canBack, accelerator: 'Alt+Left',  click: () => { try { wc.goBack() } catch {} } }))
+      menu.append(new MenuItem({ label: 'Forward', enabled: canFwd,  accelerator: 'Alt+Right', click: () => { try { wc.goForward() } catch {} } }))
+      menu.append(new MenuItem({ label: 'Reload',  accelerator: 'Ctrl+R', click: () => { try { wc.reload() } catch {} } }))
     }
+
+    // ── Edit actions (contextual) ──
+    if (params.editFlags.canUndo || params.editFlags.canRedo) {
+      sep()
+      if (params.editFlags.canUndo) menu.append(new MenuItem({ label: 'Undo', role: 'undo', accelerator: 'Ctrl+Z' }))
+      if (params.editFlags.canRedo) menu.append(new MenuItem({ label: 'Redo', role: 'redo', accelerator: 'Ctrl+Y' }))
+    }
+    if (params.editFlags.canCut || params.editFlags.canCopy || sel || params.editFlags.canPaste) {
+      sep()
+      if (params.editFlags.canCut)  menu.append(new MenuItem({ label: 'Cut',  role: 'cut',  accelerator: 'Ctrl+X' }))
+      if (params.editFlags.canCopy || sel) menu.append(new MenuItem({ label: 'Copy', role: 'copy', accelerator: 'Ctrl+C' }))
+      if (params.editFlags.canPaste) menu.append(new MenuItem({ label: 'Paste', role: 'paste', accelerator: 'Ctrl+V' }))
+      if (params.editFlags.canSelectAll) menu.append(new MenuItem({ label: 'Select All', role: 'selectAll', accelerator: 'Ctrl+A' }))
+    }
+
+    // ── Selected text ──
+    if (sel) {
+      sep()
+      const short = sel.length > 24 ? sel.slice(0, 24) + '…' : sel
+      menu.append(new MenuItem({ label: `Ask AI about “${short}”`, click: () => sendAction('ai', { selection: sel }) }))
+      menu.append(new MenuItem({ label: `Search Google for “${short}”`, click: () => safelySend('open-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(sel)}`) }))
+    }
+
+    // ── Link ──
     if (params.linkURL) {
-      menu.append(new MenuItem({ type: 'separator' }))
-      menu.append(new MenuItem({ label: 'Copy Link', click: () => clipboard.writeText(params.linkURL) }))
-      menu.append(new MenuItem({ label: 'Open in New Tab', click: () => safelySend('open-in-new-tab', params.linkURL) }))
+      sep()
+      menu.append(new MenuItem({ label: 'Open Link in New Tab', click: () => safelySend('open-in-new-tab', params.linkURL) }))
+      menu.append(new MenuItem({ label: 'Copy Link Address', click: () => clipboard.writeText(params.linkURL) }))
     }
+
+    // ── Image ──
+    if (isImage && params.srcURL) {
+      sep()
+      menu.append(new MenuItem({ label: 'Copy Image', click: () => { try { wc.copyImageAt(params.x, params.y) } catch {} } }))
+      menu.append(new MenuItem({ label: 'Copy Image Address', click: () => clipboard.writeText(params.srcURL) }))
+      menu.append(new MenuItem({ label: 'Save Image As…', click: () => { try { wc.downloadURL(params.srcURL) } catch {} } }))
+      menu.append(new MenuItem({ label: 'Open Image in New Tab', click: () => safelySend('open-in-new-tab', params.srcURL) }))
+    }
+
+    // ── AIHub actions ──
+    sep()
+    menu.append(new MenuItem({ label: 'AI Assistant', click: () => sendAction('ai') }))
+    menu.append(new MenuItem({ label: 'Research', click: () => sendAction('research') }))
+    menu.append(new MenuItem({ label: 'Agent', click: () => sendAction('agent') }))
+    menu.append(new MenuItem({ label: 'Annotation', click: () => sendAction('annotation') }))
+
+    // ── Bookmark sphere ──
+    sep()
+    menu.append(new MenuItem({ label: 'Bookmark Sphere', click: () => sendAction('sphere') }))
+    if (isWebPage) menu.append(new MenuItem({ label: 'Add to Sphere', click: () => sendAction('add-to-sphere') }))
+
+    // ── Page tools (browsing tabs only) ──
+    if (onPage && isWebPage) {
+      sep()
+      menu.append(new MenuItem({ label: 'Create QR Code for this Page', click: () => sendAction('qr') }))
+      menu.append(new MenuItem({ label: 'Copy Page URL', click: () => clipboard.writeText(pageUrl) }))
+      menu.append(new MenuItem({ label: 'Print…', accelerator: 'Ctrl+P', click: () => { try { wc.print() } catch {} } }))
+      menu.append(new MenuItem({ label: 'Save Page As…', accelerator: 'Ctrl+S', click: () => savePageAs(wc) }))
+    }
+
+    // ── Inspect (always last) ──
+    sep()
+    menu.append(new MenuItem({ label: 'Inspect Element', click: () => { try { wc.inspectElement(params.x, params.y) } catch {} } }))
+
     if (menu.items.length > 0) menu.popup({ window: mainWindow })
   })
+}
+
+// Save the current page to disk via a native Save dialog (HTML + assets).
+async function savePageAs(wc: Electron.WebContents) {
+  try {
+    let title = 'page'
+    try { title = (wc.getTitle() || 'page').replace(/[<>:"/\\|?*]+/g, '_').slice(0, 80) } catch {}
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Page As',
+      defaultPath: `${title}.html`,
+      filters: [{ name: 'Web Page, Complete', extensions: ['html'] }],
+    })
+    if (result.canceled || !result.filePath) return
+    await wc.savePage(result.filePath, 'HTMLComplete')
+  } catch {}
 }
 
 // ── Tab content views (BrowserView) ────────────────────────────────────────
@@ -537,16 +562,12 @@ function createTabView(tabId: string, url: string) {
   })
   tabViews.set(tabId, view)
   const wc = view.webContents
-  // Belt-and-suspenders: force the clean Chrome UA on this view before it
-  // loads anything, so no request ever goes out with the Electron default.
+  // Set the clean Chrome UA on this view before it loads anything, so no request
+  // ever goes out with the Electron default. This clean UA is the whole identity
+  // — no CDP debugger, no header forgery (see the CHROME_UA note above).
   try { wc.setUserAgent(CHROME_UA) } catch {}
-  // Push the full browser identity (incl. navigator.userAgentData) via CDP so
-  // Google's client-side "secure browser" check passes. DevTools opening on
-  // this view detaches the debugger, so re-apply once it closes.
-  applyBrowserIdentity(wc)
-  wc.on('devtools-closed', () => applyBrowserIdentity(wc))
 
-  attachContextMenu(wc)
+  attachContextMenu(wc, { tabId })
   attachAppShortcuts(wc)
   sendTabEvent(tabId, 'wc-id', { wcId: wc.id })
 
@@ -576,11 +597,10 @@ function createTabView(tabId: string, url: string) {
     return { action: 'deny' }
   })
 
-  // Popups need the same browser identity as tabs, or Google blocks them.
+  // Popups (OAuth windows) get the same clean UA as tabs.
   wc.on('did-create-window', (childWin) => {
     const cwc = childWin.webContents
     try { cwc.setUserAgent(CHROME_UA) } catch {}
-    applyBrowserIdentity(cwc)
     attachContextMenu(cwc)
     // Links clicked inside a popup go to a main-window tab; nested scripted
     // popups (rare, but some IdPs chain them) stay real windows.
@@ -627,7 +647,12 @@ function destroyTabView(tabId: string) {
 }
 
 function createWindow(): void {
-  nativeTheme.themeSource = 'dark'
+  // Render web pages in their natural (light) colors. Forcing 'dark' here made
+  // every site that honours prefers-color-scheme serve its dark variant, which
+  // users found dim and hard to read (e.g. sign-up pages showing near-black).
+  // The AIHub app UI itself is unaffected — its theme comes from CSS variables
+  // applied by applyThemeToDom(), not from this media query.
+  nativeTheme.themeSource = 'light'
   const settings = getData().settings
   const glassMode = settings.transparency !== 'none'
 
@@ -676,32 +701,11 @@ function createWindow(): void {
   const webviewSession = session.fromPartition('persist:main')
 
   // Spoof Chrome UA so sites serve full content (many degrade or block Electron's default UA).
+  // We do NOT rewrite Sec-CH-UA / X-Client-Data here anymore: forcing hand-forged
+  // client hints was part of the "secure browser" spoofing that broke Google
+  // sign-in. The old, working version let Chromium emit its own headers — so we
+  // do the same and only override the UA string. (See the CHROME_UA note above.)
   webviewSession.setUserAgent(CHROME_UA)
-
-  // Force Client-Hint headers to match the spoofed UA. Rewriting existing
-  // headers isn't enough: Electron 28 doesn't emit Sec-CH-UA at all (verified
-  // on the wire 2026-07-04 via httpbingo.org/headers), while every real Chrome
-  // sends the low-entropy hints on ALL HTTPS requests — their absence is
-  // exactly the kind of mismatch Google's "secure browser" check keys on.
-  webviewSession.webRequest.onBeforeSendHeaders((details, callback) => {
-    const headers = details.requestHeaders
-    if (details.url.startsWith('https://')) {
-      for (const key of Object.keys(headers)) {
-        const k = key.toLowerCase()
-        if (k.startsWith('sec-ch-ua')) delete headers[key]
-        else if (k === 'x-client-data') delete headers[key]
-      }
-      headers['sec-ch-ua'] = CHROME_SEC_CH_UA
-      headers['sec-ch-ua-mobile'] = '?0'
-      headers['sec-ch-ua-platform'] = '"Windows"'
-      // Add X-Client-Data only for Google-owned hosts, matching real Chrome.
-      try {
-        const host = new URL(details.url).hostname
-        if (GOOGLE_XCD_HOSTS.test(host)) headers['X-Client-Data'] = X_CLIENT_DATA
-      } catch {}
-    }
-    callback({ requestHeaders: headers })
-  })
 
   webviewSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(ALLOWED_PERMISSIONS.has(permission))

@@ -5,7 +5,7 @@ import { useBrowserStore } from '../../store/browserStore'
 import { addBookmarkWithAI } from '../../services/bookmarkService'
 
 export default function AddBookmarkModal() {
-  const { isAddBookmarkOpen, setAddBookmarkOpen, bookmarks, addBookmark } = useBrowserStore()
+  const { isAddBookmarkOpen, setAddBookmarkOpen, bookmarks, addBookmark, bookmarkPrefill, setBookmarkPrefill } = useBrowserStore()
   const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -16,11 +16,14 @@ export default function AddBookmarkModal() {
   useEffect(() => {
     if (isAddBookmarkOpen) {
       setTimeout(() => urlRef.current?.focus(), 100)
-      setUrl('')
+      // "Add to Sphere" from the page right-click menu pre-fills the current URL.
+      setUrl(bookmarkPrefill || '')
       setTitle('')
       setStatus('idle')
       setMessage('')
       setWarning('')
+    } else if (bookmarkPrefill) {
+      setBookmarkPrefill('')
     }
   }, [isAddBookmarkOpen])
 

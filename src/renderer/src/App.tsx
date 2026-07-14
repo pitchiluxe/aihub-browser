@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
+import React, { Suspense, lazy, useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react'
 import { useBrowserStore, type Tab } from './store/browserStore'
 import TabBar from './components/browser/TabBar'
 import NavigationBar from './components/browser/NavigationBar'
@@ -18,6 +18,7 @@ const AgentsPage     = lazy(() => import('./components/pages/AgentsPage'))
 const ExtensionsPage = lazy(() => import('./components/pages/ExtensionsPage'))
 const MailPage       = lazy(() => import('./components/pages/MailPage'))
 import AddBookmarkModal from './components/homepage/AddBookmarkModal'
+import QRCodeModal from './components/browser/QRCodeModal'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import AIAssistant from './components/ai/AIAssistant'
 import { loadBookmarks } from './services/bookmarkService'
@@ -55,6 +56,9 @@ export default function App() {
   const loadTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const contentAreaRef = useRef<HTMLDivElement>(null)
+
+  // URL for the "Create QR Code" page context-menu action (null = modal closed)
+  const [qrUrl, setQrUrl] = useState<string | null>(null)
 
   // ── Nav actions — the tab's WebContents lives in the main process now, so
   // these are fire-and-forget IPC calls rather than direct method calls. ────
@@ -184,6 +188,43 @@ export default function App() {
   useEffect(() => {
     const off = window.electronAPI?.ipc?.on?.('open-in-new-tab', (_e: any, url: string) => {
       if (url) useBrowserStore.getState().addTab(url, 'browser')
+    })
+    return () => { try { off?.() } catch {} }
+  }, [])
+
+  // ── Page right-click menu actions forwarded from the main process ─────────
+  // (AI / Research / Agent / Annotation / Sphere / Add to Sphere / QR). The
+  // native menu is built in main; app-feature items are dispatched here.
+  useEffect(() => {
+    const off = window.electronAPI?.ipc?.on?.('page-context-action', (_e: any, data: { action: string; url?: string; selection?: string }) => {
+      const store = useBrowserStore.getState()
+      switch (data.action) {
+        case 'ai':
+          if (!store.isAIPanelOpen) store.toggleAIPanel()
+          if (data.selection) {
+            document.dispatchEvent(new CustomEvent('aihub-ai-prefill', { detail: data.selection }))
+          }
+          break
+        case 'annotation':
+          if (!store.isAnnotationMode) store.toggleAnnotationMode()
+          break
+        case 'research':
+          store.addTab('aihub://research', 'research')
+          break
+        case 'agent':
+          store.addTab('aihub://agents', 'agents')
+          break
+        case 'sphere':
+          store.addTab('home', 'browser')
+          break
+        case 'add-to-sphere':
+          store.setBookmarkPrefill(data.url || '')
+          store.setAddBookmarkOpen(true)
+          break
+        case 'qr':
+          if (data.url) setQrUrl(data.url)
+          break
+      }
     })
     return () => { try { off?.() } catch {} }
   }, [])
@@ -470,6 +511,7 @@ export default function App() {
       </div>
 
       <AddBookmarkModal />
+      <QRCodeModal url={qrUrl} onClose={() => setQrUrl(null)} />
     </div>
   )
 }

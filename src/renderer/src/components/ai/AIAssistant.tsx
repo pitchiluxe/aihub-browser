@@ -60,6 +60,19 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
     }
   }, [isAIPanelOpen])
 
+  // Pre-fill the composer when "Ask AI about …" is chosen from a page's
+  // right-click menu (dispatched by App from the main-process context menu).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const text = (e as CustomEvent).detail as string
+      if (!text) return
+      setInput(`About "${text}": `)
+      setTimeout(() => inputRef.current?.focus(), 250)
+    }
+    document.addEventListener('aihub-ai-prefill', handler)
+    return () => document.removeEventListener('aihub-ai-prefill', handler)
+  }, [])
+
   // Ctrl+Shift+A global toggle
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

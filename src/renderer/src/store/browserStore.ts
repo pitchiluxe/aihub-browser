@@ -34,6 +34,9 @@ interface BrowserState {
   toggleAIPanel: () => void
   isAddBookmarkOpen: boolean
   setAddBookmarkOpen: (v: boolean) => void
+  // URL to pre-fill the Add-to-Sphere modal with (set from the page context menu)
+  bookmarkPrefill: string
+  setBookmarkPrefill: (u: string) => void
   isSidebarOpen: boolean
   toggleSidebar: () => void
   isAnnotationMode: boolean
@@ -168,6 +171,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
 
   isAddBookmarkOpen: false,
   setAddBookmarkOpen: (v) => set({ isAddBookmarkOpen: v }),
+
+  bookmarkPrefill: '',
+  setBookmarkPrefill: (u) => set({ bookmarkPrefill: u }),
 
   isSidebarOpen: false,
   toggleSidebar: () => set(s => ({ isSidebarOpen: !s.isSidebarOpen })),
