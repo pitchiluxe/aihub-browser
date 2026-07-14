@@ -139,7 +139,7 @@
           ]
         }
       ],
-      "icon": "resources/icon.ico",
+      "icon": "resources/icon.png",
       "category": "Network",
       "artifactName": "AIHub-Browser-${version}-linux-${arch}.${ext}"
     }
