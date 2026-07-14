@@ -23,7 +23,9 @@ export default function QRCodeModal({ url, onClose }: Props) {
     const canvas = canvasRef.current
     if (!canvas) return
     try {
-      const qr = qrcode(0, 'M')
+      // Level 'L' (7% EC) maximises data capacity so long page URLs still fit
+      // within version 40 instead of overflowing; fine for on-screen scanning.
+      const qr = qrcode(0, 'L')
       qr.addData(url)
       qr.make()
       const count = qr.getModuleCount()

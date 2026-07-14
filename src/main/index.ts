@@ -262,30 +262,47 @@ function ollamaChatStream(
 }
 
 // ── Ollama detection using native http ────────────────────────────────────
-async function checkOllamaRunning(): Promise<{ running: boolean; models: string[] }> {
+// Short-lived cache: ai:chat, ai:summarize and the status poller all call this,
+// so without it every AI action re-probes the network before doing any work.
+// A "not running" result probes up to 4 endpoints — cache it briefly so a user
+// without Ollama isn't stalled on repeated timeouts before the cloud fallback.
+let ollamaProbeCache: { at: number; value: { running: boolean; models: string[] } } | null = null
+const OLLAMA_PROBE_TTL = 5000
+
+async function checkOllamaRunning(force = false): Promise<{ running: boolean; models: string[] }> {
+  if (!force && ollamaProbeCache && Date.now() - ollamaProbeCache.at < OLLAMA_PROBE_TTL) {
+    return ollamaProbeCache.value
+  }
   const { olBase } = getAIConfig()
   // Try both the configured base AND a 127.0.0.1 fallback to handle systems
   // where 'localhost' resolves differently in packaged Electron.
   const bases = [olBase, 'http://127.0.0.1:11434']
   const uniqueBases = [...new Set(bases)]
 
+  const cache = (value: { running: boolean; models: string[] }) => {
+    ollamaProbeCache = { at: Date.now(), value }
+    return value
+  }
+
   for (const base of uniqueBases) {
     for (const path of ['/api/tags', '/api/version']) {
       try {
-        const { status, body } = await httpGet(`${base}${path}`, 4000)
+        // 1.5s per probe (was 4s): Ollama on localhost answers in a few ms when
+        // present, so a longer wait only ever adds dead time when it's absent.
+        const { status, body } = await httpGet(`${base}${path}`, 1500)
         if (status >= 200 && status < 400) {
           try {
             const json = JSON.parse(body)
             const models = (json.models || []).map((m: any) => (typeof m === 'string' ? m : m.name || 'unknown')).filter(Boolean)
-            return { running: true, models: models.length ? models : ['llama3'] }
+            return cache({ running: true, models: models.length ? models : ['llama3'] })
           } catch {
-            return { running: true, models: ['llama3'] }
+            return cache({ running: true, models: ['llama3'] })
           }
         }
       } catch { /* try next */ }
     }
   }
-  return { running: false, models: [] }
+  return cache({ running: false, models: [] })
 }
 
 // ── Default-browser launch URL ──────────────────────────────────────────────
@@ -1132,12 +1149,15 @@ ipcMain.handle('brain:refreshRecommendations', async () => {
 })
 
 // ── IPC: Ollama ────────────────────────────────────────────────────────────
-ipcMain.handle('ollama:status', async () => checkOllamaRunning())
+// Explicit, user-driven status checks (Settings "Check", AI panel open) force a
+// fresh probe so a just-started Ollama is detected immediately; the internal
+// ai:chat / summarize probes use the short cache.
+ipcMain.handle('ollama:status', async () => checkOllamaRunning(true))
 ipcMain.handle('ollama:pull', async (_e, model: string) => {
   const { olBase } = getAIConfig()
   try {
     const { status, body } = await httpPost(`${olBase}/api/pull`, { name: model, stream: false }, {}, 180000)
-    if (status >= 200 && status < 400) return { success: true }
+    if (status >= 200 && status < 400) { ollamaProbeCache = null; return { success: true } }
     return { success: false, error: body }
   } catch (e: any) { return { success: false, error: e.message } }
 })

@@ -336,8 +336,11 @@ export default function App() {
   // AI panel doesn't need this — it gets a permanent side gutter instead
   // (see the bounds effect above). ──────────────────────────────────────────
   useEffect(() => {
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen)
-  }, [isAddBookmarkOpen])
+    // Any host-HTML overlay (Add-to-Sphere modal, QR modal) must detach the
+    // active tab's BrowserView, which otherwise always paints on top of and
+    // steals clicks from our HTML — making the modal look frozen/invisible.
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl)
+  }, [isAddBookmarkOpen, qrUrl])
 
   // ── Single listener for all tab content events, forwarded from main ───────
   useEffect(() => {

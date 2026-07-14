@@ -73,6 +73,16 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
     return () => document.removeEventListener('aihub-ai-prefill', handler)
   }, [])
 
+  // Auto-grow the composer to fit everything the user has typed (up to the
+  // maxHeight cap, then it scrolls). Without this the textarea stays one row
+  // tall and multi-line entries are hidden behind an internal scroll.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 96)}px`
+  }, [input])
+
   // Ctrl+Shift+A global toggle
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
