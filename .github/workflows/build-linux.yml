@@ -1,0 +1,44 @@
+name: Build Linux
+
+# Builds the Linux AppImage (x64) on an Ubuntu runner and publishes it — with
+# the electron-updater metadata (latest-linux.yml) — to the DRAFT GitHub
+# Release for the pushed tag (same release the Windows/macOS jobs target).
+#
+# The AppImage runs on most modern distros incl. Kali, Ubuntu and Debian.
+# Auto-update works when the app was launched from the AppImage.
+#
+# Trigger by pushing any v* tag, or manually from the Actions tab.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate icons
+        run: npm run generate-icon
+
+      - name: Build renderer and main
+        run: npm run build
+
+      - name: Package + publish Linux AppImage
+        run: npx electron-builder --linux --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
