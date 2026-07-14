@@ -163,6 +163,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener(channel, handler)
     },
   },
+  updater: {
+    check:      () => ipcRenderer.invoke('updater:check'),
+    download:   () => ipcRenderer.invoke('updater:download'),
+    install:    () => ipcRenderer.invoke('updater:install'),
+    getVersion: () => ipcRenderer.invoke('updater:getVersion'),
+    onEvent: (cb: (e: any) => void) => {
+      const h = (_: any, d: any) => cb(d)
+      ipcRenderer.on('updater:event', h)
+      return () => ipcRenderer.removeListener('updater:event', h)
+    },
+  },
   theme: {
     onTransparency: (cb: (mode: string) => void) => {
       const h = (_e: any, mode: string) => cb(mode)

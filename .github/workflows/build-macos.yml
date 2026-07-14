@@ -1,8 +1,14 @@
 name: Build macOS
 
 # Builds the unsigned universal (Intel + Apple Silicon) DMG and ZIP on a
-# macOS runner — macOS apps cannot be compiled on Windows/Linux — and
-# attaches them to the GitHub release matching the package.json version.
+# macOS runner — macOS apps cannot be compiled on Windows/Linux — and publishes
+# them, plus the electron-updater metadata (latest-mac.yml), to the DRAFT GitHub
+# Release for the pushed tag (same release the Windows job publishes to).
+#
+# NOTE: macOS auto-update requires a SIGNED + notarized app. These builds are
+# unsigned, so mac users download updates manually from the release/website;
+# the latest-mac.yml is still published so signing later enables auto-update
+# with no further changes.
 #
 # Trigger by pushing any v* tag, or manually from the Actions tab.
 
@@ -35,17 +41,12 @@ jobs:
       - name: Build renderer and main
         run: npm run build
 
-      - name: Package macOS app
-        run: npx electron-builder --mac --publish never
+      - name: Package + publish macOS app
+        run: npx electron-builder --mac --publish always
         env:
           # No Apple Developer certificate — skip identity discovery so the
           # build stays unsigned instead of failing.
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-
-      - name: Upload artifacts to release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="v$(node -p "require('./package.json').version")"
-          echo "Uploading macOS artifacts to release $TAG"
-          gh release upload "$TAG" dist/*.dmg dist/*-mac-*.zip --clobber
+          # electron-builder publishes the DMG/ZIP + latest-mac.yml to the same
+          # draft GitHub Release the Windows job targets for this tag.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

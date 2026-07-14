@@ -6,6 +6,10 @@
   "homepage": ".",
   "author": "My Digital Solutions",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pitchiluxe/aihub-browser.git"
+  },
   "scripts": {
     "dev": "node scripts/dev.js",
     "build": "electron-vite build",
@@ -20,6 +24,7 @@
     "@types/d3": "^7.4.3",
     "axios": "^1.7.2",
     "d3": "^7.9.0",
+    "electron-updater": "^6.3.9",
     "framer-motion": "^11.2.10",
     "lucide-react": "^0.400.0",
     "qrcode-generator": "^1.4.4",
@@ -50,6 +55,13 @@
     "productName": "AIHub Browser",
     "copyright": "Copyright © 2025 Erick OMARI — My Digital Solutions",
     "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "pitchiluxe",
+        "repo": "aihub-browser"
+      }
+    ],
     "directories": {
       "output": "dist"
     },

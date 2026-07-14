@@ -1,0 +1,47 @@
+name: Build Windows
+
+# Builds the Windows NSIS installer + ZIP and publishes them — together with
+# the electron-updater metadata (latest.yml + .blockmap) that lets already
+# installed apps auto-update — to the GitHub Release for the pushed tag.
+#
+# electron-builder creates the release as a DRAFT. Review it on the Releases
+# page and click "Publish release" to make it live; only then do installed
+# clients see and offer the update (electron-updater ignores drafts).
+#
+# Trigger by pushing any v* tag, or manually from the Actions tab.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate icons
+        run: npm run generate-icon
+
+      - name: Build renderer and main
+        run: npm run build
+
+      - name: Package + publish Windows installer
+        run: npx electron-builder --win --publish always
+        env:
+          # Provided automatically to the workflow; electron-builder uses it to
+          # create the draft release and upload the installer + latest.yml.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

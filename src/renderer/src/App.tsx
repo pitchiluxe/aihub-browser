@@ -19,6 +19,7 @@ const ExtensionsPage = lazy(() => import('./components/pages/ExtensionsPage'))
 const MailPage       = lazy(() => import('./components/pages/MailPage'))
 import AddBookmarkModal from './components/homepage/AddBookmarkModal'
 import QRCodeModal from './components/browser/QRCodeModal'
+import UpdateNotification from './components/browser/UpdateNotification'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import AIAssistant from './components/ai/AIAssistant'
 import { loadBookmarks } from './services/bookmarkService'
@@ -515,6 +516,7 @@ export default function App() {
 
       <AddBookmarkModal />
       <QRCodeModal url={qrUrl} onClose={() => setQrUrl(null)} />
+      <UpdateNotification />
     </div>
   )
 }

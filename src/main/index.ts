@@ -9,6 +9,7 @@ import fs from 'fs'
 import { execSync, execFileSync } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
+import { initAutoUpdater } from './updater'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -760,6 +761,10 @@ function createWindow(): void {
   // ── Right-click context menu (copy / paste / cut / select-all) ──────────
   attachContextMenu(mainWindow.webContents)
   attachAppShortcuts(mainWindow.webContents)
+
+  // ── Auto-update (GitHub Releases) — checks on startup + periodically and
+  // notifies the renderer when a newer version is published. No-op in dev. ──
+  initAutoUpdater(() => mainWindow, safelySend)
 
   // ── Download tracking — covers mainWindow + all webviews ──────────────
   const handleDownload = (_e: any, item: any) => {
