@@ -617,10 +617,12 @@
     .index-card blockquote strong { color: var(--ink); }
     .author { display: flex; align-items: center; gap: 12px; }
     .author-av {
-      width: 38px; height: 38px; border-radius: 8px;
-      background: var(--chalk-bg); display: grid; place-items: center;
-      font-family: 'Caveat', cursive; font-size: 20px; font-weight: 700; color: var(--yellow);
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--chalk-bg); display: grid; place-items: center; overflow: hidden;
+      font-family: 'Caveat', cursive; font-size: 24px; font-weight: 700; color: var(--yellow);
+      box-shadow: 0 2px 10px rgba(0,0,0,.18); flex-shrink: 0;
     }
+    .author-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .author-name { font-weight: 700; font-size: 14px; color: var(--ink); }
     .author-role { font-size: 11px; color: var(--muted); margin-top: 1px; }
 
@@ -1062,7 +1064,7 @@
           The browser is where you spend most of your time online — it should be the smartest tool you own, not the dumbest."
         </blockquote>
         <div class="author">
-          <div class="author-av">E</div>
+          <div class="author-av"><img src="/erick.jpg" alt="Erick OMARI" width="52" height="52" /></div>
           <div>
             <div class="author-name">Erick OMARI</div>
             <div class="author-role">Creator · My Digital Solutions · pitchiluxe@gmail.com</div>
