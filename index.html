@@ -35,7 +35,7 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "AIHub Browser",
-    "operatingSystem": "Windows 10, Windows 11, macOS",
+    "operatingSystem": "Windows 10, Windows 11, macOS, Linux",
     "applicationCategory": "BrowserApplication",
     "offers": {
       "@type": "Offer",
@@ -816,7 +816,7 @@
   <div class="wrap">
     <div class="hero-inner">
       <div>
-        <div class="hero-eyebrow">✦ v1.3.0 — Free for Windows &amp; macOS</div>
+        <div class="hero-eyebrow">✦ v1.3.1 — Free for Windows, macOS &amp; Linux</div>
         <h1 class="hero-title">
           The browser<br/>
           that <span class="underline-chalk">thinks</span><br/>
@@ -842,7 +842,7 @@
           <span>Free forever</span><span class="sep"></span>
           <span>No account</span><span class="sep"></span>
           <span>No telemetry</span><span class="sep"></span>
-          <span>Windows &amp; macOS</span>
+          <span>Windows · macOS · Linux</span>
         </div>
       </div>
 
@@ -1230,30 +1230,39 @@
   },{threshold:.4})
   const sr=document.getElementById('stats-row'); if(sr) cObs.observe(sr)
 
-  /* ── OS detection: swap download copy for macOS visitors ── */
+  /* ── OS detection: swap download copy for macOS / Linux visitors ── */
   ;(function(){
-    const isMac = /Mac/.test(navigator.platform) || /Macintosh/.test(navigator.userAgent)
-    if(!isMac) return
+    const ua = navigator.userAgent, plat = navigator.platform || ''
+    let os = 'win'
+    if(/Mac/.test(plat) || /Macintosh/.test(ua)) os = 'mac'
+    // Android UA also says "Linux" — exclude phones from the desktop AppImage.
+    else if(/Linux|X11/.test(plat + ' ' + ua) && !/Android/.test(ua)) os = 'linux'
+    if(os === 'win') return
+
+    const name = os === 'mac' ? 'macOS' : 'Linux'
     document.querySelectorAll('#btn-hero .btn-label, #btn-dl-main .btn-label').forEach(el=>{
-      el.textContent = el.textContent.replace('Windows','macOS')
+      el.textContent = el.textContent.replace('Windows', name)
     })
     const metaOs = document.getElementById('dl-meta-os')
-    if(metaOs) metaOs.innerHTML = '<span class="ck">✓</span>macOS 11+ · Intel &amp; Apple Silicon'
-    const altBtn = document.getElementById('btn-dl-alt')
-    if(altBtn){
-      altBtn.href = '/api/get'
-      altBtn.querySelector('.btn-label').textContent = 'Download for Windows'
-    }
-    const heroAlt = document.getElementById('btn-hero-alt')
-    if(heroAlt){
-      heroAlt.href = '/api/get'
-      heroAlt.querySelector('.btn-label').textContent = 'Download for Windows'
-    }
+    if(metaOs) metaOs.innerHTML = os === 'mac'
+      ? '<span class="ck">✓</span>macOS 11+ · Intel &amp; Apple Silicon'
+      : '<span class="ck">✓</span>Linux · AppImage (x64)'
+
+    // Ghost/alt buttons offer Windows for non-Windows visitors.
+    ;['btn-dl-alt','btn-hero-alt'].forEach(id=>{
+      const b = document.getElementById(id)
+      if(b){ b.href = '/api/get'; const l = b.querySelector('.btn-label'); if(l) l.textContent = 'Download for Windows' }
+    })
+
     const toastBody = document.querySelector('#dl-toast .dl-toast-body')
-    if(toastBody) toastBody.textContent = 'AIHub Browser for macOS — open the .dmg to install'
+    if(toastBody) toastBody.textContent = os === 'mac'
+      ? 'AIHub Browser for macOS — open the .dmg to install'
+      : 'AIHub Browser for Linux — chmod +x then run the .AppImage'
     const steps = document.querySelectorAll('#dl-toast .dl-toast-step span:last-child')
     if(steps.length >= 2){
-      steps[1].innerHTML = 'Open the DMG and drag <strong style="color:#e2fdf0">AIHub Browser</strong> into <strong style="color:#e2fdf0">Applications</strong>. First launch: right-click the app → <strong style="color:#e2fdf0">Open</strong>.'
+      steps[1].innerHTML = os === 'mac'
+        ? 'Open the DMG and drag <strong style="color:#e2fdf0">AIHub Browser</strong> into <strong style="color:#e2fdf0">Applications</strong>. First launch: right-click the app → <strong style="color:#e2fdf0">Open</strong>.'
+        : 'Run <strong style="color:#e2fdf0">chmod +x AIHub-Browser-*.AppImage</strong> then launch it. On Kali / Debian: <strong style="color:#e2fdf0">sudo apt install libfuse2</strong> first.'
     }
   })()
 
