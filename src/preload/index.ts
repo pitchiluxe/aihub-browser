@@ -20,6 +20,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     send:           (opts: any) => ipcRenderer.invoke('gmail:send', opts),
     onConnected:    (cb: (e: { email: string }) => void) => { const h = (_: any, d: any) => cb(d); ipcRenderer.on('gmail:connected', h); return () => ipcRenderer.removeListener('gmail:connected', h) },
   },
+  // Modular Google OAuth (Authorization Code + PKCE, system browser). One
+  // account, incremental scopes: connect(['gmail','drive','calendar']).
+  google: {
+    status:         () => ipcRenderer.invoke('google:status'),
+    connect:        (apis: string[]) => ipcRenderer.invoke('google:connect', apis),
+    disconnect:     () => ipcRenderer.invoke('google:disconnect'),
+    setCredentials: (clientId: string, clientSecret: string) => ipcRenderer.invoke('google:setCredentials', clientId, clientSecret),
+    onConnected:    (cb: (e: { email: string; apis: string[] }) => void) => { const h = (_: any, d: any) => cb(d); ipcRenderer.on('google:connected', h); return () => ipcRenderer.removeListener('google:connected', h) },
+  },
+  drive: {
+    list:  (q?: string, pageToken?: string) => ipcRenderer.invoke('drive:list', { q, pageToken }),
+    about: () => ipcRenderer.invoke('drive:about'),
+  },
+  calendar: {
+    list:   () => ipcRenderer.invoke('calendar:list'),
+    events: (args?: { calendarId?: string; timeMin?: string; timeMax?: string; maxResults?: number }) => ipcRenderer.invoke('calendar:events', args || {}),
+  },
   bookmarks: {
     getAll:  () => ipcRenderer.invoke('bookmarks:getAll'),
     add:     (b:any)            => ipcRenderer.invoke('bookmarks:add', b),
