@@ -23,6 +23,7 @@ import AddBookmarkModal from './components/homepage/AddBookmarkModal'
 import QRCodeModal from './components/browser/QRCodeModal'
 import UpdateNotification from './components/browser/UpdateNotification'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
+import FindBar from './components/browser/FindBar'
 import AIAssistant from './components/ai/AIAssistant'
 import { loadBookmarks } from './services/bookmarkService'
 import { buildPageExtractionScript } from './services/pageExtractor'
@@ -68,6 +69,11 @@ export default function App() {
 
   // URL for the "Create QR Code" page context-menu action (null = modal closed)
   const [qrUrl, setQrUrl] = useState<string | null>(null)
+
+  // Find-in-page bar (Ctrl+F). Only meaningful over a real browsing tab —
+  // the bar occupies a reserved strip above the native view (see bounds sync).
+  const [findOpen, setFindOpen] = useState(false)
+  const findVisible = findOpen && needsTabView(activeTab)
 
   // ── Nav actions — the tab's WebContents lives in the main process now, so
   // these are fire-and-forget IPC calls rather than direct method calls. ────
@@ -270,6 +276,26 @@ export default function App() {
           }
           break
         }
+        case 'reopen-tab':
+          store.reopenClosedTab()
+          break
+        case 'bookmark-page': {
+          const tab = store.tabs.find(tb => tb.id === store.activeTabId)
+          if (tab && !tab.isHome && tab.pageType === 'browser' && /^https?:\/\//i.test(tab.url)) {
+            store.setBookmarkPrefill(tab.url)
+            store.setAddBookmarkOpen(true)
+          }
+          break
+        }
+        case 'open-history':
+          store.addTab('aihub://history', 'history')
+          break
+        case 'open-downloads':
+          store.addTab('aihub://downloads', 'downloads')
+          break
+        case 'find-in-page':
+          setFindOpen(true)
+          break
       }
     })
     return () => { try { off?.() } catch {} }
@@ -284,13 +310,16 @@ export default function App() {
   // itself (see AnnotationCanvas.tsx), not rendered as host HTML. ──────────
   useLayoutEffect(() => {
     const rightReserve = isAIPanelOpen ? 388 : 0
+    // The find bar lives in a reserved strip above the native view — the view
+    // always paints over host HTML, so the bar can't simply overlay it.
+    const topReserve = findVisible ? 44 : 0
     const sync = () => {
       if (!contentAreaRef.current) return
       const r = contentAreaRef.current.getBoundingClientRect()
       if (r.width > 0 && r.height > 0) {
         window.electronAPI.tabView.setBounds({
-          x: r.left, y: r.top,
-          width: Math.max(0, r.width - rightReserve), height: r.height,
+          x: r.left, y: r.top + topReserve,
+          width: Math.max(0, r.width - rightReserve), height: Math.max(0, r.height - topReserve),
         })
       }
     }
@@ -300,7 +329,7 @@ export default function App() {
     const ro = new ResizeObserver(sync)
     if (contentAreaRef.current) ro.observe(contentAreaRef.current)
     return () => { window.removeEventListener('resize', sync); ro.disconnect() }
-  }, [isAIPanelOpen])
+  }, [isAIPanelOpen, findVisible])
 
   // ── Create/destroy native tab views as tabs come and go ───────────────────
   useEffect(() => {
@@ -515,6 +544,11 @@ export default function App() {
             {/* Browser tab content renders in a main-process BrowserView layered
                 directly over this element's screen bounds (see the bounds-sync
                 effect above) — there is no DOM node for it here. */}
+
+            {/* Find-in-page bar — sits in the strip the bounds sync reserves */}
+            {findVisible && activeTabId && (
+              <FindBar key={activeTabId} tabId={activeTabId} onClose={() => setFindOpen(false)} />
+            )}
 
             {isAnnotationMode && <AnnotationCanvas />}
           </div>

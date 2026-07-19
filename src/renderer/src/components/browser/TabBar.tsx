@@ -25,6 +25,7 @@ export default function TabBar() {
     e.preventDefault()
     const idx = tabs.findIndex(t => t.id === tab.id)
     const action = await window.electronAPI.tabs.showContextMenu({
+      tabId: tab.id,
       isBrowser: !tab.isHome && tab.pageType === 'browser',
       hasRight: idx !== -1 && idx < tabs.length - 1,
       count: tabs.length,
@@ -32,11 +33,19 @@ export default function TabBar() {
     switch (action) {
       case 'new-tab':      addTab(); break
       case 'duplicate':    addTab(tab.isHome ? 'home' : tab.url, tab.pageType); break
+      case 'detach':       detachTab(tab); break
       case 'reload':       window.electronAPI.tabView.reload(tab.id); break
       case 'close':        closeTab(tab.id); break
       case 'close-others': closeOtherTabs(tab.id); break
       case 'close-right':  closeTabsToRight(tab.id); break
     }
+  }
+
+  // Move a tab into its own standalone window (multi-monitor workflows).
+  const detachTab = async (tab: Tab) => {
+    if (tab.isHome || tab.pageType !== 'browser' || !/^https?:\/\//i.test(tab.url)) return
+    const r = await window.electronAPI.window.detachTab(tab.url, tab.title)
+    if (r?.success) closeTab(tab.id)
   }
 
   const dragTabId  = useRef<string | null>(null)
@@ -65,7 +74,21 @@ export default function TabBar() {
     if (dragTabId.current && dragTabId.current !== tabId) reorderTabs(dragTabId.current, tabId)
     dragTabId.current = null; setDropTarget(null)
   }
-  const handleDragEnd = () => { dragTabId.current = null; setDropTarget(null) }
+  // Dropping a tab OUTSIDE the window (dragend coordinates beyond the
+  // viewport) detaches it into its own window — drag it to another monitor.
+  // Handled on the plain strip container (dragend bubbles) rather than the
+  // motion.div tab items, whose onDragEnd prop framer-motion intercepts.
+  // Internal reorders never reach here with dragTabId set: handleDrop clears
+  // it first.
+  const handleStripDragEnd = (e: React.DragEvent) => {
+    const draggedId = dragTabId.current
+    dragTabId.current = null; setDropTarget(null)
+    if (!draggedId) return
+    const tab = tabs.find(t => t.id === draggedId)
+    if (!tab) return
+    const outside = e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight
+    if (outside) detachTab(tab)
+  }
 
   return (
     <div
@@ -89,6 +112,7 @@ export default function TabBar() {
       <div
         ref={stripRef}
         className="flex items-end gap-1 overflow-x-auto no-scrollbar min-w-0 flex-1"
+        onDragEnd={handleStripDragEnd}
         onWheel={e => {
           // Vertical wheel scrolls the strip horizontally (scrollbar is hidden)
           if (e.deltaY !== 0 && stripRef.current) stripRef.current.scrollLeft += e.deltaY
@@ -107,7 +131,6 @@ export default function TabBar() {
               onDragStart={e => handleDragStart(e, tab.id)}
               onDragOver={e => handleDragOver(e, tab.id)}
               onDrop={e => handleDrop(e, tab.id)}
-              onDragEnd={handleDragEnd}
             />
           ))}
         </AnimatePresence>
@@ -138,7 +161,7 @@ export default function TabBar() {
   )
 }
 
-function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMenu, onDragStart, onDragOver, onDrop, onDragEnd }: {
+function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMenu, onDragStart, onDragOver, onDrop }: {
   tab: Tab
   isActive: boolean
   isDropTarget: boolean
@@ -148,7 +171,6 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
   onDragStart: (e: React.DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
-  onDragEnd: () => void
 }) {
   const [hovered, setHovered] = useState(false)
 
@@ -163,7 +185,6 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      onDragEnd={onDragEnd}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onActivate}

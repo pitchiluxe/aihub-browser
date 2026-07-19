@@ -56,7 +56,6 @@ const DEFAULT_BOOKMARKS = [
   { id: 'bm-nf', url: 'https://www.netflix.com',                       title: 'Netflix',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#E50914' },
   { id: 'bm-1',  url: 'https://aihub-eight-xi.vercel.app/dashboard',   title: 'AIHub Dashboard',  favicon: '', category: 'AI',            addedAt: 0, color: '#a78bfa' },
   { id: 'bm-2',  url: 'https://www.technobiztrader.net/',               title: 'TechnoBiz Trader', favicon: '', category: 'Trading',       addedAt: 0, color: '#fb923c' },
-  { id: 'bm-3',  url: 'https://quickbooks-playground.vercel.app/login', title: 'QuickBooks',       favicon: '', category: 'Finance',       addedAt: 0, color: '#4ade80' },
   { id: 'bm-4',  url: 'https://technobiz-trader-agent.vercel.app/',     title: 'TechnoBiz Agent',  favicon: '', category: 'AI',            addedAt: 0, color: '#a78bfa' },
 ]
 
@@ -395,15 +394,38 @@ function applyWindowOpacity(win: BrowserWindow, opacity: number) {
 // keydown listeners never see keys typed into a BrowserView).
 function matchAppShortcut(input: Electron.Input): string | null {
   if (input.type !== 'keyDown') return null
-  const ctrl = input.control || input.meta
-  if (!ctrl || input.alt) return null
   const key = input.key.toLowerCase()
-  if (key === 't' && !input.shift) return 'new-tab'
+  const ctrl = input.control || input.meta
+  if (!ctrl) {
+    // Chrome-style modifierless / Alt navigation keys
+    if (input.alt && key === 'arrowleft')  return 'nav-back'
+    if (input.alt && key === 'arrowright') return 'nav-forward'
+    if (!input.alt && key === 'f5') return 'reload-tab'
+    return null
+  }
+  if (input.alt) return null
+  if (key === 't') return input.shift ? 'reopen-tab' : 'new-tab'
   if (key === 'w' && !input.shift) return 'close-tab'
   if (key === 'tab') return input.shift ? 'prev-tab' : 'next-tab'
   if (key === 'l' && !input.shift) return 'focus-url'
   if (key === 'r' && !input.shift) return 'reload-tab'
+  if (key === 'd' && !input.shift) return 'bookmark-page'
+  if (key === 'h' && !input.shift) return 'open-history'
+  if (key === 'j' && !input.shift) return 'open-downloads'
+  if (key === 'f' && !input.shift) return 'find-in-page'
+  if (key === 'p' && !input.shift) return 'print-page'
+  if (key === '=' || key === '+') return 'zoom-in'
+  if (key === '-') return 'zoom-out'
+  if (key === '0') return 'zoom-reset'
   return null
+}
+
+// Actions that operate on a page's own webContents (zoom, print, back/forward)
+// resolve to: the view the key was typed into, or — when typed into the host
+// UI — the currently active tab's view.
+function resolvePageWc(wc: Electron.WebContents): Electron.WebContents | null {
+  for (const v of tabViews.values()) if (v.webContents === wc) return wc
+  return (activeTabViewId && tabViews.get(activeTabViewId)?.webContents) || null
 }
 
 function attachAppShortcuts(wc: Electron.WebContents) {
@@ -411,9 +433,19 @@ function attachAppShortcuts(wc: Electron.WebContents) {
     const action = matchAppShortcut(input)
     if (!action) return
     e.preventDefault()
-    // Focusing the URL bar needs keyboard focus back on the host UI first —
-    // otherwise the input focuses but keys keep going to the BrowserView.
-    if (action === 'focus-url') mainWindow?.webContents.focus()
+    const page = resolvePageWc(wc)
+    switch (action) {
+      case 'nav-back':    { try { if (page?.canGoBack())    page.goBack() } catch {} return }
+      case 'nav-forward': { try { if (page?.canGoForward()) page.goForward() } catch {} return }
+      case 'zoom-in':     { try { page?.setZoomLevel(Math.min(page.getZoomLevel() + 0.5, 8)) } catch {} return }
+      case 'zoom-out':    { try { page?.setZoomLevel(Math.max(page.getZoomLevel() - 0.5, -7)) } catch {} return }
+      case 'zoom-reset':  { try { page?.setZoomLevel(0) } catch {} return }
+      case 'print-page':  { try { page?.print() } catch {} return }
+    }
+    // Focusing the URL bar (and the find bar) needs keyboard focus back on the
+    // host UI first — otherwise the input focuses but keys keep going to the
+    // BrowserView.
+    if (action === 'focus-url' || action === 'find-in-page') mainWindow?.webContents.focus()
     safelySend('app-shortcut', action)
   })
 }
@@ -447,6 +479,7 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       menu.append(new MenuItem({ label: 'Back',    enabled: canBack, accelerator: 'Alt+Left',  click: () => { try { wc.goBack() } catch {} } }))
       menu.append(new MenuItem({ label: 'Forward', enabled: canFwd,  accelerator: 'Alt+Right', click: () => { try { wc.goForward() } catch {} } }))
       menu.append(new MenuItem({ label: 'Reload',  accelerator: 'Ctrl+R', click: () => { try { wc.reload() } catch {} } }))
+      menu.append(new MenuItem({ label: 'Hard Reload (Clear Cache)', click: () => { try { wc.reloadIgnoringCache() } catch {} } }))
     }
 
     // ── Edit actions (contextual) ──
@@ -475,6 +508,7 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
     if (params.linkURL) {
       sep()
       menu.append(new MenuItem({ label: 'Open Link in New Tab', click: () => safelySend('open-in-new-tab', params.linkURL) }))
+      menu.append(new MenuItem({ label: 'Open Link in New Window', click: () => { try { openDetachedWindow(params.linkURL) } catch {} } }))
       menu.append(new MenuItem({ label: 'Copy Link Address', click: () => clipboard.writeText(params.linkURL) }))
     }
 
@@ -504,8 +538,10 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       sep()
       menu.append(new MenuItem({ label: 'Create QR Code for this Page', click: () => sendAction('qr') }))
       menu.append(new MenuItem({ label: 'Copy Page URL', click: () => clipboard.writeText(pageUrl) }))
+      menu.append(new MenuItem({ label: 'Translate this Page', click: () => safelySend('open-in-new-tab', `https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(pageUrl)}`) }))
       menu.append(new MenuItem({ label: 'Print…', accelerator: 'Ctrl+P', click: () => { try { wc.print() } catch {} } }))
       menu.append(new MenuItem({ label: 'Save Page As…', accelerator: 'Ctrl+S', click: () => savePageAs(wc) }))
+      menu.append(new MenuItem({ label: 'View Page Source', click: () => safelySend('open-in-new-tab', `view-source:${pageUrl}`) }))
     }
 
     // ── Inspect (always last) ──
@@ -650,6 +686,9 @@ function createTabView(tabId: string, url: string) {
   wc.on('did-fail-load', (_e, errorCode) => { if (errorCode !== -3) sendTabEvent(tabId, 'did-fail-load', { errorCode }) })
   wc.on('page-title-updated', (_e, title) => sendTabEvent(tabId, 'page-title-updated', { title }))
   wc.on('page-favicon-updated', (_e, favicons) => sendTabEvent(tabId, 'page-favicon-updated', { favicons }))
+  wc.on('found-in-page', (_e, result) => sendTabEvent(tabId, 'found-in-page', {
+    matches: result.matches, activeMatchOrdinal: result.activeMatchOrdinal, finalUpdate: result.finalUpdate,
+  }))
 
   // Hide the page's native scrollbar track — re-inserted on every document
   // since insertCSS doesn't survive navigation.
@@ -1092,19 +1131,64 @@ ipcMain.handle('window:maximize',    () => { mainWindow?.isMaximized() ? mainWin
 ipcMain.handle('window:close',       () => mainWindow?.close())
 ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized())
 
+// Detach a page into its own standalone window — drag a tab out of the strip
+// or use the tab context menu. The new window is a plain framed window the
+// user can move to another monitor.
+function openDetachedWindow(url: string, title?: string) {
+  const win = new BrowserWindow({
+    width: 1100, height: 760, autoHideMenuBar: true, title: title || 'AIHub Browser',
+    webPreferences: {
+      partition: 'persist:main',
+      contextIsolation: true,
+      webSecurity: true,
+      nodeIntegration: false,
+    },
+  })
+  const wc = win.webContents
+  try { wc.setUserAgent(CHROME_UA) } catch {}
+  attachContextMenu(wc)
+  attachAppShortcuts(wc)
+  wc.setWindowOpenHandler(({ url: targetUrl }) => {
+    if (targetUrl && !targetUrl.startsWith('devtools://')) safelySend('open-in-new-tab', targetUrl)
+    return { action: 'deny' }
+  })
+  win.loadURL(url)
+  return win
+}
+
+ipcMain.handle('window:detachTab', (_e, url: string, title?: string) => {
+  try {
+    if (!/^https?:\/\//i.test(url)) return { success: false, error: 'Only web pages can move to their own window' }
+    openDetachedWindow(url, title)
+    return { success: true }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
 // ── IPC: Tab context menu ───────────────────────────────────────────────────
 // Native menu — an HTML menu in the tab strip would be clipped by the 40px
 // bar and painted over by the active tab's BrowserView. Resolves with the
 // chosen action id, or '' if dismissed.
-ipcMain.handle('tabs:showContextMenu', (_e, info: { isBrowser: boolean; hasRight: boolean; count: number }) => {
+ipcMain.handle('tabs:showContextMenu', (_e, info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number }) => {
   return new Promise<string>((resolve) => {
     let resolved = false
     const done = (action: string) => { if (!resolved) { resolved = true; resolve(action) } }
+    const tabWc = info.tabId ? tabViews.get(info.tabId)?.webContents : undefined
+    let muted = false
+    try { muted = !!tabWc?.isAudioMuted() } catch {}
     const menu = Menu.buildFromTemplate([
       { label: 'New Tab',                 click: () => done('new-tab') },
       { label: 'Duplicate Tab',           click: () => done('duplicate') },
+      { label: 'Move Tab to New Window',  enabled: info.isBrowser, click: () => done('detach') },
       { type: 'separator' },
       { label: 'Reload',                  enabled: info.isBrowser, click: () => done('reload') },
+      { label: 'Copy Page URL',           enabled: info.isBrowser && !!tabWc, click: () => {
+          try { const u = tabWc!.getURL(); if (u) clipboard.writeText(u) } catch {}
+          done('')
+        } },
+      { label: muted ? 'Unmute Tab' : 'Mute Tab', enabled: info.isBrowser && !!tabWc, click: () => {
+          try { tabWc!.setAudioMuted(!muted) } catch {}
+          done('')
+        } },
       { type: 'separator' },
       { label: 'Close Tab',               click: () => done('close') },
       { label: 'Close Other Tabs',        enabled: info.count > 1, click: () => done('close-others') },
@@ -1165,6 +1249,22 @@ ipcMain.handle('tabview:getNavState', (_e, tabId: string) => {
 // Runs a script inside a tab's page and returns its completion value — the
 // agent layer uses this to read pages and drive forms (fill fields, click).
 // userGesture=true so synthesized clicks count as real user interaction.
+ipcMain.handle('tabview:find', (_e, tabId: string, text: string, forward?: boolean, findNext?: boolean) => {
+  const wc = tabViews.get(tabId)?.webContents
+  if (!wc || !text) return
+  try { wc.findInPage(text, { forward: forward !== false, findNext: !!findNext }) } catch {}
+})
+ipcMain.handle('tabview:stopFind', (_e, tabId: string, action?: 'clearSelection' | 'keepSelection' | 'activateSelection') => {
+  try { tabViews.get(tabId)?.webContents.stopFindInPage(action || 'clearSelection') } catch {}
+})
+ipcMain.handle('tabview:zoom', (_e, tabId: string, dir: 'in' | 'out' | 'reset') => {
+  const wc = tabViews.get(tabId)?.webContents
+  if (!wc) return
+  try {
+    if (dir === 'reset') wc.setZoomLevel(0)
+    else wc.setZoomLevel(Math.max(-7, Math.min(8, wc.getZoomLevel() + (dir === 'in' ? 0.5 : -0.5))))
+  } catch {}
+})
 ipcMain.handle('tabview:execJs', async (_e, tabId: string, script: string) => {
   const wc = tabViews.get(tabId)?.webContents
   if (!wc || wc.isDestroyed()) return { error: 'tab not found — it may be a home/app tab, not a web page' }

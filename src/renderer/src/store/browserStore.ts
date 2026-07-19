@@ -23,6 +23,9 @@ interface BrowserState {
   setActiveTab: (id: string) => void
   updateTab: (id: string, u: Partial<Tab>) => void
   reorderTabs: (fromId: string, toId: string) => void
+  // Recently closed tabs (Ctrl+Shift+T restores the most recent)
+  closedTabs: { url: string; pageType: Tab['pageType'] }[]
+  reopenClosedTab: () => void
 
   // Navigation state (per active tab)
   canGoBack: boolean
@@ -71,6 +74,11 @@ interface BrowserState {
 
 let tabN = 1
 
+// Only real content tabs are worth restoring — not blank home tabs.
+function restorable(t: Tab) {
+  return !t.isHome && t.url && t.url !== 'home'
+}
+
 function loadExtStates(): Record<string, { enabled: boolean; settings: Record<string, any> }> {
   try { return JSON.parse(localStorage.getItem('aihub-extensions') || '{}') } catch { return {} }
 }
@@ -101,10 +109,23 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     return id
   },
 
+  closedTabs: [],
+  reopenClosedTab: () => {
+    const { closedTabs, addTab } = get()
+    if (!closedTabs.length) return
+    const [last, ...rest] = closedTabs
+    set({ closedTabs: rest })
+    addTab(last.url, last.pageType)
+  },
+
   closeTab: (id) => {
-    const { tabs, activeTabId, tabWcIds } = get()
+    const { tabs, activeTabId, tabWcIds, closedTabs } = get()
     const newWcIds = { ...tabWcIds }
     delete newWcIds[id]
+    const closing = tabs.find(t => t.id === id)
+    if (closing && restorable(closing)) {
+      set({ closedTabs: [{ url: closing.url, pageType: closing.pageType }, ...closedTabs].slice(0, 25) })
+    }
 
     if (tabs.length === 1) {
       const newId = `tab-${++tabN}`
@@ -124,23 +145,25 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   },
 
   closeOtherTabs: (id) => {
-    const { tabs, tabWcIds } = get()
+    const { tabs, tabWcIds, closedTabs } = get()
     const keep = tabs.find(t => t.id === id)
     if (!keep || tabs.length === 1) return
     const newWcIds: Record<string, number> = {}
     if (tabWcIds[id] != null) newWcIds[id] = tabWcIds[id]
-    set({ tabs: [keep], activeTabId: id, tabWcIds: newWcIds, canGoBack: false, canGoForward: false })
+    const closed = tabs.filter(t => t.id !== id && restorable(t)).map(t => ({ url: t.url, pageType: t.pageType }))
+    set({ tabs: [keep], activeTabId: id, tabWcIds: newWcIds, canGoBack: false, canGoForward: false, closedTabs: [...closed.reverse(), ...closedTabs].slice(0, 25) })
   },
 
   closeTabsToRight: (id) => {
-    const { tabs, activeTabId, tabWcIds } = get()
+    const { tabs, activeTabId, tabWcIds, closedTabs } = get()
     const idx = tabs.findIndex(t => t.id === id)
     if (idx === -1 || idx === tabs.length - 1) return
     const kept = tabs.slice(0, idx + 1)
     const newWcIds = { ...tabWcIds }
     for (const t of tabs.slice(idx + 1)) delete newWcIds[t.id]
+    const closed = tabs.slice(idx + 1).filter(restorable).map(t => ({ url: t.url, pageType: t.pageType }))
     const newActive = kept.some(t => t.id === activeTabId) ? activeTabId : id
-    set({ tabs: kept, activeTabId: newActive, tabWcIds: newWcIds, canGoBack: false, canGoForward: false })
+    set({ tabs: kept, activeTabId: newActive, tabWcIds: newWcIds, canGoBack: false, canGoForward: false, closedTabs: [...closed.reverse(), ...closedTabs].slice(0, 25) })
   },
 
   setActiveTab: (id) => {

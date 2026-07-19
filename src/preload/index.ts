@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     isMaximized:     () => ipcRenderer.invoke('window:isMaximized'),
     setTransparency: (m:string) => ipcRenderer.invoke('window:setTransparency', m),
     setOpacity:      (o:number) => ipcRenderer.invoke('window:setOpacity', o),
+    detachTab:       (url:string, title?:string) => ipcRenderer.invoke('window:detachTab', url, title),
   },
   gmail: {
     status:         () => ipcRenderer.invoke('gmail:status'),
@@ -155,7 +156,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getSourceId: (): Promise<string | null> => ipcRenderer.invoke('recorder:getSourceId'),
   },
   tabs: {
-    showContextMenu: (info: { isBrowser: boolean; hasRight: boolean; count: number }): Promise<string> =>
+    showContextMenu: (info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number }): Promise<string> =>
       ipcRenderer.invoke('tabs:showContextMenu', info),
   },
   tabView: {
@@ -170,6 +171,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     reload:          (tabId: string)                                                             => ipcRenderer.invoke('tabview:reload', tabId),
     getNavState:     (tabId: string): Promise<{ canGoBack: boolean; canGoForward: boolean }>     => ipcRenderer.invoke('tabview:getNavState', tabId),
     execJs:          (tabId: string, script: string)                                             => ipcRenderer.invoke('tabview:execJs', tabId, script),
+    find:            (tabId: string, text: string, forward?: boolean, findNext?: boolean)        => ipcRenderer.invoke('tabview:find', tabId, text, forward, findNext),
+    stopFind:        (tabId: string, action?: string)                                            => ipcRenderer.invoke('tabview:stopFind', tabId, action),
+    zoom:            (tabId: string, dir: 'in' | 'out' | 'reset')                                => ipcRenderer.invoke('tabview:zoom', tabId, dir),
     onEvent: (cb: (tabId: string, type: string, payload: any) => void) => {
       const handler = (_e: any, tabId: string, type: string, payload: any) => cb(tabId, type, payload)
       ipcRenderer.on('tabview:event', handler)
