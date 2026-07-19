@@ -944,9 +944,112 @@ ipcMain.handle('app:setDefaultBrowser', async () => {
 })
 
 // ── IPC: VPN / Proxy ──────────────────────────────────────────────────────
-let vpnActive: { protocol: string; host: string; port: number; username?: string; password?: string } | null = null
+let vpnActive: {
+  protocol: string; host: string; port: number
+  username?: string; password?: string
+  free?: boolean; countryCode?: string; countryName?: string
+} | null = null
 
 ipcMain.handle('vpn:getStatus', () => ({ connected: !!vpnActive, config: vpnActive }))
+
+// ── Free VPN engine ────────────────────────────────────────────────────────
+// Community proxy lists (no account, no API key). We pull candidates for the
+// requested country from two independent public sources, then verify each one
+// by routing a real request through Chromium's network stack — a proxy only
+// "wins" if it answers AND reports a different public IP than the direct line.
+const FREE_PROXY_RULE = /^(socks5|socks4|https?):\/\/\d{1,3}(\.\d{1,3}){3}:\d{2,5}$/
+
+async function fetchFreeProxyList(cc: string): Promise<string[]> {
+  const seen = new Set<string>()
+  const out: string[] = []
+  const push = (raw: string) => {
+    const rule = raw.trim().toLowerCase()
+    if (FREE_PROXY_RULE.test(rule) && !seen.has(rule)) { seen.add(rule); out.push(rule) }
+  }
+  // Source 1: Proxifly free-proxy-list (per-country JSON, refreshed on GitHub CDN)
+  try {
+    const { status, body } = await httpGet(
+      `https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/countries/${cc.toUpperCase()}/data.json`, 10000)
+    if (status === 200) {
+      for (const p of JSON.parse(body)) {
+        if (typeof p?.proxy === 'string') push(p.proxy)
+        else if (p?.protocol && p?.ip && p?.port) push(`${p.protocol}://${p.ip}:${p.port}`)
+      }
+    }
+  } catch {}
+  // Source 2: ProxyScrape free list API (country-filtered)
+  try {
+    const { status, body } = await httpGet(
+      `https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&country=${cc.toLowerCase()}&proxy_format=protocolipport&format=text`, 10000)
+    if (status === 200) for (const line of body.split(/\r?\n/)) push(line)
+  } catch {}
+  // SOCKS5 first — they tunnel HTTPS most reliably — then shuffle within groups
+  const socks = out.filter(r => r.startsWith('socks5')), rest = out.filter(r => !r.startsWith('socks5'))
+  for (const arr of [socks, rest]) arr.sort(() => Math.random() - 0.5)
+  return [...socks, ...rest]
+}
+
+// Route a probe through an isolated in-memory session so testing never touches
+// the user's real browsing session. Returns the IP seen through the proxy.
+async function probeProxy(rule: string, partition: string, timeoutMs: number): Promise<string | null> {
+  try {
+    const ses = session.fromPartition(partition)
+    await ses.setProxy({ proxyRules: rule })
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+    try {
+      const res = await ses.fetch('https://api.ipify.org?format=json', { signal: ctrl.signal, cache: 'no-store' })
+      if (!res.ok) return null
+      const d = await res.json()
+      return typeof d?.ip === 'string' ? d.ip : null
+    } finally { clearTimeout(timer) }
+  } catch { return null }
+}
+
+let freeVpnCancelled = false
+
+ipcMain.handle('vpn:freeConnect', async (_e, cc: string, countryName?: string) => {
+  freeVpnCancelled = false
+  const label = countryName || cc
+  try {
+    // Direct IP first — the yardstick that proves a proxy actually masks us.
+    let directIp = ''
+    try { directIp = JSON.parse((await httpGet('https://api.ipify.org?format=json', 8000)).body).ip || '' } catch {}
+
+    safelySend('vpn:freeProgress', { phase: 'fetching', country: cc })
+    const candidates = (await fetchFreeProxyList(cc)).slice(0, 40)
+    if (!candidates.length) {
+      return { success: false, error: `No free ${label} servers available right now. Try another country or retry in a few minutes.` }
+    }
+
+    const BATCH = 5
+    for (let i = 0; i < candidates.length; i += BATCH) {
+      if (freeVpnCancelled) return { success: false, error: 'Cancelled', cancelled: true }
+      safelySend('vpn:freeProgress', { phase: 'testing', tried: i, total: candidates.length, country: cc })
+      const batch = candidates.slice(i, i + BATCH)
+      const results = await Promise.all(
+        batch.map((rule, j) => probeProxy(rule, `vpn-probe-${j}`, 7000).then(ip => ({ rule, ip })))
+      )
+      const winner = results.find(r => r.ip && r.ip !== directIp)
+      if (winner) {
+        if (freeVpnCancelled) return { success: false, error: 'Cancelled', cancelled: true }
+        const u = new URL(winner.rule)
+        await session.defaultSession.setProxy({ proxyRules: winner.rule, proxyBypassRules: '<local>' })
+        vpnActive = {
+          protocol: u.protocol.replace(':', ''), host: u.hostname, port: Number(u.port),
+          free: true, countryCode: cc, countryName: label,
+        }
+        return { success: true, ip: winner.ip, proxy: winner.rule }
+      }
+    }
+    return {
+      success: false,
+      error: `All ${candidates.length} free ${label} servers are busy or offline right now. Free servers come and go — retry in a minute or pick another country.`,
+    }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+ipcMain.handle('vpn:freeCancel', () => { freeVpnCancelled = true; return { success: true } })
 
 ipcMain.handle('vpn:setProxy', async (_e, cfg: { protocol: string; host: string; port: number; username?: string; password?: string }) => {
   try {
@@ -968,13 +1071,18 @@ ipcMain.handle('vpn:clearProxy', async () => {
 })
 
 ipcMain.handle('vpn:getIp', async () => {
+  // Must go through the default session (ses.fetch), NOT Node's https module —
+  // Node bypasses Chromium's proxy config, so the displayed IP would always be
+  // the real one even while the VPN proxy is active.
   try {
-    const { status, body } = await httpGet('https://ipinfo.io/json', 8000)
-    if (status === 200) {
-      const d = JSON.parse(body)
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 12000)
+    try {
+      const res = await session.defaultSession.fetch('https://ipinfo.io/json', { signal: ctrl.signal, cache: 'no-store' })
+      if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
+      const d = await res.json()
       return { success: true, ip: d.ip, city: d.city, region: d.region, country: d.country, org: d.org }
-    }
-    return { success: false, error: `HTTP ${status}` }
+    } finally { clearTimeout(timer) }
   } catch (e: any) { return { success: false, error: e.message } }
 })
 
@@ -1217,38 +1325,99 @@ ipcMain.handle('wifi:scan', async () => {
   if (process.platform !== 'win32') return { networks: [], error: 'WiFi scan only on Windows' }
   try {
     const raw = execSync('netsh wlan show networks mode=bssid', { encoding: 'utf-8', timeout: 8000 })
-    return { networks: parseWifiNetworks(raw) }
+    const networks = parseWifiNetworks(raw)
+    // Saved profiles let us connect to a secured network without asking for
+    // the password again — mark those so the UI can offer one-click connect.
+    let saved: string[] = []
+    try {
+      const profRaw = execSync('netsh wlan show profiles', { encoding: 'utf-8', timeout: 8000 })
+      saved = [...profRaw.matchAll(/(?:All User Profile|User Profile)\s*:\s*(.+)/g)].map(m => m[1].trim())
+    } catch {}
+    for (const n of networks) n.saved = saved.includes(n.ssid)
+    return { networks, connectedSsid: currentWifiSsid() }
   } catch (e: any) { return { networks: [], error: e.message } }
 })
-ipcMain.handle('wifi:connect', async (_e, ssid: string, open?: boolean) => {
-  if (process.platform !== 'win32') return { success: false, error: 'Windows only' }
-  // netsh can only "connect name=" to an SSID that already has a saved WLAN
-  // profile. Open networks the user has never joined have none, so the bare
-  // connect silently fails — that's the "nothing happens" bug. For open
-  // networks, write a minimal open-auth profile, import it, THEN connect.
+
+// SSID the WLAN interface is actually associated with right now ('' if none).
+function currentWifiSsid(): string {
   try {
-    if (open) {
-      // SSID → hex, so exotic characters in the name can't break the XML.
-      const hex = Buffer.from(ssid, 'utf-8').toString('hex').toUpperCase()
-      const xml = `<?xml version="1.0"?>
+    const raw = execSync('netsh wlan show interfaces', { encoding: 'utf-8', timeout: 8000 })
+    if (!/^\s*State\s*:\s*connected/im.test(raw)) return ''
+    const m = raw.match(/^\s*SSID\s*:\s*(.+)$/im)
+    return m ? m[1].trim() : ''
+  } catch { return '' }
+}
+
+function buildWlanProfileXml(ssid: string, security: { auth: string; encryption: string; password?: string }) {
+  // SSID → hex, so exotic characters in the name can't break the XML.
+  const hex = Buffer.from(ssid, 'utf-8').toString('hex').toUpperCase()
+  const sharedKey = security.password
+    ? `\n    <sharedKey><keyType>passPhrase</keyType><protected>false</protected><keyMaterial>${escapeXml(security.password)}</keyMaterial></sharedKey>`
+    : ''
+  return `<?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
   <name>${escapeXml(ssid)}</name>
-  <SSIDConfig><SSID><hex>${hex}</hex><name>${escapeXml(ssid)}</name></SSID></SSIDConfig>
+  <SSIDConfig><SSID><hex>${hex}</hex><name>${escapeXml(ssid)}</name></SSIDConfig>
   <connectionType>ESS</connectionType>
   <connectionMode>manual</connectionMode>
   <MSM><security>
-    <authEncryption><authentication>open</authentication><encryption>none</encryption><useOneX>false</useOneX></authEncryption>
+    <authEncryption><authentication>${security.auth}</authentication><encryption>${security.encryption}</encryption><useOneX>false</useOneX></authEncryption>${sharedKey}
   </security></MSM>
 </WLANProfile>`
-      const tmp = join(os.tmpdir(), `aihub-wifi-${Date.now()}.xml`)
-      fs.writeFileSync(tmp, xml, 'utf-8')
-      // execFileSync (no shell) — the SSID is an untrusted AP-supplied string,
-      // so it must never be interpolated into a shell command line.
-      try { execFileSync('netsh', ['wlan', 'add', 'profile', `filename=${tmp}`, 'user=all'], { timeout: 8000 }) }
-      finally { try { fs.unlinkSync(tmp) } catch {} }
+}
+
+function addWlanProfile(xml: string) {
+  const tmp = join(os.tmpdir(), `aihub-wifi-${Date.now()}.xml`)
+  fs.writeFileSync(tmp, xml, 'utf-8')
+  // execFileSync (no shell) — the SSID is an untrusted AP-supplied string,
+  // so it must never be interpolated into a shell command line.
+  try { execFileSync('netsh', ['wlan', 'add', 'profile', `filename=${tmp}`, 'user=all'], { timeout: 8000 }) }
+  finally { try { fs.unlinkSync(tmp) } catch {} }
+}
+
+ipcMain.handle('wifi:connect', async (_e, ssid: string, open?: boolean, password?: string, auth?: string) => {
+  if (process.platform !== 'win32') return { success: false, error: 'Windows only' }
+  // netsh can only "connect name=" to an SSID that already has a saved WLAN
+  // profile. Open networks get a minimal open-auth profile; secured networks
+  // the user hasn't joined before get a WPA2/WPA3 profile built from the
+  // password they typed. Either way: add profile → connect → VERIFY, because
+  // "netsh wlan connect" reports success before association even starts.
+  let addedProfile = false
+  try {
+    if (open) {
+      addWlanProfile(buildWlanProfileXml(ssid, { auth: 'open', encryption: 'none' }))
+      addedProfile = true
+    } else if (password) {
+      if (password.length < 8 || password.length > 63) {
+        return { success: false, error: 'WiFi passwords are 8–63 characters', needsPassword: true }
+      }
+      const wpa3 = /wpa3/i.test(auth || '')
+      addWlanProfile(buildWlanProfileXml(ssid, { auth: wpa3 ? 'WPA3SAE' : 'WPA2PSK', encryption: 'AES', password }))
+      addedProfile = true
     }
-    execFileSync('netsh', ['wlan', 'connect', `name=${ssid}`], { timeout: 12000 })
-    return { success: true }
+    try {
+      execFileSync('netsh', ['wlan', 'connect', `name=${ssid}`], { timeout: 12000 })
+    } catch (e: any) {
+      const detail = (e.stdout?.toString?.() || '').trim() || e.message
+      // No saved profile for this secured network → the UI should ask for a password.
+      if (/no profile/i.test(detail) && !open && !password) {
+        return { success: false, needsPassword: true, error: 'Password needed for this network' }
+      }
+      throw e
+    }
+    // Poll the interface — association takes a few seconds, and a wrong
+    // password just quietly never reaches "connected".
+    for (let i = 0; i < 12; i++) {
+      await new Promise(r => setTimeout(r, 1000))
+      if (currentWifiSsid() === ssid) return { success: true }
+    }
+    // Never associated. If we just wrote a profile from a typed password,
+    // remove it so the bad key doesn't stick around poisoning future attempts.
+    if (addedProfile && password) {
+      try { execFileSync('netsh', ['wlan', 'delete', 'profile', `name=${ssid}`], { timeout: 8000 }) } catch {}
+      return { success: false, needsPassword: true, error: 'Could not connect — wrong password or weak signal. Try again.' }
+    }
+    return { success: false, error: 'Could not connect — the network did not respond. Move closer and retry.' }
   } catch (e: any) {
     // netsh writes the useful message to stdout, not the thrown Error.
     const detail = (e.stdout?.toString?.() || '').trim() || e.message

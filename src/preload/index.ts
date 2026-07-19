@@ -92,7 +92,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   wifi: {
     scan:    () => ipcRenderer.invoke('wifi:scan'),
-    connect: (ssid:string, open?:boolean) => ipcRenderer.invoke('wifi:connect', ssid, open),
+    connect: (ssid:string, open?:boolean, password?:string, auth?:string) => ipcRenderer.invoke('wifi:connect', ssid, open, password, auth),
   },
   file: {
     saveMd:    (opts: { title: string; content: string })      => ipcRenderer.invoke('file:saveMd', opts),
@@ -124,10 +124,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getLatestNews:      ()                       => ipcRenderer.invoke('ai:getLatestNews'),
   },
   vpn: {
-    getStatus:  () => ipcRenderer.invoke('vpn:getStatus'),
-    setProxy:   (cfg: any) => ipcRenderer.invoke('vpn:setProxy', cfg),
-    clearProxy: () => ipcRenderer.invoke('vpn:clearProxy'),
-    getIp:      () => ipcRenderer.invoke('vpn:getIp'),
+    getStatus:   () => ipcRenderer.invoke('vpn:getStatus'),
+    setProxy:    (cfg: any) => ipcRenderer.invoke('vpn:setProxy', cfg),
+    clearProxy:  () => ipcRenderer.invoke('vpn:clearProxy'),
+    getIp:       () => ipcRenderer.invoke('vpn:getIp'),
+    freeConnect: (cc: string, name?: string) => ipcRenderer.invoke('vpn:freeConnect', cc, name),
+    freeCancel:  () => ipcRenderer.invoke('vpn:freeCancel'),
+    onFreeProgress: (cb: (p: any) => void) => {
+      const handler = (_e: any, p: any) => cb(p)
+      ipcRenderer.on('vpn:freeProgress', handler)
+      return () => ipcRenderer.removeListener('vpn:freeProgress', handler)
+    },
   },
   app: {
     isDefaultBrowser:  () => ipcRenderer.invoke('app:isDefaultBrowser'),
