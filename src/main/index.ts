@@ -417,6 +417,9 @@ function matchAppShortcut(input: Electron.Input): string | null {
   if (key === '=' || key === '+') return 'zoom-in'
   if (key === '-') return 'zoom-out'
   if (key === '0') return 'zoom-reset'
+  // Ctrl+Shift+V — paste the clipboard URL into the address bar AND go, one
+  // stroke, no matter what has focus.
+  if (key === 'v' && input.shift) return 'paste-and-go'
   return null
 }
 
@@ -446,9 +449,32 @@ function attachAppShortcuts(wc: Electron.WebContents) {
     // host UI first — otherwise the input focuses but keys keep going to the
     // BrowserView.
     if (action === 'focus-url' || action === 'find-in-page') mainWindow?.webContents.focus()
+    // Paste-and-Go carries the clipboard text with it so the renderer doesn't
+    // need a separate clipboard round-trip.
+    if (action === 'paste-and-go') { safelySend('urlbar-paste-and-go', clipboard.readText().trim()); return }
     safelySend('app-shortcut', action)
   })
 }
+
+// Native right-click menu for the address bar. Standard edit roles operate on
+// the focused host input directly; "Paste and Go" ships the clipboard text
+// back to the renderer, which navigates with the same smart URL/search logic
+// as pressing Enter.
+ipcMain.handle('urlbar:showContextMenu', (_e, hasText: boolean) => {
+  const clip = clipboard.readText().trim()
+  const menu = Menu.buildFromTemplate([
+    { label: 'Cut',  role: 'cut',  enabled: hasText },
+    { label: 'Copy', role: 'copy', enabled: hasText },
+    { label: 'Paste', role: 'paste', enabled: !!clip },
+    {
+      label: 'Paste and Go', enabled: !!clip,
+      click: () => safelySend('urlbar-paste-and-go', clip),
+    },
+    { type: 'separator' },
+    { label: 'Select All', role: 'selectAll' },
+  ])
+  menu.popup({ window: mainWindow ?? undefined })
+})
 
 // Full page right-click menu. `opts.tabId` is set only for real browsing tabs
 // (BrowserViews) — page-specific actions (reload, print, save, QR, Add to
@@ -2319,6 +2345,99 @@ const AI_NEWS_KEYWORDS = [
   'machine learning', 'mistral', 'llama', 'groq', 'hugging face', 'diffusion',
   'transformer', 'copilot', 'stable diffusion', 'midjourney', 'sora',
 ]
+
+// ── IPC: AI research tools (web search + page fetch) ───────────────────────
+// HTTP GET with a real browser UA, following up to `hops` redirects — many
+// sites 301 to www/https variants and DDG needs a UA to answer at all.
+function fetchHtml(url: string, timeoutMs = 12000, hops = 4): Promise<{ status: number; body: string; finalUrl: string }> {
+  return new Promise((resolve, reject) => {
+    if (hops < 0) { reject(new Error('too many redirects')); return }
+    const lib = url.startsWith('https') ? https : http
+    const req = lib.get(url, {
+      timeout: timeoutMs,
+      headers: { 'User-Agent': CHROME_UA, 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8', 'Accept-Language': 'en' },
+      lookup: fallbackLookup,
+    }, (res) => {
+      const loc = res.headers.location
+      if (loc && res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
+        res.resume()
+        try { resolve(fetchHtml(new URL(loc, url).href, timeoutMs, hops - 1)) }
+        catch (e) { reject(e) }
+        return
+      }
+      let body = ''
+      res.on('data', c => { body += c })
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, body, finalUrl: url }))
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
+  })
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#x27;|&#39;|&apos;/g, "'").replace(/&nbsp;/g, ' ')
+}
+
+function htmlToText(html: string): string {
+  return decodeEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+      .replace(/<\/(p|div|li|h[1-6]|tr|br|section|article)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+  ).replace(/[ \t]+/g, ' ').replace(/\n\s*\n\s*/g, '\n\n').trim()
+}
+
+ipcMain.handle('ai:webSearch', async (_e, query: string) => {
+  try {
+    const q = String(query || '').trim()
+    if (!q) return { success: false, error: 'query is required' }
+    const { body } = await fetchHtml(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, 12000)
+    const results: { title: string; url: string; snippet: string }[] = []
+    // DDG's html endpoint groups each hit in a result block; links are
+    // redirect-wrapped (uddg= param carries the real destination).
+    const linkRe = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g
+    const snips: string[] = []
+    const snipRe = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g
+    let sm: RegExpExecArray | null
+    while ((sm = snipRe.exec(body)) !== null) snips.push(htmlToText(sm[1]))
+    let m: RegExpExecArray | null
+    let snipIdx = 0
+    while ((m = linkRe.exec(body)) !== null && results.length < 8) {
+      let url = m[1]
+      try {
+        const parsed = new URL(url.startsWith('//') ? 'https:' + url : url)
+        const real = parsed.searchParams.get('uddg')
+        if (real) url = real
+      } catch {}
+      // Skip sponsored/ad rows — DDG wraps those through y.js / bing aclick
+      // redirects, which aren't real organic results.
+      if (/duckduckgo\.com\/y\.js|bing\.com\/aclick|ad_provider=|ad_domain=/i.test(url)) { snipIdx++; continue }
+      if (!/^https?:\/\//i.test(url)) { snipIdx++; continue }
+      results.push({ title: htmlToText(m[2]), url, snippet: snips[snipIdx] || '' })
+      snipIdx++
+    }
+    if (!results.length) return { success: false, error: 'no results — try different keywords' }
+    return { success: true, query: q, results }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+ipcMain.handle('ai:fetchPage', async (_e, url: string) => {
+  try {
+    if (!/^https?:\/\//i.test(String(url || ''))) return { success: false, error: 'a full http(s) url is required' }
+    const { status, body, finalUrl } = await fetchHtml(url, 12000)
+    if (status >= 400) return { success: false, error: `HTTP ${status}` }
+    const titleM = body.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+    return {
+      success: true, url: finalUrl,
+      title: titleM ? htmlToText(titleM[1]) : '',
+      text: htmlToText(body).slice(0, 14000),
+    }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
 
 ipcMain.handle('ai:getLatestNews', async () => {
   try {

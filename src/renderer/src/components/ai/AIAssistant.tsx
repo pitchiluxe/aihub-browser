@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, X, Send, Loader2, Sparkles, FileText, Trash2, AlertCircle,
-  Zap, Paperclip, Download, BookmarkPlus, Check, Newspaper, ExternalLink, Square,
+  Zap, Paperclip, Download, BookmarkPlus, Check, Newspaper, Square,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, describeAction, executeAction, AGENT_TOOLS_DOC } from '../../services/agentTools'
+import Markdown from './Markdown'
 
 interface Props {
   currentUrl?: string
@@ -16,10 +17,10 @@ interface Props {
 interface SummaryState { title: string; url: string; mdContent: string }
 
 const SUGGESTIONS = [
+  'Research the best laptops under $1000 — table please',
   'Open YouTube for me',
-  'What can AIHub Browser do?',
   'Summarize the current page',
-  'Latest AI news and articles',
+  'Write me a Python script that renames files',
 ]
 
 const AI_NEWS_INTENT  = /latest\s+ai|ai\s+news|ai\s+articles?|ai\s+updates?|what.?s\s+new\s+in\s+ai|recent\s+ai|top\s+ai/i
@@ -211,7 +212,16 @@ You are deeply aware of the user's browser context: their bookmarks, recent hist
 ## Navigation commands
 When user asks to open a site, reply concisely: "Opening [Site Name] ↗" — the browser detects this and opens the tab automatically.
 
-Be concise, warm, and genuinely helpful. Use **bold** for site names and key terms. Bullet points for lists.${pageCtx}${bookmarkCtx}${historyCtx}${AGENT_TOOLS_DOC}`
+## Answer formatting — ALWAYS follow these
+Your chat renders full GitHub-flavored markdown: tables, fenced code, headings, task lists. Use it.
+- **Comparisons, options, specs, prices, pros/cons, any multi-attribute data → a markdown table.** Clear header row, one concept per column, keep cells short. Never dump comparable data as a wall of bullets.
+- **Links**: always \`[Descriptive Title](https://full-url)\` — never bare URLs in prose, never "click here". They render clickable and open in a tab.
+- **Code**: fenced blocks with a language tag (\`\`\`python …). Users get a copy button. Inline \`code\` for names, commands, paths.
+- **Structure long answers**: one-line takeaway first → ## sections → bullets → **bold** key terms. Short answers stay short — no headers on a two-line reply.
+- **Research answers** end with a "Sources" section of markdown links to what you actually consulted.
+- Never say you can't browse the internet — you have web_search and fetch_url. Use them.
+
+Be concise, warm, and genuinely helpful.${pageCtx}${bookmarkCtx}${historyCtx}${AGENT_TOOLS_DOC}`
   }, [currentUrl, currentTitle, bookmarks, browseHistory, appInfo])
 
   // ── Send message — agent loop: the model can request tool actions via a
@@ -563,12 +573,17 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                       color: '#fff', boxShadow: '0 2px 14px rgb(var(--ds-accent) / 0.28)',
                       userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text',
                     } : {
-                      maxWidth: '82%', borderRadius: 14, borderTopLeftRadius: 4,
-                      padding: '9px 12px', fontSize: 12, lineHeight: 1.55, whiteSpace: 'pre-wrap',
+                      // Assistant bubbles render full markdown (tables, code) —
+                      // wider, and no pre-wrap (markdown handles its own layout).
+                      maxWidth: '94%', minWidth: 0, borderRadius: 14, borderTopLeftRadius: 4,
+                      padding: '9px 12px', fontSize: 12, lineHeight: 1.55,
                       background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
                       color: 'rgb(var(--ds-text-2))', userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text',
+                      overflow: 'hidden',
                     }}>
-                      {msg.content && <MdMessage content={msg.content} onNavigate={url => addTab(url, 'browser')} />}
+                      {msg.content && (msg.role === 'assistant'
+                        ? <Markdown content={msg.content} onNavigate={url => addTab(url, 'browser')} />
+                        : <span>{msg.content}</span>)}
                       {msg.steps && msg.steps.length > 0 && (
                         <div style={{ marginTop: msg.content ? 8 : 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                           {msg.steps.map((s, si) => (
@@ -724,56 +739,6 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
       )}
     </AnimatePresence>
   )
-}
-
-// ── Simple markdown renderer for AI messages ──────────────────────────────────
-function MdMessage({ content, onNavigate }: { content: string; onNavigate: (url: string) => void }) {
-  // Bold, links, simple rendering without dependencies
-  const parts = content.split('\n')
-  return (
-    <div>
-      {parts.map((line, i) => {
-        // Render bold **text** and bare URLs as clickable
-        const rendered = renderLine(line, onNavigate)
-        return <div key={i} style={{ minHeight: line === '' ? 6 : undefined }}>{rendered}</div>
-      })}
-    </div>
-  )
-}
-
-function renderLine(line: string, onNavigate: (url: string) => void): React.ReactNode {
-  const segments: React.ReactNode[] = []
-  let rest = line
-  let key = 0
-
-  // Process **bold** and https:// links
-  const re = /(\*\*(.+?)\*\*)|(https?:\/\/[^\s]+)/g
-  let m: RegExpExecArray | null
-  let last = 0
-  re.lastIndex = 0
-
-  while ((m = re.exec(line)) !== null) {
-    if (m.index > last) segments.push(<span key={key++}>{line.slice(last, m.index)}</span>)
-    if (m[1]) {
-      segments.push(<strong key={key++} style={{ color: 'rgb(var(--ds-text-2))', fontWeight: 600 }}>{m[2]}</strong>)
-    } else {
-      const url = m[0]
-      segments.push(
-        <button key={key++} onClick={() => onNavigate(url)} style={{
-          background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-          color: '#60a5fa', textDecoration: 'underline', fontSize: 'inherit',
-          display: 'inline-flex', alignItems: 'center', gap: 2,
-        }}>
-          {url.length > 40 ? url.slice(0, 40) + '…' : url}
-          <ExternalLink size={9} />
-        </button>
-      )
-    }
-    last = m.index + m[0].length
-  }
-  if (last < line.length) segments.push(<span key={key++}>{line.slice(last)}</span>)
-
-  return segments.length > 0 ? <>{segments}</> : <>{rest}</>
 }
 
 // ── Shared button components ──────────────────────────────────────────────────

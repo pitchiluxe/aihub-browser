@@ -64,9 +64,10 @@ export default function NavigationBar({
 
   useEffect(() => { if (!isEditing) setUrlInput(displayUrl) }, [activeTab?.url, isEditing])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const q = urlInput.trim()
+  // Smart-navigate any text: a URL goes straight there, anything else becomes
+  // a Google search. Shared by Enter, Paste-and-Go, and the middle-click paste.
+  const go = (raw: string) => {
+    const q = raw.trim()
     if (!q) return
     const url = isUrl(q)
       ? (q.startsWith('http') ? q : `https://${q}`)
@@ -75,6 +76,37 @@ export default function NavigationBar({
     setIsEditing(false)
     inputRef.current?.blur()
   }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    go(urlInput)
+  }
+
+  // Paste-and-Go: read the clipboard and navigate in one step. Fed by the
+  // address-bar right-click menu, middle-click, and Ctrl+Shift+V.
+  const pasteAndGo = async (text?: string) => {
+    let clip = text
+    if (clip == null) {
+      try { clip = await navigator.clipboard.readText() } catch { clip = '' }
+    }
+    if (clip && clip.trim()) go(clip)
+  }
+
+  const handleUrlContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const el = inputRef.current
+    const hasText = !!(el && el.selectionStart !== el.selectionEnd)
+    window.electronAPI.urlbar.showContextMenu(hasText)
+  }
+
+  // Ctrl+Shift+V / menu "Paste and Go" arrive from the main process with the
+  // clipboard text already attached.
+  useEffect(() => {
+    const off = window.electronAPI?.ipc?.on?.('urlbar-paste-and-go', (_e: any, text: string) => {
+      pasteAndGo(text)
+    })
+    return () => { try { off?.() } catch {} }
+  }, [onNavigate])
 
   // One-click add the current page to the sphere (or remove it if already in).
   const handleToggleBookmark = async () => {
@@ -287,7 +319,9 @@ export default function NavigationBar({
               setTimeout(() => inputRef.current?.select(), 10)
             }}
             onBlur={() => setIsEditing(false)}
-            placeholder="Search or enter URL…"
+            onContextMenu={handleUrlContextMenu}
+            onMouseDown={e => { if (e.button === 1) { e.preventDefault(); pasteAndGo() } }}
+            placeholder="Search or enter URL…  ·  right-click for Paste & Go"
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
               fontSize: 12.5, fontWeight: 450,

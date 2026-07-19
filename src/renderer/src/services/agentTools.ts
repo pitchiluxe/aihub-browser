@@ -51,6 +51,8 @@ export function describeAction(a: ToolAction): string {
     case 'add_bookmark':    return `Bookmarking ${a.title || a.url}`
     case 'remove_bookmark': return 'Removing bookmark'
     case 'read_page':       return 'Reading page content'
+    case 'web_search':      return `Searching the web: "${String(a.query || '').slice(0, 50)}"`
+    case 'fetch_url':       return `Fetching ${String(a.url || '').slice(0, 60)}`
     case 'read_tab':        return 'Reading tab content'
     case 'scan_page':       return 'Scanning page elements'
     case 'fill_field':      return `Filling field #${a.elementId}`
@@ -277,6 +279,18 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
         return { text: sanitized }
       }
 
+      case 'web_search': {
+        if (!action.query) return { error: 'query is required' }
+        const res = await window.electronAPI.ai.webSearch(String(action.query))
+        return sanitizeResult(res)
+      }
+
+      case 'fetch_url': {
+        if (!action.url) return { error: 'url is required' }
+        const res = await window.electronAPI.ai.fetchPage(String(action.url))
+        return sanitizeResult(res)
+      }
+
       case 'read_tab': {
         if (!action.tabId) return { error: 'tabId is required' }
         return await execInTab(action.tabId, READ_TAB_SCRIPT)
@@ -397,6 +411,15 @@ Available tools:
 - add_bookmark({url, title, category?}) — saves a bookmark. This is what "save this link/page for me" means — category is optional, auto-detected if omitted.
 - remove_bookmark({id}) — deletes a bookmark by id.
 - read_page() — returns the visible text of the page in the CURRENT active tab. Use this whenever you need to actually know what a page says (summarizing, answering questions about it, or writing a good bookmark title) rather than guessing from the URL alone.
+
+Research tools (fast — no tab needed; prefer these for questions about current events, prices, comparisons, or anything you're not sure about):
+- web_search({query}) — live web search. Returns up to 8 results with title, url, and snippet. NEVER guess or say "I can't browse the internet" — search instead.
+- fetch_url({url}) — downloads a page's readable text (plus its title) WITHOUT opening a visible tab. Use it to read search results, articles, and docs during research. Only open_tab when the user should actually SEE the page.
+
+Research workflow for "research X / compare X / what's the latest on X":
+1. web_search with 1-3 focused queries (different angles).
+2. fetch_url the 2-4 most promising results to read the actual content.
+3. Synthesize into a well-structured answer: sections, a comparison table when comparing anything, and a "Sources" list of markdown links at the end. Never present a source you didn't actually fetch or see in search results.
 
 Web page interaction (works on ANY open tab — use these to research, fill forms, and apply to things on the user's behalf):
 - read_tab({tabId}) — returns the URL, title, and visible text of a specific tab. After open_tab or navigate_tab, call wait then read_tab to see the loaded page. If it returns loading:true or looks empty, wait again and re-read.

@@ -130,6 +130,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     chat:               (msgs:any[], m?:string, opts?:{preferCloud?:boolean}) => ipcRenderer.invoke('ai:chat', msgs, m, opts),
     summarizePage:      (t:string, url:string)   => ipcRenderer.invoke('ai:summarizePage', t, url),
     getLatestNews:      ()                       => ipcRenderer.invoke('ai:getLatestNews'),
+    webSearch:          (query:string)           => ipcRenderer.invoke('ai:webSearch', query),
+    fetchPage:          (url:string)             => ipcRenderer.invoke('ai:fetchPage', url),
   },
   vpn: {
     getStatus:   () => ipcRenderer.invoke('vpn:getStatus'),
@@ -158,6 +160,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   tabs: {
     showContextMenu: (info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number }): Promise<string> =>
       ipcRenderer.invoke('tabs:showContextMenu', info),
+  },
+  urlbar: {
+    showContextMenu: (hasText: boolean) => ipcRenderer.invoke('urlbar:showContextMenu', hasText),
   },
   tabView: {
     create:          (tabId: string, url: string)                                              => ipcRenderer.invoke('tabview:create', tabId, url),
