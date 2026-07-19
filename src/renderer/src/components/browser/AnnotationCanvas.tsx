@@ -492,7 +492,8 @@ async function compositeScreenshot(pageDataUrl: string, strokesDataUrl: string):
 }
 
 export default function AnnotationCanvas() {
-  const { activeTabId, tabWcIds } = useBrowserStore()
+  const activeTabId = useBrowserStore(s => s.activeTabId)
+  const tabWcIds    = useBrowserStore(s => s.tabWcIds)
   const wcId = activeTabId ? tabWcIds[activeTabId] : null
   const wcIdRef = useRef<number | null>(null)
 

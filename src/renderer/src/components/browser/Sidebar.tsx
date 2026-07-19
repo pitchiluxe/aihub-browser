@@ -3,6 +3,7 @@ import {
   Home, History, Download, Settings, Plus, Sparkles,
   Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail,
 } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 
 interface Props {
@@ -32,7 +33,12 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 function Sidebar({ onNavigate, onOpenPage }: Props) {
-  const { isSidebarOpen, bookmarks, setAddBookmarkOpen, tabs, activeTabId } = useBrowserStore()
+  // Narrow subscription — avoids re-rendering on unrelated store churn
+  const { isSidebarOpen, bookmarks, setAddBookmarkOpen, tabs, activeTabId } = useBrowserStore(
+    useShallow(s => ({
+      isSidebarOpen: s.isSidebarOpen, bookmarks: s.bookmarks,
+      setAddBookmarkOpen: s.setAddBookmarkOpen, tabs: s.tabs, activeTabId: s.activeTabId,
+    })))
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   const isActive = (type: string) => {

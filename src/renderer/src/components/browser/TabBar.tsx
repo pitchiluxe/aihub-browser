@@ -1,10 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { X, Plus, Home, Minus, Square } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore, Tab } from '../../store/browserStore'
 
+// macOS keeps its native traffic lights (inset into the tab strip by the main
+// process via titleBarStyle 'hiddenInset'); the strip reserves room for them
+// on the left and skips the custom window buttons entirely.
+const IS_MAC = window.electronAPI?.platform === 'darwin'
+
 export default function TabBar() {
-  const { tabs, activeTabId, addTab, closeTab, closeOtherTabs, closeTabsToRight, setActiveTab, reorderTabs } = useBrowserStore()
+  // Narrow subscription — without a selector every store mutation (AI chat
+  // streaming, download progress…) re-rendered the whole tab strip.
+  const { tabs, activeTabId, addTab, closeTab, closeOtherTabs, closeTabsToRight, setActiveTab, reorderTabs } = useBrowserStore(
+    useShallow(s => ({
+      tabs: s.tabs, activeTabId: s.activeTabId, addTab: s.addTab, closeTab: s.closeTab,
+      closeOtherTabs: s.closeOtherTabs, closeTabsToRight: s.closeTabsToRight,
+      setActiveTab: s.setActiveTab, reorderTabs: s.reorderTabs,
+    })))
 
   // Native context menu — an HTML dropdown would be clipped by the 40px bar
   // and painted over by the active tab's BrowserView.
@@ -66,6 +79,10 @@ export default function TabBar() {
         zIndex: 1,
       }} />
 
+      {/* macOS: reserved draggable inset for the native traffic lights so
+          the first tab never renders underneath them */}
+      {IS_MAC && <div className="drag-region shrink-0" style={{ width: 72, alignSelf: 'stretch' }} />}
+
       {/* Scrollable tab strip — tabs shrink to fit and only scroll once they
           hit their minimum width, so none get pushed off behind the window
           controls (which now live outside this container and stay pinned). */}
@@ -102,7 +119,9 @@ export default function TabBar() {
         <div style={{ flex: '1 0 12px', minWidth: 12, alignSelf: 'stretch' }} className="drag-region" />
       </div>
 
-      {/* Window controls — pinned right, always visible regardless of tab count */}
+      {/* Window controls — pinned right, always visible regardless of tab
+          count. macOS uses its native traffic lights (left inset) instead. */}
+      {!IS_MAC && (
       <div className="flex items-center self-center gap-1.5 pl-2 pr-1 no-drag shrink-0">
         <WinBtn onClick={() => window.electronAPI.window.minimize()} bg="#f59e0b" title="Minimize">
           <Minus size={7} />
@@ -114,6 +133,7 @@ export default function TabBar() {
           <X size={7} />
         </WinBtn>
       </div>
+      )}
     </div>
   )
 }

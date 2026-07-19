@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore, type Tab } from './store/browserStore'
 import TabBar from './components/browser/TabBar'
 import NavigationBar from './components/browser/NavigationBar'
@@ -40,11 +41,17 @@ function needsTabView(tab: Tab | undefined): boolean {
 }
 
 export default function App() {
+  // Narrow subscription — App is the root; re-rendering it on every store
+  // mutation (AI streaming chunks, download ticks) cascaded through the tree.
   const {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen,
-  } = useBrowserStore()
+  } = useBrowserStore(useShallow(s => ({
+    tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
+    canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
+    isAnnotationMode: s.isAnnotationMode, isAddBookmarkOpen: s.isAddBookmarkOpen, isAIPanelOpen: s.isAIPanelOpen,
+  })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
   const currentUrl   = activeTab?.isHome ? undefined : activeTab?.url

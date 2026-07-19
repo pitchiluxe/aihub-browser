@@ -198,6 +198,24 @@ body.glass-mode:not(.light-mode) #root { background: rgb(var(--ds-bg) / var(--ds
 body.glass-mode.light-mode,
 body.glass-mode.light-mode #root { background: rgb(var(--ds-bg) / var(--ds-glass-window-light)) !important; }
 
+/* ── Knowledge-graph chrome on light themes ─────────────────────────
+   BookmarkSphere's overlay chrome is written with dark-tuned slate text
+   utilities. On light bases the sphere root gains .sphere-light and this
+   block flips them to readable ink (scoped: 2-class specificity beats the
+   single-class utility, nothing else in the app is affected). */
+.sphere-light .text-slate-100, .sphere-light .text-slate-200 { color: #1C1E33; }
+.sphere-light .text-slate-300, .sphere-light .text-slate-400 { color: #3A3D5C; }
+.sphere-light .text-slate-500, .sphere-light .text-slate-600 { color: #585A7C; }
+.sphere-light .text-slate-700                                { color: #8A8CA6; }
+.sphere-light .hover\:text-white:hover,
+.sphere-light .hover\:text-slate-300:hover,
+.sphere-light .hover\:text-slate-400:hover                   { color: #121224; }
+.sphere-light .border-white\/\[0\.07\], .sphere-light .border-white\/\[0\.08\],
+.sphere-light .border-x                                      { border-color: rgba(18,18,36,0.10); }
+.sphere-light .bg-white\/\[0\.07\],
+.sphere-light .hover\:bg-white\/\[0\.07\]:hover,
+.sphere-light .hover\:bg-white\/8:hover                      { background-color: rgba(18,18,36,0.06); }
+
 /* ══════════════════════════════════════════════════════════════════
    THEME VARIANTS — body[data-theme] recolors accents + surface tints.
    Base inversion (text/borders/glass) comes from .light-mode; these

@@ -54,7 +54,13 @@ export default function HomePage({ onNavigate }: Props) {
 
   useEffect(() => {
     loadBookmarks().then(setBookmarks)
-    loadRecommendations()
+    // Recommendations read/analyze the browsing-brain profile on the main
+    // process — useful but never urgent. Deferring them off the critical
+    // mount path keeps first paint of the homepage snappy.
+    const idle = (window as any).requestIdleCallback
+      ? (cb: () => void) => (window as any).requestIdleCallback(cb, { timeout: 3000 })
+      : (cb: () => void) => setTimeout(cb, 800)
+    idle(() => loadRecommendations())
   }, [])
 
   useEffect(() => {

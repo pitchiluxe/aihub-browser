@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Palette, Bot, Shield, Info, CheckCircle2, Loader2, RefreshCw, Download, Wifi, Brain, Globe, Sparkles, Trash2, Mail } from 'lucide-react'
+import { Palette, Bot, Shield, Info, CheckCircle2, Loader2, RefreshCw, Download, Wifi, Brain, Globe, Sparkles, Trash2, Mail, FileCode } from 'lucide-react'
+import ClaudeKitSection from './ClaudeKitSection'
 import { useBrowserStore } from '../../store/browserStore'
 import {
   THEMES, loadCustomThemes, deleteCustomTheme, generateThemes, CustomTheme,
@@ -655,6 +656,11 @@ export default function SettingsPage() {
             </>
           )}
         </div>
+      </Section>
+
+      {/* Claude Kit Generator */}
+      <Section icon={<FileCode size={15} />} title="Claude Kit Generator">
+        <ClaudeKitSection />
       </Section>
 
       {/* Privacy */}

@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // 'darwin' | 'win32' | 'linux' — lets the renderer adapt chrome layout
+  // (macOS native traffic lights vs custom window buttons).
+  platform: process.platform,
   window: {
     minimize:        () => ipcRenderer.invoke('window:minimize'),
     maximize:        () => ipcRenderer.invoke('window:maximize'),
@@ -109,7 +112,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listDir:   (p: string) => ipcRenderer.invoke('agentfs:listDir', p),
     readFile:  (p: string) => ipcRenderer.invoke('agentfs:readFile', p),
     writeFile: (p: string, content: string, overwrite?: boolean) => ipcRenderer.invoke('agentfs:writeFile', p, content, overwrite),
+    pickDirectory: () => ipcRenderer.invoke('agentfs:pickDirectory'),
+    exec: (opts: { command: string; cwd: string; timeoutMs?: number }) => ipcRenderer.invoke('agentfs:exec', opts),
   },
+  appInfo: () => ipcRenderer.invoke('app:info'),
   ai: {
     checkDuplicate:     (url:string, e:string[]) => ipcRenderer.invoke('ai:checkDuplicate', url, e),
     categorizeBookmark: (url:string, t:string)   => ipcRenderer.invoke('ai:categorizeBookmark', url, t),

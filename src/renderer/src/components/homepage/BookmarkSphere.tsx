@@ -65,7 +65,7 @@ function resolveColor(bm: { color?: string; category?: string }): string {
   return VIVID_RING[Math.abs(h) % VIVID_RING.length]
 }
 
-const GRAPH_BG     = '#060A13'
+const GRAPH_BG     = '#060A13'   // fallback when CSS vars are unavailable
 const MIN_ZOOM     = 0.04
 const MAX_ZOOM     = 10
 const LABEL_ZOOM   = 0.60
@@ -79,6 +79,44 @@ function hexToRgba(hex: string, a: number): string {
   const g = parseInt(hex.slice(3, 5), 16)
   const b = parseInt(hex.slice(5, 7), 16)
   return `rgba(${r},${g},${b},${a})`
+}
+
+// ── Theme bridge ─────────────────────────────────────────────────────────────
+// The canvas can't use CSS vars directly, so the active theme (themeService
+// sets body[data-theme] / body.light-mode / inline vars for custom themes) is
+// resolved into concrete colors here. Re-read whenever <body> mutates.
+interface SphereTheme {
+  bg: string        // canvas + container background
+  label: string     // node label ink
+  dimEdge: string   // "r,g,b" for dimmed/background edges
+  panelBg: string   // detail-panel / chrome surfaces
+  border: string    // hairline borders on chrome
+  isLight: boolean
+}
+
+function readSphereTheme(): SphereTheme {
+  const cs = getComputedStyle(document.body)
+  const isLight = document.body.classList.contains('light-mode')
+  const trip = (v: string, fb: string): string => {
+    const t = cs.getPropertyValue(v).trim().split(/[ ,]+/).map(Number)
+    return t.length === 3 && t.every(n => Number.isFinite(n)) ? `${t[0]},${t[1]},${t[2]}` : fb
+  }
+  const bgT  = trip('--ds-bg', '23 24 43')
+  const inkT = trip('--ds-text-3', isLight ? '72,76,112' : '148,163,184')
+  // Dark bases: deep-space version of the theme bg (darkened, keeps the hue).
+  // Light bases: the theme surface itself.
+  const [r, g, b] = bgT.split(',').map(Number)
+  const bg = isLight
+    ? `rgb(${r},${g},${b})`
+    : `rgb(${Math.round(r * 0.35)},${Math.round(g * 0.35)},${Math.round(b * 0.35)})`
+  return {
+    bg,
+    label:   `rgb(${inkT})`,
+    dimEdge: inkT,
+    panelBg: isLight ? `rgba(${bgT},0.92)` : 'rgba(6,10,19,0.88)',
+    border:  isLight ? 'rgba(18,18,36,0.12)' : 'rgba(255,255,255,0.09)',
+    isLight,
+  }
 }
 
 function easeBackOut(t: number, s = 1.7): number {
@@ -163,6 +201,19 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   const cleanupRef    = useRef<(() => void) | null>(null)
   const queryRef      = useRef('')
 
+  const themeRef = useRef<SphereTheme>(readSphereTheme())
+  const [sphereTheme, setSphereTheme] = useState<SphereTheme>(themeRef.current)
+
+  // Live theme switching — themeService mutates <body> (data-theme attribute,
+  // light-mode class, inline vars for custom themes); observe and re-resolve.
+  // The RAF loop reads themeRef each frame, React chrome re-renders via state.
+  useEffect(() => {
+    const update = () => { themeRef.current = readSphereTheme(); setSphereTheme(themeRef.current) }
+    const obs = new MutationObserver(update)
+    obs.observe(document.body, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] })
+    return () => obs.disconnect()
+  }, [])
+
   const [zoom,          setZoom]          = useState(1)
   const [tooltip,       setTooltip]       = useState<{ node: ExtNode; x: number; y: number } | null>(null)
   const [ctxMenu,       setCtxMenu]       = useState<{ node: ExtNode; x: number; y: number } | null>(null)
@@ -207,8 +258,9 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     const elapsed  = eActive ? now - eStartRef.current : Infinity
     if (eActive && elapsed > 2200) eActiveRef.current = false
 
-    // Background
-    ctx.fillStyle = GRAPH_BG
+    // Background — follows the active theme
+    const theme = themeRef.current
+    ctx.fillStyle = theme.bg || GRAPH_BG
     ctx.fillRect(0, 0, W, H)
 
     // Per-category atmosphere glows — each cluster emits its own color
@@ -223,7 +275,9 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       if (sx + auraR < 0 || sx - auraR > W || sy + auraR < 0 || sy - auraR > H) continue
       const aura = ctx.createRadialGradient(sx, sy, 0, sx, sy, auraR)
       aura.addColorStop(0, hexToRgba(node.color, 0.045))
-      aura.addColorStop(1, 'rgba(0,0,0,0)')
+      // Fade to the node color at 0 alpha, not transparent-black — black
+      // interpolation muddies the halo on light theme surfaces.
+      aura.addColorStop(1, hexToRgba(node.color, 0))
       ctx.fillStyle = aura
       ctx.fillRect(sx - auraR, sy - auraR, auraR * 2, auraR * 2)
     }
@@ -287,7 +341,9 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       const ey = src.y! + (tgt.y! - src.y!) * growth
 
       if (dimmed) {
-        ctx.strokeStyle = `rgba(148,163,184,${selId ? 0.04 : 0.025})`
+        // Light surfaces need a touch more alpha for the hairline to survive
+        const dimA = (selId ? 0.04 : 0.025) * (theme.isLight ? 2.4 : 1)
+        ctx.strokeStyle = `rgba(${theme.dimEdge},${dimA})`
         ctx.lineWidth   = 0.5 / k
       } else {
         // Gradient edge from src color → tgt color
@@ -434,9 +490,9 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
         const r = nodeRadius(node.size)
 
         ctx.save()
-        ctx.shadowColor = GRAPH_BG
+        ctx.shadowColor = theme.bg || GRAPH_BG
         ctx.shadowBlur  = 5
-        ctx.fillStyle   = node.id === selId ? node.color : '#94a3b8'
+        ctx.fillStyle   = node.id === selId ? node.color : theme.label
         ctx.fillText(label, node.x ?? 0, (node.y ?? 0) + r + 13 / k)
         ctx.restore()
         ctx.globalAlpha = 1
@@ -743,14 +799,20 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   const activeCategories = Array.from(new Set(bookmarks.map(b => b.category)))
 
   const PANEL: React.CSSProperties = {
-    background:      'rgba(6,10,19,0.88)',
-    border:          '1px solid rgba(255,255,255,0.09)',
+    background:      sphereTheme.panelBg,
+    border:          `1px solid ${sphereTheme.border}`,
     backdropFilter:  'blur(24px)',
     WebkitBackdropFilter: 'blur(24px)',
   }
 
   return (
-    <div ref={mountRef} className="relative w-full h-full overflow-hidden" style={{ background: GRAPH_BG }}>
+    <div
+      ref={mountRef}
+      // .sphere-light (globals.css) remaps the dark-tuned slate text/border
+      // utility classes of this chrome to readable ink on light themes.
+      className={`relative w-full h-full overflow-hidden${sphereTheme.isLight ? ' sphere-light' : ''}`}
+      style={{ background: sphereTheme.bg }}
+    >
 
       {/* Canvas */}
       <canvas ref={canvasRef} className="block w-full h-full" style={{ cursor: 'grab' }} />

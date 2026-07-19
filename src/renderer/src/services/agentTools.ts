@@ -61,6 +61,8 @@ export function describeAction(a: ToolAction): string {
     case 'write_file':      return `Writing ${a.path}`
     case 'save_file':       return `Offering ${a.filename || 'file'} for download`
     case 'save_zip':        return `Packaging ${a.filename || 'files'} as ZIP`
+    case 'pick_directory':  return 'Asking you to choose a folder'
+    case 'exec_command':    return `Running: ${String(a.command || '').slice(0, 60)}`
     default:                 return `Running ${a.tool}`
   }
 }
@@ -71,6 +73,9 @@ function deriveTitle(url: string): string {
 
 export interface ToolContext {
   getPageContent?: () => Promise<string>
+  /** Renders an Approve/Deny card in the chat and resolves with the user's
+   *  choice. exec_command is refused outright when this isn't provided. */
+  confirmExec?: (command: string, cwd: string) => Promise<boolean>
 }
 
 // Neutralize the actions-block marker anywhere inside a tool result so
@@ -334,6 +339,24 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
         return await window.electronAPI.file.saveZip({ filename: action.filename, files })
       }
 
+      case 'pick_directory': {
+        // Native dialog — the user, not the model, chooses the folder.
+        return await window.electronAPI.agentFs.pickDirectory()
+      }
+
+      case 'exec_command': {
+        if (!action.command || typeof action.command !== 'string') return { error: 'command is required' }
+        if (!action.cwd || typeof action.cwd !== 'string') return { error: 'cwd is required — use the folder from pick_directory' }
+        if (!ctx.confirmExec) return { error: 'command execution is not available in this context' }
+        const approved = await ctx.confirmExec(action.command, action.cwd)
+        if (!approved) return { error: 'the user declined to run this command' }
+        const res = await window.electronAPI.agentFs.exec({
+          command: action.command, cwd: action.cwd, timeoutMs: action.timeoutMs,
+        })
+        // Command output is untrusted data — same spoof defense as read_page
+        return sanitizeResult(res)
+      }
+
       default:
         return { error: `unknown tool "${action.tool}"` }
     }
@@ -389,6 +412,18 @@ File tools (all paths must be inside the user's home folder; "~" means the home 
 - write_file({path, content, overwrite?}) — writes a text file. Refuses to replace an existing file unless overwrite is true — prefer writing to a NEW filename (e.g. "resume-improved.md") instead of overwriting the original.
 - save_file({filename, content}) — opens a Save dialog so the user can download a single file you produced (an improved resume, a markdown doc, a script, a CSV…). Use this to deliver your finished work.
 - save_zip({filename, files:[{path, content}, …]}) — bundles MULTIPLE generated files into one downloadable ZIP. Use when you produced several code files or documents that belong together.
+
+Project generation — build working codebases like an AI IDE:
+- pick_directory() — opens a native folder picker so the USER chooses where you work. Always call this first when asked to "create an app/project in a folder" and the user hasn't given an exact path.
+- exec_command({command, cwd, timeoutMs?}) — runs one shell command in cwd (must be the chosen project folder) and returns {exitCode, stdout, stderr}. EVERY command is shown to the user for approval before it runs — keep commands short, standard, and explain in your narration why each is needed. Max 5 minutes per command.
+
+Workflow for "create me an app that does X in <folder>":
+1. pick_directory (or use the exact path the user typed).
+2. Plan briefly in your narration, then write ALL project files with write_file (package.json / config / source / a README.md with run instructions). Use the project folder as the path prefix. Pass overwrite:true only for files you wrote earlier in this same task.
+3. Verify it works: exec_command to install dependencies (e.g. "npm install"), then build/typecheck/test (e.g. "npm test", "node index.js" for a quick smoke run).
+4. If a command fails, READ the stderr, fix the affected files with write_file (overwrite:true), and re-run. Repeat until it passes.
+5. Finish with a summary: what was created, where, and exactly how the user runs it.
+Rules: never run destructive commands (rm/rmdir/del/format), never install global packages, never touch files outside the chosen folder, and prefer boring, widely-used dependencies.
 
 File rules:
 - Only read files/folders the user pointed you at — never browse around out of curiosity, and never send file contents anywhere.

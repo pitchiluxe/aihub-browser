@@ -6,7 +6,7 @@ import https from 'https'
 import dns from 'dns'
 import os from 'os'
 import fs from 'fs'
-import { execSync, execFileSync } from 'child_process'
+import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
 import { initAutoUpdater } from './updater'
@@ -575,6 +575,11 @@ function createTabView(tabId: string, url: string) {
       // Google refuse with "this browser or app may not be secure". The old
       // <webview> guests ran with security on, which is why login worked then.
       webSecurity: true,
+      // Background tabs may throttle timers/rAF — big CPU/battery win with
+      // many tabs open; the active tab is never throttled.
+      backgroundThrottling: true,
+      // Cache compiled JS eagerly — repeat visits skip re-parse/compile.
+      v8CacheOptions: 'bypassHeatCheck',
       nodeIntegration: false,
     },
   })
@@ -676,7 +681,13 @@ function createWindow(): void {
 
   mainWindow = new BrowserWindow({
     width: 1440, height: 900, minWidth: 900, minHeight: 600,
-    show: false, frame: false, titleBarStyle: 'hidden',
+    show: false, frame: false,
+    // macOS: keep the native traffic lights but inset them so they sit
+    // vertically centered inside the custom tab strip instead of floating
+    // over the tabs. Renderer reserves matching left padding (TabBar) and
+    // hides its own window buttons on darwin.
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 14, y: 12 } } : {}),
     // Windows 11 native DWM rounded corners (no-op on older Windows/macOS)
     roundedCorners: true,
     // NOTE: never set transparent:true here — a transparent window drops the
@@ -767,10 +778,15 @@ function createWindow(): void {
   initAutoUpdater(() => mainWindow, safelySend)
 
   // ── Download tracking — covers mainWindow + all webviews ──────────────
+  // Sessions are shared: every webview created with the same partition returns
+  // the SAME Session object, so attaching a listener per web-contents stacked
+  // N listeners on one session → one download produced N entries. Guard with a
+  // WeakSet so each unique Session is hooked exactly once.
+  let dlSeq = 0
   const handleDownload = (_e: any, item: any) => {
     const dls = readJson(DL_FILE, [])
     const dl: any = {
-      id: `dl-${Date.now()}`, filename: item.getFilename(), url: item.getURL(),
+      id: `dl-${Date.now()}-${++dlSeq}`, filename: item.getFilename(), url: item.getURL(),
       savePath: '', totalBytes: item.getTotalBytes(), receivedBytes: 0,
       state: 'progressing', startedAt: Date.now(), completedAt: null,
     }
@@ -780,7 +796,17 @@ function createWindow(): void {
       writeJson(DL_FILE, dls.slice(0, 500))
       safelySend('download:update', dl)
     }
-    item.on('updated', (_ev, state) => { dl.receivedBytes = item.getReceivedBytes(); dl.state = state; persist() })
+    // Progress ticks fire many times per second on fast links — rewriting the
+    // json every tick hammers the disk. Throttle progress persists; state
+    // transitions and completion always write immediately.
+    let lastProgressWrite = 0
+    item.on('updated', (_ev, state) => {
+      dl.receivedBytes = item.getReceivedBytes()
+      const stateChanged = dl.state !== state
+      dl.state = state
+      const now = Date.now()
+      if (stateChanged || now - lastProgressWrite >= 500) { lastProgressWrite = now; persist() }
+    })
     item.on('done', (_ev, state) => {
       dl.state = state; dl.savePath = item.getSavePath()
       dl.completedAt = Date.now(); dl.receivedBytes = item.getReceivedBytes()
@@ -790,14 +816,19 @@ function createWindow(): void {
     safelySend('download:update', dl)
   }
 
-  // Attach to default session (covers webviews) + mainWindow session
-  session.defaultSession.on('will-download', handleDownload)
-  if (mainWindow.webContents.session !== session.defaultSession) {
-    mainWindow.webContents.session.on('will-download', handleDownload)
+  const hookedSessions = new WeakSet<Electron.Session>()
+  const hookDownloadSession = (sess: Electron.Session) => {
+    if (!sess || hookedSessions.has(sess)) return
+    hookedSessions.add(sess)
+    sess.on('will-download', handleDownload)
   }
 
+  // Attach to default session (covers webviews) + mainWindow session
+  hookDownloadSession(session.defaultSession)
+  hookDownloadSession(mainWindow.webContents.session)
+
   app.on('web-contents-created', (_e, wc) => {
-    wc.session.on('will-download', handleDownload)
+    hookDownloadSession(wc.session)
     let wcType: string | undefined
     try { wcType = wc.getType() } catch {}
     if (wcType !== 'webview' && wcType !== 'browserView') return
@@ -1074,10 +1105,24 @@ ipcMain.handle('downloads:getAll',       () => {
   // app session (crash / quit mid-transfer) and will never emit 'done' — left
   // as-is it shows a spinner that buffers forever on the Downloads page. Settle
   // these stale rows to 'interrupted' once, on load.
-  const dls = readJson(DL_FILE, []) as any[]
+  const raw = readJson(DL_FILE, []) as any[]
   let changed = false
-  for (const dl of dls) {
+  for (const dl of raw) {
     if (dl.state === 'progressing') { dl.state = 'interrupted'; changed = true }
+  }
+  // Legacy duplicate cleanup: stacked will-download listeners (fixed) used to
+  // record one real download as N entries — same url+filename started within
+  // a 2s window. Keep the best row per group (completed beats interrupted,
+  // then most-recent) so history written by older builds heals itself.
+  const dls: any[] = []
+  const rank = (d: any) => (d.state === 'completed' ? 2 : d.state === 'progressing' ? 1 : 0)
+  for (const dl of raw) {
+    const dup = dls.find(x =>
+      x.url === dl.url && x.filename === dl.filename &&
+      Math.abs((x.startedAt || 0) - (dl.startedAt || 0)) < 2000)
+    if (!dup) { dls.push(dl); continue }
+    changed = true
+    if (rank(dl) > rank(dup)) dls[dls.indexOf(dup)] = dl
   }
   if (changed) writeJson(DL_FILE, dls)
   return dls
@@ -1759,6 +1804,73 @@ ipcMain.handle('agentfs:writeFile', (_e, p: string, content: string, overwrite?:
     return { error: e?.message || String(e) }
   }
 })
+
+// ── IPC: Agent project directory picker ────────────────────────────────────
+// Lets the user point the agent at a target folder for codebase generation.
+// Native dialog = the choice is always the user's, never the model's.
+ipcMain.handle('agentfs:pickDirectory', async () => {
+  const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose a folder for the agent to work in',
+    properties: ['openDirectory', 'createDirectory'],
+    defaultPath: os.homedir(),
+  })
+  if (canceled || !filePaths?.[0]) return { canceled: true }
+  const r = resolveAgentPath(filePaths[0])
+  if ('error' in r) return r
+  return { path: r.path }
+})
+
+// ── IPC: Agent command execution ───────────────────────────────────────────
+// Runs a shell command in an agent-writable directory so the agent can
+// install deps / build / test the code it generated. The renderer shows an
+// Approve/Run card for every command BEFORE invoking this — this handler is
+// only ever reached after explicit user approval in the chat panel. Guards
+// here: cwd confined to the user folder, hard timeout, output caps.
+const EXEC_OUTPUT_CAP = 120_000  // chars kept per stream
+ipcMain.handle('agentfs:exec', async (_e, { command, cwd, timeoutMs }: { command: string; cwd: string; timeoutMs?: number }) => {
+  if (!command || typeof command !== 'string') return { error: 'command is required' }
+  if (command.length > 2000) return { error: 'command too long' }
+  const r = resolveAgentPath(cwd || '~')
+  if ('error' in r) return r
+  try {
+    const stat = fs.statSync(r.path)
+    if (!stat.isDirectory()) return { error: 'cwd must be a folder' }
+  } catch { return { error: 'cwd folder not found' } }
+
+  const timeout = Math.min(Math.max(timeoutMs || 120_000, 5_000), 300_000)
+  return await new Promise(resolve => {
+    let stdout = '', stderr = '', done = false
+    const child = spawn(command, {
+      cwd: r.path, shell: true, windowsHide: true,
+      env: { ...process.env, CI: '1' },  // CI=1 keeps most tools non-interactive
+    })
+    const finish = (result: any) => { if (!done) { done = true; resolve(result) } }
+    const killer = setTimeout(() => {
+      try { child.kill('SIGKILL') } catch {}
+      finish({ error: `command timed out after ${Math.round(timeout / 1000)}s`, stdout: stdout.slice(-EXEC_OUTPUT_CAP), stderr: stderr.slice(-EXEC_OUTPUT_CAP) })
+    }, timeout)
+    child.stdout?.on('data', d => { if (stdout.length < EXEC_OUTPUT_CAP * 2) stdout += String(d) })
+    child.stderr?.on('data', d => { if (stderr.length < EXEC_OUTPUT_CAP * 2) stderr += String(d) })
+    child.on('error', e => { clearTimeout(killer); finish({ error: e.message }) })
+    child.on('close', code => {
+      clearTimeout(killer)
+      finish({
+        exitCode: code ?? -1,
+        stdout: stdout.slice(-EXEC_OUTPUT_CAP),
+        stderr: stderr.slice(-EXEC_OUTPUT_CAP),
+      })
+    })
+  })
+})
+
+// ── IPC: App info — lets the AI assistant know exactly what it's running in ─
+ipcMain.handle('app:info', () => ({
+  version: app.getVersion(),
+  platform: process.platform,
+  electron: process.versions.electron,
+  chrome: process.versions.chrome,
+  node: process.versions.node,
+}))
 
 // ── IPC: Save any text file the agent produced (resume, code, csv…) ───────
 function sanitizeFilename(name: string, fallback: string): string {

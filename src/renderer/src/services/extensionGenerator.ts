@@ -2,10 +2,43 @@ import { CustomExt } from '../extensions/customExts'
 
 const VALID_CATEGORIES = ['Media', 'Privacy', 'Productivity', 'Accessibility', 'Developer', 'Reading']
 
+/** What generation needs to know about an already-installed extension to
+ *  avoid recreating it under a different name. */
+export interface ExistingExtInfo {
+  name: string
+  tagline: string
+  category?: string
+}
+
+// Tokenized similarity between two extensions' name+tagline. Catches
+// functional duplicates that slip past the exact-name check ("Dark Reader"
+// vs "Night Mode Pro — dark theme for every site").
+const STOPWORDS = new Set(['a', 'an', 'the', 'for', 'of', 'and', 'or', 'to', 'in', 'on', 'with', 'your', 'every', 'all', 'any', 'page', 'pages', 'site', 'sites', 'web', 'browser', 'extension'])
+function tokens(s: string): Set<string> {
+  return new Set(
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+      .filter(w => w.length > 2 && !STOPWORDS.has(w))
+  )
+}
+function isFunctionalDupe(name: string, tagline: string, existing: ExistingExtInfo[]): boolean {
+  const cand = tokens(`${name} ${tagline}`)
+  if (cand.size === 0) return false
+  for (const ext of existing) {
+    const ref = tokens(`${ext.name} ${ext.tagline}`)
+    if (ref.size === 0) continue
+    let overlap = 0
+    for (const t of cand) if (ref.has(t)) overlap++
+    // Overlap relative to the SMALLER set — a short name fully contained in
+    // an existing description is a dupe even if the union is large.
+    if (overlap / Math.min(cand.size, ref.size) >= 0.6) return true
+  }
+  return false
+}
+
 // Builds the single-shot generation prompt for ai:chat. The model must reply
 // with ONLY a JSON array of extension objects following the codebase's
 // window.__ext_<key> IIFE contract (same pattern as extensionDefs.ts).
-export function buildGenerationPrompt(topic: string, existingNames: string[]): string {
+export function buildGenerationPrompt(topic: string, existing: ExistingExtInfo[]): string {
   const theme = topic.trim()
     ? `All extensions must serve this theme: "${topic.trim()}".`
     : 'Invent a broadly useful, varied mix (productivity, reading, privacy, media, accessibility, developer tools).'
@@ -32,7 +65,9 @@ Respond with ONLY a JSON array (no prose, no markdown fences) of 5 to 10 objects
 
 icon rules: pick ONE bold, solid, saturated emoji that stays clearly visible on a dark UI (good: 🔥 🛡️ 📌 🎯 ⚡ 🧲 🔍 📖 🎨 🔒). Avoid pale, thin-line, or mostly-white emojis (bad: 🤍 💭 🕊️ ◻️ 🌫️) — they wash out on dark backgrounds.
 
-Names must NOT duplicate any of these existing extensions: ${existingNames.join(', ') || '(none)'}
+The user already has these extensions installed — do NOT duplicate their NAME or their FUNCTIONALITY (a renamed clone of an existing extension counts as a duplicate and will be rejected):
+${existing.map(e => `- ${e.name}${e.category ? ` [${e.category}]` : ''}: ${e.tagline}`).join('\n') || '(none)'}
+Every generated extension must do something genuinely DIFFERENT from all of the above.
 JSON string rules: injectCode/removeCode are single-line JSON strings — use \\n escapes for newlines and escape double quotes.`
 }
 
@@ -41,7 +76,7 @@ JSON string rules: injectCode/removeCode are single-line JSON strings — use \\
 // {extensions: [], discarded: 0} (caller treats that as a model failure).
 export function parseGeneratedExtensions(
   raw: string,
-  existingNames: string[],
+  existing: ExistingExtInfo[],
 ): { extensions: CustomExt[]; discarded: number } {
   const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
   const candidate = fence ? fence[1] : raw
@@ -73,7 +108,10 @@ export function parseGeneratedExtensions(
   }
   if (!items) return { extensions: [], discarded: 0 }
 
-  const taken = new Set(existingNames.map(n => n.toLowerCase()))
+  const taken = new Set(existing.map(e => e.name.toLowerCase()))
+  // Grows as items are accepted so one response can't contain near-dupes of
+  // itself either.
+  const dedupePool: ExistingExtInfo[] = [...existing]
   const extensions: CustomExt[] = []
   let discarded = 0
   const now = Date.now()
@@ -87,6 +125,7 @@ export function parseGeneratedExtensions(
       const removeCode = typeof it?.removeCode === 'string' ? it.removeCode.trim() : ''
       if (!name || !tagline || !injectCode || !removeCode) { discarded++; return }
       if (taken.has(name.toLowerCase())) { discarded++; return }
+      if (isFunctionalDupe(name, tagline, dedupePool)) { discarded++; return }
       // Syntax gate — constructed, never invoked in the host renderer.
       // The renderer CSP has no 'unsafe-eval', so new Function throws
       // EvalError here even for valid code. Only a SyntaxError means the
@@ -107,6 +146,7 @@ export function parseGeneratedExtensions(
         : 'Productivity'
       const howTo = typeof it?.howTo === 'string' ? it.howTo.trim() : ''
       taken.add(name.toLowerCase())
+      dedupePool.push({ name, tagline })
       extensions.push({ id: `custom-${now}-${i}`, name, tagline, icon, category, injectCode, removeCode, ...(howTo ? { howTo } : {}) })
     } catch {
       discarded++

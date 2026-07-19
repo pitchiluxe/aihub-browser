@@ -283,7 +283,7 @@ export default function ExtensionsPage() {
       {/* Generate with AI Modal */}
       {showGenerate && (
         <GenerateExtModal
-          existingNames={allExts.map(e => e.name)}
+          existing={allExts.map(e => ({ name: e.name, tagline: e.tagline, category: e.category }))}
           onClose={() => setShowGenerate(false)}
           onGenerated={(exts) => {
             const updated = [...customExts, ...exts]
@@ -486,8 +486,8 @@ function CreateExtModal({ onClose, onCreate }: {
 }
 
 // ── Generate with AI Modal ───────────────────────────────────────────────────
-function GenerateExtModal({ existingNames, onClose, onGenerated }: {
-  existingNames: string[]
+function GenerateExtModal({ existing, onClose, onGenerated }: {
+  existing: { name: string; tagline: string; category?: string }[]
   onClose: () => void
   onGenerated: (exts: CustomExt[]) => void
 }) {
@@ -512,7 +512,7 @@ function GenerateExtModal({ existingNames, onClose, onGenerated }: {
         // preferCloud: strict-JSON output — small local models fumble it, so
         // route to the cloud chain first and use Ollama only as fallback.
         const result = await window.electronAPI.ai.chat(
-          [{ role: 'user', content: buildGenerationPrompt(topic, existingNames) }],
+          [{ role: 'user', content: buildGenerationPrompt(topic, existing) }],
           undefined,
           { preferCloud: true },
         )
@@ -520,7 +520,7 @@ function GenerateExtModal({ existingNames, onClose, onGenerated }: {
           lastError = result?.content || 'AI is unavailable.'
           continue
         }
-        const { extensions, discarded } = parseGeneratedExtensions(result.content || '', existingNames)
+        const { extensions, discarded } = parseGeneratedExtensions(result.content || '', existing)
         if (extensions.length === 0) {
           lastError = `The AI response couldn't be parsed (model: ${result.model}).`
           continue

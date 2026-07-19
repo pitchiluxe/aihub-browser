@@ -28,7 +28,7 @@ export default function SearchBar({ onNavigate }: Props) {
   const [query, setQuery] = useState('')
   const [engine, setEngine] = useState(ENGINES[0])
   const [focused, setFocused] = useState(false)
-  const { bookmarks } = useBrowserStore()
+  const bookmarks = useBrowserStore(s => s.bookmarks)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const filteredBookmarks = query

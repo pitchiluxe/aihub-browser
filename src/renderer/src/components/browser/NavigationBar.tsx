@@ -3,6 +3,7 @@ import {
   ChevronLeft, ChevronRight, RotateCw, Home, Bookmark, Bot,
   Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe, Camera, Video, Square,
 } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import { addBookmarkWithAI } from '../../services/bookmarkService'
 
@@ -26,11 +27,18 @@ export default function NavigationBar({
   onNavigate, onHome, onBack, onForward, onReload,
   canGoBack, canGoForward,
 }: Props) {
+  // Narrow subscription — keeps the nav bar out of unrelated store churn
+  // (AI streaming, download progress) that used to re-render it constantly.
   const {
     tabs, activeTabId, toggleAIPanel, isAIPanelOpen,
     bookmarks, addBookmark, removeBookmark, toggleSidebar, isSidebarOpen,
     isAnnotationMode, toggleAnnotationMode, tabWcIds,
-  } = useBrowserStore()
+  } = useBrowserStore(useShallow(s => ({
+    tabs: s.tabs, activeTabId: s.activeTabId, toggleAIPanel: s.toggleAIPanel, isAIPanelOpen: s.isAIPanelOpen,
+    bookmarks: s.bookmarks, addBookmark: s.addBookmark, removeBookmark: s.removeBookmark,
+    toggleSidebar: s.toggleSidebar, isSidebarOpen: s.isSidebarOpen,
+    isAnnotationMode: s.isAnnotationMode, toggleAnnotationMode: s.toggleAnnotationMode, tabWcIds: s.tabWcIds,
+  })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
 

@@ -39,6 +39,10 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
   } = useBrowserStore()
 
   const [input,         setInput]         = useState('')
+  // Pending exec_command approval — the agent loop blocks on this until the
+  // user clicks Run or Deny on the card rendered above the composer.
+  const [pendingExec,   setPendingExec]   = useState<{ command: string; cwd: string; resolve: (ok: boolean) => void } | null>(null)
+  const [appInfo,       setAppInfo]       = useState<{ version: string; platform: string; electron: string; chrome: string } | null>(null)
   const [lastSummary,   setLastSummary]   = useState<SummaryState | null>(null)
   const [savingMd,      setSavingMd]      = useState(false)
   const [savedBookmark, setSavedBookmark] = useState(false)
@@ -47,7 +51,11 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
   const stopRequestedRef = useRef(false)
-  const stopLoop = useCallback(() => { stopRequestedRef.current = true }, [])
+  const stopLoop = useCallback(() => {
+    stopRequestedRef.current = true
+    // A pending exec-approval card would otherwise keep the loop blocked
+    setPendingExec(p => { p?.resolve(false); return null })
+  }, [])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -91,6 +99,20 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [toggleAIPanel])
+
+  // App identity — version/runtime facts injected into the system prompt so
+  // the assistant knows exactly what build it lives in.
+  useEffect(() => {
+    window.electronAPI?.appInfo?.().then(setAppInfo).catch(() => {})
+  }, [])
+
+  // exec_command approval gate — resolves the promise the agent loop awaits
+  const confirmExec = useCallback((command: string, cwd: string): Promise<boolean> => {
+    return new Promise<boolean>(resolve => setPendingExec({ command, cwd, resolve }))
+  }, [])
+  const settleExec = useCallback((ok: boolean) => {
+    setPendingExec(p => { p?.resolve(ok); return null })
+  }, [])
 
   // Load recent history for context
   useEffect(() => {
@@ -156,7 +178,11 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
       ? `\n\n### Recently visited\n` + browseHistory.map(h => `- ${h}`).join('\n')
       : ''
 
-    return `You are AIHub Browser Assistant — an intelligent AI agent built into AIHub Browser.
+    const appCtx = appInfo
+      ? `\n\n## This installation\n- AIHub Browser **v${appInfo.version}** on ${appInfo.platform === 'darwin' ? 'macOS' : appInfo.platform === 'win32' ? 'Windows' : 'Linux'}\n- Engine: Electron ${appInfo.electron} (Chromium ${appInfo.chrome})\n- Updates: in-app auto-update from GitHub Releases (Settings shows the current version)`
+      : ''
+
+    return `You are AIHub Browser Assistant — an intelligent AI agent built into AIHub Browser. You know this browser inside and out.
 
 You are deeply aware of the user's browser context: their bookmarks, recent history, current page, and habits. Use this context to give highly personalized, proactive responses.
 
@@ -165,22 +191,28 @@ You are deeply aware of the user's browser context: their bookmarks, recent hist
 • Summarize and analyze web pages
 • Research topics across multiple sources
 • Write, translate, generate code
+• Generate complete, working codebases into a folder the user picks (see Project generation in the tools section)
 • Answer questions about AIHub Browser features
 • Surface latest AI news from Hacker News
 
-## AIHub Browser features
-- **Bookmark Sphere**: 3D force-directed knowledge graph. Bookmarks cluster by category.
-- **AI Assistant** (you): local Ollama or cloud OpenRouter, switchable in Settings.
+## AIHub Browser — full feature map (answer any "can the browser do X?" from this)
+- **Tabs**: multi-tab strip with drag-reorder, context menu (duplicate / close others / close right), Ctrl+T new tab.
+- **Bookmark Sphere / Knowledge Graph**: force-directed graph of bookmarks clustered by category, with search, zoom, and per-node actions. Follows the active theme.
+- **Smart Homepage**: universal search, quick-access apps, AI site recommendations learned from browsing patterns.
+- **AI Assistant** (you): local Ollama or cloud OpenRouter, switchable in Settings → AI. Agent tools let you drive tabs, fill forms, read/write files, run approved commands, and build projects.
 - **Research Mode**: multi-tab analysis, cross-reference, generate reports.
-- **Agent Mode**: automate form filling, data gathering, site monitoring.
-- **Extensions**: 12+ built-in browser extensions, toggleable on/off.
-- **History**: semantic search across all browsing history.
+- **Extensions**: built-in page-enhancement extensions plus AI-generated custom extensions (Extensions page → Generate).
+- **Mail**: Gmail integration via Google OAuth (Settings → Google; Drive and Calendar too).
+- **Themes**: 19 built-in themes (12 dark, 7 light) plus AI-generated custom themes — Settings → Appearance. Applies everywhere, including the sphere.
+- **History**: searchable history with AI recommendations; **Downloads** manager; **Free WiFi** finder; **VPN/Proxy** page.
+- **Privacy/Security**: OAuth tokens encrypted at rest, API keys stored locally, PKCE for Google sign-in.
+- **Auto-update**: checks GitHub Releases on startup and periodically; notifies in-app when a new version ships.${appCtx}
 
 ## Navigation commands
 When user asks to open a site, reply concisely: "Opening [Site Name] ↗" — the browser detects this and opens the tab automatically.
 
 Be concise, warm, and genuinely helpful. Use **bold** for site names and key terms. Bullet points for lists.${pageCtx}${bookmarkCtx}${historyCtx}${AGENT_TOOLS_DOC}`
-  }, [currentUrl, currentTitle, bookmarks, browseHistory])
+  }, [currentUrl, currentTitle, bookmarks, browseHistory, appInfo])
 
   // ── Send message — agent loop: the model can request tool actions via a
   // JSON block (see agentTools.ts); we execute them and loop, until it
@@ -197,8 +229,11 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
     setAILoading(true)
     stopRequestedRef.current = false
 
-    const MAX_TURNS = 6
-    const MAX_ACTIONS = 25
+    // Build tasks (scaffold → install → test → fix → re-test) legitimately
+    // need more turns than chat-style tasks; the stop button and per-command
+    // approval remain the real safety rails.
+    const MAX_TURNS = 12
+    const MAX_ACTIONS = 60
     let actionsUsed = 0
 
     // Mirrors what's sent to ai.chat — includes synthetic tool-result turns
@@ -258,7 +293,7 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
             }
             break
           }
-          const res = await executeAction(actions[i], { getPageContent })
+          const res = await executeAction(actions[i], { getPageContent, confirmExec })
           actionsUsed++
           setAIMessageStepStatus(msgIndex, i, res.error ? 'error' : 'done')
           results.push({ tool: actions[i].tool, ...res })
@@ -573,6 +608,41 @@ Be concise, warm, and genuinely helpful. Use **bold** for site names and key ter
                 </div>
               )}
             </div>
+
+            {/* ── Command approval card — agent wants to run a shell command ── */}
+            {pendingExec && (
+              <div style={{
+                margin: '0 12px 8px', padding: '10px 12px', borderRadius: 12, flexShrink: 0,
+                background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.30)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <AlertCircle size={12} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#fbbf24' }}>Agent wants to run a command</span>
+                </div>
+                <code style={{
+                  display: 'block', fontSize: 11, fontFamily: 'ui-monospace, monospace', color: 'rgb(var(--ds-text-2))',
+                  background: 'var(--ds-glass-sm)', borderRadius: 8, padding: '6px 8px', marginBottom: 4,
+                  wordBreak: 'break-all', maxHeight: 72, overflowY: 'auto', userSelect: 'text',
+                }}>{pendingExec.command}</code>
+                <div style={{ fontSize: 10, color: 'rgb(var(--ds-text-4))', marginBottom: 8, wordBreak: 'break-all' }}>
+                  in {pendingExec.cwd}
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => settleExec(true)} style={{
+                    flex: 1, padding: '6px 0', borderRadius: 9, border: '1px solid rgba(52,211,153,0.35)',
+                    background: 'rgba(52,211,153,0.14)', color: '#34d399', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                    Run command
+                  </button>
+                  <button onClick={() => settleExec(false)} style={{
+                    flex: 1, padding: '6px 0', borderRadius: 9, border: '1px solid var(--ds-border-sm)',
+                    background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-3))', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                    Deny
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* ── Input ── */}
             <div style={{ padding: 12, borderTop: '1px solid var(--ds-border-sm)', flexShrink: 0 }}>
