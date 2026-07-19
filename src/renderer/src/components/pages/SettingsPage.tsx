@@ -49,6 +49,7 @@ const SEARCH_ENGINES = [
 export default function SettingsPage() {
   const { ollamaStatus, setOllamaStatus } = useBrowserStore()
   const [settings, setSettings] = useState<any>(null)
+  const [appVersion, setAppVersion] = useState('')
   const [cacheCleared, setCacheCleared] = useState(false)
   const [historyCleared, setHistoryCleared] = useState(false)
   const [pullingModel, setPullingModel] = useState('')
@@ -83,6 +84,10 @@ export default function SettingsPage() {
   const [gmailError, setGmailError] = useState('')
 
   useEffect(() => {
+    // Real version from the main process (app.getVersion()) — never hardcode;
+    // in dev this reports the electron binary's version, in packaged builds
+    // the app version from package.json.
+    window.electronAPI.appInfo?.().then((i: any) => setAppVersion(i?.version || '')).catch(() => {})
     window.electronAPI.settings.get().then(setSettings)
     window.electronAPI.brain.getProfile().then(setProfile)
     checkAI()
@@ -707,7 +712,7 @@ export default function SettingsPage() {
 
       {/* About */}
       <Section icon={<Info size={15} />} title="About">
-        <div className={ROW}><div className={LBL}>AIHub Browser</div><span className="text-sm text-aihub-muted">v1.0.0</span></div>
+        <div className={ROW}><div className={LBL}>AIHub Browser</div><span className="text-sm text-aihub-muted">{appVersion ? `v${appVersion}` : '…'}</span></div>
         <div className={ROW}><div className={LBL}>AI Engine</div><span className="text-sm text-aihub-muted">Local AI · Cloud Backup</span></div>
         <div className={ROW}><div className={LBL}>Data Privacy</div><span className="text-sm text-green-400">100% Local · Never uploaded</span></div>
         <div className={ROW}><div className={LBL}>Created by</div><span className="text-sm text-aihub-accent font-semibold">Erick Omari</span></div>
