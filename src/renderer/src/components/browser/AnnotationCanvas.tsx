@@ -309,7 +309,10 @@ const INJECT_SCRIPT = `(function(){
   var SV_AI=icon('<path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"/>');
   var SV_WAIT=icon('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/>');
   var SV_CLR=icon('<path d="M12 2.7l5.7 5.6a8 8 0 1 1-11.4 0z"/>');
-  function saveNotes(){try{localStorage.setItem(NOTES_KEY,JSON.stringify(notes));}catch(e){}}
+  // Site localStorage is only a fast local cache — the app's own store (synced
+  // via the dirty flag + host poll) is the real persistence, so notes survive
+  // site-data clears and are browsable from the Sticky Notes page.
+  function saveNotes(){try{localStorage.setItem(NOTES_KEY,JSON.stringify(notes));}catch(e){} window.__aihub_notesDirty=true;}
   function makeNoteEl(n){
     var el=document.createElement('div');
     el.id='__aihub_note_'+n.id;
@@ -446,12 +449,32 @@ const INJECT_SCRIPT = `(function(){
   };
   loadNotes();
 
+  // Full snapshot for the host — used by the poll (when dirty) and by the
+  // final flush when annotation mode closes.
+  window.__aihub_getNotesSnapshot=function(){return {url:location.href,title:document.title,notes:notes};};
+  // Merge notes saved in the app store into the page (dedup by id — the
+  // localStorage cache may already have rendered some of them).
+  window.__aihub_restoreNotes=function(arr){
+    try{
+      if(typeof arr==='string')arr=JSON.parse(arr);
+      if(!Array.isArray(arr))return;
+      arr.forEach(function(n){
+        if(!n||!n.id)return;
+        for(var i=0;i<notes.length;i++)if(notes[i].id===n.id)return;
+        notes.push(n);makeNoteEl(n);
+      });
+      try{localStorage.setItem(NOTES_KEY,JSON.stringify(notes));}catch(e){}
+    }catch(e){}
+  };
+
   window.__aihub={
     remove:function(){
       cv.remove(); tb.remove();
       Object.keys(noteEls).forEach(function(k){try{noteEls[k].el.remove();}catch(e){}});
       delete window.__aihub_setNoteText;
       delete window.__aihub_aiQueue;
+      delete window.__aihub_getNotesSnapshot;
+      delete window.__aihub_restoreNotes;
       delete window.__aihub;
     }
   };
@@ -464,7 +487,15 @@ const INJECT_SCRIPT = `(function(){
 const DRAIN_SCRIPT = `(function(){
   var ai=window.__aihub_aiQueue||[];window.__aihub_aiQueue=[];
   var shots=window.__aihub_shotQueue||[];window.__aihub_shotQueue=[];
-  return JSON.stringify({ai:ai,shots:shots});
+  var ns=null;
+  if(window.__aihub_notesDirty&&window.__aihub_getNotesSnapshot){window.__aihub_notesDirty=false;ns=window.__aihub_getNotesSnapshot();}
+  return JSON.stringify({ai:ai,shots:shots,notes:ns});
+})()`
+
+// Unconditional snapshot — used on unmount so the very last edits (inside the
+// 400ms save debounce) are never lost.
+const SNAPSHOT_SCRIPT = `(function(){
+  return window.__aihub_getNotesSnapshot?JSON.stringify(window.__aihub_getNotesSnapshot()):null;
 })()`
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -500,7 +531,23 @@ export default function AnnotationCanvas() {
   useEffect(() => {
     if (!wcId) return
     wcIdRef.current = wcId
-    window.electronAPI.webview.execScript(wcId, INJECT_SCRIPT).catch(() => {})
+    // Inject, then push any notes the app has saved for this page back into it.
+    window.electronAPI.webview.execScript(wcId, INJECT_SCRIPT)
+      .then(async () => {
+        try {
+          const urlRes = await window.electronAPI.webview.execScript(wcId, 'location.href')
+          const url = urlRes?.ok ? String(urlRes.result || '') : ''
+          if (!url) return
+          const saved = await window.electronAPI.notes.getForUrl(url)
+          if (Array.isArray(saved) && saved.length > 0) {
+            await window.electronAPI.webview.execScript(
+              wcId,
+              `window.__aihub_restoreNotes&&window.__aihub_restoreNotes(${JSON.stringify(JSON.stringify(saved))})`
+            )
+          }
+        } catch {}
+      })
+      .catch(() => {})
 
     // Guest pages can't reach electronAPI, so the ✨ buttons only enqueue.
     // Poll the queue, run ai:chat host-side, write answers back into notes.
@@ -513,6 +560,11 @@ export default function AnnotationCanvas() {
         const drained = JSON.parse(String(res.result || '{}'))
         const aiQueue: any[] = Array.isArray(drained.ai) ? drained.ai : []
         const shotQueue: any[] = Array.isArray(drained.shots) ? drained.shots : []
+
+        const noteSync = drained.notes
+        if (noteSync && typeof noteSync.url === 'string' && Array.isArray(noteSync.notes)) {
+          window.electronAPI.notes.saveForUrl(noteSync.url, noteSync.notes, noteSync.title || '').catch(() => {})
+        }
 
         if (aiQueue.length > 0) {
           const pageRes = await window.electronAPI.webview.execScript(id, buildPageExtractionScript())
@@ -552,10 +604,25 @@ export default function AnnotationCanvas() {
 
     return () => {
       clearInterval(poll)
-      if (wcIdRef.current !== null) {
-        window.electronAPI.webview.execScript(wcIdRef.current, `window.__aihub&&window.__aihub.remove()`).catch(() => {})
-      }
+      const id = wcIdRef.current
       wcIdRef.current = null
+      if (id !== null) {
+        // Final flush BEFORE removing the overlay: snapshot the notes exactly
+        // as they are (even mid-debounce) so closing annotation mode right
+        // after typing never drops the last edit.
+        ;(async () => {
+          try {
+            const res = await window.electronAPI.webview.execScript(id, SNAPSHOT_SCRIPT)
+            if (res?.ok && res.result) {
+              const snap = JSON.parse(String(res.result))
+              if (snap && typeof snap.url === 'string' && Array.isArray(snap.notes)) {
+                await window.electronAPI.notes.saveForUrl(snap.url, snap.notes, snap.title || '')
+              }
+            }
+          } catch {}
+          window.electronAPI.webview.execScript(id, `window.__aihub&&window.__aihub.remove()`).catch(() => {})
+        })()
+      }
     }
   }, [wcId])
 

@@ -90,6 +90,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('brain:recommendations', handler)
     },
   },
+  notes: {
+    getForUrl:  (url: string) => ipcRenderer.invoke('notes:getForUrl', url),
+    saveForUrl: (url: string, notes: any[], pageTitle?: string) => ipcRenderer.invoke('notes:saveForUrl', url, notes, pageTitle),
+    getAll:     () => ipcRenderer.invoke('notes:getAll'),
+    deleteUrl:  (url: string) => ipcRenderer.invoke('notes:deleteUrl', url),
+    deleteNote: (url: string, noteId: string) => ipcRenderer.invoke('notes:deleteNote', url, noteId),
+  },
   wifi: {
     scan:    () => ipcRenderer.invoke('wifi:scan'),
     connect: (ssid:string, open?:boolean, password?:string, auth?:string) => ipcRenderer.invoke('wifi:connect', ssid, open, password, auth),

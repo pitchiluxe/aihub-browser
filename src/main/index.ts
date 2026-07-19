@@ -1425,6 +1425,60 @@ ipcMain.handle('wifi:connect', async (_e, ssid: string, open?: boolean, password
   }
 })
 
+// ── IPC: Sticky notes (annotation) ─────────────────────────────────────────
+// Notes used to live only in each site's localStorage, which made them
+// invisible outside that exact page and easy to lose. The app file is now
+// the source of truth: keyed by origin+pathname, one entry per page.
+const NOTES_FILE = join(APP_DIR, 'sticky-notes.json')
+let _stickyNotes: Record<string, { url: string; pageTitle: string; updatedAt: number; notes: any[] }> | null = null
+
+function getNotesStore() {
+  if (!_stickyNotes) _stickyNotes = readJson(NOTES_FILE, {}) || {}
+  return _stickyNotes!
+}
+function noteKey(url: string): string {
+  try { const u = new URL(url); return u.origin + u.pathname } catch { return url }
+}
+
+ipcMain.handle('notes:getForUrl', (_e, url: string) => getNotesStore()[noteKey(url)]?.notes || [])
+
+ipcMain.handle('notes:saveForUrl', (_e, url: string, notes: any[], pageTitle?: string) => {
+  try {
+    const store = getNotesStore()
+    const k = noteKey(url)
+    if (!Array.isArray(notes) || notes.length === 0) delete store[k]
+    else store[k] = { url, pageTitle: pageTitle || store[k]?.pageTitle || '', updatedAt: Date.now(), notes }
+    writeJson(NOTES_FILE, store)
+    return { success: true }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+ipcMain.handle('notes:getAll', () => getNotesStore())
+
+ipcMain.handle('notes:deleteUrl', (_e, url: string) => {
+  try {
+    const store = getNotesStore()
+    delete store[noteKey(url)]
+    writeJson(NOTES_FILE, store)
+    return { success: true }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+ipcMain.handle('notes:deleteNote', (_e, url: string, noteId: string) => {
+  try {
+    const store = getNotesStore()
+    const k = noteKey(url)
+    const entry = store[k]
+    if (entry) {
+      entry.notes = entry.notes.filter((n: any) => n?.id !== noteId)
+      if (entry.notes.length === 0) delete store[k]
+      else entry.updatedAt = Date.now()
+      writeJson(NOTES_FILE, store)
+    }
+    return { success: true }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
 function escapeXml(s: string) {
   return s.replace(/[<>&'"]/g, c => (
     { '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c] as string
