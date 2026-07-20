@@ -1088,18 +1088,23 @@ ipcMain.handle('vpn:freeConnect', async (_e, cc: string, countryName?: string) =
     try { directIp = JSON.parse((await httpGet('https://api.ipify.org?format=json', 8000)).body).ip || '' } catch {}
 
     safelySend('vpn:freeProgress', { phase: 'fetching', country: cc })
-    const candidates = (await fetchFreeProxyList(cc)).slice(0, 40)
+    // Free proxies have a low success rate for HTTPS tunnelling — most are
+    // dead or refuse CONNECT. Sampling only a few dozen frequently found
+    // nothing even though the pool holds hundreds, so cast a wider net and
+    // probe more of them at once rather than waiting on slow serial batches.
+    const candidates = (await fetchFreeProxyList(cc)).slice(0, 150)
     if (!candidates.length) {
       return { success: false, error: `No free ${label} servers available right now. Try another country or retry in a few minutes.` }
     }
 
-    const BATCH = 5
+    const BATCH = 15
     for (let i = 0; i < candidates.length; i += BATCH) {
       if (freeVpnCancelled) return { success: false, error: 'Cancelled', cancelled: true }
       safelySend('vpn:freeProgress', { phase: 'testing', tried: i, total: candidates.length, country: cc })
       const batch = candidates.slice(i, i + BATCH)
       const results = await Promise.all(
-        batch.map((rule, j) => probeProxy(rule, `vpn-probe-${j}`, 7000).then(ip => ({ rule, ip })))
+        // Dead proxies fail fast; working ones answer well inside 5s
+        batch.map((rule, j) => probeProxy(rule, `vpn-probe-${j}`, 5000).then(ip => ({ rule, ip })))
       )
       const winner = results.find(r => r.ip && r.ip !== directIp)
       if (winner) {
@@ -1122,6 +1127,49 @@ ipcMain.handle('vpn:freeConnect', async (_e, cc: string, countryName?: string) =
 })
 
 ipcMain.handle('vpn:freeCancel', () => { freeVpnCancelled = true; return { success: true } })
+
+// Native country picker for the toolbar VPN button. It has to be a native
+// menu: the nav bar is host HTML, and the active tab's BrowserView paints
+// above host HTML, so an HTML dropdown hanging below the bar is invisible
+// behind the page (same reason the tab menu is native).
+// Resolves with 'connect:<CC>', 'disconnect', or '' when dismissed.
+ipcMain.handle('vpn:showMenu', (_e, countries: { cc: string; name: string }[]) => {
+  return new Promise<string>((resolve) => {
+    let resolved = false
+    const done = (v: string) => { if (!resolved) { resolved = true; resolve(v) } }
+
+    const active = vpnActive
+    const items: Electron.MenuItemConstructorOptions[] = [
+      {
+        label: active
+          ? `VPN on — ${active.countryName || `${active.host}:${active.port}`}`
+          : 'VPN off — pick a country',
+        enabled: false,
+      },
+      { type: 'separator' },
+    ]
+
+    // Country names only, no emoji — flag glyphs render as tofu boxes in
+    // native Windows menus.
+    for (const c of (Array.isArray(countries) ? countries : [])) {
+      items.push({
+        label: c.name,
+        type: 'checkbox',
+        checked: !!active?.free && active.countryCode === c.cc,
+        click: () => done(`connect:${c.cc}`),
+      })
+    }
+
+    if (active) {
+      items.push({ type: 'separator' })
+      items.push({ label: 'Turn VPN off', click: () => done('disconnect') })
+    }
+
+    const menu = Menu.buildFromTemplate(items)
+    // callback also fires on dismiss — defer so a real click wins the race
+    menu.popup({ window: mainWindow ?? undefined, callback: () => setTimeout(() => done(''), 0) })
+  })
+})
 
 ipcMain.handle('vpn:setProxy', async (_e, cfg: { protocol: string; host: string; port: number; username?: string; password?: string }) => {
   try {

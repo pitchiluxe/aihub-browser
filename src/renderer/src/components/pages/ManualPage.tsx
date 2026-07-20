@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { BookOpen, Download, Printer, Check, Loader2, ExternalLink } from 'lucide-react'
+import { BookOpen, Download, Check, Loader2 } from 'lucide-react'
 // The manual ships inside the bundle as a standalone HTML document, so it
 // works offline and can be handed to the user as a single self-contained file.
 import manualHtml from '../../assets/manual.html?raw'
@@ -34,18 +34,6 @@ export default function ManualPage() {
     }
   }
 
-  // Printing has to target the iframe's own document — printing the host
-  // window would print the app chrome instead of the manual.
-  const print = () => {
-    const frame = document.getElementById('manual-frame') as HTMLIFrameElement | null
-    try { frame?.contentWindow?.focus(); frame?.contentWindow?.print() } catch {}
-  }
-
-  const openInTab = () => {
-    const blob = new Blob([manualHtml], { type: 'text/html' })
-    window.open(URL.createObjectURL(blob), '_blank')
-  }
-
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--ds-page-bg)' }}>
 
@@ -76,30 +64,6 @@ export default function ManualPage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={openInTab}
-            title="Open the manual in its own tab"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-            style={{
-              background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
-              color: 'rgb(var(--ds-text-3))', cursor: 'pointer',
-            }}
-          >
-            <ExternalLink size={13} /> Open in Tab
-          </button>
-
-          <button
-            onClick={print}
-            title="Print, or save as PDF"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-            style={{
-              background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
-              color: 'rgb(var(--ds-text-3))', cursor: 'pointer',
-            }}
-          >
-            <Printer size={13} /> Print / PDF
-          </button>
-
           <button
             onClick={download}
             disabled={saving}

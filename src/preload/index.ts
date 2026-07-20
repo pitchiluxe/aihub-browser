@@ -140,6 +140,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getIp:       () => ipcRenderer.invoke('vpn:getIp'),
     freeConnect: (cc: string, name?: string) => ipcRenderer.invoke('vpn:freeConnect', cc, name),
     freeCancel:  () => ipcRenderer.invoke('vpn:freeCancel'),
+    showMenu:    (countries: { cc: string; name: string }[]): Promise<string> =>
+      ipcRenderer.invoke('vpn:showMenu', countries),
     onFreeProgress: (cb: (p: any) => void) => {
       const handler = (_e: any, p: any) => cb(p)
       ipcRenderer.on('vpn:freeProgress', handler)
