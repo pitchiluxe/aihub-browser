@@ -1033,16 +1033,20 @@
 
   function easeBackOut(t){ const s=1.7, c=s+1; return 1 + c*Math.pow(t-1,3) + s*Math.pow(t-1,2); }
 
-  function startTL(){
+  // userInitiated=true means the Replay button was pressed — always animate,
+  // even under reduced-motion, so the button visibly does something. The
+  // automatic on-load play (userInitiated=false) still respects reduce and
+  // fills instantly.
+  function startTL(userInitiated){
     if (tlTimer) clearInterval(tlTimer);
     revealed = new Set(); pop = new Map(); tlIdx = 0; running = true;
-    if (reduce){ order.forEach(i=>revealed.add(i)); running=false; return; }
-    tlTimer = setInterval(()=>{
+    if (reduce && !userInitiated){ order.forEach(function(i){revealed.add(i);}); running=false; return; }
+    tlTimer = setInterval(function(){
       if (tlIdx >= order.length){ clearInterval(tlTimer); tlTimer=null; running=false; return; }
-      const id = order[tlIdx++];
+      var id = order[tlIdx++];
       revealed.add(id);
       pop.set(id, performance.now());
-    }, 95);
+    }, 110);
   }
 
   function physics(){
@@ -1104,13 +1108,14 @@
     requestAnimationFrame(draw);
   }
 
-  function boot(){ build(); startTL(); }
+  function boot(){ build(); startTL(false); }
   boot();
   requestAnimationFrame(draw);
 
   let rt;
   window.addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(()=>{ build(); order.forEach(i=>revealed.add(i)); }, 180); });
-  document.getElementById('replay').addEventListener('click', startTL);
+  var replayBtn = document.getElementById('replay');
+  if (replayBtn) replayBtn.addEventListener('click', function(){ startTL(true); });
 })();
 </script>
 
