@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIHub Browser — The Complete Manual</title>
+<meta name="author" content="Erick Omari">
+<meta name="description" content="The complete manual for AIHub Browser — every feature, all shortcuts, and how to command the AI assistant. Created by Erick Omari.">
+</head>
+<body>
+<style>
+  /* ─── Tokens ─────────────────────────────────────────────────────────── */
+  :root{
+    --ground:#F6F7FB; --surface:#FFFFFF; --surface-2:#EFF1F8; --sunk:#E7EAF4;
+    --ink:#111428; --ink-2:#3A4062; --ink-3:#6A719A; --ink-4:#9AA0C0;
+    --line:#DDE1EF; --line-2:#C9CEE4;
+    --violet:#5B3FE0; --violet-soft:#7C5CFF; --violet-wash:#EDE9FE;
+    --sky:#0284C7; --emerald:#059669; --amber:#B45309; --rose:#E11D48;
+    --canvas-bg:#0A0D18;
+    --shadow:0 1px 2px rgba(17,20,40,.06), 0 8px 28px rgba(17,20,40,.07);
+    --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ground:#0A0D18; --surface:#151B30; --surface-2:#1B2239; --sunk:#0D1122;
+      --ink:#EDEFFA; --ink-2:#BCC2E0; --ink-3:#8C93B8; --ink-4:#666D93;
+      --line:#252D48; --line-2:#323B5C;
+      --violet:#A78BFA; --violet-soft:#7C5CFF; --violet-wash:#1E1B3A;
+      --sky:#38BDF8; --emerald:#34D399; --amber:#FBBF24; --rose:#FB7185;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 34px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="light"]{
+    --ground:#F6F7FB; --surface:#FFFFFF; --surface-2:#EFF1F8; --sunk:#E7EAF4;
+    --ink:#111428; --ink-2:#3A4062; --ink-3:#6A719A; --ink-4:#9AA0C0;
+    --line:#DDE1EF; --line-2:#C9CEE4;
+    --violet:#5B3FE0; --violet-soft:#7C5CFF; --violet-wash:#EDE9FE;
+    --sky:#0284C7; --emerald:#059669; --amber:#B45309; --rose:#E11D48;
+    --shadow:0 1px 2px rgba(17,20,40,.06), 0 8px 28px rgba(17,20,40,.07);
+  }
+  :root[data-theme="dark"]{
+    --ground:#0A0D18; --surface:#151B30; --surface-2:#1B2239; --sunk:#0D1122;
+    --ink:#EDEFFA; --ink-2:#BCC2E0; --ink-3:#8C93B8; --ink-4:#666D93;
+    --line:#252D48; --line-2:#323B5C;
+    --violet:#A78BFA; --violet-soft:#7C5CFF; --violet-wash:#1E1B3A;
+    --sky:#38BDF8; --emerald:#34D399; --amber:#FBBF24; --rose:#FB7185;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 34px rgba(0,0,0,.45);
+  }
+
+  *{box-sizing:border-box}
+
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family: ui-sans-serif, system-ui, "Segoe UI Variable Text", "Segoe UI", -apple-system, Roboto, sans-serif;
+    font-size:16.5px; line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .mono{font-family: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, "SF Mono", monospace;}
+
+  h1,h2,h3,h4{
+    font-family: ui-sans-serif, system-ui, "Segoe UI Variable Display", "Segoe UI", -apple-system, sans-serif;
+    text-wrap:balance; margin:0; line-height:1.1;
+  }
+  h1{font-size:clamp(2.4rem,6vw,4.2rem); font-weight:800; letter-spacing:-.035em}
+  h2{font-size:clamp(1.6rem,3.2vw,2.3rem); font-weight:780; letter-spacing:-.028em}
+  h3{font-size:1.16rem; font-weight:700; letter-spacing:-.015em}
+  h4{font-size:.98rem; font-weight:700; letter-spacing:-.005em}
+  p{margin:0}
+  a{color:var(--violet)}
+
+  .eyebrow{
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size:.66rem; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--ink-4); font-weight:600;
+  }
+
+  /* ─── Shell ──────────────────────────────────────────────────────────── */
+  .wrap{max-width:1180px; margin:0 auto; padding:0 clamp(18px,4vw,40px)}
+  .cols{display:grid; grid-template-columns:210px minmax(0,1fr); gap:clamp(28px,5vw,64px); align-items:start}
+  @media (max-width:940px){ .cols{grid-template-columns:1fr} .rail{display:none} }
+
+  .rail{position:sticky; top:20px; padding:22px 0; display:flex; flex-direction:column; gap:1px}
+  .rail a{
+    display:block; padding:5px 12px; font-size:.83rem; color:var(--ink-3);
+    text-decoration:none; border-left:2px solid var(--line);
+    transition:color .15s, border-color .15s;
+  }
+  .rail a:hover, .rail a:focus-visible{color:var(--violet); border-left-color:var(--violet)}
+  .rail .rail-grp{
+    font-family: ui-monospace, Consolas, monospace; font-size:.6rem; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--ink-4); padding:16px 12px 5px; border-left:2px solid transparent;
+  }
+
+  .col{min-width:0; padding-bottom:96px}
+
+  /* ─── Hero ───────────────────────────────────────────────────────────── */
+  .hero{position:relative; border-radius:20px; overflow:hidden; background:var(--canvas-bg);
+        margin:20px 0 8px; border:1px solid var(--line)}
+  .hero canvas{display:block; width:100%; height:340px}
+  @media (max-width:640px){ .hero canvas{height:260px} }
+  .hero-copy{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center;
+             padding:clamp(22px,4.5vw,48px); pointer-events:none}
+  .hero-copy h1{color:#F2F0FF; max-width:15ch;
+    text-shadow:0 2px 30px rgba(10,13,24,.95), 0 1px 4px rgba(10,13,24,.9)}
+  .hero-copy .eyebrow{color:#9C8BFF; margin-bottom:14px}
+  .hero-copy p{color:#C7CBE8; max-width:44ch; margin-top:14px; font-size:1.02rem;
+    text-shadow:0 1px 16px rgba(10,13,24,.95)}
+  .hero-btn{
+    pointer-events:auto; margin-top:22px; align-self:flex-start;
+    font-family: ui-monospace, Consolas, monospace; font-size:.76rem; letter-spacing:.09em;
+    text-transform:uppercase; font-weight:700;
+    background:rgba(124,92,255,.2); color:#C4B5FD; border:1px solid rgba(124,92,255,.55);
+    padding:9px 17px; border-radius:11px; cursor:pointer; transition:all .15s;
+  }
+  .hero-btn:hover{background:rgba(124,92,255,.35); color:#E9E4FF}
+
+  .lede{font-size:1.14rem; color:var(--ink-2); max-width:66ch; margin:26px 0 0}
+
+  /* ─── Sections ───────────────────────────────────────────────────────── */
+  section{scroll-margin-top:20px; padding-top:60px}
+  .sec-head{display:flex; align-items:center; gap:13px; margin-bottom:6px}
+  .node{width:11px; height:11px; border-radius:50%; background:var(--violet); flex:none;
+        box-shadow:0 0 0 4px color-mix(in srgb, var(--violet) 18%, transparent)}
+  .sec-line{height:1px; background:linear-gradient(90deg,var(--line-2),transparent); flex:1}
+  .sec-sub{color:var(--ink-3); max-width:66ch; margin-top:10px}
+  .body-col{max-width:68ch}
+  .body-col > * + *{margin-top:16px}
+
+  /* ─── Blocks ─────────────────────────────────────────────────────────── */
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+        padding:20px 22px; box-shadow:var(--shadow)}
+  .grid{display:grid; gap:14px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+
+  .feat{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:17px 19px}
+  .feat h4{margin-bottom:6px; display:flex; align-items:center; gap:8px}
+  .feat p{font-size:.9rem; color:var(--ink-3); line-height:1.55}
+  .dot{width:7px;height:7px;border-radius:50%;flex:none}
+
+  kbd{
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size:.78rem; font-weight:600;
+    background:var(--surface); color:var(--ink);
+    border:1px solid var(--line-2); border-bottom-width:2px;
+    border-radius:6px; padding:2px 7px; white-space:nowrap; display:inline-block;
+  }
+
+  code:not(pre code){
+    font-family: ui-monospace, Consolas, monospace; font-size:.87em;
+    background:var(--violet-wash); color:var(--violet);
+    padding:1px 6px; border-radius:5px;
+  }
+
+  .console{
+    background:var(--sunk); border:1px solid var(--line); border-radius:12px;
+    overflow:hidden; margin-top:14px;
+  }
+  .console-bar{
+    display:flex; align-items:center; gap:8px; padding:8px 14px;
+    border-bottom:1px solid var(--line); background:var(--surface-2);
+    font-family: ui-monospace, Consolas, monospace; font-size:.64rem;
+    letter-spacing:.16em; text-transform:uppercase; color:var(--ink-4); font-weight:700;
+  }
+  .console pre{
+    margin:0; padding:14px 16px; overflow-x:auto;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size:.84rem; line-height:1.7; color:var(--ink-2);
+  }
+  .console .u{color:var(--violet); font-weight:600}
+  .console .c{color:var(--ink-4)}
+
+  .tbl-scroll{overflow-x:auto; margin-top:14px; border:1px solid var(--line);
+              border-radius:12px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:.88rem; min-width:440px}
+  th{
+    text-align:left; padding:10px 15px; background:var(--surface-2);
+    font-family: ui-monospace, Consolas, monospace; font-size:.64rem;
+    letter-spacing:.15em; text-transform:uppercase; color:var(--ink-3); font-weight:700;
+    border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  td{padding:9px 15px; border-bottom:1px solid var(--line); color:var(--ink-2); vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td:first-child{white-space:nowrap}
+
+  .note{
+    border-left:3px solid var(--violet); background:var(--violet-wash);
+    border-radius:0 11px 11px 0; padding:13px 17px; font-size:.9rem; color:var(--ink-2);
+  }
+  .note.warn{border-left-color:var(--amber); background:color-mix(in srgb, var(--amber) 11%, transparent)}
+  .note.good{border-left-color:var(--emerald); background:color-mix(in srgb, var(--emerald) 11%, transparent)}
+  .note strong{color:var(--ink)}
+
+  ul,ol{margin:0; padding-left:20px; color:var(--ink-2)}
+  li{margin:5px 0}
+  li::marker{color:var(--ink-4)}
+
+  .steps{list-style:none; padding:0; counter-reset:s; display:flex; flex-direction:column; gap:11px}
+  .steps li{counter-increment:s; display:flex; gap:13px; margin:0}
+  .steps li::before{
+    content:counter(s,decimal-leading-zero);
+    font-family: ui-monospace, Consolas, monospace; font-size:.72rem; font-weight:700;
+    color:var(--violet); background:var(--violet-wash); border-radius:7px;
+    width:26px; height:24px; display:grid; place-items:center; flex:none; margin-top:2px;
+  }
+
+  /* chat mockup */
+  .chat{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+        padding:16px; display:flex; flex-direction:column; gap:11px; box-shadow:var(--shadow)}
+  .bub{padding:10px 13px; border-radius:13px; font-size:.87rem; max-width:88%; line-height:1.55}
+  .bub.me{align-self:flex-end; background:var(--violet-soft); color:#fff; border-top-right-radius:4px}
+  .bub.ai{align-self:flex-start; background:var(--surface-2); border:1px solid var(--line);
+          border-top-left-radius:4px; color:var(--ink-2); width:100%; max-width:100%}
+  .bub.ai table{font-size:.8rem; margin-top:8px; min-width:0}
+  .bub.ai th{padding:6px 10px; font-size:.58rem}
+  .bub.ai td{padding:5px 10px}
+  .steps-run{display:flex; flex-direction:column; gap:4px; margin-top:9px;
+             font-family:ui-monospace,Consolas,monospace; font-size:.76rem}
+  .steps-run span{color:var(--ink-3)}
+  .tick{color:var(--emerald); font-weight:700}
+
+  figure{margin:18px 0 0}
+  figcaption{font-size:.78rem; color:var(--ink-4); margin-top:9px; text-align:center;
+             font-family:ui-monospace,Consolas,monospace; letter-spacing:.03em}
+  svg{max-width:100%; height:auto; display:block}
+
+  .pill{display:inline-block; font-family:ui-monospace,Consolas,monospace; font-size:.66rem;
+        letter-spacing:.08em; text-transform:uppercase; font-weight:700;
+        padding:2px 8px; border-radius:20px; vertical-align:middle}
+  .pill.new{background:color-mix(in srgb, var(--emerald) 16%, transparent); color:var(--emerald)}
+
+  footer{border-top:1px solid var(--line); margin-top:70px; padding:26px 0 60px;
+         color:var(--ink-4); font-size:.83rem}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms !important; transition-duration:.001ms !important}
+  }
+</style>
+
+<div class="wrap">
+
+  <!-- ══ HERO ══════════════════════════════════════════════════════════ -->
+  <div class="hero">
+    <canvas id="constellation" aria-label="Animated knowledge-graph constellation of bookmarks"></canvas>
+    <div class="hero-copy">
+      <div class="eyebrow">AIHub Browser · Version 1.5 · Created by Erick Omari</div>
+      <h1>The browser that thinks with you.</h1>
+      <p>Every tab becomes knowledge. Every bookmark becomes a star in your graph. And an AI agent sits behind it all, ready to research, build, and browse on your behalf.</p>
+      <button class="hero-btn" id="replay">▶ Replay timelapse</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- ══ RAIL ════════════════════════════════════════════════════════ -->
+    <nav class="rail" aria-label="Contents">
+      <div class="rail-grp">Start</div>
+      <a href="#what">What it is</a>
+      <a href="#tour">Interface tour</a>
+      <a href="#start">First 5 minutes</a>
+      <div class="rail-grp">Browsing</div>
+      <a href="#tabs">Tabs &amp; windows</a>
+      <a href="#address">Address bar</a>
+      <a href="#home">Smart homepage</a>
+      <a href="#pagetools">Page tools</a>
+      <div class="rail-grp">Intelligence</div>
+      <a href="#ai">AI assistant</a>
+      <a href="#talk">How to talk to it</a>
+      <a href="#tools">Agent toolbox</a>
+      <a href="#research">Research &amp; Agent</a>
+      <div class="rail-grp">Knowledge</div>
+      <a href="#sphere">Bookmark Sphere</a>
+      <a href="#notes">Notes &amp; annotation</a>
+      <a href="#capture">Capture</a>
+      <div class="rail-grp">Utilities</div>
+      <a href="#vpn">Free VPN</a>
+      <a href="#wifi">Wi-Fi</a>
+      <a href="#mail">Mail</a>
+      <a href="#hist">History &amp; downloads</a>
+      <a href="#ext">Extensions</a>
+      <a href="#themes">Themes</a>
+      <div class="rail-grp">Reference</div>
+      <a href="#keys">All shortcuts</a>
+      <a href="#menus">Right-click menus</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#trouble">Troubleshooting</a>
+    </nav>
+
+    <!-- ══ CONTENT ═════════════════════════════════════════════════════ -->
+    <main class="col">
+
+      <!-- WHAT IT IS -->
+      <section id="what">
+        <div class="sec-head"><span class="node"></span><h2>What AIHub Browser is</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p class="lede">AIHub Browser is a Chromium-based desktop browser with an AI agent wired into its core. It browses the web like Chrome, organizes knowledge like Obsidian, and acts on your behalf like an assistant that can actually click things.</p>
+          <p>It runs on Windows, macOS, and Linux, built on Electron and Chromium — so every site that works in Chrome works here, including Google sign-in.</p>
+          <div class="grid g3" style="margin-top:22px">
+            <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Agentic</h4><p>The AI can open tabs, read pages, fill forms, search the live web, write files, and build whole projects — with your approval at every risky step.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Visual</h4><p>Bookmarks live in a force-directed constellation you can fly through, search, and replay as a timelapse.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Private</h4><p>Local AI via Ollama, a free built-in VPN, encrypted tokens, and keys that never leave your machine.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TOUR -->
+      <section id="tour">
+        <div class="sec-head"><span class="node"></span><h2>The interface, labeled</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Four zones. Learn these and everything else is discoverable.</p>
+
+        <figure>
+          <svg viewBox="0 0 760 400" role="img" aria-label="Diagram of the AIHub Browser window with labeled zones">
+            <defs>
+              <linearGradient id="gwin" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="var(--surface-2)"/><stop offset="1" stop-color="var(--surface)"/>
+              </linearGradient>
+            </defs>
+            <rect x="60" y="16" width="640" height="330" rx="14" fill="url(#gwin)" stroke="var(--line-2)"/>
+            <!-- tab strip -->
+            <rect x="60" y="16" width="640" height="34" rx="14" fill="var(--surface-2)"/>
+            <rect x="60" y="40" width="640" height="10" fill="var(--surface-2)"/>
+            <rect x="76" y="24" width="104" height="20" rx="7" fill="var(--surface)" stroke="var(--violet)" stroke-opacity=".5"/>
+            <rect x="186" y="24" width="104" height="20" rx="7" fill="var(--sunk)"/>
+            <rect x="296" y="24" width="104" height="20" rx="7" fill="var(--sunk)"/>
+            <circle cx="410" cy="34" r="6" fill="none" stroke="var(--ink-4)" stroke-width="1.4"/>
+            <path d="M406.5 34h7M410 30.5v7" stroke="var(--ink-4)" stroke-width="1.4" stroke-linecap="round"/>
+            <circle cx="650" cy="34" r="5" fill="var(--amber)"/><circle cx="666" cy="34" r="5" fill="var(--emerald)"/><circle cx="682" cy="34" r="5" fill="var(--rose)"/>
+            <!-- nav bar -->
+            <rect x="60" y="50" width="640" height="42" fill="var(--surface)"/>
+            <line x1="60" y1="92" x2="700" y2="92" stroke="var(--line)"/>
+            <g fill="none" stroke="var(--ink-3)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M84 71l-6 0M81 68l-3 3 3 3"/><path d="M104 71l6 0M107 68l3 3-3 3"/>
+              <path d="M129 66.5a5.5 5.5 0 1 0 5-3.2M134 60v4h-4"/>
+              <path d="M152 74v-6l6-4 6 4v6z"/>
+            </g>
+            <rect x="182" y="60" width="360" height="23" rx="11" fill="var(--sunk)" stroke="var(--line-2)"/>
+            <circle cx="196" cy="71.5" r="3.2" fill="var(--emerald)"/>
+            <rect x="208" y="67" width="150" height="4" rx="2" fill="var(--ink-4)" opacity=".55"/>
+            <g fill="none" stroke="var(--ink-3)" stroke-width="1.7" stroke-linecap="round">
+              <path d="M562 65l0 13 5-4 5 4 0-13z"/><path d="M592 78l10-10 3 3-10 10-4 1z"/>
+              <circle cx="622" cy="71" r="5.5"/><path d="M617 66l10 10" opacity=".5"/>
+            </g>
+            <rect x="644" y="61" width="46" height="21" rx="9" fill="var(--violet)" opacity=".9"/>
+            <text x="667" y="75.5" font-size="10" font-family="ui-monospace,monospace" fill="#fff" text-anchor="middle" font-weight="700">AI</text>
+            <!-- sidebar -->
+            <rect x="60" y="92" width="46" height="254" fill="var(--surface-2)"/>
+            <line x1="106" y1="92" x2="106" y2="346" stroke="var(--line)"/>
+            <g fill="var(--ink-4)">
+              <rect x="75" y="108" width="16" height="4" rx="2"/><rect x="75" y="132" width="16" height="4" rx="2"/>
+              <rect x="75" y="156" width="16" height="4" rx="2"/><rect x="75" y="180" width="16" height="4" rx="2"/>
+              <rect x="75" y="204" width="16" height="4" rx="2"/><rect x="75" y="228" width="16" height="4" rx="2"/>
+              <rect x="75" y="252" width="16" height="4" rx="2"/>
+            </g>
+            <rect x="73" y="104" width="20" height="12" rx="4" fill="var(--violet)" opacity=".25"/>
+            <!-- page -->
+            <rect x="106" y="92" width="454" height="254" fill="var(--surface)"/>
+            <g fill="var(--ink-4)" opacity=".33">
+              <rect x="136" y="122" width="200" height="9" rx="4"/>
+              <rect x="136" y="146" width="330" height="5" rx="2.5"/><rect x="136" y="160" width="300" height="5" rx="2.5"/>
+              <rect x="136" y="174" width="322" height="5" rx="2.5"/><rect x="136" y="188" width="180" height="5" rx="2.5"/>
+              <rect x="136" y="216" width="150" height="80" rx="8"/><rect x="300" y="216" width="150" height="80" rx="8"/>
+            </g>
+            <!-- ai panel -->
+            <rect x="560" y="100" width="132" height="238" rx="11" fill="var(--surface-2)" stroke="var(--violet)" stroke-opacity=".4"/>
+            <rect x="572" y="112" width="60" height="6" rx="3" fill="var(--violet)" opacity=".75"/>
+            <rect x="572" y="134" width="108" height="26" rx="8" fill="var(--sunk)"/>
+            <rect x="600" y="170" width="80" height="22" rx="8" fill="var(--violet)" opacity=".8"/>
+            <rect x="572" y="202" width="108" height="34" rx="8" fill="var(--sunk)"/>
+            <rect x="572" y="304" width="108" height="22" rx="9" fill="var(--sunk)" stroke="var(--line-2)"/>
+            <!-- labels -->
+            <g font-family="ui-monospace,monospace" font-size="10.5" fill="var(--violet)" font-weight="700">
+              <text x="0" y="34">1</text><text x="0" y="75">2</text><text x="0" y="205">3</text><text x="716" y="205">4</text>
+            </g>
+            <g stroke="var(--violet)" stroke-width="1.2" opacity=".5" stroke-dasharray="3 3">
+              <path d="M12 30h60"/><path d="M12 71h60"/><path d="M12 201h50"/><path d="M712 201h-14"/>
+            </g>
+            <g font-family="ui-sans-serif,system-ui,sans-serif" font-size="11" fill="var(--ink-3)">
+              <text x="60" y="372">1 · Tab strip &amp; window controls</text>
+              <text x="330" y="372">2 · Navigation + address bar</text>
+              <text x="60" y="390">3 · Feature sidebar</text>
+              <text x="330" y="390">4 · AI assistant panel</text>
+            </g>
+          </svg>
+          <figcaption>The AIHub Browser window — press Ctrl+Shift+A to summon zone 4 at any time</figcaption>
+        </figure>
+
+        <div class="body-col" style="margin-top:26px">
+          <div class="grid g2">
+            <div class="feat"><h4>1 · Tab strip</h4><p>Drag to reorder, drag out to detach into its own window, right-click for the full tab menu. Scrolls horizontally when full; the active tab always stays visible.</p></div>
+            <div class="feat"><h4>2 · Navigation + address bar</h4><p>Back, forward, reload, home, then the omnibox. On the right: bookmark, annotate, screenshot, record, and the AI button.</p></div>
+            <div class="feat"><h4>3 · Sidebar</h4><p>Toggle with the panel icon. Home, Research, Agent Mode, Sticky Notes, History, Downloads, Extensions, Wi-Fi, VPN, Mail, Settings.</p></div>
+            <div class="feat"><h4>4 · AI panel</h4><p>Docked on the right, resizes the page rather than covering it. Chat, quick actions, and live agent step tracking.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FIRST 5 MIN -->
+      <section id="start">
+        <div class="sec-head"><span class="node"></span><h2>Your first five minutes</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">This really is a sequence — do it in order and the rest of the app makes sense.</p>
+        <div class="body-col">
+          <ol class="steps">
+            <li><div><strong>Connect an AI brain.</strong> Sidebar → <em>Settings</em> → <em>AI</em>. Paste an OpenRouter key for cloud models (Claude, GPT, Gemini, DeepSeek, Grok, Mistral), <em>or</em> install <a href="https://ollama.com">Ollama</a> and pick a local model for fully private AI. The header of the AI panel tells you which one is live.</div></li>
+            <li><div><strong>Open the assistant.</strong> Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> and ask it something real: <code>research the best budget laptops and give me a table</code>.</div></li>
+            <li><div><strong>Bookmark a few pages.</strong> Press <kbd>Ctrl</kbd>+<kbd>D</kbd> on any site. The AI auto-categorizes and colors each one.</div></li>
+            <li><div><strong>Open the Sphere.</strong> Sidebar → <em>Home</em> → sphere view. Hit <em>Timelapse</em> and watch your graph build itself.</div></li>
+            <li><div><strong>Make it yours.</strong> <em>Settings</em> → <em>Appearance</em> for 25 themes, transparency, and window opacity.</div></li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- TABS -->
+      <section id="tabs">
+        <div class="sec-head"><span class="node"></span><h2>Tabs &amp; windows</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p>Tabs behave the way you expect from Chrome, plus a few things Chrome won't do.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Action</th><th>How</th></tr></thead>
+              <tbody>
+                <tr><td>New tab</td><td><kbd>Ctrl</kbd>+<kbd>T</kbd>, or the <strong>+</strong> in the strip</td></tr>
+                <tr><td>Close tab</td><td><kbd>Ctrl</kbd>+<kbd>W</kbd>, or the × on the tab</td></tr>
+                <tr><td><strong>Reopen closed tab</strong></td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> — walks back through your closed-tab stack</td></tr>
+                <tr><td>Next / previous tab</td><td><kbd>Ctrl</kbd>+<kbd>Tab</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd></td></tr>
+                <tr><td>Reorder</td><td>Drag a tab left or right</td></tr>
+                <tr><td><strong>Detach to new window</strong></td><td>Right-click the tab → <em>Move Tab to New Window</em>. Perfect for a second monitor.</td></tr>
+                <tr><td>Duplicate</td><td>Right-click → <em>Duplicate Tab</em></td></tr>
+                <tr><td>Mute a noisy tab</td><td>Right-click → <em>Mute Tab</em></td></tr>
+                <tr><td>Close others / to the right</td><td>Right-click → <em>Close Other Tabs</em> / <em>Close Tabs to the Right</em></td></tr>
+                <tr><td>Scroll the strip</td><td>Mouse wheel over the tab strip</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note"><strong>Second-monitor tip:</strong> detached windows are real, independent browser windows. Drag one to another display and it keeps its own history and navigation. You can also send a link straight out: right-click a link → <em>Open Link in New Window</em>.</div>
+        </div>
+      </section>
+
+      <!-- ADDRESS BAR -->
+      <section id="address">
+        <div class="sec-head"><span class="node"></span><h2>The address bar</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p>Type a URL to go there; type anything else to search it. Your search engine is configurable in <em>Settings</em> — Google, Bing, DuckDuckGo, or Perplexity AI.</p>
+
+          <h3 style="margin-top:24px">Paste and Go <span class="pill new">new</span></h3>
+          <p>Pasting a link then reaching for Enter is two motions. Paste and Go is one. Copy any URL, then use whichever is closest to your hand:</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Method</th><th>What happens</th></tr></thead>
+              <tbody>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></td><td>Navigates to the clipboard URL instantly — works even while a page has focus</td></tr>
+                <tr><td>Right-click address bar</td><td>Menu with Cut, Copy, Paste, <strong>Paste and Go</strong>, Select All</td></tr>
+                <tr><td>Middle-click address bar</td><td>Same as Paste and Go — one click, no menu</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note good">All three run the clipboard through the same smart logic as Enter: a URL navigates, anything else becomes a search. Paste a phrase and it searches; paste a link and it goes.</div>
+          <p style="margin-top:16px"><kbd>Ctrl</kbd>+<kbd>L</kbd> focuses and selects the address bar from anywhere, including from inside a page.</p>
+        </div>
+      </section>
+
+      <!-- HOMEPAGE -->
+      <section id="home">
+        <div class="sec-head"><span class="node"></span><h2>Smart homepage</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p>Every new tab opens the homepage, which is part launcher, part memory.</p>
+          <ul>
+            <li><strong>Universal search</strong> — one field that searches the web, your bookmarks, and your history at once.</li>
+            <li><strong>Quick-access apps</strong> — your pinned destinations. Add, remove, and reorder them freely.</li>
+            <li><strong>AI recommendations</strong> — the browser learns which sites you return to and at what times, and surfaces them without being asked.</li>
+            <li><strong>Sphere / grid toggle</strong> — flip between the constellation view and a plain card grid of bookmarks.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- PAGE TOOLS -->
+      <section id="pagetools">
+        <div class="sec-head"><span class="node"></span><h2>Working with a page</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Tool</th><th>Shortcut</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td>Find in page</td><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Live match count, Enter / Shift+Enter to step, Esc to close</td></tr>
+                <tr><td>Zoom</td><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd></td><td>Per-page zoom; <kbd>Ctrl</kbd>+<kbd>0</kbd> resets</td></tr>
+                <tr><td>Print</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Native print dialog, or save as PDF</td></tr>
+                <tr><td>Save page</td><td>Right-click → Save Page As…</td><td>Saves HTML with its assets</td></tr>
+                <tr><td>Hard reload</td><td>Right-click → Hard Reload</td><td>Bypasses the cache when a site is stuck</td></tr>
+                <tr><td>Translate</td><td>Right-click → Translate this Page</td><td>Sends the page through translation</td></tr>
+                <tr><td>QR code</td><td>Right-click → Create QR Code</td><td>Scan to jump to this page on your phone</td></tr>
+                <tr><td>Reader-style view</td><td>Extensions → Focus Reader</td><td>Strips clutter for distraction-free reading</td></tr>
+                <tr><td>Inspect</td><td>Right-click → Inspect Element</td><td>Full Chromium DevTools</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ AI ASSISTANT ══ -->
+      <section id="ai">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>The AI assistant</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">This is the part that makes AIHub different from every other browser. It is not a chatbot bolted onto a sidebar — it can act.</p>
+
+        <div class="body-col">
+          <p>Open it with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> or the violet <strong>AI</strong> button. The header shows which brain is answering: <span style="color:var(--emerald)">● Local · Ollama</span> or <span style="color:var(--violet)">● Cloud · OpenRouter</span>.</p>
+
+          <h3 style="margin-top:26px">What it can do</h3>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Research the live web</h4><p>Searches the real internet, opens the best sources, reads them, and synthesizes an answer with citations. It never has to say "I can't browse."</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Drive the browser</h4><p>Opens, closes, and navigates tabs. Reads any page's text. Scans forms, fills fields, clicks buttons.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Write &amp; build</h4><p>Generates code, documents, and whole working projects into a folder you choose — then installs, runs, and fixes them until they pass.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Handle your files</h4><p>Reads local documents (including <code>.docx</code>), improves them, and delivers results via a save dialog.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--rose)"></span>Summarize &amp; explain</h4><p>One-click page summaries you can export as Markdown or file into your Articles bookmarks.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--ink-3)"></span>Know your context</h4><p>It sees your bookmarks, recent history, and current page, so "open my trading dashboard" just works.</p></div>
+          </div>
+
+          <h3 style="margin-top:30px">Beautifully formatted answers <span class="pill new">new</span></h3>
+          <p>Ask for a comparison and you get a real table — not a wall of bullets. Ask for code and you get a syntax block with a copy button. Links arrive titled and clickable, opening in a new tab.</p>
+
+          <div class="chat" style="margin-top:14px">
+            <div class="bub me">Compare the top 3 note apps in a table</div>
+            <div class="bub ai">
+              Here's how the three leading options compare:
+              <div style="overflow-x:auto">
+              <table>
+                <thead><tr><th>App</th><th>Best for</th><th>Offline</th><th>Price</th></tr></thead>
+                <tbody>
+                  <tr><td>Obsidian</td><td>Linked thinking</td><td>Yes</td><td>Free</td></tr>
+                  <tr><td>Notion</td><td>Team wikis</td><td>Partial</td><td>Freemium</td></tr>
+                  <tr><td>Apple Notes</td><td>Quick capture</td><td>Yes</td><td>Free</td></tr>
+                </tbody>
+              </table>
+              </div>
+            </div>
+            <div class="bub me">Open the first one and bookmark it</div>
+            <div class="bub ai">
+              Opening Obsidian and saving it to your sphere.
+              <div class="steps-run">
+                <span><span class="tick">✓</span> Opening https://obsidian.md</span>
+                <span><span class="tick">✓</span> Bookmarking Obsidian</span>
+              </div>
+            </div>
+          </div>
+          <figcaption style="text-align:left">Every action the agent takes is listed and ticked off live, so you always see what it did.</figcaption>
+        </div>
+      </section>
+
+      <!-- HOW TO TALK -->
+      <section id="talk">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>How to talk to the assistant</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Plain English. No syntax to memorize — but these phrasings get the best results.</p>
+
+        <div class="body-col">
+          <div class="console">
+            <div class="console-bar">Navigation &amp; tabs</div>
+            <pre><span class="u">open YouTube</span>
+<span class="u">go to my trading dashboard</span>            <span class="c"># matches your bookmarks</span>
+<span class="u">open 5 news sites and bookmark them all</span>
+<span class="u">close every tab except this one</span>
+<span class="u">what tabs do I have open?</span></pre>
+          </div>
+
+          <div class="console">
+            <div class="console-bar">Research — it actually searches the web</div>
+            <pre><span class="u">research the best budget laptops under $800, table please</span>
+<span class="u">what's the latest news on the Fed rate decision?</span>
+<span class="u">compare React vs Svelte in 2026 with sources</span>
+<span class="u">find three suppliers for LED panels in Canada</span></pre>
+          </div>
+
+          <div class="console">
+            <div class="console-bar">Understanding the current page</div>
+            <pre><span class="u">summarize this page</span>
+<span class="u">what are the key points here?</span>
+<span class="u">explain this article like I'm five</span>
+<span class="u">translate this page to French</span>
+<span class="u">is there anything misleading on this page?</span></pre>
+          </div>
+
+          <div class="console">
+            <div class="console-bar">Writing &amp; code</div>
+            <pre><span class="u">write a Python script that renames files by date</span>
+<span class="u">draft a polite follow-up email about invoice 4021</span>
+<span class="u">rewrite this paragraph to be shorter</span>          <span class="c"># select text first</span>
+<span class="u">build me a React todo app in a folder I'll pick</span></pre>
+          </div>
+
+          <div class="console">
+            <div class="console-bar">Files on your computer</div>
+            <pre><span class="u">read ~/Documents/resume.docx and improve it</span>
+<span class="u">what's in my ~/Downloads folder?</span>
+<span class="u">save that summary as a markdown file</span></pre>
+          </div>
+
+          <div class="console">
+            <div class="console-bar">Acting on your behalf</div>
+            <pre><span class="u">find remote React jobs and show me the best 5</span>
+<span class="u">fill this application using my resume</span>
+<span class="u">sign me up for this newsletter with my email</span></pre>
+          </div>
+
+          <h3 style="margin-top:28px">Three ways to give it context</h3>
+          <ul>
+            <li><strong>Select text, then right-click → <em>Ask AI about "…"</em></strong> — pre-fills the question with your selection.</li>
+            <li><strong>Attach Page</strong> — the quick-action button loads the whole page into the conversation so you can interrogate it.</li>
+            <li><strong>Summarize</strong> — one click; afterwards you can export the summary as <code>.md</code> or save it to Articles.</li>
+          </ul>
+
+          <div class="note warn" style="margin-top:18px"><strong>Safety rails you should know about.</strong> The agent asks permission before running any shell command, and it will never click a final <em>Submit</em> / <em>Apply</em> / <em>Send</em> button on its own — it stops, shows you exactly what's about to be sent, and waits for your confirmation. If a site needs a login, a CAPTCHA, or a file upload, it hands control back to you. Press the ■ stop button any time to halt a running task.</div>
+
+          <div class="note" style="margin-top:14px"><strong>Getting better answers:</strong> say the output shape you want ("as a table", "5 bullets", "a bash script"), name the constraint ("under $500", "published this year"), and tell it when to use real sources ("with citations"). It will use live web search whenever the question needs current facts.</div>
+        </div>
+      </section>
+
+      <!-- TOOLBOX -->
+      <section id="tools">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>The agent's toolbox</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">You never type these — the AI chooses them. Knowing they exist tells you what's possible to ask for.</p>
+        <div class="body-col">
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">web_search</td><td>Live web search, ad-filtered results</td></tr>
+                <tr><td class="mono">fetch_url</td><td>Reads a page's text without opening a visible tab</td></tr>
+                <tr><td class="mono">open_tab</td><td>Opens a new tab at a URL</td></tr>
+                <tr><td class="mono">close_tab</td><td>Closes a tab</td></tr>
+                <tr><td class="mono">navigate_tab</td><td>Sends an existing tab to a new URL</td></tr>
+                <tr><td class="mono">switch_tab</td><td>Brings a tab to the front</td></tr>
+                <tr><td class="mono">list_tabs</td><td>Lists everything you have open</td></tr>
+                <tr><td class="mono">read_page</td><td>Reads the current page's visible text</td></tr>
+                <tr><td class="mono">read_tab</td><td>Reads any specific tab</td></tr>
+                <tr><td class="mono">scan_page</td><td>Maps every form field, button, and link</td></tr>
+                <tr><td class="mono">fill_field</td><td>Types into inputs, dropdowns, checkboxes, rich editors</td></tr>
+                <tr><td class="mono">click_element</td><td>Clicks a button or link</td></tr>
+                <tr><td class="mono">wait</td><td>Pauses so a page can settle</td></tr>
+                <tr><td class="mono">list_bookmarks</td><td>Reads your sphere</td></tr>
+                <tr><td class="mono">add_bookmark</td><td>Saves a page, auto-categorized</td></tr>
+                <tr><td class="mono">remove_bookmark</td><td>Deletes a bookmark</td></tr>
+                <tr><td class="mono">list_dir</td><td>Lists a folder in your home directory</td></tr>
+                <tr><td class="mono">read_file</td><td>Reads a text file or extracts <code>.docx</code> text</td></tr>
+                <tr><td class="mono">write_file</td><td>Writes a file (won't overwrite without permission)</td></tr>
+                <tr><td class="mono">save_file</td><td>Offers a finished file via a Save dialog</td></tr>
+                <tr><td class="mono">save_zip</td><td>Bundles many generated files into one ZIP</td></tr>
+                <tr><td class="mono">pick_directory</td><td>Asks <em>you</em> to choose the working folder</td></tr>
+                <tr><td class="mono">exec_command</td><td>Runs a shell command — <strong>always with your approval</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note" style="margin-top:16px">File access is limited to your home folder, and the agent only touches paths you pointed it at. Page content and command output are treated as untrusted data — instructions hidden inside a web page cannot hijack the agent.</div>
+        </div>
+      </section>
+
+      <!-- RESEARCH / AGENT -->
+      <section id="research">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Research Mode &amp; Agent Mode</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <div class="grid g2">
+            <div class="feat"><h4>Research Mode</h4><p>A dedicated workspace for multi-source work: analyze several tabs at once, cross-reference claims, spot contradictions between sources, and generate a cited report you can export.</p></div>
+            <div class="feat"><h4>Agent Mode</h4><p>Build and save named agents with their own instructions and saved conversations — a research agent, a shopping agent, a code agent — each remembering its own context.</p></div>
+          </div>
+          <p style="margin-top:16px">Both live in the sidebar. Research Mode suits one-off deep dives; Agent Mode suits jobs you repeat.</p>
+        </div>
+      </section>
+
+      <!-- SPHERE -->
+      <section id="sphere">
+        <div class="sec-head"><span class="node" style="background:var(--emerald)"></span><h2>The Bookmark Sphere</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Your bookmarks as a living constellation — the flagship view, and the fastest way to rediscover something you saved months ago.</p>
+
+        <div class="body-col">
+          <p>Each bookmark is a node. Size grows with how connected it is; color comes from its AI-assigned category. Bookmarks in the same category cluster around a hub, and the hubs link to each other so the whole graph is one connected structure — never a hairball.</p>
+
+          <h3 style="margin-top:26px">Controls</h3>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Do this</th><th>Get this</th></tr></thead>
+              <tbody>
+                <tr><td>Scroll</td><td>Zoom toward the cursor</td></tr>
+                <tr><td>Drag empty space</td><td>Pan the view</td></tr>
+                <tr><td>Drag a node</td><td>Pull it around — the graph springs back into balance</td></tr>
+                <tr><td>Hover a node</td><td>Tooltip with title, category, connections</td></tr>
+                <tr><td>Click a node</td><td>Highlight it and its links, dim everything else</td></tr>
+                <tr><td>Right-click a node</td><td>Open Site · Copy URL · Remove Bookmark</td></tr>
+                <tr><td>Search icon</td><td>Live filter — matches stay lit, the rest fade</td></tr>
+                <tr><td>Zoom % button</td><td>Zoom to fit the whole graph</td></tr>
+                <tr><td>Crosshair</td><td>Re-center and fit</td></tr>
+                <tr><td>Refresh</td><td>Rebuild and replay the entrance animation</td></tr>
+                <tr><td><strong>Timelapse</strong> <span class="pill new">new</span></td><td>Replays how your graph was built — hubs first, then their satellites</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 style="margin-top:26px">About the animation</h3>
+          <p>When the sphere opens, nodes don't just appear. The most-connected hubs pop in first on a spring that slightly overshoots and settles, mid-tier nodes follow, then the leaves — while edges draw themselves outward from source to target with a bright travelling tip. The camera dollies from pulled-back to fitted. Once settled, every node breathes gently, hubs a little more than leaves.</p>
+          <p><strong>Timelapse</strong> takes that idea further: it empties the canvas and rebuilds your graph one node at a time in order of importance, roughly eight nodes a second, with a live progress bar. An edge only appears once both of its endpoints exist, and the physics keeps reflowing as the graph grows — so you watch your knowledge base assemble itself. Press <em>Stop</em> to bring everything back instantly.</p>
+
+          <figure>
+            <svg viewBox="0 0 700 150" role="img" aria-label="Diagram showing timelapse revealing hub nodes first, then satellites, then the full graph">
+              <g font-family="ui-monospace,monospace" font-size="9.5" fill="var(--ink-4)" letter-spacing="1">
+                <text x="72" y="140" text-anchor="middle">0% · HUBS</text>
+                <text x="256" y="140" text-anchor="middle">45% · CLUSTERS</text>
+                <text x="440" y="140" text-anchor="middle">80% · LEAVES</text>
+                <text x="624" y="140" text-anchor="middle">100% · SETTLED</text>
+              </g>
+              <g stroke="var(--line-2)" stroke-width="1"><path d="M150 62h28M334 62h28M518 62h28"/></g>
+              <g fill="none" stroke="var(--sky)" stroke-width="1.1" opacity=".55">
+                <path d="M256 62l-26-18M256 62l26-18M256 62l-26 18M256 62l26 18"/>
+                <path d="M440 62l-30-20M440 62l30-20M440 62l-30 20M440 62l30 20M410 42l-18-12M470 42l18-12M410 82l-18 12M470 82l18 12"/>
+                <path d="M624 62l-30-20M624 62l30-20M624 62l-30 20M624 62l30 20M594 42l-18-12M654 42l18-12M594 82l-18 12M654 82l18 12M576 30l-14-8M672 30l14-8M576 94l-14 8M672 94l14 8"/>
+              </g>
+              <circle cx="72" cy="62" r="10" fill="var(--violet)"/>
+              <g fill="var(--violet)"><circle cx="256" cy="62" r="10"/><circle cx="440" cy="62" r="10"/><circle cx="624" cy="62" r="10"/></g>
+              <g fill="var(--sky)">
+                <circle cx="230" cy="44" r="5.5"/><circle cx="282" cy="44" r="5.5"/><circle cx="230" cy="80" r="5.5"/><circle cx="282" cy="80" r="5.5"/>
+                <circle cx="410" cy="42" r="5.5"/><circle cx="470" cy="42" r="5.5"/><circle cx="410" cy="82" r="5.5"/><circle cx="470" cy="82" r="5.5"/>
+                <circle cx="594" cy="42" r="5.5"/><circle cx="654" cy="42" r="5.5"/><circle cx="594" cy="82" r="5.5"/><circle cx="654" cy="82" r="5.5"/>
+              </g>
+              <g fill="var(--emerald)">
+                <circle cx="392" cy="30" r="3.6"/><circle cx="488" cy="30" r="3.6"/><circle cx="392" cy="94" r="3.6"/><circle cx="488" cy="94" r="3.6"/>
+                <circle cx="576" cy="30" r="3.6"/><circle cx="672" cy="30" r="3.6"/><circle cx="576" cy="94" r="3.6"/><circle cx="672" cy="94" r="3.6"/>
+                <circle cx="562" cy="22" r="3"/><circle cx="686" cy="22" r="3"/><circle cx="562" cy="102" r="3"/><circle cx="686" cy="102" r="3"/>
+              </g>
+            </svg>
+            <figcaption>Timelapse reveals your graph in order of importance</figcaption>
+          </figure>
+
+          <h3 style="margin-top:26px">Adding bookmarks</h3>
+          <ul>
+            <li><kbd>Ctrl</kbd>+<kbd>D</kbd> or the bookmark icon — the AI picks a category and color.</li>
+            <li>Right-click any page → <em>Add to Sphere</em>.</li>
+            <li>Ask the assistant: <code>bookmark this page</code>.</li>
+          </ul>
+          <div class="note good">Duplicate detection runs before anything is saved — matching on exact URL, same page path, and same domain — so your graph never fills with near-copies.</div>
+        </div>
+      </section>
+
+      <!-- NOTES -->
+      <section id="notes">
+        <div class="sec-head"><span class="node" style="background:var(--emerald)"></span><h2>Annotation &amp; sticky notes</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p>Click the pencil in the toolbar to draw directly on any web page. A floating toolbar appears — drag it anywhere, or minimize it.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Tool</th><th>Key</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td>Pen</td><td><kbd>P</kbd></td><td>Freehand, smoothed</td></tr>
+                <tr><td>Highlighter</td><td><kbd>H</kbd></td><td>Translucent wide stroke</td></tr>
+                <tr><td>Arrow</td><td><kbd>A</kbd></td><td>Point at things</td></tr>
+                <tr><td>Rectangle</td><td><kbd>R</kbd></td><td>Box things out</td></tr>
+                <tr><td>Ellipse</td><td><kbd>E</kbd></td><td>Circle things</td></tr>
+                <tr><td>Text</td><td><kbd>T</kbd></td><td>Click, type, Enter to place</td></tr>
+                <tr><td>Eraser</td><td><kbd>X</kbd></td><td>Rub strokes away</td></tr>
+                <tr><td>Undo / redo</td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td></td></tr>
+                <tr><td>Pointer mode</td><td>—</td><td>Click through to use the page normally</td></tr>
+                <tr><td>Save</td><td>—</td><td>Exports page + drawings as one PNG</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 style="margin-top:26px">Sticky notes that actually come back <span class="pill new">new</span></h3>
+          <p>Click <em>New Note</em> in the annotation toolbar to pin a note to the page. Give it a title, type freely, pick from six pastel colors, drag it anywhere, minimize it.</p>
+          <ul>
+            <li><strong>They persist.</strong> Notes are saved into the app itself, not into the website's storage — clearing site data won't lose them.</li>
+            <li><strong>They return.</strong> Re-open annotation mode on that page and your notes reappear exactly where you left them.</li>
+            <li><strong>They're all in one place.</strong> Sidebar → <em>Sticky Notes</em> lists every note across every page, with search, per-note delete, and an <em>Open Page</em> jump.</li>
+            <li><strong>The ✨ button is AI.</strong> Empty note → it summarizes the page into it. Note with a question in it → it answers that question about the page.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- CAPTURE -->
+      <section id="capture">
+        <div class="sec-head"><span class="node" style="background:var(--emerald)"></span><h2>Screenshots &amp; recording</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <ul>
+            <li><strong>Screenshot</strong> — the camera icon captures the visible page and opens a save dialog.</li>
+            <li><strong>Annotated screenshot</strong> — draw first, then hit <em>Save</em> in the annotation toolbar; drawings are composited onto the real pixels.</li>
+            <li><strong>Record</strong> — the video icon records the window with audio and a live timer. Click stop to save as <code>.webm</code>.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- VPN -->
+      <section id="vpn">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Free VPN</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p>No account, no subscription, no credentials. Sidebar → <em>VPN</em>, click a country, done.</p>
+          <p>Available locations: <strong>France, Belgium, Canada, United States, United Kingdom, Germany, Netherlands, Japan</strong> — plus <em>Direct</em> to turn it off.</p>
+          <h3 style="margin-top:22px">How it works</h3>
+          <ol class="steps">
+            <li><div>You click a country.</div></li>
+            <li><div>The browser pulls a fresh list of free community servers for that country.</div></li>
+            <li><div>It tests them in batches, and only accepts one that both responds <em>and</em> genuinely changes your public IP.</div></li>
+            <li><div>The card shows live progress ("Testing 7/40"). Tap again to cancel.</div></li>
+          </ol>
+          <div class="note warn" style="margin-top:16px"><strong>Be realistic about free servers.</strong> They're community-run: speeds vary, servers come and go, and the first connection to a country can take up to half a minute while the browser hunts for a working one. Don't do banking through one. If a server drops, just reconnect and it finds another.</div>
+          <p style="margin-top:14px">Have your own paid proxy? <em>Advanced → Add your own proxy server</em> supports SOCKS5, HTTP, and HTTPS with optional credentials.</p>
+        </div>
+      </section>
+
+      <!-- WIFI -->
+      <section id="wifi">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Wi-Fi</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p>Sidebar → <em>Wi-Fi</em> scans every network around you and lets you join <strong>any</strong> of them — open or secured.</p>
+          <ul>
+            <li><strong>Open networks</strong> connect with one click, no password.</li>
+            <li><strong>Secured networks</strong> prompt for the password once, then Windows remembers it.</li>
+            <li><strong>Saved networks</strong> show a <em>Saved</em> badge and reconnect in one click.</li>
+            <li><strong>Real verification</strong> — the browser waits and confirms you actually associated, rather than claiming success immediately. A wrong password is reported honestly and the bad profile is cleaned up.</li>
+          </ul>
+          <div class="note">Wi-Fi management is Windows-only for now. On any open network, turn the VPN on before doing anything sensitive.</div>
+        </div>
+      </section>
+
+      <!-- MAIL -->
+      <section id="mail">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Mail, Drive &amp; Calendar</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p>Sidebar → <em>Mail</em> gives you a native Gmail client. Connect through <em>Settings → Google</em>, which uses OAuth2 with PKCE and opens consent in your system browser — AIHub never sees your Google password.</p>
+          <ul>
+            <li>Read threads, search, and manage labels.</li>
+            <li>Drive and Calendar use the same connection.</li>
+            <li>Tokens are encrypted at rest on your machine.</li>
+          </ul>
+          <div class="note">First-time setup needs a Google Desktop OAuth client ID pasted into Settings. Until that's filled in, the Mail page will tell you it can't connect.</div>
+        </div>
+      </section>
+
+      <!-- HISTORY -->
+      <section id="hist">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>History &amp; downloads</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <div class="grid g2">
+            <div class="feat"><h4>History · <kbd>Ctrl</kbd>+<kbd>H</kbd></h4><p>Searchable timeline of everywhere you've been, with AI recommendations drawn from your actual patterns.</p></div>
+            <div class="feat"><h4>Downloads · <kbd>Ctrl</kbd>+<kbd>J</kbd></h4><p>Live progress, open-in-folder, and a running list of everything you've saved.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- EXTENSIONS -->
+      <section id="ext">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Extensions</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p>Fourteen built-in page enhancers, each a toggle. No store, no permissions dialogs, no tracking.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Extension</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td>Dime</td><td>Dims the background while video plays</td></tr>
+                <tr><td>Video Downloader</td><td>Saves direct-file videos with their real name</td></tr>
+                <tr><td>Silent Mode</td><td>Blocks autoplay audio and video everywhere</td></tr>
+                <tr><td>Focus Reader</td><td>Strips clutter for distraction-free reading</td></tr>
+                <tr><td>Link Cleaner</td><td>Removes UTM and tracking parameters from links</td></tr>
+                <tr><td>Dark Force</td><td>Forces dark mode on any website</td></tr>
+                <tr><td>Image Inspector</td><td>Hover images to see dimensions and file name</td></tr>
+                <tr><td>Word Counter</td><td>Live word count and reading time</td></tr>
+                <tr><td>Cursor Trail</td><td>Glowing physics-based cursor trail</td></tr>
+                <tr><td>Color Filter</td><td>Colorblind accessibility simulation</td></tr>
+                <tr><td>Pixel Ruler</td><td>Crosshair overlay with pixel coordinates</td></tr>
+                <tr><td>No Animations</td><td>Freezes all CSS animation and transitions</td></tr>
+                <tr><td>Sepia Mode</td><td>Warm reading tone</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note good" style="margin-top:16px"><strong>Generate your own.</strong> Extensions page → <em>Generate</em>. Describe what you want in plain English and the AI writes the injection code, names it, and adds it to your list.</div>
+        </div>
+      </section>
+
+      <!-- THEMES -->
+      <section id="themes">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Themes &amp; appearance</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p><em>Settings → Appearance</em>. Twenty-five built-in themes — Midnight, Ocean, Forest, Sunset, Crimson, Cyber, Royal, Rose, Graphite, Nordic, Espresso, Aurora, Lavender, Mint, Sand, Sky, Blossom, Paper, Clear and more — spanning dark and light.</p>
+          <ul>
+            <li><strong>AI-generated themes</strong> — describe a mood and get a full custom palette.</li>
+            <li><strong>Window material</strong> — Solid, Mica, Acrylic/Aero, or Tabbed on Windows.</li>
+            <li><strong>Window opacity</strong> — 85% to 100%.</li>
+            <li>Themes apply everywhere, including the Sphere's canvas.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- KEYS -->
+      <section id="keys">
+        <div class="sec-head"><span class="node" style="background:var(--ink-3)"></span><h2>Every keyboard shortcut</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">All of these work even while a web page has keyboard focus.</p>
+        <div class="body-col">
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+              <tbody>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>New tab</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></td><td>Reopen last closed tab</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>W</kbd></td><td>Close tab</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>Tab</kbd></td><td>Next tab</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Previous tab</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>Focus address bar</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></td><td>Paste and Go</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>R</kbd> / <kbd>F5</kbd></td><td>Reload</td></tr>
+                <tr><td><kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd></td><td>Back / forward</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Bookmark this page</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Find in page</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>History</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>J</kbd></td><td>Downloads</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Print</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd></td><td>Zoom in / out / reset</td></tr>
+                <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>Toggle AI assistant</td></tr>
+                <tr><td><kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>In AI chat: send / new line</td></tr>
+                <tr><td><kbd>Esc</kbd></td><td>Close find bar, menu, or overlay</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- MENUS -->
+      <section id="menus">
+        <div class="sec-head"><span class="node" style="background:var(--ink-3)"></span><h2>Right-click menus</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <p>The page menu adapts to what's under your cursor.</p>
+          <div class="grid g2">
+            <div class="feat"><h4>On any page</h4><p>Back · Forward · Reload · Hard Reload · AI Assistant · Research · Agent · Annotation · Bookmark Sphere · Add to Sphere · QR Code · Copy Page URL · Translate · Print · Save Page As · Inspect Element</p></div>
+            <div class="feat"><h4>On selected text</h4><p>Cut · Copy · Paste · Select All · <strong>Ask AI about "…"</strong> · Search Google for "…"</p></div>
+            <div class="feat"><h4>On a link</h4><p>Open Link in New Tab · <strong>Open Link in New Window</strong> · Copy Link Address</p></div>
+            <div class="feat"><h4>On an image</h4><p>Copy Image · Copy Image Address · Save Image As… · Open Image in New Tab</p></div>
+            <div class="feat"><h4>On a tab</h4><p>New Tab · Duplicate · <strong>Move Tab to New Window</strong> · Reload · Copy Page URL · Mute/Unmute · Close · Close Others · Close to the Right</p></div>
+            <div class="feat"><h4>On the address bar</h4><p>Cut · Copy · Paste · <strong>Paste and Go</strong> · Select All</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRIVACY -->
+      <section id="privacy">
+        <div class="sec-head"><span class="node" style="background:var(--ink-3)"></span><h2>Privacy &amp; security</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <ul>
+            <li><strong>Local AI option</strong> — with Ollama, nothing you type leaves your machine.</li>
+            <li><strong>Keys stay local</strong> — API keys are stored on your device, never transmitted anywhere but the provider you chose.</li>
+            <li><strong>OAuth done properly</strong> — Google sign-in uses PKCE in your system browser; tokens are encrypted at rest.</li>
+            <li><strong>Web security stays on</strong> — pages run with full Chromium sandboxing.</li>
+            <li><strong>Prompt-injection defense</strong> — text from pages, files, and command output is fed to the AI as data, and can't issue it commands.</li>
+            <li><strong>Command approval</strong> — nothing executes on your system without an explicit click.</li>
+          </ul>
+          <p style="margin-top:14px">AIHub checks GitHub Releases for updates on startup and periodically, and tells you in-app when a new version ships.</p>
+        </div>
+      </section>
+
+      <!-- TROUBLE -->
+      <section id="trouble">
+        <div class="sec-head"><span class="node" style="background:var(--ink-3)"></span><h2>Troubleshooting</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Problem</th><th>Fix</th></tr></thead>
+              <tbody>
+                <tr><td>AI says it can't connect</td><td>Settings → AI. Check your OpenRouter key, or confirm Ollama is running. If you're on the VPN, try Direct — a dead free proxy blocks AI calls too.</td></tr>
+                <tr><td>VPN won't connect</td><td>Free servers rotate constantly. Retry, or pick another country. "All servers busy" means the pool is momentarily dry, not that it's broken.</td></tr>
+                <tr><td>Wi-Fi password rejected</td><td>The browser verifies real association, so a wrong key is caught properly. Re-enter it; passwords are 8–63 characters.</td></tr>
+                <tr><td>Sticky notes missing</td><td>They only render in annotation mode. Turn the pencil back on, or check the Sticky Notes page in the sidebar.</td></tr>
+                <tr><td>A page looks broken</td><td>Right-click → Hard Reload. If an extension is the cause, toggle it off on the Extensions page.</td></tr>
+                <tr><td>Agent stuck on a task</td><td>Press ■ stop in the AI panel. Sites with CAPTCHAs or logins need you to take over that step.</td></tr>
+                <tr><td>Site blocks sign-in</td><td>Use the real popup flow rather than a detached window — OAuth popups need the opener relationship.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <p><strong style="color:var(--ink)">AIHub Browser v1.5</strong> — an AI operating system for the web.</p>
+        <p style="margin-top:6px">Built on Electron and Chromium · Windows, macOS, Linux · Auto-updating from GitHub Releases</p>
+        <p style="margin-top:14px; padding-top:14px; border-top:1px solid var(--line)">
+          <strong style="color:var(--ink)">Created by Erick Omari</strong><br>
+          AIHub Browser and this manual — designed, built, and maintained by Erick Omari.
+        </p>
+      </footer>
+
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+  const cv = document.getElementById('constellation');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const CATS = ['#7C5CFF','#38BDF8','#34D399','#FBBF24','#FB7185','#A78BFA'];
+  let W=0, H=0, dpr=Math.min(window.devicePixelRatio||1, 2);
+  let nodes=[], edges=[];
+
+  function build(){
+    const rect = cv.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    cv.width = W*dpr; cv.height = H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+
+    nodes = []; edges = [];
+    const clusters = 6, per = 7;
+    for (let c=0;c<clusters;c++){
+      const ang = (c/clusters)*Math.PI*2 - Math.PI/2;
+      const cxp = W/2 + Math.cos(ang)*Math.min(W,H)*0.29;
+      const cyp = H/2 + Math.sin(ang)*Math.min(W,H)*0.26;
+      const hub = { x:cxp, y:cyp, vx:0, vy:0, r:7.5, c:CATS[c], deg:per, hub:true };
+      nodes.push(hub);
+      const hi = nodes.length-1;
+      for (let i=0;i<per;i++){
+        const a2 = Math.random()*Math.PI*2, d2 = 26+Math.random()*40;
+        nodes.push({ x:cxp+Math.cos(a2)*d2, y:cyp+Math.sin(a2)*d2, vx:0, vy:0,
+                     r:2.6+Math.random()*2.2, c:CATS[c], deg:1, hub:false });
+        edges.push([hi, nodes.length-1]);
+      }
+      if (c>0) edges.push([0, hi]);
+    }
+    // order: hubs first, then the rest — same rule the real sphere uses
+    order = nodes.map((n,i)=>i).sort((a,b)=> nodes[b].deg - nodes[a].deg);
+  }
+
+  let order=[], revealed=new Set(), pop=new Map(), tlIdx=0, tlTimer=null, running=false;
+
+  function easeBackOut(t){ const s=1.7, c=s+1; return 1 + c*Math.pow(t-1,3) + s*Math.pow(t-1,2); }
+
+  function startTL(){
+    if (tlTimer) clearInterval(tlTimer);
+    revealed = new Set(); pop = new Map(); tlIdx = 0; running = true;
+    if (reduce){ order.forEach(i=>revealed.add(i)); running=false; return; }
+    tlTimer = setInterval(()=>{
+      if (tlIdx >= order.length){ clearInterval(tlTimer); tlTimer=null; running=false; return; }
+      const id = order[tlIdx++];
+      revealed.add(id);
+      pop.set(id, performance.now());
+    }, 95);
+  }
+
+  function physics(){
+    for (const [a,b] of edges){
+      const A=nodes[a], B=nodes[b];
+      const dx=B.x-A.x, dy=B.y-A.y, d=Math.hypot(dx,dy)||1;
+      const f=(d-52)*0.0016;
+      A.vx+=dx/d*f; A.vy+=dy/d*f; B.vx-=dx/d*f; B.vy-=dy/d*f;
+    }
+    for (let i=0;i<nodes.length;i++){
+      for (let j=i+1;j<nodes.length;j++){
+        const A=nodes[i],B=nodes[j];
+        const dx=B.x-A.x, dy=B.y-A.y; let d2=dx*dx+dy*dy;
+        if (d2>9000||d2===0) continue;
+        const d=Math.sqrt(d2), f=90/(d2*d)*1.2;
+        A.vx-=dx/d*f; A.vy-=dy/d*f; B.vx+=dx/d*f; B.vy+=dy/d*f;
+      }
+    }
+    for (const n of nodes){
+      n.vx += (W/2-n.x)*0.00035; n.vy += (H/2-n.y)*0.00035;
+      n.vx*=0.86; n.vy*=0.86; n.x+=n.vx; n.y+=n.vy;
+    }
+  }
+
+  function draw(){
+    const now = performance.now();
+    ctx.clearRect(0,0,W,H);
+    if (!reduce) physics();
+
+    const scaleOf = (i)=>{
+      if (!revealed.has(i)) return 0;
+      const t0 = pop.get(i);
+      if (t0 == null) return 1;
+      const e = (now-t0)/420;
+      return e>=1 ? 1 : Math.max(0, easeBackOut(e));
+    };
+
+    for (const [a,b] of edges){
+      if (!revealed.has(a) || !revealed.has(b)) continue;
+      const A=nodes[a], B=nodes[b];
+      const g = ctx.createLinearGradient(A.x,A.y,B.x,B.y);
+      g.addColorStop(0, A.c+'55'); g.addColorStop(1, B.c+'55');
+      ctx.strokeStyle=g; ctx.lineWidth=A.hub||B.hub?1.1:0.7;
+      ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+    }
+
+    for (let i=0;i<nodes.length;i++){
+      const s = scaleOf(i); if (s<=0) continue;
+      const n = nodes[i];
+      const breathe = reduce ? 1 : 1 + Math.sin(now*0.0013 + i*0.5)*(n.hub?0.09:0.05);
+      const r = n.r*s*breathe;
+      if (n.hub){
+        ctx.shadowColor=n.c; ctx.shadowBlur=16;
+      }
+      ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2);
+      ctx.fillStyle=n.c+(n.hub?'F0':'C0'); ctx.fill();
+      ctx.shadowBlur=0;
+    }
+    requestAnimationFrame(draw);
+  }
+
+  function boot(){ build(); startTL(); }
+  boot();
+  requestAnimationFrame(draw);
+
+  let rt;
+  window.addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(()=>{ build(); order.forEach(i=>revealed.add(i)); }, 180); });
+  document.getElementById('replay').addEventListener('click', startTL);
+})();
+</script>
+
+</body>
+</html>

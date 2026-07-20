@@ -19,6 +19,7 @@ const AgentsPage     = lazy(() => import('./components/pages/AgentsPage'))
 const ExtensionsPage = lazy(() => import('./components/pages/ExtensionsPage'))
 const MailPage       = lazy(() => import('./components/pages/MailPage'))
 const NotesPage      = lazy(() => import('./components/pages/NotesPage'))
+const ManualPage     = lazy(() => import('./components/pages/ManualPage'))
 import AddBookmarkModal from './components/homepage/AddBookmarkModal'
 import QRCodeModal from './components/browser/QRCodeModal'
 import UpdateNotification from './components/browser/UpdateNotification'
@@ -123,7 +124,7 @@ export default function App() {
   }, [activeTabId, updateTab, setNavState])
 
   // ── Special pages ──────────────────────────────────────────────────────────
-  const openSpecialPage = useCallback((pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes') => {
+  const openSpecialPage = useCallback((pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual') => {
     useBrowserStore.getState().addTab(`aihub://${pageType}`, pageType)
   }, [])
 
@@ -536,6 +537,7 @@ export default function App() {
                     {tab.pageType === 'extensions' && <ExtensionsPage />}
                     {tab.pageType === 'mail'       && <MailPage />}
                     {tab.pageType === 'notes'      && <NotesPage onNavigate={navigate} />}
+                    {tab.pageType === 'manual'     && <ManualPage />}
                   </Suspense>
                 </div>
               )

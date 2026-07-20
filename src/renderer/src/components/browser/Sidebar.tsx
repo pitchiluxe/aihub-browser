@@ -1,20 +1,20 @@
 import React, { memo } from 'react'
 import {
   Home, History, Download, Settings, Plus, Sparkles,
-  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote,
+  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 
 interface Props {
   onNavigate: (url: string) => void
-  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes') => void
+  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual') => void
 }
 
 interface NavItem {
   icon: React.ElementType
   label: string
-  page: null | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes'
+  page: null | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual'
   type: string
   accent?: string
 }
@@ -30,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Wifi,         label: 'Free WiFi',    page: 'wifi',         type: 'wifi'       },
   { icon: Shield,       label: 'VPN / Proxy',  page: 'vpn',          type: 'vpn'        },
   { icon: Mail,         label: 'Mail',         page: 'mail',         type: 'mail'       },
+  { icon: BookOpen,     label: 'User Manual',  page: 'manual',       type: 'manual',     accent: '#5eead4' },
   { icon: Settings,     label: 'Settings',     page: 'settings',     type: 'settings'   },
 ]
 
