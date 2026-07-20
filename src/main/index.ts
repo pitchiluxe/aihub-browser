@@ -1166,6 +1166,39 @@ async function fetchFreeProxyList(cc: string): Promise<string[]> {
   return [...socks, ...rest]
 }
 
+// Every session that actually carries user traffic. Tab content runs in
+// BrowserViews on the 'persist:main' partition — a DIFFERENT session from
+// defaultSession — so proxying only defaultSession left real browsing going
+// out direct while the IP readout (which also used defaultSession) showed the
+// proxy's address. The VPN must be applied to, and verified through, the
+// session tabs actually use.
+// Only the BROWSING session is proxied. The app's own session (defaultSession)
+// carries AI requests, update checks and favicon fetches — pushing those
+// through a flaky free proxy stalls the UI without protecting anything the
+// user cares about. The VPN exists so websites see the chosen country.
+function trafficSessions(): Electron.Session[] {
+  return [session.fromPartition('persist:main')]
+}
+
+async function applyProxyToTraffic(config: Electron.ProxyConfig): Promise<void> {
+  for (const ses of trafficSessions()) {
+    try { await ses.setProxy(config) } catch {}
+  }
+}
+
+/** Public IP as seen by the session tab content uses — the honest answer. */
+async function currentPublicIp(timeoutMs = 12000): Promise<string> {
+  const ses = session.fromPartition('persist:main')
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const res = await ses.fetch('https://api.ipify.org?format=json', { signal: ctrl.signal, cache: 'no-store' })
+    if (!res.ok) return ''
+    const d = await res.json()
+    return typeof d?.ip === 'string' ? d.ip : ''
+  } catch { return '' } finally { clearTimeout(timer) }
+}
+
 // Route a probe through an isolated in-memory session so testing never touches
 // the user's real browsing session. Returns the IP seen through the proxy.
 async function probeProxy(rule: string, partition: string, timeoutMs: number): Promise<string | null> {
@@ -1216,13 +1249,23 @@ ipcMain.handle('vpn:freeConnect', async (_e, cc: string, countryName?: string) =
       if (winner) {
         if (freeVpnCancelled) return { success: false, error: 'Cancelled', cancelled: true }
         const u = new URL(winner.rule)
-        await session.defaultSession.setProxy({ proxyRules: winner.rule, proxyBypassRules: '<local>' })
+        // Apply to the sessions real browsing uses, then PROVE it took effect
+        // by re-checking the public IP through the tab session. Without this
+        // check "connected" could be reported while pages still went out
+        // direct — which is exactly what used to happen.
+        await applyProxyToTraffic({ proxyRules: winner.rule, proxyBypassRules: '<local>' })
+        const liveIp = await currentPublicIp(9000)
+        if (!liveIp || (directIp && liveIp === directIp)) {
+          // Not actually routing — undo and keep hunting rather than lie
+          await applyProxyToTraffic({ mode: 'direct' })
+          continue
+        }
         vpnActive = {
           protocol: u.protocol.replace(':', ''), host: u.hostname, port: Number(u.port),
           free: true, countryCode: cc, countryName: label,
         }
         broadcastVpnState()
-        return { success: true, ip: winner.ip, proxy: winner.rule }
+        return { success: true, ip: liveIp, proxy: winner.rule }
       }
     }
     return {
@@ -1282,16 +1325,22 @@ ipcMain.handle('vpn:setProxy', async (_e, cfg: { protocol: string; host: string;
     let rules = `${cfg.protocol.toLowerCase()}://`
     if (cfg.username && cfg.password) rules += `${encodeURIComponent(cfg.username)}:${encodeURIComponent(cfg.password)}@`
     rules += `${cfg.host}:${cfg.port}`
-    await session.defaultSession.setProxy({ proxyRules: rules })
+    await applyProxyToTraffic({ proxyRules: rules, proxyBypassRules: '<local>' })
+    // Confirm the proxy actually carries traffic before reporting success
+    const liveIp = await currentPublicIp(9000)
+    if (!liveIp) {
+      await applyProxyToTraffic({ mode: 'direct' })
+      return { success: false, error: 'That proxy did not respond — nothing was changed.' }
+    }
     vpnActive = cfg
     broadcastVpnState()
-    return { success: true }
+    return { success: true, ip: liveIp }
   } catch (e: any) { return { success: false, error: e.message } }
 })
 
 ipcMain.handle('vpn:clearProxy', async () => {
   try {
-    await session.defaultSession.setProxy({ mode: 'direct' })
+    await applyProxyToTraffic({ mode: 'direct' })
     vpnActive = null
     broadcastVpnState()
     return { success: true }
@@ -1299,14 +1348,16 @@ ipcMain.handle('vpn:clearProxy', async () => {
 })
 
 ipcMain.handle('vpn:getIp', async () => {
-  // Must go through the default session (ses.fetch), NOT Node's https module —
-  // Node bypasses Chromium's proxy config, so the displayed IP would always be
-  // the real one even while the VPN proxy is active.
+  // Query through the SAME session tab content uses ('persist:main'), not
+  // defaultSession and not Node's https module. Node bypasses Chromium's proxy
+  // entirely, and defaultSession is not what pages load through — reading
+  // either one reports an IP that has nothing to do with real browsing.
   try {
+    const ses = session.fromPartition('persist:main')
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 12000)
     try {
-      const res = await session.defaultSession.fetch('https://ipinfo.io/json', { signal: ctrl.signal, cache: 'no-store' })
+      const res = await ses.fetch('https://ipinfo.io/json', { signal: ctrl.signal, cache: 'no-store' })
       if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
       const d = await res.json()
       return { success: true, ip: d.ip, city: d.city, region: d.region, country: d.country, org: d.org }
