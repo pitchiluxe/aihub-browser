@@ -1005,8 +1005,9 @@
     cv.width = W*dpr; cv.height = H*dpr;
     ctx.setTransform(dpr,0,0,dpr,0,0);
 
-    GX = W * 0.79; GY = H * 0.5;
-    SPREAD = Math.min(W * 0.15, H * 0.29);
+    GX = W * 0.80; GY = H * 0.5;
+    // Wider orbit so the constellation fills most of the dark right-hand band
+    SPREAD = Math.min(W * 0.20, H * 0.42);
 
     nodes = []; edges = [];
     const clusters = 6, per = 7;
@@ -1014,13 +1015,13 @@
       const ang = (c/clusters)*Math.PI*2 - Math.PI/2;
       const cxp = GX + Math.cos(ang)*SPREAD;
       const cyp = GY + Math.sin(ang)*SPREAD*0.95;
-      const hub = { x:cxp, y:cyp, vx:0, vy:0, r:7.5, c:CATS[c], deg:per, hub:true };
+      const hub = { x:cxp, y:cyp, vx:0, vy:0, r:9, c:CATS[c], deg:per, hub:true };
       nodes.push(hub);
       const hi = nodes.length-1;
       for (let i=0;i<per;i++){
-        const a2 = Math.random()*Math.PI*2, d2 = 20+Math.random()*30;
+        const a2 = Math.random()*Math.PI*2, d2 = 26+Math.random()*42;
         nodes.push({ x:cxp+Math.cos(a2)*d2, y:cyp+Math.sin(a2)*d2, vx:0, vy:0,
-                     r:2.6+Math.random()*2.2, c:CATS[c], deg:1, hub:false });
+                     r:3+Math.random()*2.6, c:CATS[c], deg:1, hub:false });
         edges.push([hi, nodes.length-1]);
       }
       if (c>0) edges.push([0, hi]);
