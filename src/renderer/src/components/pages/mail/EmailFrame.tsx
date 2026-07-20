@@ -59,7 +59,11 @@ export default function EmailFrame({ html, plain }: { html: string; plain: strin
       )}
       <iframe
         title="email-body"
-        sandbox="allow-same-origin"
+        // allow-popups lets a link (rendered with <base target="_blank">) fire
+        // a new-window request, which the window-open handler turns into a new
+        // app tab. Without it the click was silently swallowed by the sandbox.
+        // Still no allow-scripts, so nothing in the email can run code.
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         srcDoc={srcDoc}
         onLoad={measure}
         style={{ width: '100%', height, border: 'none', background: '#fff', borderRadius: 8 }}
