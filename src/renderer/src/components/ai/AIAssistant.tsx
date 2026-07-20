@@ -5,7 +5,7 @@ import {
   Zap, Paperclip, Download, BookmarkPlus, Check, Newspaper, Square,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
-import { parseActionsBlock, describeAction, executeAction, AGENT_TOOLS_DOC } from '../../services/agentTools'
+import { parseActionsBlock, executeAction, AGENT_TOOLS_DOC } from '../../services/agentTools'
 import Markdown from './Markdown'
 
 interface Props {
@@ -33,7 +33,7 @@ const OPEN_PATTERNS   = [
 export default function AIAssistant({ currentUrl, currentTitle, getPageContent }: Props) {
   const {
     isAIPanelOpen, toggleAIPanel,
-    aiMessages, addAIMessage, clearAIMessages, setAIMessageStepStatus,
+    aiMessages, addAIMessage, clearAIMessages,
     isAILoading, setAILoading,
     ollamaStatus, setOllamaStatus,
     bookmarks, addTab,
@@ -287,25 +287,17 @@ Be concise, warm, and genuinely helpful.${pageCtx}${bookmarkCtx}${historyCtx}${A
           return
         }
 
-        const msgIndex = useBrowserStore.getState().aiMessages.length
-        addAIMessage({
-          role: 'assistant',
-          content: narration,
-          steps: actions.map(a => ({ label: describeAction(a), status: 'pending' as const })),
-        })
+        // Show only the model's prose (if any). The actions themselves run
+        // silently — no step chips, no tool names, no JSON — so the user sees
+        // the assistant do the work, never the machinery behind it.
+        if (narration) addAIMessage({ role: 'assistant', content: narration })
         loopHistory.push({ role: 'assistant', content: raw })
 
         const results: any[] = []
         for (let i = 0; i < actions.length; i++) {
-          if (stopRequestedRef.current) {
-            for (let j = i; j < actions.length; j++) {
-              setAIMessageStepStatus(msgIndex, j, 'error')
-            }
-            break
-          }
+          if (stopRequestedRef.current) break
           const res = await executeAction(actions[i], { getPageContent, confirmExec })
           actionsUsed++
-          setAIMessageStepStatus(msgIndex, i, res.error ? 'error' : 'done')
           results.push({ tool: actions[i].tool, ...res })
         }
 
@@ -584,18 +576,6 @@ Be concise, warm, and genuinely helpful.${pageCtx}${bookmarkCtx}${historyCtx}${A
                       {msg.content && (msg.role === 'assistant'
                         ? <Markdown content={msg.content} onNavigate={url => addTab(url, 'browser')} />
                         : <span>{msg.content}</span>)}
-                      {msg.steps && msg.steps.length > 0 && (
-                        <div style={{ marginTop: msg.content ? 8 : 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          {msg.steps.map((s, si) => (
-                            <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                              <span style={{ color: s.status === 'done' ? '#34d399' : s.status === 'error' ? '#f87171' : '#facc15', flexShrink: 0 }}>
-                                {s.status === 'done' ? '✓' : s.status === 'error' ? '✕' : '⏳'}
-                              </span>
-                              <span style={{ color: 'rgb(var(--ds-text-3))' }}>{s.label}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </motion.div>
                 ))}

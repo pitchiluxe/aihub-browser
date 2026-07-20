@@ -17,27 +17,42 @@ export interface ParsedResponse {
 
 const ACTIONS_MARKER = '###ACTIONS###'
 
+// Strip anything that looks like the machine protocol from user-facing text,
+// so the raw actions JSON, the marker, or a stray ```json fence never appear in
+// the chat. The user should only ever see prose, never the plumbing.
+function cleanNarration(text: string): string {
+  let out = text
+  // Everything from the marker onward is machine protocol — drop it.
+  const m = out.indexOf(ACTIONS_MARKER)
+  if (m !== -1) out = out.slice(0, m)
+  // A bare {"actions":[…]} object the model emitted without the marker.
+  out = out.replace(/\{\s*"actions"\s*:\s*\[[\s\S]*?\]\s*\}/g, '')
+  // Fenced code blocks that only contain such an object.
+  out = out.replace(/```(?:json)?\s*\{\s*"actions"[\s\S]*?```/gi, '')
+  return out.trim()
+}
+
 // Extracts a trailing `###ACTIONS###\n{"actions":[...]}` block from a raw
 // model response. Anything before the marker is the user-facing narration;
 // the block itself is parsed and stripped. A missing or malformed block
-// means "no actions this turn" — never throws.
+// means "no actions this turn" — never throws, and never leaks the JSON.
 export function parseActionsBlock(raw: string): ParsedResponse {
   const idx = raw.indexOf(ACTIONS_MARKER)
-  if (idx === -1) return { narration: raw.trim(), actions: null }
+  if (idx === -1) return { narration: cleanNarration(raw), actions: null }
 
-  const narration = raw.slice(0, idx).trim()
   let jsonPart = raw.slice(idx + ACTIONS_MARKER.length).trim()
   jsonPart = jsonPart.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
 
   try {
     const parsed = JSON.parse(jsonPart)
     if (Array.isArray(parsed?.actions)) {
-      return { narration, actions: parsed.actions }
+      return { narration: cleanNarration(raw), actions: parsed.actions }
     }
   } catch {
     // fall through — malformed JSON degrades to plain text, never crashes
   }
-  return { narration: raw.trim(), actions: null }
+  // Even on malformed JSON, strip the block so the raw JSON never shows.
+  return { narration: cleanNarration(raw), actions: null }
 }
 
 export function describeAction(a: ToolAction): string {

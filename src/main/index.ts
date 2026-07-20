@@ -700,6 +700,13 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
       nodeIntegration: false,
     },
   })
+  // Opaque white backing for tab content. The app window is transparent for
+  // Mica/acrylic glass, and a BrowserView inherits that transparency — so any
+  // site whose <body>/<html> has no background of its own (e.g. ollama.com's
+  // hero) let the desktop show through, making a light page look dark. Painting
+  // the view white first means those pages render on white, exactly as in
+  // Chrome, regardless of the app's own light/dark theme.
+  try { view.setBackgroundColor('#ffffff') } catch {}
   tabViews.set(tabId, view)
   const wc = view.webContents
   // Set the clean Chrome UA on this view before it loads anything, so no request
