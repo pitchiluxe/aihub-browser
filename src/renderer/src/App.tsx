@@ -123,6 +123,20 @@ export default function App() {
     }
   }, [activeTabId, updateTab, setNavState])
 
+  // ── Detached-window hand-off ───────────────────────────────────────────────
+  // A tab moved into its own window opens the full app with ?initialUrl=…, so
+  // the new window lands directly on that page instead of the home screen.
+  // Runs once, and reuses the starting tab rather than adding a second one.
+  const initialUrlDone = useRef(false)
+  useEffect(() => {
+    if (initialUrlDone.current || !activeTabId) return
+    let target = ''
+    try { target = new URLSearchParams(window.location.search).get('initialUrl') || '' } catch {}
+    if (!target || !/^https?:\/\//i.test(target)) return
+    initialUrlDone.current = true
+    navigate(target)
+  }, [activeTabId, navigate])
+
   // ── Special pages ──────────────────────────────────────────────────────────
   const openSpecialPage = useCallback((pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual') => {
     useBrowserStore.getState().addTab(`aihub://${pageType}`, pageType)

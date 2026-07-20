@@ -317,8 +317,59 @@ function extractLaunchUrl(argv: string[]): string | null {
 }
 let pendingOpenUrl: string | null = extractLaunchUrl(process.argv)
 
-// ── Window ─────────────────────────────────────────────────────────────────
+// ── Windows ────────────────────────────────────────────────────────────────
+// Every app window is a full browser: its own tab strip, sidebar, AI panel and
+// toolbar. Detaching a tab therefore opens another complete window rather than
+// a bare page, so all tab state has to be scoped per window instead of global.
+interface AppWin {
+  win: BrowserWindow
+  /** Tab content views owned by THIS window, keyed by renderer tabId */
+  views: Map<string, BrowserView>
+  activeId: string | null
+  bounds: { x: number; y: number; width: number; height: number }
+  /** True while a host HTML overlay (a modal) must paint above tab content */
+  overlayHidden: boolean
+}
+
+// Keyed by the window's own renderer webContents id, which is what arrives on
+// every IPC event as `e.sender.id`.
+const appWins = new Map<number, AppWin>()
+
+// The first window opened. Kept for things that are genuinely app-global —
+// the auto-updater and the OAuth flow — not for tab or chrome operations.
 let mainWindow: BrowserWindow
+
+/** The window that sent an IPC message. */
+function ctxFromEvent(e: { sender: Electron.WebContents }): AppWin | undefined {
+  return appWins.get(e.sender.id)
+}
+
+/** The window owning a webContents — either its renderer or one of its tabs. */
+function ctxOwning(wc: Electron.WebContents): AppWin | undefined {
+  const direct = appWins.get(wc.id)
+  if (direct) return direct
+  for (const ctx of appWins.values()) {
+    for (const v of ctx.views.values()) {
+      if (!v.webContents.isDestroyed() && v.webContents === wc) return ctx
+    }
+  }
+  return undefined
+}
+
+function winFrom(e: { sender: Electron.WebContents }): BrowserWindow | undefined {
+  return ctxFromEvent(e)?.win
+    ?? BrowserWindow.fromWebContents(e.sender)
+    ?? (mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined)
+}
+
+/** Send to one specific window. */
+function sendTo(ctx: AppWin | undefined, channel: string, ...args: any[]) {
+  try {
+    if (ctx && !ctx.win.isDestroyed() && !ctx.win.webContents.isDestroyed()) {
+      ctx.win.webContents.send(channel, ...args)
+    }
+  } catch {}
+}
 
 // Electron's default UA carries "aihub-browser/x" and "Electron/x" tokens
 // that make Google's sign-in reject the tab ("This browser or app may not be
@@ -363,12 +414,16 @@ const ALLOWED_PERMISSIONS = new Set([
 
 // Safe IPC sender — prevents "Render frame was disposed" crash when webContents
 // transitions (navigation, tab switch) happen just as a send is attempted.
+// Broadcast app-wide state (theme, VPN status, downloads, updates) to every
+// open window so they all stay in agreement.
 function safelySend(channel: string, ...args: any[]) {
-  try {
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-      mainWindow.webContents.send(channel, ...args)
-    }
-  } catch {}
+  for (const ctx of appWins.values()) {
+    try {
+      if (!ctx.win.isDestroyed() && ctx.win.webContents && !ctx.win.webContents.isDestroyed()) {
+        ctx.win.webContents.send(channel, ...args)
+      }
+    } catch {}
+  }
 }
 
 function applyTransparency(win: BrowserWindow, mode: string) {
@@ -427,8 +482,10 @@ function matchAppShortcut(input: Electron.Input): string | null {
 // resolve to: the view the key was typed into, or — when typed into the host
 // UI — the currently active tab's view.
 function resolvePageWc(wc: Electron.WebContents): Electron.WebContents | null {
-  for (const v of tabViews.values()) if (v.webContents === wc) return wc
-  return (activeTabViewId && tabViews.get(activeTabViewId)?.webContents) || null
+  const ctx = ctxOwning(wc)
+  if (!ctx) return null
+  for (const v of ctx.views.values()) if (v.webContents === wc) return wc
+  return (ctx.activeId && ctx.views.get(ctx.activeId)?.webContents) || null
 }
 
 function attachAppShortcuts(wc: Electron.WebContents) {
@@ -448,11 +505,12 @@ function attachAppShortcuts(wc: Electron.WebContents) {
     // Focusing the URL bar (and the find bar) needs keyboard focus back on the
     // host UI first — otherwise the input focuses but keys keep going to the
     // BrowserView.
-    if (action === 'focus-url' || action === 'find-in-page') mainWindow?.webContents.focus()
+    const ctx = ctxOwning(wc)
+    if (action === 'focus-url' || action === 'find-in-page') ctx?.win.webContents.focus()
     // Paste-and-Go carries the clipboard text with it so the renderer doesn't
     // need a separate clipboard round-trip.
-    if (action === 'paste-and-go') { safelySend('urlbar-paste-and-go', clipboard.readText().trim()); return }
-    safelySend('app-shortcut', action)
+    if (action === 'paste-and-go') { sendTo(ctx, 'urlbar-paste-and-go', clipboard.readText().trim()); return }
+    sendTo(ctx, 'app-shortcut', action)
   })
 }
 
@@ -460,7 +518,7 @@ function attachAppShortcuts(wc: Electron.WebContents) {
 // the focused host input directly; "Paste and Go" ships the clipboard text
 // back to the renderer, which navigates with the same smart URL/search logic
 // as pressing Enter.
-ipcMain.handle('urlbar:showContextMenu', (_e, hasText: boolean) => {
+ipcMain.handle('urlbar:showContextMenu', (e, hasText: boolean) => {
   const clip = clipboard.readText().trim()
   const menu = Menu.buildFromTemplate([
     { label: 'Cut',  role: 'cut',  enabled: hasText },
@@ -473,7 +531,7 @@ ipcMain.handle('urlbar:showContextMenu', (_e, hasText: boolean) => {
     { type: 'separator' },
     { label: 'Select All', role: 'selectAll' },
   ])
-  menu.popup({ window: mainWindow ?? undefined })
+  menu.popup({ window: winFrom(e) })
 })
 
 // Full page right-click menu. `opts.tabId` is set only for real browsing tabs
@@ -491,8 +549,9 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
     const sel = (params.selectionText || '').trim()
     const isImage = params.mediaType === 'image'
 
+    const menuCtx = ctxOwning(wc)
     const sendAction = (action: string, extra?: Record<string, any>) =>
-      safelySend('page-context-action', { action, tabId, url: pageUrl, selection: sel, ...extra })
+      sendTo(menuCtx, 'page-context-action', { action, tabId, url: pageUrl, selection: sel, ...extra })
 
     const menu = new Menu()
     const sep = () => { if (menu.items.length && menu.items[menu.items.length - 1].type !== 'separator') menu.append(new MenuItem({ type: 'separator' })) }
@@ -527,13 +586,13 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       sep()
       const short = sel.length > 24 ? sel.slice(0, 24) + '…' : sel
       menu.append(new MenuItem({ label: `Ask AI about “${short}”`, click: () => sendAction('ai', { selection: sel }) }))
-      menu.append(new MenuItem({ label: `Search Google for “${short}”`, click: () => safelySend('open-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(sel)}`) }))
+      menu.append(new MenuItem({ label: `Search Google for “${short}”`, click: () => sendTo(menuCtx, 'open-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(sel)}`) }))
     }
 
     // ── Link ──
     if (params.linkURL) {
       sep()
-      menu.append(new MenuItem({ label: 'Open Link in New Tab', click: () => safelySend('open-in-new-tab', params.linkURL) }))
+      menu.append(new MenuItem({ label: 'Open Link in New Tab', click: () => sendTo(menuCtx, 'open-in-new-tab', params.linkURL) }))
       menu.append(new MenuItem({ label: 'Open Link in New Window', click: () => { try { openDetachedWindow(params.linkURL) } catch {} } }))
       menu.append(new MenuItem({ label: 'Copy Link Address', click: () => clipboard.writeText(params.linkURL) }))
     }
@@ -544,7 +603,7 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       menu.append(new MenuItem({ label: 'Copy Image', click: () => { try { wc.copyImageAt(params.x, params.y) } catch {} } }))
       menu.append(new MenuItem({ label: 'Copy Image Address', click: () => clipboard.writeText(params.srcURL) }))
       menu.append(new MenuItem({ label: 'Save Image As…', click: () => { try { wc.downloadURL(params.srcURL) } catch {} } }))
-      menu.append(new MenuItem({ label: 'Open Image in New Tab', click: () => safelySend('open-in-new-tab', params.srcURL) }))
+      menu.append(new MenuItem({ label: 'Open Image in New Tab', click: () => sendTo(menuCtx, 'open-in-new-tab', params.srcURL) }))
     }
 
     // ── AIHub actions ──
@@ -574,7 +633,7 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
     sep()
     menu.append(new MenuItem({ label: 'Inspect Element', click: () => { try { wc.inspectElement(params.x, params.y) } catch {} } }))
 
-    if (menu.items.length > 0) menu.popup({ window: mainWindow })
+    if (menu.items.length > 0) menu.popup({ window: menuCtx?.win ?? mainWindow })
   })
 }
 
@@ -598,36 +657,32 @@ async function savePageAs(wc: Electron.WebContents) {
 // identical fix for the <webview> guest-viewport desync bug: the main process
 // owns sizing directly via setBounds(), so there's no GuestViewContainer
 // ResizeObserver/FrameMsg_Resize round-trip for window.innerHeight to lose sync with.
-const tabViews = new Map<string, BrowserView>()
-let activeTabViewId: string | null = null
-let tabViewBounds = { x: 0, y: 0, width: 0, height: 0 }
-let tabViewOverlayHidden = false // true while a host HTML overlay (modal) must render above tab content
-
-function sendTabEvent(tabId: string, type: string, payload?: any) {
-  safelySend('tabview:event', tabId, type, payload)
+function sendTabEvent(ctx: AppWin | undefined, tabId: string, type: string, payload?: any) {
+  sendTo(ctx, 'tabview:event', tabId, type, payload)
 }
 
-// BrowserView always paints above mainWindow's own webContents — there is no
+// BrowserView always paints above the window's own webContents — there is no
 // z-index control from the renderer side. Overlays that must appear above tab
 // content (e.g. AddBookmarkModal) call tabview:setOverlayHidden(true) to detach
 // the view instead.
-function syncActiveBrowserView() {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const view = (!tabViewOverlayHidden && activeTabViewId) ? tabViews.get(activeTabViewId) : undefined
-  const current = mainWindow.getBrowserView()
+function syncActiveBrowserView(ctx: AppWin | undefined) {
+  if (!ctx || ctx.win.isDestroyed()) return
+  const view = (!ctx.overlayHidden && ctx.activeId) ? ctx.views.get(ctx.activeId) : undefined
+  const current = ctx.win.getBrowserView()
   if (view) {
-    if (current !== view) mainWindow.setBrowserView(view)
+    if (current !== view) ctx.win.setBrowserView(view)
     view.setBounds({
-      x: Math.round(tabViewBounds.x), y: Math.round(tabViewBounds.y),
-      width: Math.max(0, Math.round(tabViewBounds.width)), height: Math.max(0, Math.round(tabViewBounds.height)),
+      x: Math.round(ctx.bounds.x), y: Math.round(ctx.bounds.y),
+      width: Math.max(0, Math.round(ctx.bounds.width)), height: Math.max(0, Math.round(ctx.bounds.height)),
     })
   } else if (current) {
-    mainWindow.setBrowserView(null)
+    ctx.win.setBrowserView(null)
   }
 }
 
-function createTabView(tabId: string, url: string) {
-  if (tabViews.has(tabId)) return
+function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
+  if (!ctx || ctx.views.has(tabId)) return
+  const tabViews = ctx.views
   const view = new BrowserView({
     webPreferences: {
       partition: 'persist:main',
@@ -654,7 +709,7 @@ function createTabView(tabId: string, url: string) {
 
   attachContextMenu(wc, { tabId })
   attachAppShortcuts(wc)
-  sendTabEvent(tabId, 'wc-id', { wcId: wc.id })
+  sendTabEvent(ctx, tabId, 'wc-id', { wcId: wc.id })
 
   // Scripted popups (window.open with features — OAuth flows like
   // "Sign in with Google" on TradingView) must open as real child windows:
@@ -677,7 +732,7 @@ function createTabView(tabId: string, url: string) {
       }
     }
     if (targetUrl && !targetUrl.startsWith('devtools://') && !targetUrl.startsWith('chrome-extension://')) {
-      safelySend('open-in-new-tab', targetUrl)
+      sendTo(ctx, 'open-in-new-tab', targetUrl)
     }
     return { action: 'deny' }
   })
@@ -694,25 +749,25 @@ function createTabView(tabId: string, url: string) {
         return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true } }
       }
       if (popupUrl && !popupUrl.startsWith('devtools://') && !popupUrl.startsWith('chrome-extension://')) {
-        safelySend('open-in-new-tab', popupUrl)
+        sendTo(ctx, 'open-in-new-tab', popupUrl)
       }
       return { action: 'deny' }
     })
   })
 
-  wc.on('did-navigate', (_e, navUrl) => sendTabEvent(tabId, 'did-navigate', { url: navUrl }))
-  wc.on('did-navigate-in-page', (_e, navUrl) => sendTabEvent(tabId, 'did-navigate-in-page', { url: navUrl }))
-  wc.on('did-start-loading', () => sendTabEvent(tabId, 'did-start-loading'))
+  wc.on('did-navigate', (_e, navUrl) => sendTabEvent(ctx, tabId, 'did-navigate', { url: navUrl }))
+  wc.on('did-navigate-in-page', (_e, navUrl) => sendTabEvent(ctx, tabId, 'did-navigate-in-page', { url: navUrl }))
+  wc.on('did-start-loading', () => sendTabEvent(ctx, tabId, 'did-start-loading'))
   wc.on('did-stop-loading', () => {
     let title = ''; let curUrl = ''
     try { title = wc.getTitle() } catch {}
     try { curUrl = wc.getURL() } catch {}
-    sendTabEvent(tabId, 'did-stop-loading', { title, url: curUrl })
+    sendTabEvent(ctx, tabId, 'did-stop-loading', { title, url: curUrl })
   })
-  wc.on('did-fail-load', (_e, errorCode) => { if (errorCode !== -3) sendTabEvent(tabId, 'did-fail-load', { errorCode }) })
-  wc.on('page-title-updated', (_e, title) => sendTabEvent(tabId, 'page-title-updated', { title }))
-  wc.on('page-favicon-updated', (_e, favicons) => sendTabEvent(tabId, 'page-favicon-updated', { favicons }))
-  wc.on('found-in-page', (_e, result) => sendTabEvent(tabId, 'found-in-page', {
+  wc.on('did-fail-load', (_e, errorCode) => { if (errorCode !== -3) sendTabEvent(ctx, tabId, 'did-fail-load', { errorCode }) })
+  wc.on('page-title-updated', (_e, title) => sendTabEvent(ctx, tabId, 'page-title-updated', { title }))
+  wc.on('page-favicon-updated', (_e, favicons) => sendTabEvent(ctx, tabId, 'page-favicon-updated', { favicons }))
+  wc.on('found-in-page', (_e, result) => sendTabEvent(ctx, tabId, 'found-in-page', {
     matches: result.matches, activeMatchOrdinal: result.activeMatchOrdinal, finalUpdate: result.finalUpdate,
   }))
 
@@ -725,72 +780,21 @@ function createTabView(tabId: string, url: string) {
   wc.loadURL(url)
 }
 
-function destroyTabView(tabId: string) {
-  const view = tabViews.get(tabId)
+function destroyTabView(ctx: AppWin | undefined, tabId: string) {
+  if (!ctx) return
+  const view = ctx.views.get(tabId)
   if (!view) return
-  if (activeTabViewId === tabId) { activeTabViewId = null; syncActiveBrowserView() }
-  try { mainWindow?.removeBrowserView(view) } catch {}
+  if (ctx.activeId === tabId) { ctx.activeId = null; syncActiveBrowserView(ctx) }
+  try { if (!ctx.win.isDestroyed()) ctx.win.removeBrowserView(view) } catch {}
   try { view.webContents.close() } catch {}
-  tabViews.delete(tabId)
+  ctx.views.delete(tabId)
 }
 
-function createWindow(): void {
-  // Render web pages in their natural (light) colors. Forcing 'dark' here made
-  // every site that honours prefers-color-scheme serve its dark variant, which
-  // users found dim and hard to read (e.g. sign-up pages showing near-black).
-  // The AIHub app UI itself is unaffected — its theme comes from CSS variables
-  // applied by applyThemeToDom(), not from this media query.
-  nativeTheme.themeSource = 'light'
-  const settings = getData().settings
-  const glassMode = settings.transparency !== 'none'
-
-  mainWindow = new BrowserWindow({
-    width: 1440, height: 900, minWidth: 900, minHeight: 600,
-    show: false, frame: false,
-    // macOS: keep the native traffic lights but inset them so they sit
-    // vertically centered inside the custom tab strip instead of floating
-    // over the tabs. Renderer reserves matching left padding (TabBar) and
-    // hides its own window buttons on darwin.
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 14, y: 12 } } : {}),
-    // Windows 11 native DWM rounded corners (no-op on older Windows/macOS)
-    roundedCorners: true,
-    // NOTE: never set transparent:true here — a transparent window drops the
-    // DWM frame entirely (square corners, no shadow) and conflicts with
-    // setBackgroundMaterial. Mica/acrylic only need the fully transparent
-    // backgroundColor to show through.
-    backgroundColor: glassMode ? '#00000000' : '#17182B',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false, webviewTag: false,
-      nodeIntegration: false, contextIsolation: true, webSecurity: false,
-    }
-  })
-
-  mainWindow.on('closed', () => {
-    tabViews.forEach(v => { try { v.webContents.close() } catch {} })
-    tabViews.clear()
-    activeTabViewId = null
-  })
-
-  applyTransparency(mainWindow, settings.transparency)
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
-    applyWindowOpacity(mainWindow, settings.windowOpacity ?? 1)
-    safelySend('theme:transparency', settings.transparency)
-  })
-
-  // F12 / Ctrl+Shift+I toggles DevTools in dev mode
-  mainWindow.webContents.on('before-input-event', (_e, input) => {
-    if (!isDev) return
-    if (input.type !== 'keyDown') return
-    const devKey = input.key === 'F12' || (input.control && input.shift && input.key === 'I')
-    if (devKey) {
-      if (mainWindow.webContents.isDevToolsOpened()) mainWindow.webContents.closeDevTools()
-      else mainWindow.webContents.openDevTools({ mode: 'detach' })
-    }
-  })
-
+// One-time app-wide setup: shared session config, download tracking and the
+// auto-updater. These are global concerns — running them per window would
+// stack duplicate listeners (and duplicate download entries).
+let sharedSetupDone = false
+function setupSharedApp(firstWin: BrowserWindow): void {
   // Configure the persist:main session used by all <webview partition="persist:main"> tags.
   const webviewSession = session.fromPartition('persist:main')
 
@@ -826,17 +830,6 @@ function createWindow(): void {
     }
     callback({ responseHeaders: headers })
   })
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url && !url.startsWith('devtools://') && !url.startsWith('chrome-extension://')) {
-      safelySend('open-in-new-tab', url)
-    }
-    return { action: 'deny' }
-  })
-
-  // ── Right-click context menu (copy / paste / cut / select-all) ──────────
-  attachContextMenu(mainWindow.webContents)
-  attachAppShortcuts(mainWindow.webContents)
 
   // ── Auto-update (GitHub Releases) — checks on startup + periodically and
   // notifies the renderer when a newer version is published. No-op in dev. ──
@@ -890,7 +883,7 @@ function createWindow(): void {
 
   // Attach to default session (covers webviews) + mainWindow session
   hookDownloadSession(session.defaultSession)
-  hookDownloadSession(mainWindow.webContents.session)
+  hookDownloadSession(firstWin.webContents.session)
 
   app.on('web-contents-created', (_e, wc) => {
     hookDownloadSession(wc.session)
@@ -901,18 +894,131 @@ function createWindow(): void {
     process.nextTick(() => { try { wc.setUserAgent(CHROME_UA) } catch {} })
   })
 
-  if (isDev && process.env['ELECTRON_RENDERER_URL']) mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  else mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+}
+
+// Creates a COMPLETE browser window — tab strip, sidebar, toolbar, AI panel,
+// VPN control, annotation, screenshot and recording all included. Used both for
+// the first window at launch and for every tab detached into its own window,
+// so a detached tab is indistinguishable from a freshly opened browser.
+function createAppWindow(initialUrl?: string): AppWin {
+  // Render web pages in their natural (light) colors. Forcing 'dark' here made
+  // every site that honours prefers-color-scheme serve its dark variant, which
+  // users found dim and hard to read (e.g. sign-up pages showing near-black).
+  // The AIHub app UI itself is unaffected — its theme comes from CSS variables
+  // applied by applyThemeToDom(), not from this media query.
+  nativeTheme.themeSource = 'light'
+  const settings = getData().settings
+  const glassMode = settings.transparency !== 'none'
+
+  // Cascade extra windows so a detached tab doesn't land exactly on top of the
+  // window it came from.
+  const offset = appWins.size * 28
+
+  const win = new BrowserWindow({
+    width: 1440, height: 900, minWidth: 900, minHeight: 600,
+    ...(offset ? { x: 60 + offset, y: 40 + offset } : {}),
+    show: false, frame: false,
+    // macOS: keep the native traffic lights but inset them so they sit
+    // vertically centered inside the custom tab strip instead of floating
+    // over the tabs. Renderer reserves matching left padding (TabBar) and
+    // hides its own window buttons on darwin.
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 14, y: 12 } } : {}),
+    // Windows 11 native DWM rounded corners (no-op on older Windows/macOS)
+    roundedCorners: true,
+    // NOTE: never set transparent:true here — a transparent window drops the
+    // DWM frame entirely (square corners, no shadow) and conflicts with
+    // setBackgroundMaterial. Mica/acrylic only need the fully transparent
+    // backgroundColor to show through.
+    backgroundColor: glassMode ? '#00000000' : '#17182B',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false, webviewTag: false,
+      nodeIntegration: false, contextIsolation: true, webSecurity: false,
+    }
+  })
+
+  const ctx: AppWin = {
+    win,
+    views: new Map(),
+    activeId: null,
+    bounds: { x: 0, y: 0, width: 0, height: 0 },
+    overlayHidden: false,
+  }
+  // Capture the id up front: by the time 'closed' fires the window is already
+  // destroyed and touching win.webContents throws "Object has been destroyed".
+  const winId = win.webContents.id
+  appWins.set(winId, ctx)
+  if (!mainWindow || mainWindow.isDestroyed()) mainWindow = win
+
+  win.on('closed', () => {
+    ctx.views.forEach(v => { try { v.webContents.close() } catch {} })
+    ctx.views.clear()
+    ctx.activeId = null
+    appWins.delete(winId)
+    // Keep mainWindow pointing at a window that still exists
+    if (mainWindow === win) {
+      const next = appWins.values().next()
+      mainWindow = next.done ? (undefined as unknown as BrowserWindow) : next.value.win
+    }
+  })
+
+  applyTransparency(win, settings.transparency)
+  win.on('ready-to-show', () => {
+    win.show()
+    applyWindowOpacity(win, settings.windowOpacity ?? 1)
+    sendTo(ctx, 'theme:transparency', settings.transparency)
+  })
+
+  // Keep the renderer's maximize button in sync when the OS changes the state
+  win.on('maximize',   () => sendTo(ctx, 'window:maximized', true))
+  win.on('unmaximize', () => sendTo(ctx, 'window:maximized', false))
+
+  // F12 / Ctrl+Shift+I toggles DevTools in dev mode
+  win.webContents.on('before-input-event', (_e, input) => {
+    if (!isDev) return
+    if (input.type !== 'keyDown') return
+    const devKey = input.key === 'F12' || (input.control && input.shift && input.key === 'I')
+    if (devKey) {
+      if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools()
+      else win.webContents.openDevTools({ mode: 'detach' })
+    }
+  })
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && !url.startsWith('devtools://') && !url.startsWith('chrome-extension://')) {
+      sendTo(ctx, 'open-in-new-tab', url)
+    }
+    return { action: 'deny' }
+  })
+
+  // ── Right-click context menu (copy / paste / cut / select-all) ──────────
+  attachContextMenu(win.webContents)
+  attachAppShortcuts(win.webContents)
+
+  if (!sharedSetupDone) { sharedSetupDone = true; setupSharedApp(win) }
+
+  // A detached tab arrives as ?initialUrl=… so the new window opens straight
+  // onto that page instead of the home screen.
+  const query = initialUrl ? `?initialUrl=${encodeURIComponent(initialUrl)}` : ''
+  if (isDev && process.env['ELECTRON_RENDERER_URL']) win.loadURL(process.env['ELECTRON_RENDERER_URL'] + query)
+  else win.loadFile(join(__dirname, '../renderer/index.html'), initialUrl ? { search: query } : undefined)
 
   // Flush a URL we were launched with (cold start as default browser) once the
   // renderer has actually mounted its 'open-in-new-tab' listener — sending any
   // earlier is a silent no-op since nothing is listening yet.
-  mainWindow.webContents.on('did-finish-load', () => {
+  win.webContents.on('did-finish-load', () => {
     if (pendingOpenUrl) {
-      safelySend('open-in-new-tab', pendingOpenUrl)
+      sendTo(ctx, 'open-in-new-tab', pendingOpenUrl)
       pendingOpenUrl = null
     }
   })
+
+  return ctx
+}
+
+function createWindow(): void {
+  createAppWindow()
 
   // Background AI recommendation refresh
   setTimeout(async () => {
@@ -1133,7 +1239,7 @@ ipcMain.handle('vpn:freeCancel', () => { freeVpnCancelled = true; return { succe
 // above host HTML, so an HTML dropdown hanging below the bar is invisible
 // behind the page (same reason the tab menu is native).
 // Resolves with 'connect:<CC>', 'disconnect', or '' when dismissed.
-ipcMain.handle('vpn:showMenu', (_e, countries: { cc: string; name: string }[]) => {
+ipcMain.handle('vpn:showMenu', (e, countries: { cc: string; name: string }[]) => {
   return new Promise<string>((resolve) => {
     let resolved = false
     const done = (v: string) => { if (!resolved) { resolved = true; resolve(v) } }
@@ -1167,7 +1273,7 @@ ipcMain.handle('vpn:showMenu', (_e, countries: { cc: string; name: string }[]) =
 
     const menu = Menu.buildFromTemplate(items)
     // callback also fires on dismiss — defer so a real click wins the race
-    menu.popup({ window: mainWindow ?? undefined, callback: () => setTimeout(() => done(''), 0) })
+    menu.popup({ window: winFrom(e), callback: () => setTimeout(() => done(''), 0) })
   })
 })
 
@@ -1209,34 +1315,17 @@ ipcMain.handle('vpn:getIp', async () => {
 })
 
 // ── IPC: Window ────────────────────────────────────────────────────────────
-ipcMain.handle('window:minimize',    () => mainWindow?.minimize())
-ipcMain.handle('window:maximize',    () => { mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow?.maximize() })
-ipcMain.handle('window:close',       () => mainWindow?.close())
-ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized())
+ipcMain.handle('window:minimize',    (e) => winFrom(e)?.minimize())
+ipcMain.handle('window:maximize',    (e) => { const w = winFrom(e); if (!w) return; w.isMaximized() ? w.unmaximize() : w.maximize() })
+ipcMain.handle('window:close',       (e) => winFrom(e)?.close())
+ipcMain.handle('window:isMaximized', (e) => !!winFrom(e)?.isMaximized())
 
-// Detach a page into its own standalone window — drag a tab out of the strip
-// or use the tab context menu. The new window is a plain framed window the
-// user can move to another monitor.
-function openDetachedWindow(url: string, title?: string) {
-  const win = new BrowserWindow({
-    width: 1100, height: 760, autoHideMenuBar: true, title: title || 'AIHub Browser',
-    webPreferences: {
-      partition: 'persist:main',
-      contextIsolation: true,
-      webSecurity: true,
-      nodeIntegration: false,
-    },
-  })
-  const wc = win.webContents
-  try { wc.setUserAgent(CHROME_UA) } catch {}
-  attachContextMenu(wc)
-  attachAppShortcuts(wc)
-  wc.setWindowOpenHandler(({ url: targetUrl }) => {
-    if (targetUrl && !targetUrl.startsWith('devtools://')) safelySend('open-in-new-tab', targetUrl)
-    return { action: 'deny' }
-  })
-  win.loadURL(url)
-  return win
+// Detach a page into its own window — drag a tab out of the strip, use the tab
+// context menu, or "Open Link in New Window". The result is a COMPLETE browser
+// window (tab strip, sidebar, toolbar, AI panel, VPN, annotation, screenshot,
+// recording), identical to launching the app fresh, just opened on this page.
+function openDetachedWindow(url: string, _title?: string) {
+  return createAppWindow(url).win
 }
 
 ipcMain.handle('window:detachTab', (_e, url: string, title?: string) => {
@@ -1251,11 +1340,11 @@ ipcMain.handle('window:detachTab', (_e, url: string, title?: string) => {
 // Native menu — an HTML menu in the tab strip would be clipped by the 40px
 // bar and painted over by the active tab's BrowserView. Resolves with the
 // chosen action id, or '' if dismissed.
-ipcMain.handle('tabs:showContextMenu', (_e, info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number }) => {
+ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number }) => {
   return new Promise<string>((resolve) => {
     let resolved = false
     const done = (action: string) => { if (!resolved) { resolved = true; resolve(action) } }
-    const tabWc = info.tabId ? tabViews.get(info.tabId)?.webContents : undefined
+    const tabWc = info.tabId ? ctxFromEvent(e)?.views.get(info.tabId)?.webContents : undefined
     let muted = false
     try { muted = !!tabWc?.isAudioMuted() } catch {}
     const menu = Menu.buildFromTemplate([
@@ -1278,78 +1367,82 @@ ipcMain.handle('tabs:showContextMenu', (_e, info: { tabId?: string; isBrowser: b
       { label: 'Close Tabs to the Right', enabled: info.hasRight,  click: () => done('close-right') },
     ])
     // callback fires on dismiss too; defer so a click handler wins the race
-    menu.popup({ window: mainWindow ?? undefined, callback: () => setTimeout(() => done(''), 0) })
+    menu.popup({ window: winFrom(e), callback: () => setTimeout(() => done(''), 0) })
   })
 })
-ipcMain.handle('window:setTransparency', (_e, mode: string) => {
+ipcMain.handle('window:setTransparency', (e, mode: string) => {
   const d = getData(); d.settings.transparency = mode; saveData()
-  if (mainWindow) {
-    applyTransparency(mainWindow, mode)
+  const w = winFrom(e)
+  if (w) {
+    applyTransparency(w, mode)
     safelySend('theme:transparency', mode)
   }
 })
-ipcMain.handle('window:setOpacity', (_e, opacity: number) => {
+ipcMain.handle('window:setOpacity', (e, opacity: number) => {
   const d = getData(); d.settings.windowOpacity = opacity; saveData()
-  if (mainWindow) applyWindowOpacity(mainWindow, opacity)
+  const w = winFrom(e); if (w) applyWindowOpacity(w, opacity)
 })
 
 registerGoogleIpc(safelySend)
 
 // ── IPC: Tab content views (BrowserView) ────────────────────────────────────
-ipcMain.handle('tabview:create', (_e, tabId: string, url: string) => createTabView(tabId, url))
-ipcMain.handle('tabview:destroy', (_e, tabId: string) => destroyTabView(tabId))
-ipcMain.handle('tabview:setActive', (_e, tabId: string | null) => {
-  activeTabViewId = tabId
-  syncActiveBrowserView()
+ipcMain.handle('tabview:create', (e, tabId: string, url: string) => createTabView(ctxFromEvent(e), tabId, url))
+ipcMain.handle('tabview:destroy', (e, tabId: string) => destroyTabView(ctxFromEvent(e), tabId))
+ipcMain.handle('tabview:setActive', (e, tabId: string | null) => {
+  const ctx = ctxFromEvent(e); if (!ctx) return
+  ctx.activeId = tabId
+  syncActiveBrowserView(ctx)
 })
-ipcMain.handle('tabview:setBounds', (_e, bounds: { x: number; y: number; width: number; height: number }) => {
-  tabViewBounds = bounds
-  syncActiveBrowserView()
+ipcMain.handle('tabview:setBounds', (e, bounds: { x: number; y: number; width: number; height: number }) => {
+  const ctx = ctxFromEvent(e); if (!ctx) return
+  ctx.bounds = bounds
+  syncActiveBrowserView(ctx)
 })
-ipcMain.handle('tabview:setOverlayHidden', (_e, hidden: boolean) => {
-  tabViewOverlayHidden = hidden
-  syncActiveBrowserView()
+ipcMain.handle('tabview:setOverlayHidden', (e, hidden: boolean) => {
+  const ctx = ctxFromEvent(e); if (!ctx) return
+  ctx.overlayHidden = hidden
+  syncActiveBrowserView(ctx)
 })
-ipcMain.handle('tabview:navigate', (_e, tabId: string, url: string) => {
-  try { tabViews.get(tabId)?.webContents.loadURL(url) } catch {}
+ipcMain.handle('tabview:navigate', (e, tabId: string, url: string) => {
+  try { ctxFromEvent(e)?.views.get(tabId)?.webContents.loadURL(url) } catch {}
 })
-ipcMain.handle('tabview:goBack', (_e, tabId: string) => {
-  const wc = tabViews.get(tabId)?.webContents
+ipcMain.handle('tabview:goBack', (e, tabId: string) => {
+  const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
   try { if (wc?.canGoBack()) wc.goBack() } catch {}
 })
-ipcMain.handle('tabview:goForward', (_e, tabId: string) => {
-  const wc = tabViews.get(tabId)?.webContents
+ipcMain.handle('tabview:goForward', (e, tabId: string) => {
+  const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
   try { if (wc?.canGoForward()) wc.goForward() } catch {}
 })
-ipcMain.handle('tabview:reload', (_e, tabId: string) => {
-  try { tabViews.get(tabId)?.webContents.reload() } catch {}
+ipcMain.handle('tabview:reload', (e, tabId: string) => {
+  try { ctxFromEvent(e)?.views.get(tabId)?.webContents.reload() } catch {}
 })
-ipcMain.handle('tabview:getNavState', (_e, tabId: string) => {
-  const wc = tabViews.get(tabId)?.webContents
+ipcMain.handle('tabview:getNavState', (e, tabId: string) => {
+  const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
   try { return { canGoBack: wc?.canGoBack() ?? false, canGoForward: wc?.canGoForward() ?? false } }
   catch { return { canGoBack: false, canGoForward: false } }
 })
 // Runs a script inside a tab's page and returns its completion value — the
 // agent layer uses this to read pages and drive forms (fill fields, click).
 // userGesture=true so synthesized clicks count as real user interaction.
-ipcMain.handle('tabview:find', (_e, tabId: string, text: string, forward?: boolean, findNext?: boolean) => {
-  const wc = tabViews.get(tabId)?.webContents
+ipcMain.handle('tabview:find', (e, tabId: string, text: string, forward?: boolean, findNext?: boolean) => {
+  const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
   if (!wc || !text) return
   try { wc.findInPage(text, { forward: forward !== false, findNext: !!findNext }) } catch {}
 })
-ipcMain.handle('tabview:stopFind', (_e, tabId: string, action?: 'clearSelection' | 'keepSelection' | 'activateSelection') => {
-  try { tabViews.get(tabId)?.webContents.stopFindInPage(action || 'clearSelection') } catch {}
+ipcMain.handle('tabview:stopFind', (e, tabId: string, action?: 'clearSelection' | 'keepSelection' | 'activateSelection') => {
+  try { ctxFromEvent(e)?.views.get(tabId)?.webContents.stopFindInPage(action || 'clearSelection') } catch {}
 })
-ipcMain.handle('tabview:zoom', (_e, tabId: string, dir: 'in' | 'out' | 'reset') => {
-  const wc = tabViews.get(tabId)?.webContents
+ipcMain.handle('tabview:zoom', (e, tabId: string, dir: 'in' | 'out' | 'reset') => {
+  const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
   if (!wc) return
   try {
     if (dir === 'reset') wc.setZoomLevel(0)
     else wc.setZoomLevel(Math.max(-7, Math.min(8, wc.getZoomLevel() + (dir === 'in' ? 0.5 : -0.5))))
   } catch {}
 })
-ipcMain.handle('tabview:execJs', async (_e, tabId: string, script: string) => {
-  const wc = tabViews.get(tabId)?.webContents
+ipcMain.handle('tabview:execJs', async (e, tabId: string, script: string) => {
+  const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
   if (!wc || wc.isDestroyed()) return { error: 'tab not found — it may be a home/app tab, not a web page' }
   try {
     const result = await wc.executeJavaScript(script, true)
@@ -2391,8 +2484,8 @@ ipcMain.handle('file:saveZip', async (_e, { filename, files }: { filename?: stri
 // directly as chromeMediaSourceId in a renderer-side getUserMedia call,
 // scoped to this app's own window — no desktopCapturer.getSources() call or
 // OS screen-picker permission dance needed for capturing our own window.
-ipcMain.handle('recorder:getSourceId', () => {
-  try { return mainWindow.getMediaSourceId() } catch { return null }
+ipcMain.handle('recorder:getSourceId', (e) => {
+  try { return (winFrom(e) ?? mainWindow).getMediaSourceId() } catch { return null }
 })
 
 // ── IPC: Live AI news from Hacker News ────────────────────────────────────
