@@ -97,13 +97,15 @@
   /* ─── Hero ───────────────────────────────────────────────────────────── */
   .hero{position:relative; border-radius:20px; overflow:hidden; background:var(--canvas-bg);
         margin:20px 0 8px; border:1px solid var(--line)}
-  .hero canvas{display:block; width:100%; height:340px}
-  @media (max-width:640px){ .hero canvas{height:260px} }
-  .hero-copy{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center;
-             padding:clamp(22px,4.5vw,48px); pointer-events:none;
+  /* Canvas is a background layer; the copy sits in normal flow and decides
+     the hero's height, so the eyebrow and button can never be clipped. */
+  .hero canvas{position:absolute; inset:0; display:block; width:100%; height:100%}
+  .hero-copy{position:relative; display:flex; flex-direction:column; justify-content:center;
+             padding:clamp(26px,4.5vw,48px); pointer-events:none;
+             min-height:340px;
              /* leave the right band clear for the constellation */
              max-width:62%}
-  @media (max-width:640px){ .hero-copy{max-width:74%} }
+  @media (max-width:640px){ .hero-copy{max-width:74%; min-height:300px} }
   .hero-copy h1{color:#F2F0FF; max-width:15ch;
     text-shadow:0 2px 30px rgba(10,13,24,.95), 0 1px 4px rgba(10,13,24,.9)}
   .hero-copy .eyebrow{color:#9C8BFF; margin-bottom:14px}

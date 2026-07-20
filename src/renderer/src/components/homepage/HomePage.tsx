@@ -11,6 +11,8 @@ import { loadBookmarks, removeBookmark } from '../../services/bookmarkService'
 import SearchBar from './SearchBar'
 import AddBookmarkModal from './AddBookmarkModal'
 import { useTheme } from '../../hooks/useTheme'
+import { getHoliday, holidayThemeEnabled } from '../../services/holidayService'
+import HolidayLayer from './HolidayLayer'
 
 // Code-split: the sphere pulls in d3 (~100KB+) — load it only when opened
 const BookmarkSphere = React.lazy(() => import('./BookmarkSphere'))
@@ -51,6 +53,13 @@ export default function HomePage({ onNavigate }: Props) {
     const h = new Date().getHours()
     setGreeting(h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening')
   }, [])
+
+  // Seasonal look — recomputed whenever the clock rolls over a day, so the
+  // homepage dresses itself without a restart.
+  const holiday = React.useMemo(
+    () => (holidayThemeEnabled() ? getHoliday(time) : null),
+    [time.getFullYear(), time.getMonth(), time.getDate()],
+  )
 
   useEffect(() => {
     loadBookmarks().then(setBookmarks)
@@ -135,25 +144,36 @@ export default function HomePage({ onNavigate }: Props) {
     <div className="relative flex flex-col h-full overflow-hidden"
       style={{ background: 'linear-gradient(160deg, rgb(var(--ds-bg)) 0%, rgb(var(--ds-bg-3)) 100%)' }}>
 
-      {/* ── Aurora background orbs ── */}
+      {/* ── Aurora background orbs — tinted by the day's holiday ── */}
       {!isLight && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
-          {/* Purple main orb */}
+          {/* Main orb */}
           <div className="aurora-orb-1 absolute rounded-full"
-            style={{ width: 700, height: 450, top: '-100px', left: '5%', background: 'radial-gradient(ellipse, rgb(var(--ds-accent) / 0.18) 0%, rgb(var(--ds-accent) / 0.05) 50%, transparent 70%)', filter: 'blur(50px)' }} />
-          {/* Soft violet orb */}
+            style={{ width: 700, height: 450, top: '-100px', left: '5%', background: holiday
+              ? `radial-gradient(ellipse, ${holiday.colors[0]}33 0%, ${holiday.colors[0]}0d 50%, transparent 70%)`
+              : 'radial-gradient(ellipse, rgb(var(--ds-accent) / 0.18) 0%, rgb(var(--ds-accent) / 0.05) 50%, transparent 70%)', filter: 'blur(50px)' }} />
+          {/* Secondary orb */}
           <div className="aurora-orb-2 absolute rounded-full"
-            style={{ width: 500, height: 380, top: '25%', right: '0%', background: 'radial-gradient(ellipse, rgb(var(--ds-accent-soft) / 0.10) 0%, transparent 70%)', filter: 'blur(60px)' }} />
-          {/* Indigo accent at bottom */}
+            style={{ width: 500, height: 380, top: '25%', right: '0%', background: holiday
+              ? `radial-gradient(ellipse, ${holiday.colors[1]}26 0%, transparent 70%)`
+              : 'radial-gradient(ellipse, rgb(var(--ds-accent-soft) / 0.10) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+          {/* Bottom accent */}
           <div className="aurora-orb-3 absolute rounded-full"
-            style={{ width: 450, height: 320, bottom: '5%', left: '20%', background: 'radial-gradient(ellipse, rgb(var(--ds-accent) / 0.08) 0%, rgba(194,175,255,0.04) 50%, transparent 70%)', filter: 'blur(70px)' }} />
+            style={{ width: 450, height: 320, bottom: '5%', left: '20%', background: holiday
+              ? `radial-gradient(ellipse, ${holiday.colors[1]}1f 0%, ${holiday.colors[0]}0f 50%, transparent 70%)`
+              : 'radial-gradient(ellipse, rgb(var(--ds-accent) / 0.08) 0%, rgba(194,175,255,0.04) 50%, transparent 70%)', filter: 'blur(70px)' }} />
           {/* Subtle dot grid */}
           <div className="absolute inset-0" style={{
-            backgroundImage: 'radial-gradient(rgb(var(--ds-accent) / 0.06) 1px, transparent 1px)',
+            backgroundImage: holiday
+              ? `radial-gradient(${holiday.colors[0]}12 1px, transparent 1px)`
+              : 'radial-gradient(rgb(var(--ds-accent) / 0.06) 1px, transparent 1px)',
             backgroundSize: '32px 32px',
           }} />
         </div>
       )}
+
+      {/* Drifting holiday glyphs — behind all content, never clickable */}
+      {holiday && <HolidayLayer holiday={holiday} />}
 
       <div className="relative flex flex-col h-full overflow-y-auto" style={{ zIndex: 1 }}>
 
@@ -162,12 +182,39 @@ export default function HomePage({ onNavigate }: Props) {
           <motion.div className="text-center mb-1"
             initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <div className={`font-extralight tracking-tight tabular-nums ${isLight ? 'text-slate-800' : 'text-white'}`}
-              style={{ fontSize: 72, lineHeight: 1, textShadow: isLight ? 'none' : '0 0 40px rgb(var(--ds-accent) / 0.30), 0 0 80px rgb(var(--ds-accent) / 0.12)' }}>
+              style={{
+                fontSize: 72, lineHeight: 1,
+                textShadow: isLight ? 'none'
+                  : holiday
+                    ? `0 0 40px ${holiday.colors[0]}59, 0 0 80px ${holiday.colors[1]}26`
+                    : '0 0 40px rgb(var(--ds-accent) / 0.30), 0 0 80px rgb(var(--ds-accent) / 0.12)',
+              }}>
               {timeStr}
             </div>
             <div className={`text-xs mt-2 font-medium tracking-wide ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
-              {greeting} &nbsp;·&nbsp; {dateStr}
+              {holiday?.greeting || greeting} &nbsp;·&nbsp; {dateStr}
             </div>
+
+            {/* Which holiday it is today */}
+            {holiday && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
+                className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1 rounded-full"
+                style={{
+                  background: `${holiday.colors[0]}1f`,
+                  border: `1px solid ${holiday.colors[0]}4d`,
+                  boxShadow: `0 0 18px ${holiday.colors[0]}26`,
+                }}
+              >
+                <span style={{ fontSize: 12, lineHeight: 1 }}>{holiday.emoji}</span>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+                  color: isLight ? '#334155' : holiday.colors[0],
+                }}>
+                  {holiday.name}
+                </span>
+              </motion.div>
+            )}
           </motion.div>
 
           {/* Search */}
