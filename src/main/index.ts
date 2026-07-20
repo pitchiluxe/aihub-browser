@@ -1017,6 +1017,12 @@ let vpnActive: {
 
 ipcMain.handle('vpn:getStatus', () => ({ connected: !!vpnActive, config: vpnActive }))
 
+// Push VPN state to the renderer so the toolbar indicator stays truthful no
+// matter which surface (toolbar or VPN page) made the change.
+function broadcastVpnState() {
+  safelySend('vpn:state', { connected: !!vpnActive, config: vpnActive })
+}
+
 // ── Free VPN engine ────────────────────────────────────────────────────────
 // Community proxy lists (no account, no API key). We pull candidates for the
 // requested country from two independent public sources, then verify each one
@@ -1104,6 +1110,7 @@ ipcMain.handle('vpn:freeConnect', async (_e, cc: string, countryName?: string) =
           protocol: u.protocol.replace(':', ''), host: u.hostname, port: Number(u.port),
           free: true, countryCode: cc, countryName: label,
         }
+        broadcastVpnState()
         return { success: true, ip: winner.ip, proxy: winner.rule }
       }
     }
@@ -1123,6 +1130,7 @@ ipcMain.handle('vpn:setProxy', async (_e, cfg: { protocol: string; host: string;
     rules += `${cfg.host}:${cfg.port}`
     await session.defaultSession.setProxy({ proxyRules: rules })
     vpnActive = cfg
+    broadcastVpnState()
     return { success: true }
   } catch (e: any) { return { success: false, error: e.message } }
 })
@@ -1131,6 +1139,7 @@ ipcMain.handle('vpn:clearProxy', async () => {
   try {
     await session.defaultSession.setProxy({ mode: 'direct' })
     vpnActive = null
+    broadcastVpnState()
     return { success: true }
   } catch (e: any) { return { success: false, error: e.message } }
 })

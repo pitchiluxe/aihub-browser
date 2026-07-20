@@ -145,6 +145,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('vpn:freeProgress', handler)
       return () => ipcRenderer.removeListener('vpn:freeProgress', handler)
     },
+    onState: (cb: (s: { connected: boolean; config: any }) => void) => {
+      const handler = (_e: any, s: any) => cb(s)
+      ipcRenderer.on('vpn:state', handler)
+      return () => ipcRenderer.removeListener('vpn:state', handler)
+    },
   },
   app: {
     isDefaultBrowser:  () => ipcRenderer.invoke('app:isDefaultBrowser'),

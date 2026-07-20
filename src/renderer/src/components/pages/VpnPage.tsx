@@ -5,21 +5,9 @@ import {
   Wifi, X, ChevronDown, ChevronRight, Zap,
 } from 'lucide-react'
 
-// ── Free VPN countries ────────────────────────────────────────────────────────
-interface FreeCountry { cc: string; name: string; flag: string }
-
-const FREE_COUNTRIES: FreeCountry[] = [
-  { cc: 'FR', name: 'France',         flag: '🇫🇷' },
-  { cc: 'BE', name: 'Belgium',        flag: '🇧🇪' },
-  { cc: 'CA', name: 'Canada',         flag: '🇨🇦' },
-  { cc: 'US', name: 'United States',  flag: '🇺🇸' },
-  { cc: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
-  { cc: 'DE', name: 'Germany',        flag: '🇩🇪' },
-  { cc: 'NL', name: 'Netherlands',    flag: '🇳🇱' },
-  { cc: 'JP', name: 'Japan',          flag: '🇯🇵' },
-]
-
-const flagFor = (cc?: string) => FREE_COUNTRIES.find(c => c.cc === cc)?.flag || '🌍'
+// Country list is shared with the toolbar quick-toggle (VpnButton) so the two
+// can never drift apart.
+import { FREE_COUNTRIES, FreeCountry, flagFor, rememberCountry } from '../../services/vpnCountries'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface VpnProfile {
@@ -126,6 +114,7 @@ export default function VpnPage() {
         setConnected(true)
         setActiveFree({ cc: c.cc, name: c.name, flag: c.flag, proxy: r.proxy })
         setActiveProfile(null)
+        rememberCountry(c)
         setSuccess(`Connected — you now browse from ${c.flag} ${c.name}`)
         setTimeout(() => setSuccess(''), 5000)
         setTimeout(fetchIp, 1200)

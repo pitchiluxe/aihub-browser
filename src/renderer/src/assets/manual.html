@@ -100,7 +100,10 @@
   .hero canvas{display:block; width:100%; height:340px}
   @media (max-width:640px){ .hero canvas{height:260px} }
   .hero-copy{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center;
-             padding:clamp(22px,4.5vw,48px); pointer-events:none}
+             padding:clamp(22px,4.5vw,48px); pointer-events:none;
+             /* leave the right band clear for the constellation */
+             max-width:62%}
+  @media (max-width:640px){ .hero-copy{max-width:74%} }
   .hero-copy h1{color:#F2F0FF; max-width:15ch;
     text-shadow:0 2px 30px rgba(10,13,24,.95), 0 1px 4px rgba(10,13,24,.9)}
   .hero-copy .eyebrow{color:#9C8BFF; margin-bottom:14px}
@@ -990,6 +993,9 @@
   const CATS = ['#7C5CFF','#38BDF8','#34D399','#FBBF24','#FB7185','#A78BFA'];
   let W=0, H=0, dpr=Math.min(window.devicePixelRatio||1, 2);
   let nodes=[], edges=[];
+  // The graph lives in the empty dark band on the right so it never sits
+  // under the headline. GX/GY is its gravitational centre, not the canvas'.
+  let GX=0, GY=0, SPREAD=0;
 
   function build(){
     const rect = cv.getBoundingClientRect();
@@ -997,17 +1003,20 @@
     cv.width = W*dpr; cv.height = H*dpr;
     ctx.setTransform(dpr,0,0,dpr,0,0);
 
+    GX = W * 0.79; GY = H * 0.5;
+    SPREAD = Math.min(W * 0.15, H * 0.29);
+
     nodes = []; edges = [];
     const clusters = 6, per = 7;
     for (let c=0;c<clusters;c++){
       const ang = (c/clusters)*Math.PI*2 - Math.PI/2;
-      const cxp = W/2 + Math.cos(ang)*Math.min(W,H)*0.29;
-      const cyp = H/2 + Math.sin(ang)*Math.min(W,H)*0.26;
+      const cxp = GX + Math.cos(ang)*SPREAD;
+      const cyp = GY + Math.sin(ang)*SPREAD*0.95;
       const hub = { x:cxp, y:cyp, vx:0, vy:0, r:7.5, c:CATS[c], deg:per, hub:true };
       nodes.push(hub);
       const hi = nodes.length-1;
       for (let i=0;i<per;i++){
-        const a2 = Math.random()*Math.PI*2, d2 = 26+Math.random()*40;
+        const a2 = Math.random()*Math.PI*2, d2 = 20+Math.random()*30;
         nodes.push({ x:cxp+Math.cos(a2)*d2, y:cyp+Math.sin(a2)*d2, vx:0, vy:0,
                      r:2.6+Math.random()*2.2, c:CATS[c], deg:1, hub:false });
         edges.push([hi, nodes.length-1]);
@@ -1051,7 +1060,7 @@
       }
     }
     for (const n of nodes){
-      n.vx += (W/2-n.x)*0.00035; n.vy += (H/2-n.y)*0.00035;
+      n.vx += (GX-n.x)*0.00045; n.vy += (GY-n.y)*0.00045;
       n.vx*=0.86; n.vy*=0.86; n.x+=n.vx; n.y+=n.vy;
     }
   }

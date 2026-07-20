@@ -6,6 +6,7 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import { addBookmarkWithAI } from '../../services/bookmarkService'
+import VpnButton from './VpnButton'
 
 interface Props {
   onNavigate: (url: string) => void
@@ -387,6 +388,9 @@ export default function NavigationBar({
             <Video size={13} />
           </NavBtn>
         )}
+
+        {/* VPN quick-toggle — green while protected, right-click to switch country */}
+        <VpnButton />
 
         {/* AI assistant button — purple accent — opens the full docked panel */}
         <AIButton onClick={toggleAIPanel} active={isAIPanelOpen} />
