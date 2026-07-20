@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState, memo } from 'react'
 import * as d3 from 'd3'
-import { Search, X, ZoomIn, ZoomOut, ChevronLeft, Maximize2 } from 'lucide-react'
+import { Search, X, ZoomIn, ZoomOut, ChevronLeft, Maximize2, Play, Square, Crosshair, RefreshCw } from 'lucide-react'
 import { Bookmark } from '../../store/browserStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -200,6 +200,13 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   const camAnimRef    = useRef<{ from: { x: number; y: number; k: number }; to: { x: number; y: number; k: number }; t0: number; dur: number } | null>(null)
   const cleanupRef    = useRef<(() => void) | null>(null)
   const queryRef      = useRef('')
+  // Timelapse — replays how the graph built itself, revealing nodes hub-first.
+  // While active only visibleSetRef members are drawn; each newly revealed node
+  // gets a pop-in entry in animMapRef (same spring the entrance cascade uses).
+  const tlModeRef     = useRef(false)
+  const tlVisibleRef  = useRef<Set<string>>(new Set())
+  const tlTimerRef    = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tlIdxRef      = useRef(0)
 
   const themeRef = useRef<SphereTheme>(readSphereTheme())
   const [sphereTheme, setSphereTheme] = useState<SphereTheme>(themeRef.current)
@@ -220,6 +227,8 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   const [selNode,       setSelNode]       = useState<ExtNode | null>(null)
   const [searchQuery,   setSearchQuery]   = useState('')
   const [searchOpen,    setSearchOpen]    = useState(false)
+  const [tlPlaying,     setTlPlaying]     = useState(false)
+  const [tlProgress,    setTlProgress]    = useState(0)
 
   useEffect(() => { queryRef.current = searchQuery }, [searchQuery])
 
@@ -317,6 +326,8 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       const src = l.source as ExtNode
       const tgt = l.target as ExtNode
       if (src.x == null || tgt.x == null) continue
+      // Timelapse: an edge only exists once BOTH its endpoints have been revealed
+      if (tlModeRef.current && (!tlVisibleRef.current.has(src.id) || !tlVisibleRef.current.has(tgt.id))) continue
 
       const touching  = selId && (src.id === selId || tgt.id === selId)
       const srcMatch  = !matchSet || matchSet.has(src.id)
@@ -374,6 +385,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     // ── Nodes ────────────────────────────────────────────────────────────
     for (let ni = 0; ni < nodes.length; ni++) {
       const node    = nodes[ni]
+      if (tlModeRef.current && !tlVisibleRef.current.has(node.id)) continue
       const nx      = node.x ?? 0
       const ny      = node.y ?? 0
       const r       = nodeRadius(node.size)
@@ -475,6 +487,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       ctx.textAlign = 'center'
 
       for (const node of nodes) {
+        if (tlModeRef.current && !tlVisibleRef.current.has(node.id)) continue
         const isHub   = node.connections >= HUB_THRESHOLD
         if (k < LABEL_ZOOM && !isHub) continue
         const isConn  = connSet  ? connSet.has(node.id)  : true
@@ -564,6 +577,63 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     setZoom(k)
   }, [])
 
+  // ── Timelapse ─────────────────────────────────────────────────────────────
+  // Replays the graph's construction: hubs first, then their satellites, each
+  // node popping in on the same back-out spring as the entrance cascade. The
+  // simulation is nudged on every reveal so the layout visibly reflows as the
+  // graph grows, instead of nodes appearing at pre-solved positions.
+  const stopTimelapse = useCallback(() => {
+    if (tlTimerRef.current) { clearInterval(tlTimerRef.current); tlTimerRef.current = null }
+    setTlPlaying(false)
+    setTlProgress(100)
+    tlModeRef.current = false
+    tlVisibleRef.current = new Set()
+    animMapRef.current = new Map()
+  }, [])
+
+  const startTimelapse = useCallback(() => {
+    const nodes = nodesRef.current
+    if (!nodes.length) return
+    if (tlTimerRef.current) clearInterval(tlTimerRef.current)
+
+    // Clear selection/search so nothing dims the reveal
+    setSelNode(null); selIdRef.current = null
+    setTlPlaying(true)
+    setTlProgress(0)
+    tlIdxRef.current = 0
+    tlModeRef.current = true
+    tlVisibleRef.current = new Set()
+    animMapRef.current = new Map()
+    // Entrance cascade and timelapse would fight over the same scale channel
+    eActiveRef.current = false
+
+    const total = nodes.length
+    const sorted = [...nodes].sort((a, b) => b.connections - a.connections)
+
+    setTimeout(() => {
+      tlTimerRef.current = setInterval(() => {
+        const idx = tlIdxRef.current
+        if (idx >= total) {
+          if (tlTimerRef.current) { clearInterval(tlTimerRef.current); tlTimerRef.current = null }
+          setTlPlaying(false)
+          setTlProgress(100)
+          // Let the last pop finish, then hand the graph back to normal drawing
+          setTimeout(() => { tlModeRef.current = false; tlVisibleRef.current = new Set() }, 300)
+          return
+        }
+        const node = sorted[idx]
+        tlVisibleRef.current.add(node.id)
+        animMapRef.current.set(node.id, { t0: performance.now(), dur: 400 })
+        tlIdxRef.current++
+        setTlProgress(Math.round(((idx + 1) / total) * 100))
+        simRef.current?.alpha(0.06).restart()
+      }, 120)
+    }, 200)
+  }, [])
+
+  // Never leave an interval running past unmount
+  useEffect(() => () => { if (tlTimerRef.current) clearInterval(tlTimerRef.current) }, [])
+
   // ── Build graph ───────────────────────────────────────────────────────────
   const buildGraph = useCallback(() => {
     const mount  = mountRef.current
@@ -578,6 +648,12 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     hoveredRef.current = null
     draggingRef.current = null
     animMapRef.current  = new Map()
+    // A rebuild invalidates any in-flight timelapse (node set changed)
+    if (tlTimerRef.current) { clearInterval(tlTimerRef.current); tlTimerRef.current = null }
+    tlModeRef.current   = false
+    tlVisibleRef.current = new Set()
+    setTlPlaying(false)
+    setTlProgress(0)
 
     const W = mount.clientWidth
     const H = mount.clientHeight
@@ -887,25 +963,90 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
           <div className="flex items-center h-8 rounded-xl overflow-hidden" style={PANEL}>
             <button
               onClick={() => applyZoom(0.77)}
+              title="Zoom out"
               className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/8 transition-all"
             >
               <ZoomOut size={13} />
             </button>
             <button
               onClick={fitView}
+              title="Zoom to fit"
               className="h-8 px-2.5 text-xs text-slate-500 hover:text-slate-300 transition-colors border-x border-white/[0.08] tabular-nums"
             >
               {Math.round(zoom * 100)}%
             </button>
             <button
               onClick={() => applyZoom(1.30)}
+              title="Zoom in"
               className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/8 transition-all"
             >
               <ZoomIn size={13} />
             </button>
           </div>
+
+          {/* Fit + replay entrance */}
+          <div className="flex items-center h-8 rounded-xl overflow-hidden" style={PANEL}>
+            <button
+              onClick={fitView}
+              title="Center & fit graph"
+              className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/8 transition-all"
+            >
+              <Crosshair size={13} />
+            </button>
+            <button
+              onClick={buildGraph}
+              title="Rebuild & replay entrance animation"
+              className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/8 transition-all border-l border-white/[0.08]"
+            >
+              <RefreshCw size={13} />
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* ── Timelapse ────────────────────────────────────────────────── */}
+      {bookmarks.length > 0 && (
+        <div className="absolute bottom-6 right-4 z-40 flex flex-col items-end gap-2 no-drag">
+          {tlPlaying && (
+            <div className="w-32 rounded-xl px-3 py-2" style={PANEL}>
+              <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.10)' }}>
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${tlProgress}%`,
+                    background: 'linear-gradient(90deg, rgb(var(--ds-accent)), rgb(var(--ds-accent-2)))',
+                    boxShadow: '0 0 8px rgb(var(--ds-accent) / 0.7)',
+                    transition: 'width 0.1s linear',
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between mt-1.5">
+                <span className="text-[9px] text-slate-600 uppercase tracking-widest font-bold">Building</span>
+                <span className="text-[10px] text-slate-400 tabular-nums font-semibold">{tlProgress}%</span>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={tlPlaying ? stopTimelapse : startTimelapse}
+            title={tlPlaying ? 'Stop timelapse' : 'Replay how your graph was built, hub-first'}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-semibold transition-all duration-150"
+            style={{
+              ...PANEL,
+              ...(tlPlaying ? {
+                background: 'rgb(var(--ds-accent) / 0.20)',
+                border:     '1px solid rgb(var(--ds-accent) / 0.55)',
+                color:      'rgb(var(--ds-accent-soft))',
+                boxShadow:  '0 0 20px rgb(var(--ds-accent) / 0.28)',
+              } : { color: 'rgb(var(--ds-text-3))' }),
+            }}
+          >
+            {tlPlaying
+              ? <><Square size={11} fill="currentColor" /> Stop</>
+              : <><Play size={11} fill="currentColor" /> Timelapse</>}
+          </button>
+        </div>
+      )}
 
       {/* Controls hint */}
       <div className="absolute top-[4.5rem] left-1/2 -translate-x-1/2 text-[10px] text-slate-700 pointer-events-none select-none whitespace-nowrap tracking-wide">
