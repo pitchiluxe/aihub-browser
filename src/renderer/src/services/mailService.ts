@@ -16,6 +16,8 @@ export const mailListThreads = (q: string, pageToken?: string) =>
   api().listThreads(q, pageToken) as Promise<{ ok: boolean; threads?: ThreadRow[]; nextPageToken?: string; error?: string }>
 export const mailGetThread = (id: string) =>
   api().getThread(id) as Promise<{ ok: boolean; messages?: ParsedMessage[]; error?: string }>
+export const mailMarkRead = (id: string) =>
+  api().markRead(id) as Promise<{ ok: boolean; error?: string }>
 export const mailGetAttachment = (mId: string, aId: string, filename: string) =>
   api().getAttachment(mId, aId, filename) as Promise<{ ok: boolean; savedPath?: string; error?: string }>
 export const mailSend = (opts: { to: string; subject: string; body: string; inReplyTo?: string; references?: string; threadId?: string }) =>

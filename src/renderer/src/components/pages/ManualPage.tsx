@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { BookOpen, Download, Check, Loader2 } from 'lucide-react'
 // The manual ships inside the bundle as a standalone HTML document, so it
 // works offline and can be handed to the user as a single self-contained file.
@@ -10,6 +10,17 @@ export default function ManualPage() {
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
   const [error,  setError]  = useState('')
+
+  // Render the manual from a blob URL rather than srcDoc. srcDoc gives the
+  // iframe an "about:srcdoc" base URL, which stops in-page "#section" links
+  // from scrolling and makes the embedded script behave unreliably. A blob
+  // URL is a real document with a real base, so the Replay button and every
+  // table-of-contents link work exactly as they do standalone.
+  const manualUrl = useMemo(
+    () => URL.createObjectURL(new Blob([manualHtml], { type: 'text/html' })),
+    [],
+  )
+  useEffect(() => () => URL.revokeObjectURL(manualUrl), [manualUrl])
 
   const download = async () => {
     if (saving) return
@@ -72,10 +83,10 @@ export default function ManualPage() {
             style={{
               background: saved
                 ? 'rgba(52,211,153,0.18)'
-                : 'linear-gradient(135deg, rgb(var(--ds-accent)), rgb(var(--ds-accent-2)))',
-              border: `1px solid ${saved ? 'rgba(52,211,153,0.45)' : 'rgb(var(--ds-accent-soft) / 0.5)'}`,
+                : 'linear-gradient(135deg, #ef4444, #dc2626)',
+              border: `1px solid ${saved ? 'rgba(52,211,153,0.45)' : 'rgba(239,68,68,0.6)'}`,
               color: saved ? '#34d399' : '#fff',
-              boxShadow: saved ? 'none' : '0 3px 18px rgb(var(--ds-accent) / 0.4)',
+              boxShadow: saved ? 'none' : '0 3px 18px rgba(239,68,68,0.4)',
               cursor: saving ? 'wait' : 'pointer',
               opacity: saving ? 0.7 : 1,
             }}
@@ -103,7 +114,7 @@ export default function ManualPage() {
       <iframe
         id="manual-frame"
         title="AIHub Browser User Manual"
-        srcDoc={manualHtml}
+        src={manualUrl}
         className="flex-1 w-full border-0 min-h-0"
         style={{ background: 'transparent' }}
       />

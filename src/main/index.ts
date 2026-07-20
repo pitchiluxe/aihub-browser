@@ -996,6 +996,17 @@ function createAppWindow(initialUrl?: string): AppWin {
   attachContextMenu(win.webContents)
   attachAppShortcuts(win.webContents)
 
+  // Mouse back / forward side buttons (Windows/Linux fire app-command).
+  // Navigate the active tab of THIS window, matching Alt+←/→.
+  win.on('app-command', (_e, cmd) => {
+    const page = ctx.activeId ? ctx.views.get(ctx.activeId)?.webContents : undefined
+    if (!page) return
+    try {
+      if (cmd === 'browser-backward' && page.canGoBack()) page.goBack()
+      else if (cmd === 'browser-forward' && page.canGoForward()) page.goForward()
+    } catch {}
+  })
+
   if (!sharedSetupDone) { sharedSetupDone = true; setupSharedApp(win) }
 
   // A detached tab arrives as ?initialUrl=… so the new window opens straight

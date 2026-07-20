@@ -1114,5 +1114,21 @@
 })();
 </script>
 
+<script>
+/* Table-of-contents scrolling — driven by JS so it works no matter what base
+   URL the document is loaded under (blob:, file:, about:srcdoc). */
+(function(){
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('a[href^="#"]');
+    if (!a) return;
+    var id = a.getAttribute('href').slice(1);
+    var target = id && document.getElementById(id);
+    if (!target) return;
+    e.preventDefault();
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+})();
+</script>
+
 </body>
 </html>

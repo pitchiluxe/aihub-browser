@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Mail, RefreshCw, Loader2, LogOut, Search } from 'lucide-react'
 import {
-  mailStatus, mailConnect, mailDisconnect, mailListThreads, onMailConnected, ThreadRow, ParsedMessage,
+  mailStatus, mailConnect, mailDisconnect, mailListThreads, mailMarkRead, onMailConnected, ThreadRow, ParsedMessage,
 } from '../../services/mailService'
 import ThreadReader from './mail/ThreadReader'
 import Compose from './mail/Compose'
@@ -46,6 +46,16 @@ export default function MailPage() {
   }
 
   const disconnect = async () => { await mailDisconnect(); setConnected(false); setEmail(null); setThreads([]); setActiveId(null) }
+
+  // Opening a message marks it read: drop the unread dot and un-bold it
+  // immediately, then tell Gmail to remove the UNREAD label.
+  const openThread = (t: ThreadRow) => {
+    setActiveId(t.id)
+    if (t.unread) {
+      setThreads(prev => prev.map(x => x.id === t.id ? { ...x, unread: false } : x))
+      mailMarkRead(t.id).catch(() => {})
+    }
+  }
 
   const handleReply = (m: ParsedMessage) => setCompose({
     to: m.from,
@@ -100,7 +110,7 @@ export default function MailPage() {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {error && <div style={{ padding: 12, color: '#f87171', fontSize: 12 }}>{error}</div>}
           {threads.map(t => (
-            <button key={t.id} onClick={() => setActiveId(t.id)}
+            <button key={t.id} onClick={() => openThread(t)}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', cursor: 'pointer',
                 borderBottom: '1px solid var(--ds-border-sm)', background: activeId === t.id ? 'var(--ds-glass-sm)' : 'transparent' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>

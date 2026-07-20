@@ -16,7 +16,9 @@ function restoreImages(html: string): string {
 }
 
 export default function EmailFrame({ html, plain }: { html: string; plain: string }) {
-  const [showImages, setShowImages] = useState(false)
+  // Images load automatically when an email is opened. (A "Hide images"
+  // control isn't offered — the user asked for automatic display.)
+  const [showImages, setShowImages] = useState(true)
   const [height, setHeight] = useState(200)
   const hasHtml = !!html.trim()
 

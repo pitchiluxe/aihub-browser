@@ -2,7 +2,7 @@ import { ipcMain, app } from 'electron'
 import fs from 'fs'
 import path, { join } from 'path'
 import { connect, disconnect, status, setCredentials, isEncryptionAvailable, GoogleApiId } from './auth'
-import { listThreads, getThread, getAttachmentData, sendMessage } from './apis/gmail'
+import { listThreads, getThread, getAttachmentData, sendMessage, markThreadRead } from './apis/gmail'
 import { listFiles, getAbout } from './apis/drive'
 import { listCalendars, listEvents } from './apis/calendar'
 
@@ -78,6 +78,10 @@ export function registerGoogleIpc(safelySend: (channel: string, ...args: any[]) 
 
   ipcMain.handle('gmail:getThread', async (_e, args: { id: string }) => {
     try { return ok({ messages: await getThread(args.id) }) } catch (e: any) { return fail(e.message) }
+  })
+
+  ipcMain.handle('gmail:markRead', async (_e, args: { id: string }) => {
+    try { await markThreadRead(args.id); return ok({}) } catch (e: any) { return fail(e.message) }
   })
 
   ipcMain.handle('gmail:getAttachment', async (_e, args: { messageId: string; attachmentId: string; filename: string }) => {

@@ -49,6 +49,12 @@ export async function getThread(id: string): Promise<ParsedMessage[]> {
   return (t.messages || []).map(parseGmailMessage)
 }
 
+// Drop the UNREAD label from a whole thread — the same effect as Gmail
+// marking a conversation read once you open it.
+export async function markThreadRead(id: string): Promise<void> {
+  await post(`/users/me/threads/${id}/modify`, { removeLabelIds: ['UNREAD'] })
+}
+
 export async function getAttachmentData(messageId: string, attachmentId: string): Promise<Buffer> {
   const a = await get(`/users/me/messages/${messageId}/attachments/${attachmentId}`)
   return b64urlDecode(a.data)
