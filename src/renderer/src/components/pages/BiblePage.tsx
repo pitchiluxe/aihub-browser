@@ -1,42 +1,180 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { getBooks, getChapter, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
+import BookSpread from '../bible/BookSpread'
+import PageLeaf from '../bible/PageLeaf'
+
+// The spread always shows two consecutive chapters, so a completed turn moves
+// by a whole sheet — two chapters, not one.
+const STEP = 2
+// How far the pointer must travel horizontally before we decide it is a page
+// turn rather than a click on a verse or a vertical scroll.
+const DRAG_THRESHOLD_PX = 14
 
 export default function BiblePage() {
   const [bookId, setBookId] = useState('JHN')
   const [chapter, setChapter] = useState(3)
-  const [verses, setVerses] = useState<Verse[]>([])
   const [selectedRef, setSelectedRef] = useState<string | null>(null)
+
+  // A small window of chapters around the spread: the two visible pages plus
+  // the faces the turning leaf reveals on either side.
+  const [pages, setPages] = useState<Record<number, Verse[]>>({})
+
+  const [turning, setTurning] = useState<'next' | 'prev' | null>(null)
+  const [autoTurn, setAutoTurn] = useState(false)   // true when a button/key started the turn
+  const [dragOriginX, setDragOriginX] = useState<number | null>(null)
+
+  const book = getBooks().find(b => b.id === bookId)
+  const lastChapter = book?.chapters ?? 1
 
   useEffect(() => {
     let cancelled = false
-    getChapter(bookId, chapter).then(v => { if (!cancelled) setVerses(v) })
+    // Two either side, so the chapters a completed turn lands on are already
+    // resident and the new spread paints without a blank frame.
+    const wanted = [chapter - 2, chapter - 1, chapter, chapter + 1, chapter + 2]
+      .filter(c => c >= 1 && c <= lastChapter)
+    Promise.all(wanted.map(async c => [c, await getChapter(bookId, c)] as const))
+      .then(entries => { if (!cancelled) setPages(Object.fromEntries(entries)) })
     return () => { cancelled = true }
-  }, [bookId, chapter])
+  }, [bookId, chapter, lastChapter])
 
-  const book = getBooks().find(b => b.id === bookId)
+  const canTurn = useCallback((dir: 'next' | 'prev') => {
+    if (dir === 'prev') return chapter > 1
+    return chapter + 1 < lastChapter
+  }, [chapter, lastChapter])
+
+  // The one entry point for starting a turn. `originX` present means a finger
+  // is driving it; absent means the leaf animates itself.
+  const startTurn = useCallback((dir: 'next' | 'prev', originX?: number) => {
+    if (turning) return                       // never two sheets in flight at once
+    if (!canTurn(dir)) return
+    setAutoTurn(originX == null)
+    setDragOriginX(originX ?? null)
+    setTurning(dir)
+  }, [turning, canTurn])
+
+  const endTurn = useCallback((completed: boolean) => {
+    setTurning(null)
+    setAutoTurn(false)
+    setDragOriginX(null)
+    if (!completed) return
+    setChapter(c => {
+      const target = turning === 'prev' ? c - STEP : c + STEP
+      return Math.max(1, Math.min(lastChapter, target))
+    })
+  }, [turning, lastChapter])
+
+  // Buttons and arrow keys both come through startTurn, so they inherit the
+  // same boundary guards and the same "one turn at a time" rule.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      if (e.key === 'ArrowRight') startTurn('next')
+      if (e.key === 'ArrowLeft') startTurn('prev')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [startTurn])
+
+  // Drag detection lives on the spread rather than on the leaf, because the
+  // leaf does not exist until we have decided a turn has begun. We wait for a
+  // decisively horizontal movement so that clicking a verse and scrolling a
+  // page both still work.
+  const pressed = useRef<{ x: number; y: number } | null>(null)
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    pressed.current = { x: e.clientX, y: e.clientY }
+  }
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const from = pressed.current
+    if (!from || turning) return
+    const dx = e.clientX - from.x
+    const dy = e.clientY - from.y
+    if (Math.abs(dx) < DRAG_THRESHOLD_PX || Math.abs(dx) <= Math.abs(dy)) return
+    pressed.current = null
+    startTurn(dx < 0 ? 'next' : 'prev', from.x)
+  }
+
+  const releasePress = () => { pressed.current = null }
+
+  const page = (ch: number) => {
+    if (ch < 1 || ch > lastChapter) return null      // blank leaf past the end of the book
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-4 shrink-0 text-xs uppercase tracking-widest opacity-45">{book?.name} {ch}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <VerseText
+            bookId={bookId}
+            chapter={ch}
+            verses={pages[ch] ?? []}
+            highlights={{}}
+            selectedRef={selectedRef}
+            onSelectVerse={setSelectedRef}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // Forward: the right-hand sheet lifts, its recto is the page you were
+  // reading and its verso is the chapter that becomes the new left page.
+  // Backward: the left-hand sheet lifts and reveals the chapter before it.
+  const leafFaces = turning === 'prev'
+    ? { front: page(chapter), back: page(chapter - 1) }
+    : { front: page(chapter + 1), back: page(chapter + 2) }
 
   return (
-    <div className="h-full overflow-y-auto bg-aihub-bg text-aihub-text p-8">
-      <h1 className="text-2xl font-bold mb-4">{book?.name} {chapter}</h1>
-      <div className="flex gap-2 mb-4">
-        <select value={bookId} onChange={e => { setBookId(e.target.value); setChapter(1) }}
-          className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm">
+    <div className="flex h-full flex-col bg-aihub-bg text-aihub-text p-8">
+      <div className="mb-4 flex shrink-0 items-center gap-2">
+        <h1 className="mr-2 text-2xl font-bold">{book?.name} {chapter}</h1>
+        <select
+          value={bookId}
+          onChange={e => { setBookId(e.target.value); setChapter(1); setSelectedRef(null) }}
+          className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm"
+        >
           {getBooks().map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
-        <button onClick={() => setChapter(c => Math.max(1, c - 1))}
-          className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm">Prev</button>
-        <button onClick={() => setChapter(c => Math.min(book?.chapters ?? 1, c + 1))}
-          className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm">Next</button>
+        <button
+          onClick={() => startTurn('prev')}
+          disabled={!canTurn('prev') || !!turning}
+          className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm disabled:opacity-40"
+        >Prev</button>
+        <button
+          onClick={() => startTurn('next')}
+          disabled={!canTurn('next') || !!turning}
+          className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm disabled:opacity-40"
+        >Next</button>
       </div>
-      <div className="max-w-2xl leading-8">
-        <VerseText
-          bookId={bookId}
-          chapter={chapter}
-          verses={verses}
-          highlights={{}}
-          selectedRef={selectedRef}
-          onSelectVerse={setSelectedRef}
+
+      <div
+        className="min-h-0 flex-1"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={releasePress}
+        onPointerCancel={releasePress}
+        onPointerLeave={releasePress}
+      >
+        <BookSpread
+          left={page(chapter)}
+          right={page(chapter + 1)}
+          leafSide={turning === 'prev' ? 'left' : 'right'}
+          leaf={turning ? (
+            <PageLeaf
+              key={`${bookId}-${chapter}-${turning}`}
+              direction={turning}
+              auto={autoTurn}
+              originX={dragOriginX ?? undefined}
+              front={leafFaces.front}
+              back={leafFaces.back}
+              onComplete={() => endTurn(true)}
+              onCancel={() => endTurn(false)}
+            />
+          ) : null}
         />
       </div>
     </div>
