@@ -1982,10 +1982,13 @@ interface BibleMarks {
   lastRead: { book: string; chapter: number } | null
 }
 const BIBLE_MARKS_FILE = join(APP_DIR, 'bible-marks.json')
-const EMPTY_MARKS: BibleMarks = { highlights: {}, saved: [], notes: {}, lastRead: null }
 
 ipcMain.handle('bible:getMarks', (): BibleMarks => {
-  const stored = readJson(BIBLE_MARKS_FILE, EMPTY_MARKS) as Partial<BibleMarks>
+  const stored = readJson(BIBLE_MARKS_FILE, { highlights: {}, saved: [], notes: {}, lastRead: null })
+  // Guard against null, arrays, and non-object values from valid JSON.
+  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) {
+    return { highlights: {}, saved: [], notes: {}, lastRead: null }
+  }
   // Merge onto the empty shape so a file written by an older build (missing a
   // key) can't crash the reader.
   return {
