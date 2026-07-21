@@ -278,7 +278,11 @@ Be concise, warm, and genuinely helpful.${pageCtx}${bookmarkCtx}${historyCtx}${A
         const { narration, actions } = parseActionsBlock(raw)
 
         if (!actions || actions.length === 0 || stopRequestedRef.current) {
-          addAIMessage({ role: 'assistant', content: narration || raw })
+          // Never fall back to `raw` — that is what leaked the ###ACTIONS###
+          // block to the chat. Show the cleaned prose; if the model gave only
+          // a (mis-formatted) action block and no prose, show a soft note
+          // instead of the JSON.
+          addAIMessage({ role: 'assistant', content: narration || "I couldn't complete that — please try rephrasing." })
           return
         }
 

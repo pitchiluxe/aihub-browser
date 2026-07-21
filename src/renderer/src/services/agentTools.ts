@@ -25,34 +25,91 @@ function cleanNarration(text: string): string {
   // Everything from the marker onward is machine protocol — drop it.
   const m = out.indexOf(ACTIONS_MARKER)
   if (m !== -1) out = out.slice(0, m)
-  // A bare {"actions":[…]} object the model emitted without the marker.
+  // Any JSON action object/array the model emitted without the marker —
+  // {"actions":[…]}, a bare {"tool":…}, or a […] array of tool calls.
+  out = out.replace(/```(?:json)?\s*[\s\S]*?```/gi, block =>
+    /"(?:actions|tool)"\s*:/.test(block) ? '' : block)
   out = out.replace(/\{\s*"actions"\s*:\s*\[[\s\S]*?\]\s*\}/g, '')
-  // Fenced code blocks that only contain such an object.
-  out = out.replace(/```(?:json)?\s*\{\s*"actions"[\s\S]*?```/gi, '')
+  out = out.replace(/\[\s*\{\s*"tool"[\s\S]*?\}\s*\]/g, '')
+  out = out.replace(/\{\s*"tool"\s*:\s*"[\s\S]*?(?:\}|$)/g, '')
   return out.trim()
 }
 
-// Extracts a trailing `###ACTIONS###\n{"actions":[...]}` block from a raw
-// model response. Anything before the marker is the user-facing narration;
-// the block itself is parsed and stripped. A missing or malformed block
-// means "no actions this turn" — never throws, and never leaks the JSON.
-export function parseActionsBlock(raw: string): ParsedResponse {
-  const idx = raw.indexOf(ACTIONS_MARKER)
-  if (idx === -1) return { narration: cleanNarration(raw), actions: null }
-
-  let jsonPart = raw.slice(idx + ACTIONS_MARKER.length).trim()
-  jsonPart = jsonPart.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
-
-  try {
-    const parsed = JSON.parse(jsonPart)
-    if (Array.isArray(parsed?.actions)) {
-      return { narration: cleanNarration(raw), actions: parsed.actions }
+// Best-effort repair of the almost-JSON models sometimes emit: trailing commas,
+// and truncated output missing its closing brackets/braces (a streaming cut-off
+// or the model just stopping mid-object). Returns null if it still won't parse.
+function tryParseLoose(src: string): any {
+  const attempts: string[] = [src]
+  const noTrailingComma = src.replace(/,\s*([}\]])/g, '$1')
+  if (noTrailingComma !== src) attempts.push(noTrailingComma)
+  // Balance brackets by appending whatever closers are missing, in the right
+  // order (stack-based), for each candidate.
+  for (const base of [src, noTrailingComma]) {
+    const stack: string[] = []
+    let inStr = false, esc = false
+    for (const ch of base) {
+      if (esc) { esc = false; continue }
+      if (ch === '\\') { esc = true; continue }
+      if (ch === '"') { inStr = !inStr; continue }
+      if (inStr) continue
+      if (ch === '{' || ch === '[') stack.push(ch)
+      else if (ch === '}' || ch === ']') stack.pop()
     }
-  } catch {
-    // fall through — malformed JSON degrades to plain text, never crashes
+    if (stack.length) {
+      let repaired = base
+      if (inStr) repaired += '"'
+      for (let i = stack.length - 1; i >= 0; i--) repaired += stack[i] === '{' ? '}' : ']'
+      attempts.push(repaired)
+    }
   }
-  // Even on malformed JSON, strip the block so the raw JSON never shows.
-  return { narration: cleanNarration(raw), actions: null }
+  for (const a of attempts) {
+    try { return JSON.parse(a) } catch { /* try next */ }
+  }
+  return null
+}
+
+// Normalize any of the shapes models actually produce into an actions array:
+//   {"actions":[{...}]}   ← the documented shape
+//   [{"tool":...}]        ← a bare array of calls
+//   {"tool":...}          ← a single bare call
+function toActions(parsed: any): ToolAction[] | null {
+  if (!parsed) return null
+  if (Array.isArray(parsed?.actions)) return parsed.actions
+  if (Array.isArray(parsed) && parsed.every(x => x && typeof x.tool === 'string')) return parsed
+  if (parsed && typeof parsed.tool === 'string') return [parsed]
+  return null
+}
+
+// Extracts the action block from a raw model response. Anything before the
+// marker is the user-facing narration; the block is parsed and stripped. This
+// is deliberately forgiving — it recognizes the marker OR a bare JSON action
+// object even without it, repairs truncated/loose JSON, and accepts every
+// shape models emit — so a mis-formatted tool call still EXECUTES instead of
+// being printed. It never throws and never leaks the JSON to the chat.
+export function parseActionsBlock(raw: string): ParsedResponse {
+  const narration = cleanNarration(raw)
+
+  // 1) The documented path: text after the ###ACTIONS### marker.
+  const idx = raw.indexOf(ACTIONS_MARKER)
+  if (idx !== -1) {
+    let jsonPart = raw.slice(idx + ACTIONS_MARKER.length).trim()
+    jsonPart = jsonPart.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
+    const actions = toActions(tryParseLoose(jsonPart))
+    if (actions && actions.length) return { narration, actions }
+    return { narration, actions: null }
+  }
+
+  // 2) No marker, but the model still emitted a JSON action call somewhere
+  //    (a common mistake). Pull the first {...} or [...] that carries a
+  //    "tool"/"actions" key and try to run it rather than print it.
+  const candidate = raw.match(/(\{[\s\S]*"(?:actions|tool)"[\s\S]*)$/)
+  if (candidate) {
+    let jsonPart = candidate[1].replace(/```$/, '').trim()
+    const actions = toActions(tryParseLoose(jsonPart))
+    if (actions && actions.length) return { narration, actions }
+  }
+
+  return { narration, actions: null }
 }
 
 export function describeAction(a: ToolAction): string {
