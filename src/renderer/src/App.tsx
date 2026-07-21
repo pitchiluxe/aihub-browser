@@ -21,6 +21,7 @@ const MailPage       = lazy(() => import('./components/pages/MailPage'))
 const NotesPage      = lazy(() => import('./components/pages/NotesPage'))
 const ManualPage     = lazy(() => import('./components/pages/ManualPage'))
 const RewindPage     = lazy(() => import('./components/pages/RewindPage'))
+const WatchPage      = lazy(() => import('./components/pages/WatchPage'))
 import AddBookmarkModal from './components/homepage/AddBookmarkModal'
 import QRCodeModal from './components/browser/QRCodeModal'
 import UpdateNotification from './components/browser/UpdateNotification'
@@ -144,7 +145,7 @@ export default function App() {
   }, [activeTabId, navigate])
 
   // ── Special pages ──────────────────────────────────────────────────────────
-  const openSpecialPage = useCallback((pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind') => {
+  const openSpecialPage = useCallback((pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch') => {
     useBrowserStore.getState().addTab(`aihub://${pageType}`, pageType)
   }, [])
 
@@ -637,6 +638,7 @@ export default function App() {
                     {tab.pageType === 'notes'      && <NotesPage onNavigate={navigate} />}
                     {tab.pageType === 'manual'     && <ManualPage />}
                     {tab.pageType === 'rewind'     && <RewindPage onNavigate={navigate} />}
+                    {tab.pageType === 'watch'      && <WatchPage />}
                   </Suspense>
                 </div>
               )

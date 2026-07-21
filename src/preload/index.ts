@@ -102,6 +102,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   focus: {
     apply: (blocked: string[] | null) => ipcRenderer.invoke('focus:apply', blocked),
   },
+  watch: {
+    list:     () => ipcRenderer.invoke('watch:list'),
+    add:      (w: { url: string; title?: string; mode?: 'change' | 'contains'; keyword?: string; intervalMin?: number }) => ipcRenderer.invoke('watch:add', w),
+    remove:   (id: string) => ipcRenderer.invoke('watch:remove', id),
+    toggle:   (id: string) => ipcRenderer.invoke('watch:toggle', id),
+    rearm:    (id: string) => ipcRenderer.invoke('watch:rearm', id),
+    checkNow: (id: string) => ipcRenderer.invoke('watch:checkNow', id),
+    onChanged: (cb: () => void) => { const h = () => cb(); ipcRenderer.on('watch:changed', h); return () => ipcRenderer.removeListener('watch:changed', h) },
+    onTriggered: (cb: (d: any) => void) => { const h = (_: any, d: any) => cb(d); ipcRenderer.on('watch:triggered', h); return () => ipcRenderer.removeListener('watch:triggered', h) },
+  },
   rewind: {
     add:    (entry: { url: string; title?: string; favicon?: string; text?: string }) => ipcRenderer.invoke('rewind:add', entry),
     search: (query: string) => ipcRenderer.invoke('rewind:search', query),

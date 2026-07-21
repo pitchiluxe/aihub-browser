@@ -1,4 +1,4 @@
-import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, webContents as electronWebContents } from 'electron'
+import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, webContents as electronWebContents } from 'electron'
 import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname } from 'path'
 import zlib from 'zlib'
 import http from 'http'
@@ -1936,6 +1936,112 @@ ipcMain.handle('rewind:remove', (_e, id: string) => {
   return { ok: true }
 })
 ipcMain.handle('rewind:clear', () => { _rewind = []; writeJson(REWIND_FILE, []); return { ok: true } })
+
+// ── Watch & Ping ───────────────────────────────────────────────────────────
+// Background monitors: re-check a page on a schedule and fire a desktop
+// notification when it changes (or when a keyword appears). Turns the browser
+// into a watchdog — "tell me when this drops in price / this issue closes".
+interface Watch {
+  id: string; url: string; title: string
+  mode: 'change' | 'contains'; keyword?: string
+  intervalMin: number
+  active: boolean
+  lastHash?: string; lastChecked?: number; lastChanged?: number
+  triggered?: boolean // currently in a fired state (until re-armed by the user)
+}
+const WATCHES_FILE = join(APP_DIR, 'watches.json')
+let _watches: Watch[] | null = null
+function getWatches(): Watch[] { if (!_watches) _watches = (readJson(WATCHES_FILE, []) as Watch[]) || []; return _watches! }
+function saveWatches() { writeJson(WATCHES_FILE, getWatches()); safelySend('watch:changed', null) }
+function hashStr(s: string): string {
+  let h = 0
+  for (let i = 0; i < s.length; i++) { h = (Math.imul(31, h) + s.charCodeAt(i)) | 0 }
+  return String(h >>> 0)
+}
+
+ipcMain.handle('watch:list', () => getWatches())
+ipcMain.handle('watch:add', (_e, w: { url: string; title?: string; mode?: 'change' | 'contains'; keyword?: string; intervalMin?: number }) => {
+  try {
+    if (!w?.url || !/^https?:\/\//i.test(w.url)) return { ok: false, error: 'a full http(s) url is required' }
+    const watches = getWatches()
+    const watch: Watch = {
+      id: `w-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      url: w.url, title: w.title || w.url,
+      mode: w.mode === 'contains' ? 'contains' : 'change',
+      keyword: (w.keyword || '').trim() || undefined,
+      intervalMin: Math.max(5, Math.min(1440, w.intervalMin || 30)),
+      active: true,
+    }
+    watches.unshift(watch)
+    saveWatches()
+    checkWatch(watch).catch(() => {}) // establish a baseline immediately
+    return { ok: true, id: watch.id }
+  } catch (e: any) { return { ok: false, error: e.message } }
+})
+ipcMain.handle('watch:remove', (_e, id: string) => {
+  const watches = getWatches(); const i = watches.findIndex(w => w.id === id)
+  if (i !== -1) { watches.splice(i, 1); saveWatches() }
+  return { ok: true }
+})
+ipcMain.handle('watch:toggle', (_e, id: string) => {
+  const w = getWatches().find(x => x.id === id)
+  if (w) { w.active = !w.active; if (w.active) w.triggered = false; saveWatches() }
+  return { ok: true }
+})
+// Re-arm a fired watch (acknowledge and keep watching) or check one now.
+ipcMain.handle('watch:rearm', (_e, id: string) => {
+  const w = getWatches().find(x => x.id === id)
+  if (w) { w.triggered = false; saveWatches() }
+  return { ok: true }
+})
+ipcMain.handle('watch:checkNow', async (_e, id: string) => {
+  const w = getWatches().find(x => x.id === id)
+  if (w) await checkWatch(w, true)
+  return { ok: true }
+})
+
+async function checkWatch(w: Watch, force = false) {
+  try {
+    const { status, body } = await fetchHtml(w.url, 12000)
+    if (status >= 400) { w.lastChecked = Date.now(); saveWatches(); return }
+    const text = htmlToText(body)
+    w.lastChecked = Date.now()
+    if (w.mode === 'contains') {
+      const hit = w.keyword ? text.toLowerCase().includes(w.keyword.toLowerCase()) : false
+      if (hit && !w.triggered) { w.triggered = true; w.lastChanged = Date.now(); notifyWatch(w, `“${w.keyword}” appeared on the page`) }
+    } else {
+      const hash = hashStr(text)
+      if (w.lastHash === undefined || force && w.lastHash === undefined) { w.lastHash = hash }
+      else if (hash !== w.lastHash) {
+        w.lastHash = hash; w.lastChanged = Date.now()
+        if (!w.triggered) { w.triggered = true; notifyWatch(w, 'This page changed since you last looked') }
+      }
+    }
+    saveWatches()
+  } catch { w.lastChecked = Date.now(); saveWatches() }
+}
+
+function notifyWatch(w: Watch, body: string) {
+  try {
+    if (!Notification.isSupported()) return
+    const n = new Notification({ title: `🔔 ${w.title}`, body, silent: false })
+    n.on('click', () => {
+      const ctx = appWins.values().next()
+      if (!ctx.done) { const win = ctx.value.win; if (win.isMinimized()) win.restore(); win.focus(); sendTo(ctx.value, 'open-in-new-tab', w.url) }
+    })
+    n.show()
+  } catch {}
+  safelySend('watch:triggered', { id: w.id, title: w.title, url: w.url, body })
+}
+
+// Scheduler — one tick a minute; check whichever active watches are due.
+setInterval(() => {
+  const now = Date.now()
+  for (const w of getWatches()) {
+    if (!w.active || w.triggered) continue
+    if (!w.lastChecked || now - w.lastChecked >= w.intervalMin * 60000) checkWatch(w).catch(() => {})
+  }
+}, 60 * 1000)
 
 const NOTES_FILE = join(APP_DIR, 'sticky-notes.json')
 let _stickyNotes: Record<string, { url: string; pageTitle: string; updatedAt: number; notes: any[] }> | null = null
