@@ -15,6 +15,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "generate-icon": "node scripts/generate-icon.js",
+    "build:bible": "node scripts/build-bible.mjs",
     "package": "npm run generate-icon && npm run build && cross-env ELECTRON_RUN_AS_NODE= electron-builder",
     "postinstall": "electron-builder install-app-deps",
     "test": "vitest run",
