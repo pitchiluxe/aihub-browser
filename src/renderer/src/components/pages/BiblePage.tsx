@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Bookmark } from 'lucide-react'
+import { Bookmark, Sparkles } from 'lucide-react'
 import { getBookMeta, getBooks, getChapter, parseRef, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
@@ -8,6 +8,8 @@ import VerseActions from '../bible/VerseActions'
 import ShareSheet from '../bible/ShareSheet'
 import NoteEditor from '../bible/NoteEditor'
 import SavedVerses from '../bible/SavedVerses'
+import BibleAssistant from '../bible/BibleAssistant'
+import BookCover from '../bible/BookCover'
 
 // Shape persisted by the main process (see `bible:getMarks` / `bible:setMarks`
 // in src/main/index.ts) — highlights, saved verses, notes and the last
@@ -26,6 +28,8 @@ const STEP = 2
 // How far the pointer must travel horizontally before we decide it is a page
 // turn rather than a click on a verse or a vertical scroll.
 const DRAG_THRESHOLD_PX = 14
+const FLICK_PX_PER_EVENT = 6
+const TURN_MS = 420
 
 // Spreads are always anchored on an odd-numbered left page (base, base+1).
 // `chapter` itself is not guaranteed to be odd — a "go to chapter" jump, a
@@ -40,6 +44,10 @@ export default function BiblePage() {
   const [selectedRef, setSelectedRef] = useState<string | null>(null)
   const [noteOpen, setNoteOpen] = useState(false)
   const [savedOpen, setSavedOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
+  // The book starts closed. Opening it is the one bit of ceremony in the app,
+  // and it also hides the first-load chapter fetch behind something to look at.
+  const [coverOpen, setCoverOpen] = useState(false)
 
   // Highlights, saved verses, notes and reading position. `marks` drives
   // rendering; `marksRef` mirrors it synchronously and is what every write
@@ -125,16 +133,22 @@ export default function BiblePage() {
   // one — to a valid spread, so handing it a raw restored chapter is safe;
   // we still clamp to the target book's own chapter count and bail on an
   // unknown book id, since a saved position can predate a book's data.
-  const restored = useRef(false)
+  // `restored` must be state, not a ref. As a ref it flipped true synchronously
+  // inside this effect, while `setBookId`/`setChapter` below only take effect on
+  // the next render — so the debounced writer downstream could fire in between
+  // and persist the DEFAULT position over the reader's real one. Losing your
+  // place every session is exactly the bug that produced. As state, the writer
+  // cannot see `restored` until the restored position has actually rendered.
+  const [restored, setRestored] = useState(false)
   useEffect(() => {
-    if (restored.current || !marksLoaded) return
-    restored.current = true
-    if (!marks.lastRead) return
+    if (restored || !marksLoaded) return
+    if (!marks.lastRead) { setRestored(true); return }
     const { book: savedBook, chapter: savedChapter } = marks.lastRead
     const meta = getBookMeta(savedBook)
-    if (!meta) return
+    if (!meta) { setRestored(true); return }
     setBookId(savedBook)
     setChapter(Math.max(1, Math.min(meta.chapters, savedChapter)))
+    setRestored(true)
   }, [marksLoaded, marks.lastRead])
 
   // Write the reading position back, debounced. Goes through `persist`, so it
@@ -142,12 +156,12 @@ export default function BiblePage() {
   // never clobber a highlight/save/note made during the debounce window, and
   // it can never itself be clobbered by one that lands after it fires.
   useEffect(() => {
-    if (!restored.current) return
+    if (!restored) return
     const id = window.setTimeout(() => {
       persist(current => ({ ...current, lastRead: { book: bookId, chapter } }))
     }, 800)
     return () => window.clearTimeout(id)
-  }, [bookId, chapter, persist])
+  }, [restored, bookId, chapter, persist])
 
   // A small window of chapters around the spread: the two visible pages plus
   // the faces the turning leaf reveals on either side. The book the chapters
@@ -175,9 +189,24 @@ export default function BiblePage() {
 
   const [shareOpen, setShareOpen] = useState(false)
 
+  // ── The turn ──────────────────────────────────────────────────────────────
+  // The page owns the whole gesture: which way the sheet is going, how far
+  // over it is, and whether it is easing to rest. Keeping it here (rather than
+  // in the leaf) is what makes the sheet track the finger from the first
+  // pixel — the pointer is already captured by the time the leaf mounts.
   const [turning, setTurning] = useState<'next' | 'prev' | null>(null)
-  const [autoTurn, setAutoTurn] = useState(false)   // true when a button/key started the turn
-  const [dragOriginX, setDragOriginX] = useState<number | null>(null)
+  const [angle, setAngle] = useState(0)             // 0 → 180 degrees
+  const [animating, setAnimating] = useState(false) // easing to a resting angle
+
+  const angleRef = useRef(0)
+  const dragRef = useRef<{ startX: number; width: number; velocity: number; lastX: number } | null>(null)
+  const settleTimer = useRef<number | null>(null)
+  const spreadRef = useRef<HTMLDivElement>(null)
+
+  const prefersReduced = useRef(
+    typeof window !== 'undefined'
+      && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+  ).current
 
   const book = getBooks().find(b => b.id === bookId)
   const lastChapter = book?.chapters ?? 1
@@ -206,20 +235,56 @@ export default function BiblePage() {
     return spreadBase + 1 < lastChapter
   }, [spreadBase, lastChapter])
 
+  // Land the turn: ease the sheet to its resting angle, then commit or undo.
+  // The one and only place a turn ends, so it can never fire twice or hang.
+  const settle = useCallback((complete: boolean) => {
+    if (settleTimer.current !== null) return    // already settling
+    const resting = complete ? 180 : 0
+    angleRef.current = resting
+    dragRef.current = null
+    if (prefersReduced) {
+      setAnimating(false)
+      setAngle(0)
+    } else {
+      setAnimating(true)
+      setAngle(resting)
+    }
+    settleTimer.current = window.setTimeout(() => {
+      settleTimer.current = null
+      setAnimating(false)
+      setAngle(0)
+      angleRef.current = 0
+      endTurnRef.current(complete)
+    }, prefersReduced ? 0 : TURN_MS)
+  }, [prefersReduced])
+
+  // `endTurn` is defined below but `settle` is referenced by handlers declared
+  // above it; a ref keeps the ordering honest without a forward declaration.
+  const endTurnRef = useRef<(completed: boolean) => void>(() => {})
+
   // The one entry point for starting a turn. `originX` present means a finger
-  // is driving it; absent means the leaf animates itself.
-  const startTurn = useCallback((dir: 'next' | 'prev', originX?: number) => {
-    if (turning) return                       // never two sheets in flight at once
+  // is driving it; absent means the sheet animates itself.
+  const startTurn = useCallback((dir: 'next' | 'prev', originX?: number, width?: number) => {
+    if (turning || settleTimer.current !== null) return   // never two sheets at once
     if (!canTurn(dir)) return
-    setAutoTurn(originX == null)
-    setDragOriginX(originX ?? null)
-    setTurning(dir)
-  }, [turning, canTurn])
+    angleRef.current = 0
+    setAngle(0)
+    if (originX == null) {
+      // Button or arrow key: nothing is holding the sheet, so it turns itself.
+      dragRef.current = null
+      setTurning(dir)
+      // Two frames, so the 0-degree start style is committed before the flip
+      // and the transition actually runs rather than snapping.
+      requestAnimationFrame(() => requestAnimationFrame(() => settle(true)))
+    } else {
+      dragRef.current = { startX: originX, width: width || 1, velocity: 0, lastX: originX }
+      setAnimating(false)
+      setTurning(dir)
+    }
+  }, [turning, canTurn, settle])
 
   const endTurn = useCallback((completed: boolean) => {
     setTurning(null)
-    setAutoTurn(false)
-    setDragOriginX(null)
     if (!completed) return
     // The selected verse is about to leave the spread, so its action bar and
     // share sheet would be acting on something the reader can no longer see —
@@ -237,6 +302,13 @@ export default function BiblePage() {
       return Math.max(1, Math.min(lastChapter, target))
     })
   }, [turning, lastChapter])
+
+  endTurnRef.current = endTurn
+
+  // A turn in flight must not outlive the page.
+  useEffect(() => () => {
+    if (settleTimer.current !== null) window.clearTimeout(settleTimer.current)
+  }, [])
 
   // Buttons and arrow keys both come through startTurn, so they inherit the
   // same boundary guards and the same "one turn at a time" rule.
@@ -269,25 +341,28 @@ export default function BiblePage() {
   // page both still work.
   const pressed = useRef<{ x: number; y: number } | null>(null)
 
-  // Capture is attempted the instant a turn starts, so the release is
-  // normally guaranteed to come back to this element even if the finger
-  // leaves the window. But `setPointerCapture` can throw (see the try/catch
-  // below), and release delivery must not depend on it succeeding — so
-  // `awaitingRelease` tracks "a drag turn is waiting for its release" on its
-  // own, independent of whether `captured` ever got populated. `releaseSignal`
-  // hands the release to the leaf, which may not have bound its own window
-  // listeners yet — its mount effect is passive and can be flushed after the
-  // pointer has already come up.
   const captured = useRef<{ el: HTMLElement; id: number } | null>(null)
-  const awaitingRelease = useRef(false)
-  const [releaseSignal, setReleaseSignal] = useState(0)
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
+    if (turning || settleTimer.current !== null) return
     pressed.current = { x: e.clientX, y: e.clientY }
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
+    // Already turning: this move is the drag itself, so advance the sheet.
+    const drag = dragRef.current
+    if (drag && turning) {
+      drag.velocity = e.clientX - drag.lastX
+      drag.lastX = e.clientX
+      const travelled = turning === 'next' ? drag.startX - e.clientX : e.clientX - drag.startX
+      const ratio = Math.max(0, Math.min(1, travelled / drag.width))
+      angleRef.current = ratio * 180
+      // Under reduced motion the sheet stays flat; the drag still navigates.
+      if (!prefersReduced) setAngle(angleRef.current)
+      return
+    }
+
     const from = pressed.current
     if (!from || turning) return
     const dx = e.clientX - from.x
@@ -304,28 +379,38 @@ export default function BiblePage() {
     } catch {
       captured.current = null
     }
-    // Set regardless of whether capture above succeeded — the leaf still
-    // needs its release signal either way.
-    awaitingRelease.current = true
-    startTurn(dx < 0 ? 'next' : 'prev', from.x)
+    // Half the spread is how far the finger travels for a full 180 degrees.
+    const half = (spreadRef.current?.offsetWidth ?? 2) / 2
+    startTurn(dx < 0 ? 'next' : 'prev', from.x, half)
+    // Apply this very move immediately, so the sheet is already lifted by the
+    // pixel that started the turn rather than waiting for the next event.
+    const d = dragRef.current
+    if (d) {
+      const travelled = Math.abs(dx)
+      angleRef.current = Math.max(0, Math.min(1, travelled / d.width)) * 180
+      if (!prefersReduced) setAngle(angleRef.current)
+    }
   }
 
   // pointerup, pointercancel and lostpointercapture all land here; whichever
-  // arrives first consumes the pending release and the rest are inert.
+  // arrives first consumes the release and the rest are inert.
   const signalRelease = () => {
     pressed.current = null
-    if (!awaitingRelease.current) return
-    awaitingRelease.current = false
     const cap = captured.current
     captured.current = null
     if (cap) {
       try {
         if (cap.el.hasPointerCapture(cap.id)) cap.el.releasePointerCapture(cap.id)
       } catch {
-        /* the pointer is already gone; the signal below is what matters */
+        /* the pointer is already gone; the decision below is what matters */
       }
     }
-    setReleaseSignal(s => s + 1)
+    const drag = dragRef.current
+    if (!drag || !turning) return
+    const flicked = turning === 'next'
+      ? drag.velocity < -FLICK_PX_PER_EVENT
+      : drag.velocity > FLICK_PX_PER_EVENT
+    settle(angleRef.current > 90 || flicked)
   }
 
   const releasePress = () => { pressed.current = null }
@@ -389,8 +474,23 @@ export default function BiblePage() {
   const spreadLeft = turning === 'prev' ? spreadBase - 2 : spreadBase
   const spreadRight = turning === 'next' ? spreadBase + 3 : spreadBase + 1
 
+  if (!coverOpen) {
+    return (
+      <div ref={rootRef} className="relative h-full bg-aihub-bg text-aihub-text">
+        <BookCover
+          onOpen={() => setCoverOpen(true)}
+          // Only offer to "continue" once the saved position has actually been
+          // restored — before that, `chapter` is still the default and the
+          // cover would promise a page the reader never left off on.
+          subtitle={restored && marks.lastRead && book ? `Continue — ${book.name} ${chapter}` : 'Click to open'}
+        />
+      </div>
+    )
+  }
+
   return (
-    <div ref={rootRef} className="flex h-full flex-col bg-aihub-bg text-aihub-text p-8">
+    <div ref={rootRef} className="flex h-full bg-aihub-bg text-aihub-text">
+      <div className="flex min-w-0 flex-1 flex-col p-8">
       <div className="mb-4 flex shrink-0 items-center gap-2">
         <h1 className="mr-2 text-2xl font-bold">{book?.name} {chapter}</h1>
         <select
@@ -417,9 +517,19 @@ export default function BiblePage() {
           className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm disabled:opacity-40"
         >Next</button>
         <button
+          onClick={() => setAiOpen(o => !o)}
+          title="Study with AI"
+          className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium"
+          style={aiOpen
+            ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
+            : { background: 'rgb(var(--ds-accent) / 0.14)', color: 'rgb(var(--ds-accent-soft))' }}
+        >
+          <Sparkles size={14} /> Ask
+        </button>
+        <button
           onClick={() => setSavedOpen(true)}
           title="Saved verses"
-          className="ml-auto flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
+          className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
         >
           <Bookmark size={14} /> Saved
           {marks.saved.length > 0 && (
@@ -431,6 +541,7 @@ export default function BiblePage() {
       </div>
 
       <div
+        ref={spreadRef}
         className="min-h-0 flex-1"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -445,19 +556,27 @@ export default function BiblePage() {
           leafSide={turning === 'prev' ? 'left' : 'right'}
           leaf={turning ? (
             <PageLeaf
-              key={`${bookId}-${chapter}-${turning}`}
               direction={turning}
-              auto={autoTurn}
-              originX={dragOriginX ?? undefined}
-              releaseSignal={releaseSignal}
+              angle={angle}
+              animating={animating}
+              durationMs={TURN_MS}
               front={leafFaces.front}
               back={leafFaces.back}
-              onComplete={() => endTurn(true)}
-              onCancel={() => endTurn(false)}
             />
           ) : null}
         />
       </div>
+      </div>
+
+      <BibleAssistant
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        bookId={bookId}
+        bookName={book?.name ?? ''}
+        chapter={chapter}
+        selectedRef={selectedRef}
+        onOpenRef={gotoRef}
+      />
 
       {selectedRef && (
         <VerseActions

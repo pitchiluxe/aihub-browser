@@ -755,6 +755,9 @@
           <p>Open <strong>Bible</strong> from the sidebar or the command palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>). All 66 books are built into AIHub itself, so the reader opens and reads even with no network connection at all.</p>
           <p>The text is the <strong>World English Bible (WEB)</strong>, a modern-English translation that is fully <strong>public domain</strong> — free of the licensing that covers translations like the NIV, NKJV, or ESV.</p>
 
+          <h3 style="margin-top:26px">Opening the book</h3>
+          <p>The Bible starts closed, as a bound volume with gilt page edges and a ribbon marker. Click the cover (or press <kbd>Enter</kbd>) and it swings open on its spine. If you have read before, the cover tells you where you left off — <em>Continue — John 3</em> — and opens straight back to that spread. Your place is remembered between sessions automatically.</p>
+
           <h3 style="margin-top:26px">Turning pages</h3>
           <p>The Bible opens as a two-page spread, like a real book. Pick any book from the dropdown, step through it one spread at a time with the Prev / Next buttons, or turn a page by hand:</p>
           <div class="tbl-scroll">
@@ -786,6 +789,24 @@
           <h3 style="margin-top:26px">Sharing a verse</h3>
           <p>The share sheet offers Facebook, X, WhatsApp, LinkedIn, Telegram, Reddit, and Email — each opens the platform in your system browser with the verse and its reference pre-filled. <strong>Copy</strong> puts the quote and reference on your clipboard.</p>
           <div class="note good"><strong>TikTok and Instagram</strong> don't accept a shared link at all, so they're not in that row. Use <strong>Save image</strong> instead — it renders the verse onto a shareable image and downloads it as a PNG, ready for you to post yourself.</div>
+
+          <h3 style="margin-top:26px">Study with AI</h3>
+          <p>Press <strong>Ask</strong> in the reader's header and a study panel opens beside the book. Ask it anything — <em>&ldquo;find verses about money&rdquo;</em>, <em>&ldquo;what does the Bible say about forgiveness?&rdquo;</em>, <em>&ldquo;give me a verse for when I feel afraid&rdquo;</em> — and it answers like a patient teacher, in plain language.</p>
+          <p>The important part is <strong>where its answers come from</strong>. The first time you open the panel, AIHub reads all 31,103 verses and builds a search index on your machine. Every question is then answered from verses it actually finds in that text, and those verses are handed to the AI as the only scripture it is allowed to quote. It is explicitly forbidden to recall a verse from memory or invent a reference — the failure that would make a Bible app worthless.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Ask it</th><th>What happens</th></tr></thead>
+              <tbody>
+                <tr><td>A topic — <em>money, fear, forgiveness</em></td><td>Searches the whole Bible and answers from what it finds</td></tr>
+                <tr><td><em>Explain this chapter</em></td><td>Uses the spread you're reading as the context</td></tr>
+                <tr><td>Select a verse, then <strong>Explain</strong></td><td>Reads that verse with the passage around it, not in isolation</td></tr>
+                <tr><td>Click any <span class="mono">[John 3:16]</span> in a reply</td><td>Opens that verse in the book and selects it</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Searching is done in scripture's own vocabulary, not just your words. Ask about &ldquo;money&rdquo; and it also looks for <em>mammon, riches, treasure, covet</em>; say &ldquo;I feel afraid&rdquo; and it reaches for <em>fear, dread, courage, dismayed</em>. That is the difference between being handed a ledger entry in Kings and being handed the Sermon on the Mount.</p>
+          <div class="note">The panel uses whichever AI you have set up in <strong>Settings</strong> — Ollama running locally (private, nothing leaves your machine) or an OpenRouter key. With no AI configured the reader still works completely; only the Ask panel needs one.</div>
+          <div class="note good">It will tell you when the text doesn't answer your question rather than filling the gap with a guess, and on contested questions it gives the main views fairly instead of ruling. It isn't a substitute for a real pastor or counsellor, and it will say so.</div>
 
           <h3 style="margin-top:26px">A handful of verses look empty</h3>
           <p>Luke 17:36, Acts 8:37, Acts 15:34, Acts 24:7, and Romans 16:25 show a small italic note instead of verse text. The WEB keeps these traditional verse numbers even though the passages themselves are absent from the oldest manuscripts — most modern translations quietly renumber around them. It's expected, not a bug.</p>

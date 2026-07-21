@@ -1,242 +1,36 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React from 'react'
 
 interface Props {
   front: React.ReactNode          // the face of the leaf as it lies on the book
   back: React.ReactNode           // the face revealed as the leaf swings over
-  onComplete: () => void          // fired once the turn passes the point of no return
-  onCancel: () => void            // fired when the leaf springs back
   direction: 'next' | 'prev'
-  auto?: boolean                  // when true the leaf turns itself (button / keyboard)
-  originX?: number                // clientX the drag began at; omit for an auto turn
-  // Bumped by the parent when the pointer it captured is released. The parent
-  // owns the pointer capture, so this arrives even if the raw `pointerup` was
-  // dispatched before this component's listeners were bound.
-  releaseSignal?: number
+  angle: number                   // 0 → 180 degrees, owned by the page
+  animating: boolean              // true while easing to a resting angle
+  durationMs: number
 }
 
-const DURATION_MS = 420
-const FLICK_PX_PER_EVENT = 6
-// Last-resort watchdog: a drag that goes this long with no movement and no
-// release is treated as abandoned and cancelled, so a lost pointer can never
-// leave the reader stuck with `turning` latched.
-const IDLE_RELEASE_MS = 8000
-
-// One turning sheet. Rotation is driven directly by pointer movement so the
-// page tracks the finger, then either completes or springs back on release.
-// Only `transform` and `opacity` animate, so the whole turn stays on the
-// compositor.
+// One turning sheet, rendered from an angle the page hands it.
 //
-// The component is a small one-shot state machine: it settles exactly once,
-// into either `onComplete` or `onCancel`, and every timer, frame and listener
-// it owns is torn down on unmount.
-export default function PageLeaf({ front, back, onComplete, onCancel, direction, auto, originX, releaseSignal }: Props) {
-  const [angle, setAngle] = useState(0)          // 0 → 180 degrees
-  const [dragging, setDragging] = useState(false)
-
-  // A finger is driving this leaf (rather than a button or an arrow key).
-  const isDrag = !auto && originX != null
-
-  const rootRef = useRef<HTMLDivElement>(null)
-  const startX = useRef(originX ?? 0)
-  const lastX = useRef(originX ?? 0)
-  const velocity = useRef(0)
-  const width = useRef(1)
-  const angleRef = useRef(0)                     // pointer handlers read this, not state
-  // The pointer has already travelled DRAG_THRESHOLD_PX before this component
-  // exists, so the first move's displacement is pre-mount travel, not speed.
-  const seenMove = useRef(false)
-
-  const settled = useRef(false)                  // guarantees one and only one outcome
-  const timer = useRef<number | null>(null)
-  const frame = useRef<number | null>(null)
-  const watchdog = useRef<number | null>(null)
-  const lastActivity = useRef(0)
-
-  // The parent passes fresh closures on every render; holding them in a ref
-  // keeps the mount effect from restarting (and re-arming its timer) whenever
-  // the parent happens to re-render mid-turn.
-  const callbacks = useRef({ onComplete, onCancel })
-  callbacks.current = { onComplete, onCancel }
-
-  const [prefersReduced] = useState(() =>
-    typeof window !== 'undefined'
-      && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  )
-
-  const clearWatchdog = useCallback(() => {
-    if (watchdog.current !== null) {
-      window.clearTimeout(watchdog.current)
-      watchdog.current = null
-    }
-  }, [])
-
-  // The single exit. Snaps the leaf to its resting angle, lets the CSS
-  // transition run, then hands control back to the page exactly once.
-  const settle = useCallback((complete: boolean) => {
-    if (settled.current) return
-    settled.current = true
-    clearWatchdog()
-    setDragging(false)
-    // Under reduced motion the leaf never rotates at all — it stays at 0
-    // degrees, which is pixel-for-pixel the page already underneath it, and
-    // the spread simply changes when the zero-length settle timer fires.
-    if (!prefersReduced) {
-      const resting = complete ? 180 : 0
-      angleRef.current = resting
-      setAngle(resting)
-    }
-    timer.current = window.setTimeout(() => {
-      timer.current = null
-      if (complete) callbacks.current.onComplete()
-      else callbacks.current.onCancel()
-    }, prefersReduced ? 0 : DURATION_MS)
-  }, [prefersReduced, clearWatchdog])
-
-  // The release decision, hoisted out of the mount effect so that it exists
-  // from the component's first render: the parent's `releaseSignal` can then
-  // reach it even in the window before the effect has run.
-  const handleRelease = useCallback(() => {
-    if (!isDrag) return                          // a stray pointerup must not cancel an auto turn
-    if (settled.current) return
-    const flicked = direction === 'next'
-      ? velocity.current < -FLICK_PX_PER_EVENT
-      : velocity.current > FLICK_PX_PER_EVENT
-    settle(angleRef.current > 90 || flicked)
-  }, [isDrag, direction, settle])
-
-  // Re-arms itself rather than being reset on every pointermove, so a long
-  // drag costs no timer churn: it wakes at most once per idle window.
-  const armWatchdog = useCallback(() => {
-    const tick = () => {
-      watchdog.current = null
-      if (settled.current) return
-      const idle = Date.now() - lastActivity.current
-      if (idle < IDLE_RELEASE_MS) {
-        watchdog.current = window.setTimeout(tick, IDLE_RELEASE_MS - idle)
-        return
-      }
-      settle(false)                              // abandoned drag: spring back, never hang
-    }
-    clearWatchdog()
-    watchdog.current = window.setTimeout(tick, IDLE_RELEASE_MS)
-  }, [settle, clearWatchdog])
-
-  // The parent captures the pointer at the moment the drag threshold is
-  // crossed and bumps this counter on pointerup / pointercancel /
-  // lostpointercapture. Capture guarantees the parent sees the release even if
-  // the finger leaves the window, and this effect delivers it to the leaf even
-  // if the release landed before the leaf's own window listeners were bound.
-  const releaseBaseline = useRef(releaseSignal)
-  useEffect(() => {
-    if (releaseSignal === releaseBaseline.current) return
-    handleRelease()
-  }, [releaseSignal, handleRelease])
-
-  // Tear down anything still pending. Kept separate from the driving effect so
-  // it runs on unmount no matter which path the leaf took.
-  //
-  // `settled` is released here as well. Under StrictMode the mount effects run
-  // create → destroy → create, and a settle raised in the first pass would
-  // otherwise leave the guard latched with its timer already cleared: the
-  // second pass would early-return and the outcome would never fire at all.
-  // Releasing it in the same cleanup that clears the timer keeps flag and
-  // timer in step, so exactly one outcome is always in flight.
-  useEffect(() => () => {
-    if (timer.current !== null) window.clearTimeout(timer.current)
-    if (frame.current !== null) cancelAnimationFrame(frame.current)
-    if (watchdog.current !== null) window.clearTimeout(watchdog.current)
-    timer.current = null
-    frame.current = null
-    watchdog.current = null
-    settled.current = false
-  }, [])
-
-  // Mount-time driver, run once. Either the leaf animates itself (button or
-  // arrow key) or it binds to the pointer that started the drag.
-  useEffect(() => {
-    width.current = rootRef.current?.offsetWidth || 1
-
-    // Auto turn: nothing is holding the page, so flip it on the next frame and
-    // let the CSS transition carry it. Under reduced motion there is no
-    // animation to wait for — the page simply changes.
-    if (auto || originX == null) {
-      if (prefersReduced) {
-        settle(true)
-      } else {
-        // Two frames, not one: a rAF callback runs before the style pass of the
-        // frame it belongs to, and React flushes the state change in the
-        // following microtask, so a single frame can hand the compositor 0 and
-        // 180 degrees with no computed style in between and the transition
-        // never starts. The second frame guarantees the 0-degree start style
-        // has been committed first.
-        frame.current = requestAnimationFrame(() => {
-          frame.current = requestAnimationFrame(() => {
-            frame.current = null
-            settle(true)
-          })
-        })
-      }
-      return
-    }
-
-    // Drag turn: the pointerdown happened on the spread before this component
-    // existed, so listen on the window rather than on our own subtree. That
-    // also keeps the turn alive if the finger leaves the page.
-    setDragging(true)
-    seenMove.current = false
-    lastActivity.current = Date.now()
-    armWatchdog()
-
-    const onMove = (e: PointerEvent) => {
-      if (settled.current) return
-      lastActivity.current = Date.now()
-      // The first move carries the pre-mount travel that tripped the drag
-      // threshold, which always exceeds FLICK_PX_PER_EVENT. Counting it as
-      // velocity would turn every slow, deliberate drag into a flick.
-      if (seenMove.current) velocity.current = e.clientX - lastX.current
-      else { seenMove.current = true; velocity.current = 0 }
-      lastX.current = e.clientX
-      // Dragging right-to-left turns forward; the sign flips going back.
-      const travelled = direction === 'next' ? startX.current - e.clientX : e.clientX - startX.current
-      const ratio = Math.max(0, Math.min(1, travelled / width.current))
-      // `angleRef` is the drag's progress and always tracks the finger, since
-      // the release decision reads it. Only the rendered angle is withheld
-      // under reduced motion, so the sheet never rotates while the drag still
-      // navigates normally.
-      angleRef.current = ratio * 180
-      if (!prefersReduced) setAngle(angleRef.current)
-    }
-
-    const onRelease = () => handleRelease()
-
-    // `blur` covers the case where the window loses focus mid-drag and no
-    // pointerup or pointercancel ever arrives — without it the leaf would hang.
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onRelease)
-    window.addEventListener('pointercancel', onRelease)
-    window.addEventListener('blur', onRelease)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onRelease)
-      window.removeEventListener('pointercancel', onRelease)
-      window.removeEventListener('blur', onRelease)
-      clearWatchdog()
-    }
-    // Intentionally mount-only: the leaf is created for one turn and discarded.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
+// This is deliberately a dumb view. An earlier version owned the gesture
+// itself and bound its own pointer listeners in an effect — but an effect runs
+// after React commits and paints, and a real drag is over in a couple of
+// hundred milliseconds, so the whole gesture routinely finished before the
+// listeners existed and the page simply never moved. The page now tracks the
+// pointer it already captured on pointerdown and drives this component, so the
+// sheet follows the finger from the very first pixel.
+//
+// Only `transform` and `opacity` animate, so the turn stays on the compositor.
+export default function PageLeaf({ front, back, direction, angle, animating, durationMs }: Props) {
   // Deepest at the halfway point, where the sheet stands upright to the light.
   const shadow = Math.sin((angle / 180) * Math.PI) * 0.45
   const easing = 'cubic-bezier(0.22, 0.61, 0.36, 1)'
-  const still = dragging || prefersReduced
-  const transition = still ? 'none' : `transform ${DURATION_MS}ms ${easing}`
-  const shadeTransition = still ? 'none' : `opacity ${DURATION_MS}ms ${easing}`
+  const transition = animating ? `transform ${durationMs}ms ${easing}` : 'none'
+  const shadeTransition = animating ? `opacity ${durationMs}ms ${easing}` : 'none'
 
-  // The leaf is purely a picture of the turn — the window listeners drive it,
-  // so it must never swallow clicks meant for the page underneath.
+  // The leaf is purely a picture of the turn — the page drives it, so it must
+  // never swallow clicks meant for the text underneath.
   return (
-    <div ref={rootRef} className="pointer-events-none absolute inset-0 z-30" style={{ perspective: 2200 }}>
+    <div className="pointer-events-none absolute inset-0 z-30" style={{ perspective: 2200 }}>
       <div
         className={`absolute inset-0 ${direction === 'next' ? 'origin-left' : 'origin-right'}`}
         style={{
@@ -244,13 +38,9 @@ export default function PageLeaf({ front, back, onComplete, onCancel, direction,
           transform: `rotateY(${direction === 'next' ? -angle : angle}deg)`,
           transition,
           willChange: 'transform',
-          touchAction: 'none',
         }}
       >
-        <div
-          className="absolute inset-0 bible-paper overflow-hidden p-10"
-          style={{ backfaceVisibility: 'hidden' }}
-        >
+        <div className="absolute inset-0 bible-paper overflow-hidden p-10" style={{ backfaceVisibility: 'hidden' }}>
           {front}
           {/* Opacity-only so the shading rides the compositor with the rotation. */}
           <div
