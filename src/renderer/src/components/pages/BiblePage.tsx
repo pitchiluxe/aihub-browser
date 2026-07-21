@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { getBooks, getChapter, type Verse } from '../../services/bibleService'
+import VerseText from '../bible/VerseText'
 
 export default function BiblePage() {
   const [bookId, setBookId] = useState('JHN')
   const [chapter, setChapter] = useState(3)
   const [verses, setVerses] = useState<Verse[]>([])
+  const [selectedRef, setSelectedRef] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -28,9 +30,14 @@ export default function BiblePage() {
           className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm">Next</button>
       </div>
       <div className="max-w-2xl leading-8">
-        {verses.map(v => (
-          <span key={v.v}><sup className="text-aihub-muted mr-1">{v.v}</sup>{v.t} </span>
-        ))}
+        <VerseText
+          bookId={bookId}
+          chapter={chapter}
+          verses={verses}
+          highlights={{}}
+          selectedRef={selectedRef}
+          onSelectVerse={setSelectedRef}
+        />
       </div>
     </div>
   )
