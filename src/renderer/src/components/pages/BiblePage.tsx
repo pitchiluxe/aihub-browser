@@ -29,9 +29,12 @@ export default function BiblePage() {
 
   useEffect(() => {
     let cancelled = false
-    // Two either side, so the chapters a completed turn lands on are already
-    // resident and the new spread paints without a blank frame.
-    const wanted = [chapter - 2, chapter - 1, chapter, chapter + 1, chapter + 2]
+    // Two behind and three ahead. The window has to cover every chapter that
+    // can be on screen during a turn, not just the settled spread: the leaf's
+    // two faces (`chapter+1` / `chapter+2` forward, `chapter` / `chapter-1`
+    // back) and — since the half under the lifted sheet already shows what the
+    // turn will reveal — `chapter+3` forward and `chapter-2` back.
+    const wanted = [chapter - 2, chapter - 1, chapter, chapter + 1, chapter + 2, chapter + 3]
       .filter(c => c >= 1 && c <= lastChapter)
     Promise.all(wanted.map(async c => [c, await getChapter(bookId, c)] as const))
       .then(entries => { if (!cancelled) setPages(Object.fromEntries(entries)) })
@@ -85,6 +88,14 @@ export default function BiblePage() {
   // page both still work.
   const pressed = useRef<{ x: number; y: number } | null>(null)
 
+  // The pointer is captured the instant a turn starts, so the release is
+  // guaranteed to come back to this element even if the finger leaves the
+  // window. `releaseSignal` hands it to the leaf, which may not have bound its
+  // own window listeners yet — its mount effect is passive and can be flushed
+  // after the pointer has already come up.
+  const captured = useRef<{ el: HTMLElement; id: number } | null>(null)
+  const [releaseSignal, setReleaseSignal] = useState(0)
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
     pressed.current = { x: e.clientX, y: e.clientY }
@@ -97,7 +108,32 @@ export default function BiblePage() {
     const dy = e.clientY - from.y
     if (Math.abs(dx) < DRAG_THRESHOLD_PX || Math.abs(dx) <= Math.abs(dy)) return
     pressed.current = null
+    // Capture here rather than on pointerdown: capture also retargets the
+    // compatibility mouse events, so taking it before the gesture is known to
+    // be a drag would swallow the click that selects a verse.
+    const el = e.currentTarget as HTMLElement
+    try {
+      el.setPointerCapture(e.pointerId)
+      captured.current = { el, id: e.pointerId }
+    } catch {
+      captured.current = null
+    }
     startTurn(dx < 0 ? 'next' : 'prev', from.x)
+  }
+
+  // pointerup, pointercancel and lostpointercapture all land here; whichever
+  // arrives first consumes the capture and the rest are inert.
+  const signalRelease = () => {
+    pressed.current = null
+    const cap = captured.current
+    if (!cap) return
+    captured.current = null
+    try {
+      if (cap.el.hasPointerCapture(cap.id)) cap.el.releasePointerCapture(cap.id)
+    } catch {
+      /* the pointer is already gone; the signal below is what matters */
+    }
+    setReleaseSignal(s => s + 1)
   }
 
   const releasePress = () => { pressed.current = null }
@@ -127,6 +163,17 @@ export default function BiblePage() {
   const leafFaces = turning === 'prev'
     ? { front: page(chapter), back: page(chapter - 1) }
     : { front: page(chapter + 1), back: page(chapter + 2) }
+
+  // While a sheet is in flight, the half it lifts off already shows what the
+  // turn will reveal, exactly as a real book does — otherwise that half sits
+  // there showing the page still printed on the sheet above it for the whole
+  // 90-180 window, then pops when the turn lands. At 0 degrees the leaf's
+  // front face covers that half pixel-for-pixel, so swapping its content at
+  // turn start is invisible; at 180 degrees the leaf's back face covers the
+  // *other* half, whose content likewise matches the settled spread. Cancel is
+  // safe too: `turning` clears in the same commit that unmounts the leaf.
+  const spreadLeft = turning === 'prev' ? chapter - 2 : chapter
+  const spreadRight = turning === 'next' ? chapter + 3 : chapter + 1
 
   return (
     <div className="flex h-full flex-col bg-aihub-bg text-aihub-text p-8">
@@ -158,13 +205,14 @@ export default function BiblePage() {
         className="min-h-0 flex-1"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={releasePress}
-        onPointerCancel={releasePress}
+        onPointerUp={signalRelease}
+        onPointerCancel={signalRelease}
+        onLostPointerCapture={signalRelease}
         onPointerLeave={releasePress}
       >
         <BookSpread
-          left={page(chapter)}
-          right={page(chapter + 1)}
+          left={page(spreadLeft)}
+          right={page(spreadRight)}
           leafSide={turning === 'prev' ? 'left' : 'right'}
           leaf={turning ? (
             <PageLeaf
@@ -172,6 +220,7 @@ export default function BiblePage() {
               direction={turning}
               auto={autoTurn}
               originX={dragOriginX ?? undefined}
+              releaseSignal={releaseSignal}
               front={leafFaces.front}
               back={leafFaces.back}
               onComplete={() => endTurn(true)}
