@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, X, Send, Loader2, Sparkles, FileText, Trash2, AlertCircle,
-  Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain,
+  Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain, Mic,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, executeAction, AGENT_TOOLS_DOC } from '../../services/agentTools'
@@ -435,6 +435,51 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
     } catch {}
   }
 
+  // ── Voice input (Web Speech). Availability varies by build/platform, so we
+  // only show the mic when the API exists and surface a clear message if the
+  // engine refuses (common in some Electron builds). ────────────────────────
+  const voiceSupported = useRef(typeof ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) !== 'undefined').current
+  const [listening, setListening] = useState(false)
+  const [voiceError, setVoiceError] = useState('')
+  const recognitionRef = useRef<any>(null)
+
+  const toggleVoice = () => {
+    if (!voiceSupported) return
+    if (listening) { try { recognitionRef.current?.stop() } catch {}; setListening(false); return }
+    setVoiceError('')
+    try {
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      const rec = new SR()
+      rec.lang = 'en-US'
+      rec.interimResults = true
+      rec.continuous = false
+      let finalText = ''
+      rec.onresult = (e: any) => {
+        let interim = ''
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i]
+          if (r.isFinal) finalText += r[0].transcript
+          else interim += r[0].transcript
+        }
+        setInput((finalText + interim).trim())
+      }
+      rec.onerror = (e: any) => {
+        setListening(false)
+        setVoiceError(e?.error === 'not-allowed' || e?.error === 'service-not-allowed'
+          ? 'Voice input was blocked. Check microphone permission.'
+          : 'Voice input isn’t available in this build.')
+        setTimeout(() => setVoiceError(''), 4000)
+      }
+      rec.onend = () => { setListening(false); setTimeout(() => inputRef.current?.focus(), 30) }
+      recognitionRef.current = rec
+      rec.start()
+      setListening(true)
+    } catch {
+      setVoiceError('Voice input isn’t available in this build.')
+      setTimeout(() => setVoiceError(''), 4000)
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
@@ -746,6 +791,11 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
 
             {/* ── Input ── */}
             <div style={{ padding: 12, borderTop: '1px solid var(--ds-border-sm)', flexShrink: 0 }}>
+              {(listening || voiceError) && (
+                <div style={{ marginBottom: 7, fontSize: 11, fontWeight: 600, color: voiceError ? '#f87171' : '#f87171', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {voiceError || <>🎙️ <span style={{ color: 'rgb(var(--ds-text-3))' }}>Listening… speak now</span></>}
+                </div>
+              )}
               <div
                 style={{
                   display: 'flex', alignItems: 'flex-end', gap: 8,
@@ -769,6 +819,23 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
                     userSelect: 'text',
                   }}
                 />
+                {voiceSupported && (
+                  <button
+                    onClick={toggleVoice}
+                    title={listening ? 'Stop listening' : 'Speak your request'}
+                    style={{
+                      width: 30, height: 30, borderRadius: 10, border: 'none', cursor: 'pointer', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: listening ? 'rgba(239,68,68,0.18)' : 'var(--ds-glass-sm)',
+                      color: listening ? '#f87171' : 'rgb(var(--ds-text-4))',
+                      boxShadow: listening ? '0 0 0 3px rgba(239,68,68,0.15)' : 'none',
+                      animation: listening ? 'micPulse 1.1s ease-in-out infinite' : 'none',
+                    }}
+                  >
+                    <Mic size={13} />
+                    <style>{`@keyframes micPulse{0%,100%{box-shadow:0 0 0 2px rgba(239,68,68,0.12)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0.05)}}`}</style>
+                  </button>
+                )}
                 <button onClick={sendMessage} disabled={!input.trim() || isAILoading} style={{
                   width: 30, height: 30, borderRadius: 10, border: 'none', cursor: input.trim() ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
