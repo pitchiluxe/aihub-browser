@@ -1,4 +1,4 @@
-import React, { memo } from 'react'
+import React, { memo, useEffect, useState } from 'react'
 import {
   Home, History, Download, Settings, Plus, Sparkles,
   Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing, BookMarked,
@@ -45,6 +45,15 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
       setAddBookmarkOpen: s.setAddBookmarkOpen, tabs: s.tabs, activeTabId: s.activeTabId,
     })))
   const activeTab = tabs.find(t => t.id === activeTabId)
+
+  // Real app version, not a literal — the hardcoded one sat at v1.0 for
+  // twenty releases. Same source Settings and the manual read from.
+  const [appVersion, setAppVersion] = useState('')
+  useEffect(() => {
+    window.electronAPI.appInfo?.()
+      .then((i: any) => setAppVersion(i?.version || ''))
+      .catch(() => {})
+  }, [])
 
   const isActive = (type: string) => {
     if (type === 'home') return !!(activeTab?.isHome && activeTab?.pageType === 'browser')
@@ -223,7 +232,7 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <span style={{ fontSize: 9, color: 'rgba(96,102,130,0.5)', letterSpacing: '0.04em' }}>
-          AIHub v1.0
+          {appVersion ? `AIHub v${appVersion}` : 'AIHub'}
         </span>
         <span style={{
           fontSize: 9,

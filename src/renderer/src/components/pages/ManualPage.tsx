@@ -10,6 +10,23 @@ export default function ManualPage() {
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
   const [error,  setError]  = useState('')
+  // The manual carries a __AIHUB_VERSION__ placeholder rather than a literal
+  // version: hardcoding it meant the footer still read v1.5 fifteen releases
+  // later. Resolved from the main process, the same source Settings uses.
+  const [version, setVersion] = useState('')
+
+  useEffect(() => {
+    window.electronAPI.appInfo?.()
+      .then((i: any) => setVersion(i?.version || ''))
+      .catch(() => {})
+  }, [])
+
+  // Until the version resolves, fall back to an unversioned name rather than
+  // rendering the raw placeholder.
+  const html = useMemo(
+    () => manualHtml.replace(/__AIHUB_VERSION__/g, version ? `v${version}` : ''),
+    [version],
+  )
 
   // Render the manual from a blob URL rather than srcDoc. srcDoc gives the
   // iframe an "about:srcdoc" base URL, which stops in-page "#section" links
@@ -17,8 +34,8 @@ export default function ManualPage() {
   // URL is a real document with a real base, so the Replay button and every
   // table-of-contents link work exactly as they do standalone.
   const manualUrl = useMemo(
-    () => URL.createObjectURL(new Blob([manualHtml], { type: 'text/html' })),
-    [],
+    () => URL.createObjectURL(new Blob([html], { type: 'text/html' })),
+    [html],
   )
   useEffect(() => () => URL.revokeObjectURL(manualUrl), [manualUrl])
 
@@ -28,7 +45,7 @@ export default function ManualPage() {
     try {
       const res = await window.electronAPI.file.saveText({
         filename: MANUAL_FILENAME,
-        content:  manualHtml,
+        content:  html,
       })
       if (res?.success) {
         setSaved(true)
