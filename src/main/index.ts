@@ -642,7 +642,7 @@ async function savePageAs(wc: Electron.WebContents) {
   try {
     let title = 'page'
     try { title = (wc.getTitle() || 'page').replace(/[<>:"/\\|?*]+/g, '_').slice(0, 80) } catch {}
-    const result = await dialog.showSaveDialog(mainWindow, {
+    const result = await dialog.showSaveDialog(BrowserWindow.getFocusedWindow() ?? mainWindow, {
       title: 'Save Page As',
       defaultPath: `${title}.html`,
       filters: [{ name: 'Web Page, Complete', extensions: ['html'] }],
@@ -1184,16 +1184,13 @@ async function fetchFreeProxyList(cc: string): Promise<string[]> {
   return [...socks, ...rest]
 }
 
-// Every session that actually carries user traffic. Tab content runs in
-// BrowserViews on the 'persist:main' partition — a DIFFERENT session from
-// defaultSession — so proxying only defaultSession left real browsing going
-// out direct while the IP readout (which also used defaultSession) showed the
-// proxy's address. The VPN must be applied to, and verified through, the
-// session tabs actually use.
-// Only the BROWSING session is proxied. The app's own session (defaultSession)
-// carries AI requests, update checks and favicon fetches — pushing those
-// through a flaky free proxy stalls the UI without protecting anything the
-// user cares about. The VPN exists so websites see the chosen country.
+// The VPN proxies ONLY the browsing session. Tab content runs in BrowserViews
+// on the 'persist:main' partition — a different session from defaultSession —
+// so proxying defaultSession (as an earlier version did) left real browsing
+// going out direct while "connected" showed green. The app's own defaultSession
+// (AI requests, update checks, favicons) is deliberately left direct: routing
+// it through a flaky free proxy would stall the UI without protecting anything
+// the user cares about. The VPN exists so websites see the chosen country.
 function trafficSessions(): Electron.Session[] {
   return [session.fromPartition('persist:main')]
 }
@@ -2165,7 +2162,7 @@ ipcMain.handle('ai:summarizePage', async (_e, pageText: string, url: string) => 
 // ── IPC: Save summary as Markdown ─────────────────────────────────────────
 ipcMain.handle('file:saveMd', async (_e, { title, content }: { title: string; content: string }) => {
   const safeName = title.replace(/[^a-z0-9\s]/gi, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'summary'
-  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+  const { filePath, canceled } = await dialog.showSaveDialog(BrowserWindow.getFocusedWindow() ?? mainWindow, {
     title: 'Save Summary as Markdown',
     defaultPath: join(os.homedir(), 'Documents', `${safeName}.md`),
     filters: [{ name: 'Markdown', extensions: ['md'] }],
@@ -2182,7 +2179,7 @@ ipcMain.handle('file:saveMd', async (_e, { title, content }: { title: string; co
 // ── IPC: Save screenshot as PNG ────────────────────────────────────────────
 ipcMain.handle('file:saveImage', async (_e, { dataUrl, baseName }: { dataUrl: string; baseName?: string }) => {
   const safeName = (baseName || 'screenshot').replace(/[^a-z0-9\s-]/gi, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'screenshot'
-  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+  const { filePath, canceled } = await dialog.showSaveDialog(BrowserWindow.getFocusedWindow() ?? mainWindow, {
     title: 'Save Screenshot',
     defaultPath: join(os.homedir(), 'Documents', `${safeName}-${Date.now()}.png`),
     filters: [{ name: 'PNG Image', extensions: ['png'] }],
@@ -2199,7 +2196,7 @@ ipcMain.handle('file:saveImage', async (_e, { dataUrl, baseName }: { dataUrl: st
 
 // ── IPC: Save tab recording as WebM ────────────────────────────────────────
 ipcMain.handle('file:saveVideo', async (_e, { buffer }: { buffer: ArrayBuffer }) => {
-  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+  const { filePath, canceled } = await dialog.showSaveDialog(BrowserWindow.getFocusedWindow() ?? mainWindow, {
     title: 'Save Recording',
     defaultPath: join(os.homedir(), 'Documents', `recording-${Date.now()}.webm`),
     filters: [{ name: 'WebM Video', extensions: ['webm'] }],
@@ -2388,7 +2385,7 @@ ipcMain.handle('agentfs:writeFile', (_e, p: string, content: string, overwrite?:
 // Lets the user point the agent at a target folder for codebase generation.
 // Native dialog = the choice is always the user's, never the model's.
 ipcMain.handle('agentfs:pickDirectory', async () => {
-  const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+  const { filePaths, canceled } = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() ?? mainWindow, {
     title: 'Choose a folder for the agent to work in',
     properties: ['openDirectory', 'createDirectory'],
     defaultPath: os.homedir(),
@@ -2460,7 +2457,7 @@ function sanitizeFilename(name: string, fallback: string): string {
 ipcMain.handle('file:saveText', async (_e, { filename, content }: { filename: string; content: string }) => {
   const safe = sanitizeFilename(filename, 'agent-output.txt')
   const ext = extname(safe).replace('.', '') || 'txt'
-  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+  const { filePath, canceled } = await dialog.showSaveDialog(BrowserWindow.getFocusedWindow() ?? mainWindow, {
     title: 'Save File',
     defaultPath: join(os.homedir(), 'Downloads', safe),
     filters: [{ name: ext.toUpperCase() + ' File', extensions: [ext] }, { name: 'All Files', extensions: ['*'] }],
@@ -2545,7 +2542,7 @@ ipcMain.handle('file:saveZip', async (_e, { filename, files }: { filename?: stri
   if (!Array.isArray(files) || files.length === 0) return { success: false, error: 'no files to zip' }
   let safe = sanitizeFilename(filename || '', 'agent-files.zip')
   if (!safe.toLowerCase().endsWith('.zip')) safe += '.zip'
-  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+  const { filePath, canceled } = await dialog.showSaveDialog(BrowserWindow.getFocusedWindow() ?? mainWindow, {
     title: 'Save ZIP Archive',
     defaultPath: join(os.homedir(), 'Downloads', safe),
     filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
@@ -2707,7 +2704,7 @@ ipcMain.handle('ai:getLatestNews', async () => {
 
 // ── IPC: Bookmark export ───────────────────────────────────────────────────
 ipcMain.handle('bookmarks:export', async (_e, format: 'json' | 'html') => {
-  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+  const { filePath, canceled } = await dialog.showSaveDialog(BrowserWindow.getFocusedWindow() ?? mainWindow, {
     title: 'Export Bookmarks',
     defaultPath: `aihub-bookmarks.${format}`,
     filters: format === 'json'
@@ -2735,7 +2732,7 @@ ipcMain.handle('bookmarks:export', async (_e, format: 'json' | 'html') => {
 
 // ── IPC: Bookmark import ───────────────────────────────────────────────────
 ipcMain.handle('bookmarks:import', async () => {
-  const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+  const { filePaths, canceled } = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() ?? mainWindow, {
     title: 'Import Bookmarks',
     filters: [{ name: 'Bookmark Files', extensions: ['json', 'html', 'htm'] }],
     properties: ['openFile'],
