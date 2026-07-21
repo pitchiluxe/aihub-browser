@@ -871,13 +871,14 @@ interface Props {
   onComplete: () => void          // fired once the turn passes the point of no return
   onCancel: () => void            // fired when the leaf springs back
   direction: 'next' | 'prev'
+  auto?: boolean                  // when true the leaf turns itself (button / keyboard)
 }
 
 // One turning sheet. Rotation is driven directly by pointer movement so the
 // page tracks the finger, then either completes or springs back on release.
 // Only `transform` and `opacity` animate, so the whole turn stays on the
 // compositor.
-export default function PageLeaf({ front, back, onComplete, onCancel, direction }: Props) {
+export default function PageLeaf({ front, back, onComplete, onCancel, direction, auto }: Props) {
   const [angle, setAngle] = useState(0)          // 0 → 180 degrees
   const [dragging, setDragging] = useState(false)
   const startX = useRef(0)
@@ -921,12 +922,14 @@ export default function PageLeaf({ front, back, onComplete, onCancel, direction 
     finish(angle > 90 || flicked)
   }
 
-  // Keyboard and button turns animate through the same path as a drag.
+  // A button or arrow-key turn has no pointer driving it, so the leaf drives
+  // itself: flip to 180deg on the next frame and let the CSS transition run.
   useEffect(() => {
-    if (dragging) return
-    const id = window.setTimeout(() => setAngle(a => (a === 0 ? 0 : a)), 0)
-    return () => window.clearTimeout(id)
-  }, [dragging])
+    if (!auto) return
+    const raf = requestAnimationFrame(() => setAngle(180))
+    const done = window.setTimeout(() => onComplete(), prefersReduced ? 0 : 440)
+    return () => { cancelAnimationFrame(raf); window.clearTimeout(done) }
+  }, [auto, onComplete, prefersReduced])
 
   const shadow = Math.sin((angle / 180) * Math.PI) * 0.45
 
@@ -997,6 +1000,7 @@ Replace the body of `BiblePage.tsx` render with a spread showing two consecutive
 
 ```tsx
   const [turning, setTurning] = useState<'next' | 'prev' | null>(null)
+  const [autoTurn, setAutoTurn] = useState(false)   // true when a button/key started the turn
   const [nextVerses, setNextVerses] = useState<Verse[]>([])
 
   useEffect(() => {
@@ -1023,10 +1027,15 @@ and render:
         leaf={turning ? (
           <PageLeaf
             direction={turning}
+            auto={autoTurn}
             front={page(nextVerses, chapter + 1)}
             back={page(verses, chapter)}
-            onComplete={() => { setTurning(null); setChapter(c => c + (turning === 'next' ? 2 : -2)) }}
-            onCancel={() => setTurning(null)}
+            onComplete={() => {
+              const step = turning === 'next' ? 2 : -2
+              setTurning(null); setAutoTurn(false)
+              setChapter(c => Math.max(1, Math.min((book?.chapters ?? 1), c + step)))
+            }}
+            onCancel={() => { setTurning(null); setAutoTurn(false) }}
           />
         ) : null}
       />
@@ -1039,17 +1048,27 @@ import BookSpread from '../bible/BookSpread'
 import PageLeaf from '../bible/PageLeaf'
 ```
 
-Wire the Prev/Next buttons to `setTurning('prev')` and `setTurning('next')`, and add a key handler:
+Add a single helper and wire the Prev/Next buttons plus arrow keys to it. Button
+and keyboard turns set `autoTurn` so the leaf animates itself; a pointer drag
+leaves `autoTurn` false so the finger drives it.
 
 ```tsx
+  const startTurn = useCallback((dir: 'next' | 'prev') => {
+    if (turning) return
+    if (dir === 'prev' && chapter <= 1) return
+    if (dir === 'next' && chapter + 1 >= (book?.chapters ?? 1)) return
+    setAutoTurn(true)
+    setTurning(dir)
+  }, [turning, chapter, book?.chapters])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight') setTurning('next')
-      if (e.key === 'ArrowLeft' && chapter > 1) setTurning('prev')
+      if (e.key === 'ArrowRight') startTurn('next')
+      if (e.key === 'ArrowLeft')  startTurn('prev')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [chapter])
+  }, [startTurn])
 ```
 
 - [ ] **Step 5: Build and verify the animation**
@@ -1209,21 +1228,40 @@ import VerseActions from '../bible/VerseActions'
 
 - [ ] **Step 3: Persist reading position**
 
+Restore the saved position once on first load, then write it back as the reader
+moves. A ref guards the restore so it runs only on the initial load and can't
+fight the user's own navigation afterwards.
+
 Add to `BiblePage.tsx`:
 
 ```tsx
-  // Remember where the reader left off, and restore it on next open.
+  const restored = useRef(false)
+
+  // Restore the last reading position exactly once, when marks first arrive.
   useEffect(() => {
-    if (marks.lastRead && marks.lastRead.book !== bookId) return
-  }, [marks.lastRead, bookId])
+    if (restored.current || !marks.lastRead) return
+    restored.current = true
+    setBookId(marks.lastRead.book)
+    setChapter(marks.lastRead.chapter)
+  }, [marks.lastRead])
+
+  // Write the position back, debounced, without clobbering concurrent edits:
+  // read the latest marks from the ref rather than closing over a stale copy.
+  const marksRef = useRef(marks)
+  useEffect(() => { marksRef.current = marks }, [marks])
 
   useEffect(() => {
+    if (!restored.current) return
     const id = window.setTimeout(() => {
-      window.electronAPI.bible.setMarks({ ...marks, lastRead: { book: bookId, chapter } }).catch(() => {})
+      const next = { ...marksRef.current, lastRead: { book: bookId, chapter } }
+      marksRef.current = next
+      window.electronAPI.bible.setMarks(next).catch(() => {})
     }, 800)
     return () => window.clearTimeout(id)
-  }, [bookId, chapter, marks])
+  }, [bookId, chapter])
 ```
+
+Import `useRef` from React.
 
 - [ ] **Step 4: Build and verify**
 
