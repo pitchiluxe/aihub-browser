@@ -41,7 +41,8 @@ declare global {
 // A tab needs a native tab content view when it has left the home screen and
 // isn't one of the special aihub:// pages.
 function needsTabView(tab: Tab | undefined): boolean {
-  return !!tab && !tab.isHome && tab.pageType === 'browser'
+  // A sleeping tab has no native view (its memory was freed) until woken.
+  return !!tab && !tab.isHome && tab.pageType === 'browser' && !tab.asleep
 }
 
 export default function App() {
@@ -417,6 +418,30 @@ export default function App() {
       setNavState({ canGoBack: false, canGoForward: false })
     }
   }, [activeTabId, activeTab?.isHome, activeTab?.pageType, setNavState])
+
+  // ── Tab sleeping — free the memory of tabs left in the background too long.
+  // Sleeping destroys the BrowserView (via needsTabView + the lifecycle effect
+  // above); the page is recreated and reloaded when the tab is next activated.
+  // The active tab is never slept. ────────────────────────────────────────────
+  const lastActiveAt = useRef<Map<string, number>>(new Map())
+  useEffect(() => {
+    if (activeTabId) lastActiveAt.current.set(activeTabId, Date.now())
+  }, [activeTabId])
+  useEffect(() => {
+    const SLEEP_AFTER_MS = 30 * 60 * 1000 // 30 minutes idle in the background
+    const timer = setInterval(() => {
+      const now = Date.now()
+      const store = useBrowserStore.getState()
+      for (const t of store.tabs) {
+        if (t.id === store.activeTabId || t.asleep) continue
+        if (t.isHome || t.pageType !== 'browser') continue
+        if (!createdViewIds.current.has(t.id)) continue // no live view to free
+        const seen = lastActiveAt.current.get(t.id) ?? now
+        if (now - seen > SLEEP_AFTER_MS) store.sleepTab(t.id)
+      }
+    }, 60 * 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   // ── Hide the native view while a host HTML overlay must render above it —
   // BrowserView always paints above the window's own webContents, so there's

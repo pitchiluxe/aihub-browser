@@ -179,7 +179,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getSourceId: (): Promise<string | null> => ipcRenderer.invoke('recorder:getSourceId'),
   },
   tabs: {
-    showContextMenu: (info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number }): Promise<string> =>
+    showContextMenu: (info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number; canSleep?: boolean }): Promise<string> =>
       ipcRenderer.invoke('tabs:showContextMenu', info),
   },
   urlbar: {

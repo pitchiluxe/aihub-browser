@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string }
-export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; pageType?: 'browser'|'settings'|'history'|'downloads'|'wifi'|'vpn'|'research'|'agents'|'extensions'|'mail'|'notes'|'manual' }
+export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; asleep?: boolean; pageType?: 'browser'|'settings'|'history'|'downloads'|'wifi'|'vpn'|'research'|'agents'|'extensions'|'mail'|'notes'|'manual' }
 export interface AIMessage { role: 'user'|'assistant'|'system'; content: string; steps?: { label: string; status: 'pending' | 'done' | 'error' }[] }
 export interface HistoryItem { id: string; url: string; title: string; favicon?: string; timestamp: number }
 export interface DownloadItem { id: string; filename: string; url: string; savePath: string; totalBytes: number; receivedBytes: number; state: string; startedAt: number; completedAt?: number }
@@ -21,6 +21,7 @@ interface BrowserState {
   closeOtherTabs: (id: string) => void
   closeTabsToRight: (id: string) => void
   setActiveTab: (id: string) => void
+  sleepTab: (id: string) => void
   updateTab: (id: string, u: Partial<Tab>) => void
   reorderTabs: (fromId: string, toId: string) => void
   // Recently closed tabs (Ctrl+Shift+T restores the most recent)
@@ -173,11 +174,23 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   },
 
   setActiveTab: (id) => {
-    set(s => {
-      const tab = s.tabs.find(t => t.id === id)
-      return { activeTabId: id, canGoBack: false, canGoForward: false }
-    })
+    set(s => ({
+      activeTabId: id,
+      canGoBack: false,
+      canGoForward: false,
+      // Activating a slept tab wakes it — clearing the flag lets the tab-view
+      // lifecycle recreate its native view and reload the page.
+      tabs: s.tabs.some(t => t.id === id && t.asleep)
+        ? s.tabs.map(t => t.id === id ? { ...t, asleep: false, isLoading: true } : t)
+        : s.tabs,
+    }))
   },
+
+  // Free a background tab's memory: mark it asleep (never the active tab). The
+  // App lifecycle effect then destroys its BrowserView; it's recreated on wake.
+  sleepTab: (id) => set(s => (
+    id === s.activeTabId ? {} : { tabs: s.tabs.map(t => t.id === id ? { ...t, asleep: true } : t) }
+  )),
 
   updateTab: (id, u) => set(s => ({ tabs: s.tabs.map(t => t.id === id ? { ...t, ...u } : t) })),
 

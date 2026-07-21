@@ -12,11 +12,11 @@ const IS_MAC = window.electronAPI?.platform === 'darwin'
 export default function TabBar() {
   // Narrow subscription — without a selector every store mutation (AI chat
   // streaming, download progress…) re-rendered the whole tab strip.
-  const { tabs, activeTabId, addTab, closeTab, closeOtherTabs, closeTabsToRight, setActiveTab, reorderTabs } = useBrowserStore(
+  const { tabs, activeTabId, addTab, closeTab, closeOtherTabs, closeTabsToRight, setActiveTab, reorderTabs, sleepTab } = useBrowserStore(
     useShallow(s => ({
       tabs: s.tabs, activeTabId: s.activeTabId, addTab: s.addTab, closeTab: s.closeTab,
       closeOtherTabs: s.closeOtherTabs, closeTabsToRight: s.closeTabsToRight,
-      setActiveTab: s.setActiveTab, reorderTabs: s.reorderTabs,
+      setActiveTab: s.setActiveTab, reorderTabs: s.reorderTabs, sleepTab: s.sleepTab,
     })))
 
   // Native context menu — an HTML dropdown would be clipped by the 40px bar
@@ -24,16 +24,20 @@ export default function TabBar() {
   const handleContextMenu = async (e: React.MouseEvent, tab: Tab) => {
     e.preventDefault()
     const idx = tabs.findIndex(t => t.id === tab.id)
+    const isBrowser = !tab.isHome && tab.pageType === 'browser'
     const action = await window.electronAPI.tabs.showContextMenu({
       tabId: tab.id,
-      isBrowser: !tab.isHome && tab.pageType === 'browser',
+      isBrowser,
       hasRight: idx !== -1 && idx < tabs.length - 1,
       count: tabs.length,
+      // Can sleep a background browser tab that isn't already asleep.
+      canSleep: isBrowser && tab.id !== activeTabId && !tab.asleep,
     })
     switch (action) {
       case 'new-tab':      addTab(); break
       case 'duplicate':    addTab(tab.isHome ? 'home' : tab.url, tab.pageType); break
       case 'detach':       detachTab(tab); break
+      case 'sleep':        sleepTab(tab.id); break
       case 'reload':       window.electronAPI.tabView.reload(tab.id); break
       case 'close':        closeTab(tab.id); break
       case 'close-others': closeOtherTabs(tab.id); break
@@ -205,9 +209,11 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
         ...(isActive ? { animation: 'tabGlow 3s ease-in-out infinite' } : {}),
       }}
     >
-      {/* Favicon */}
-      <span className="shrink-0 flex items-center">
-        {tab.isHome ? (
+      {/* Favicon (💤 while the tab is asleep — memory freed) */}
+      <span className="shrink-0 flex items-center" title={tab.asleep ? 'Sleeping — click to wake' : undefined}>
+        {tab.asleep ? (
+          <span style={{ fontSize: 11, lineHeight: 1 }}>💤</span>
+        ) : tab.isHome ? (
           <Home size={11} style={{ color: isActive ? 'rgb(var(--ds-accent-soft))' : 'inherit' }} />
         ) : tab.favicon ? (
           <img src={tab.favicon} style={{ width: 13, height: 13, borderRadius: 3, objectFit: 'contain' }} />
@@ -224,6 +230,7 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
         flex: 1, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis',
         whiteSpace: 'nowrap', userSelect: 'none',
         color: isActive ? 'rgb(var(--ds-text-2))' : undefined,
+        opacity: tab.asleep ? 0.5 : undefined,
       }}>
         {tab.title || 'Loading…'}
       </span>

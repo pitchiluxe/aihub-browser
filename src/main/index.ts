@@ -1460,7 +1460,7 @@ ipcMain.handle('window:detachTab', (_e, url: string, title?: string) => {
 // Native menu — an HTML menu in the tab strip would be clipped by the 40px
 // bar and painted over by the active tab's BrowserView. Resolves with the
 // chosen action id, or '' if dismissed.
-ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number }) => {
+ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number; canSleep?: boolean }) => {
   return new Promise<string>((resolve) => {
     let resolved = false
     const done = (action: string) => { if (!resolved) { resolved = true; resolve(action) } }
@@ -1471,6 +1471,7 @@ ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: bo
       { label: 'New Tab',                 click: () => done('new-tab') },
       { label: 'Duplicate Tab',           click: () => done('duplicate') },
       { label: 'Move Tab to New Window',  enabled: info.isBrowser, click: () => done('detach') },
+      { label: 'Sleep Tab (free memory)', enabled: !!info.canSleep, click: () => done('sleep') },
       { type: 'separator' },
       { label: 'Reload',                  enabled: info.isBrowser, click: () => done('reload') },
       { label: 'Copy Page URL',           enabled: info.isBrowser && !!tabWc, click: () => {
