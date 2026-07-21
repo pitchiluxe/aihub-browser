@@ -1,8 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { getBooks, getChapter, type Verse } from '../../services/bibleService'
+import { formatRef, getBookMeta, getBooks, getChapter, parseRef, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
 import PageLeaf from '../bible/PageLeaf'
+import VerseActions from '../bible/VerseActions'
+
+// Shape persisted by the main process (see `bible:getMarks` / `bible:setMarks`
+// in src/main/index.ts) — highlights, saved verses, notes and the last
+// reading position, all keyed by verse ref (`BOOK.CHAPTER.VERSE`).
+interface BibleMarks {
+  highlights: Record<string, string>
+  saved: { ref: string; ts: number }[]
+  notes: Record<string, string>
+  lastRead: { book: string; chapter: number } | null
+}
+const EMPTY_MARKS: BibleMarks = { highlights: {}, saved: [], notes: {}, lastRead: null }
 
 // The spread always shows two consecutive chapters, so a completed turn moves
 // by a whole sheet — two chapters, not one.
@@ -23,9 +35,124 @@ export default function BiblePage() {
   const [chapter, setChapter] = useState(3)
   const [selectedRef, setSelectedRef] = useState<string | null>(null)
 
+  // Highlights, saved verses, notes and reading position. `marks` drives
+  // rendering; `marksRef` mirrors it synchronously and is what every write
+  // reads from, so a write that lands later (e.g. the debounced reading-
+  // position write below) is always building on top of the latest edit
+  // rather than a copy captured when its effect last ran.
+  const [marks, setMarks] = useState<BibleMarks>(EMPTY_MARKS)
+  const marksRef = useRef<BibleMarks>(EMPTY_MARKS)
+  const highlights = marks.highlights
+
+  // Distinct from `marks.lastRead` being null: EMPTY_MARKS also has a null
+  // `lastRead`, so content alone can't tell "not loaded yet" apart from
+  // "loaded, nothing saved". The restore effect needs that distinction so a
+  // first-time reader (genuinely no saved position) still gets `restored`
+  // flipped to true and starts persisting their position going forward.
+  const [marksLoaded, setMarksLoaded] = useState(false)
+
+  useEffect(() => {
+    window.electronAPI.bible.getMarks()
+      .then((m: BibleMarks) => { marksRef.current = m; setMarks(m) })
+      .catch(() => {})
+      .finally(() => setMarksLoaded(true))
+  }, [])
+
+  // The one path every mark write goes through: compute `next` off the ref
+  // (never off a closed-over `marks`), commit it to the ref before anything
+  // else runs, then mirror it into state for rendering and push it to disk.
+  const persist = useCallback((update: (current: BibleMarks) => BibleMarks) => {
+    const next = update(marksRef.current)
+    marksRef.current = next
+    setMarks(next)
+    window.electronAPI.bible.setMarks(next).catch(() => {})
+  }, [])
+
+  const highlightVerse = useCallback((color: string | null) => {
+    if (!selectedRef) return
+    persist(current => {
+      const nextHighlights = { ...current.highlights }
+      if (color) nextHighlights[selectedRef] = color
+      else delete nextHighlights[selectedRef]
+      return { ...current, highlights: nextHighlights }
+    })
+  }, [selectedRef, persist])
+
+  const toggleSave = useCallback(() => {
+    if (!selectedRef) return
+    persist(current => {
+      const exists = current.saved.some(s => s.ref === selectedRef)
+      return {
+        ...current,
+        saved: exists
+          ? current.saved.filter(s => s.ref !== selectedRef)
+          : [{ ref: selectedRef, ts: Date.now() }, ...current.saved],
+      }
+    })
+  }, [selectedRef, persist])
+
+  const addNote = useCallback(() => {
+    if (!selectedRef) return
+    const text = prompt('Note for this verse:', marksRef.current.notes[selectedRef] || '')
+    if (text === null) return
+    persist(current => {
+      const nextNotes = { ...current.notes }
+      if (text.trim()) nextNotes[selectedRef] = text.trim()
+      else delete nextNotes[selectedRef]
+      return { ...current, notes: nextNotes }
+    })
+  }, [selectedRef, persist])
+
+  // Restore the last reading position exactly once, as soon as marks have
+  // arrived (successfully or not — see `marksLoaded` above). `restored` is
+  // flipped unconditionally on that first pass, whether or not there was a
+  // saved position to restore, so it both (a) never fires again and fights
+  // the user's own navigation, and (b) doesn't get stuck open forever for a
+  // first-time reader who has no `lastRead` yet, which would otherwise leave
+  // the debounced write below permanently disarmed.
+  // toSpreadBase() (below) normalises any chapter — including a saved even
+  // one — to a valid spread, so handing it a raw restored chapter is safe;
+  // we still clamp to the target book's own chapter count and bail on an
+  // unknown book id, since a saved position can predate a book's data.
+  const restored = useRef(false)
+  useEffect(() => {
+    if (restored.current || !marksLoaded) return
+    restored.current = true
+    if (!marks.lastRead) return
+    const { book: savedBook, chapter: savedChapter } = marks.lastRead
+    const meta = getBookMeta(savedBook)
+    if (!meta) return
+    setBookId(savedBook)
+    setChapter(Math.max(1, Math.min(meta.chapters, savedChapter)))
+  }, [marksLoaded, marks.lastRead])
+
+  // Write the reading position back, debounced. Goes through `persist`, so it
+  // reads and writes via `marksRef` like every other mark change — it can
+  // never clobber a highlight/save/note made during the debounce window, and
+  // it can never itself be clobbered by one that lands after it fires.
+  useEffect(() => {
+    if (!restored.current) return
+    const id = window.setTimeout(() => {
+      persist(current => ({ ...current, lastRead: { book: bookId, chapter } }))
+    }, 800)
+    return () => window.clearTimeout(id)
+  }, [bookId, chapter, persist])
+
   // A small window of chapters around the spread: the two visible pages plus
   // the faces the turning leaf reveals on either side.
   const [pages, setPages] = useState<Record<number, Verse[]>>({})
+
+  // Copies the reference and verse text to the clipboard. There's no share
+  // sheet/modal in scope for this task, so this is the whole feature — a real
+  // action rather than a dangling "open share panel" toggle with nothing to
+  // open.
+  const shareVerse = useCallback(() => {
+    if (!selectedRef) return
+    const parsed = parseRef(selectedRef)
+    const verseText = parsed ? pages[parsed.chapter]?.find(v => v.v === parsed.verse)?.t : undefined
+    const text = verseText ? `${formatRef(selectedRef)} — ${verseText}` : formatRef(selectedRef)
+    navigator.clipboard?.writeText(text).catch(() => {})
+  }, [selectedRef, pages])
 
   const [turning, setTurning] = useState<'next' | 'prev' | null>(null)
   const [autoTurn, setAutoTurn] = useState(false)   // true when a button/key started the turn
@@ -175,7 +302,7 @@ export default function BiblePage() {
             bookId={bookId}
             chapter={ch}
             verses={pages[ch] ?? []}
-            highlights={{}}
+            highlights={highlights}
             selectedRef={selectedRef}
             onSelectVerse={setSelectedRef}
           />
@@ -260,6 +387,19 @@ export default function BiblePage() {
           ) : null}
         />
       </div>
+
+      {selectedRef && (
+        <VerseActions
+          verseRef={selectedRef}
+          currentColor={marks.highlights[selectedRef]}
+          isSaved={marks.saved.some(s => s.ref === selectedRef)}
+          onHighlight={highlightVerse}
+          onSave={toggleSave}
+          onNote={addNote}
+          onShare={shareVerse}
+          onClose={() => setSelectedRef(null)}
+        />
+      )}
     </div>
   )
 }
