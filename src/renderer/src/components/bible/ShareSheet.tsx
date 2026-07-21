@@ -132,10 +132,23 @@ export default function ShareSheet({ verseRef, text, onClose }: Props) {
     ctx.fillStyle = '#fbbf24'
     ctx.fillText(formatRef(verseRef), centerX, startY + lines.length * lineHeight + REFERENCE_GAP)
 
-    const a = document.createElement('a')
-    a.download = `${verseRef.replace(/\./g, '-')}.png`
-    a.href = c.toDataURL('image/png')
-    a.click()
+    // A blob URL, not a data URL: the main process records `item.getURL()`
+    // verbatim into downloads.json, so a data URL would park a 150-400KB
+    // base64 string in that file — re-read, re-written on every progress
+    // tick, broadcast over IPC and string-compared for duplicates. A blob:
+    // URL is a few dozen characters.
+    c.toBlob(blob => {
+      if (!blob) return
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.download = `${verseRef.replace(/\./g, '-')}.png`
+      a.href = url
+      a.click()
+      // The blob has to outlive the click: Electron resolves the URL
+      // asynchronously when it starts the download, and revoking it in the
+      // same tick would cancel the save.
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    }, 'image/png')
   }
 
   return (

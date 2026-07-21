@@ -7,6 +7,7 @@ interface Props {
   verseRef: string
   currentColor?: string
   isSaved: boolean
+  hasNote: boolean
   onHighlight: (color: string | null) => void
   onSave: () => void
   onNote: () => void
@@ -15,7 +16,7 @@ interface Props {
 }
 
 export default function VerseActions({
-  verseRef, currentColor, isSaved, onHighlight, onSave, onNote, onShare, onClose,
+  verseRef, currentColor, isSaved, hasNote, onHighlight, onSave, onNote, onShare, onClose,
 }: Props) {
   return (
     <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl border border-aihub-border/40 bg-aihub-surface/95 px-4 py-3 shadow-2xl backdrop-blur">
@@ -33,9 +34,9 @@ export default function VerseActions({
           className="flex h-8 w-8 items-center justify-center rounded-lg text-aihub-muted hover:bg-aihub-border/20">
           {isSaved ? <BookmarkCheck size={16} className="text-aihub-accent" /> : <Bookmark size={16} />}
         </button>
-        <button onClick={onNote} title="Add a note"
+        <button onClick={onNote} title={hasNote ? 'Edit note' : 'Add a note'}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-aihub-muted hover:bg-aihub-border/20">
-          <StickyNote size={16} />
+          <StickyNote size={16} className={hasNote ? 'text-aihub-accent' : undefined} />
         </button>
         <button onClick={onShare} title="Share"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-aihub-muted hover:bg-aihub-border/20">

@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Bookmark } from 'lucide-react'
 import { getBookMeta, getBooks, getChapter, parseRef, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
 import PageLeaf from '../bible/PageLeaf'
 import VerseActions from '../bible/VerseActions'
 import ShareSheet from '../bible/ShareSheet'
+import NoteEditor from '../bible/NoteEditor'
+import SavedVerses from '../bible/SavedVerses'
 
 // Shape persisted by the main process (see `bible:getMarks` / `bible:setMarks`
 // in src/main/index.ts) — highlights, saved verses, notes and the last
@@ -35,6 +38,8 @@ export default function BiblePage() {
   const [bookId, setBookId] = useState('JHN')
   const [chapter, setChapter] = useState(3)
   const [selectedRef, setSelectedRef] = useState<string | null>(null)
+  const [noteOpen, setNoteOpen] = useState(false)
+  const [savedOpen, setSavedOpen] = useState(false)
 
   // Highlights, saved verses, notes and reading position. `marks` drives
   // rendering; `marksRef` mirrors it synchronously and is what every write
@@ -92,17 +97,22 @@ export default function BiblePage() {
     })
   }, [selectedRef, persist])
 
-  const addNote = useCallback(() => {
+  // Editing happens in <NoteEditor>; this is only the write. An empty string
+  // clears the note, which is how the editor's "Clear note" button works.
+  const saveNote = useCallback((text: string) => {
     if (!selectedRef) return
-    const text = prompt('Note for this verse:', marksRef.current.notes[selectedRef] || '')
-    if (text === null) return
     persist(current => {
       const nextNotes = { ...current.notes }
       if (text.trim()) nextNotes[selectedRef] = text.trim()
       else delete nextNotes[selectedRef]
       return { ...current, notes: nextNotes }
     })
+    setNoteOpen(false)
   }, [selectedRef, persist])
+
+  const removeSaved = useCallback((ref: string) => {
+    persist(current => ({ ...current, saved: current.saved.filter(s => s.ref !== ref) }))
+  }, [persist])
 
   // Restore the last reading position exactly once, as soon as marks have
   // arrived (successfully or not — see `marksLoaded` above). `restored` is
@@ -140,18 +150,27 @@ export default function BiblePage() {
   }, [bookId, chapter, persist])
 
   // A small window of chapters around the spread: the two visible pages plus
-  // the faces the turning leaf reveals on either side.
-  const [pages, setPages] = useState<Record<number, Verse[]>>({})
+  // the faces the turning leaf reveals on either side. The book the chapters
+  // came from is stored alongside them, because chapter number alone does not
+  // identify a page: after a book change the loader is async, and a cache
+  // keyed only by number would keep rendering the old book's chapter 1 under
+  // the new book's heading — long enough for a click to bind a verse ref to
+  // the wrong book. `chapterVerses` below refuses to serve another book's
+  // text at all, so during that window the page is simply empty.
+  const [pages, setPages] = useState<{ book: string; chapters: Record<number, Verse[]> }>(
+    { book: bookId, chapters: {} },
+  )
+  const chapterVerses = (ch: number): Verse[] =>
+    (pages.book === bookId ? pages.chapters[ch] : undefined) ?? []
 
-  // Text of the currently selected verse, looked up from the `pages` cache
-  // (Task 7's replacement for the old `verses`/`nextVerses` pair). Falls back
-  // to '' if the containing chapter hasn't loaded into the cache yet — the
-  // share sheet still renders fine with an empty quote in that edge case.
+  // Text of the currently selected verse, looked up from the `pages` cache.
+  // Falls back to '' if the containing chapter hasn't loaded into the cache
+  // yet — the share sheet still renders fine with an empty quote.
   const selectedVerseText = (() => {
     if (!selectedRef) return ''
     const parsed = parseRef(selectedRef)
-    if (!parsed) return ''
-    return pages[parsed.chapter]?.find(v => v.v === parsed.verse)?.t ?? ''
+    if (!parsed || parsed.bookId !== bookId) return ''
+    return chapterVerses(parsed.chapter).find(v => v.v === parsed.verse)?.t ?? ''
   })()
 
   const [shareOpen, setShareOpen] = useState(false)
@@ -178,7 +197,7 @@ export default function BiblePage() {
     const wanted = [spreadBase - 2, spreadBase - 1, spreadBase, spreadBase + 1, spreadBase + 2, spreadBase + 3]
       .filter(c => c >= 1 && c <= lastChapter)
     Promise.all(wanted.map(async c => [c, await getChapter(bookId, c)] as const))
-      .then(entries => { if (!cancelled) setPages(Object.fromEntries(entries)) })
+      .then(entries => { if (!cancelled) setPages({ book: bookId, chapters: Object.fromEntries(entries) }) })
     return () => { cancelled = true }
   }, [bookId, spreadBase, lastChapter])
 
@@ -202,6 +221,13 @@ export default function BiblePage() {
     setAutoTurn(false)
     setDragOriginX(null)
     if (!completed) return
+    // The selected verse is about to leave the spread, so its action bar and
+    // share sheet would be acting on something the reader can no longer see —
+    // and once its chapter falls out of the prefetch window the sheet would
+    // quote an empty string. A cancelled turn keeps the selection.
+    setSelectedRef(null)
+    setNoteOpen(false)
+    setShareOpen(false)
     setChapter(c => {
       // Normalise the same way `spreadBase` does: the turn moves the base
       // that was actually on screen, regardless of whether `c` itself was
@@ -214,8 +240,18 @@ export default function BiblePage() {
 
   // Buttons and arrow keys both come through startTurn, so they inherit the
   // same boundary guards and the same "one turn at a time" rule.
+  //
+  // Special pages are never unmounted — App.tsx keeps every one of them
+  // mounted and hides the inactive ones with `display: none` — so this
+  // window-level listener outlives the tab being on screen. Without the
+  // visibility gate, an arrow key pressed on the homepage or in Settings
+  // would turn pages in the hidden reader and the debounced position write
+  // would persist the drift. `offsetParent` is null exactly when the element
+  // or an ancestor is `display: none`, which is the mechanism App.tsx uses.
+  const rootRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!rootRef.current || rootRef.current.offsetParent === null) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const el = e.target as HTMLElement | null
       const tag = el?.tagName
@@ -294,6 +330,23 @@ export default function BiblePage() {
 
   const releasePress = () => { pressed.current = null }
 
+  // Jump to a saved verse. `chapter` is set raw and clamped to the book, the
+  // same as the reading-position restore — `toSpreadBase` normalises it into
+  // a spread, so an even chapter lands correctly. Refused mid-turn for the
+  // same reason the book dropdown is locked: the sheet in flight would land
+  // its completion on the new position.
+  const gotoRef = useCallback((ref: string) => {
+    if (turning) return
+    const parsed = parseRef(ref)
+    if (!parsed) return
+    const meta = getBookMeta(parsed.bookId)
+    if (!meta) return
+    setBookId(parsed.bookId)
+    setChapter(Math.max(1, Math.min(meta.chapters, parsed.chapter)))
+    setSelectedRef(ref)
+    setSavedOpen(false)
+  }, [turning])
+
   const page = (ch: number) => {
     if (ch < 1 || ch > lastChapter) return null      // blank leaf past the end of the book
     return (
@@ -303,8 +356,9 @@ export default function BiblePage() {
           <VerseText
             bookId={bookId}
             chapter={ch}
-            verses={pages[ch] ?? []}
+            verses={chapterVerses(ch)}
             highlights={highlights}
+            notes={marks.notes}
             selectedRef={selectedRef}
             onSelectVerse={setSelectedRef}
           />
@@ -336,12 +390,15 @@ export default function BiblePage() {
   const spreadRight = turning === 'next' ? spreadBase + 3 : spreadBase + 1
 
   return (
-    <div className="flex h-full flex-col bg-aihub-bg text-aihub-text p-8">
+    <div ref={rootRef} className="flex h-full flex-col bg-aihub-bg text-aihub-text p-8">
       <div className="mb-4 flex shrink-0 items-center gap-2">
         <h1 className="mr-2 text-2xl font-bold">{book?.name} {chapter}</h1>
         <select
           value={bookId}
-          onChange={e => { setBookId(e.target.value); setChapter(1); setSelectedRef(null) }}
+          onChange={e => {
+            setBookId(e.target.value); setChapter(1)
+            setSelectedRef(null); setNoteOpen(false); setShareOpen(false)
+          }}
           // Locked mid-turn: the sheet already in flight would otherwise land
           // its completion on the new book and step past chapter 1.
           disabled={!!turning}
@@ -359,6 +416,18 @@ export default function BiblePage() {
           disabled={!canTurn('next') || !!turning}
           className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm disabled:opacity-40"
         >Next</button>
+        <button
+          onClick={() => setSavedOpen(true)}
+          title="Saved verses"
+          className="ml-auto flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
+        >
+          <Bookmark size={14} /> Saved
+          {marks.saved.length > 0 && (
+            <span className="rounded-full bg-aihub-accent/20 px-1.5 text-[10px] font-bold text-aihub-accent">
+              {marks.saved.length}
+            </span>
+          )}
+        </button>
       </div>
 
       <div
@@ -397,9 +466,19 @@ export default function BiblePage() {
           isSaved={marks.saved.some(s => s.ref === selectedRef)}
           onHighlight={highlightVerse}
           onSave={toggleSave}
-          onNote={addNote}
+          hasNote={!!marks.notes[selectedRef]}
+          onNote={() => setNoteOpen(true)}
           onShare={() => setShareOpen(true)}
-          onClose={() => { setShareOpen(false); setSelectedRef(null) }}
+          onClose={() => { setShareOpen(false); setNoteOpen(false); setSelectedRef(null) }}
+        />
+      )}
+
+      {noteOpen && selectedRef && (
+        <NoteEditor
+          verseRef={selectedRef}
+          initial={marks.notes[selectedRef] ?? ''}
+          onSave={saveNote}
+          onClose={() => setNoteOpen(false)}
         />
       )}
 
@@ -408,6 +487,16 @@ export default function BiblePage() {
           verseRef={selectedRef}
           text={selectedVerseText}
           onClose={() => setShareOpen(false)}
+        />
+      )}
+
+      {savedOpen && (
+        <SavedVerses
+          saved={marks.saved}
+          notes={marks.notes}
+          onOpen={gotoRef}
+          onRemove={removeSaved}
+          onClose={() => setSavedOpen(false)}
         />
       )}
     </div>

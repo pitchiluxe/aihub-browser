@@ -14,19 +14,21 @@ interface Props {
   chapter: number
   verses: Verse[]
   highlights: Record<string, string>
+  notes: Record<string, string>
   selectedRef: string | null
   onSelectVerse: (ref: string) => void
 }
 
 // Verses render as inline spans inside one flowing column so the text wraps
 // like a printed page rather than sitting in a list of rows.
-export default function VerseText({ bookId, chapter, verses, highlights, selectedRef, onSelectVerse }: Props) {
+export default function VerseText({ bookId, chapter, verses, highlights, notes, selectedRef, onSelectVerse }: Props) {
   return (
     <div className="bible-prose">
       {verses.map(v => {
         const ref = refKey(bookId, chapter, v.v)
         const color = highlights[ref]
         const selected = selectedRef === ref
+        const hasNote = !!notes[ref]
         // The WEB text keeps traditional verse numbers for a handful of verses
         // (e.g. Luke 17:36, Acts 8:37) that are absent from the oldest
         // manuscripts, so the verse body is legitimately empty. Render a quiet
@@ -47,6 +49,12 @@ export default function VerseText({ bookId, chapter, verses, highlights, selecte
             }}
           >
             <sup className="mr-0.5 select-none opacity-50">{v.v}</sup>
+            {/* A note is otherwise invisible until the verse is selected, so
+                the verse carries a quiet marker of its own — same superscript
+                rhythm as the verse number, tinted like a highlight. */}
+            {hasNote && (
+              <sup title="This verse has a note" className="mr-0.5 select-none text-aihub-accent opacity-80">&#9679;</sup>
+            )}
             {isOmitted ? (
               <span className="text-xs italic text-aihub-muted opacity-70">
                 (verse not in the earliest manuscripts)
