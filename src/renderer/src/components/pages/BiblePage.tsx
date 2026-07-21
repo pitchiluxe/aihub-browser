@@ -11,6 +11,13 @@ const STEP = 2
 // turn rather than a click on a verse or a vertical scroll.
 const DRAG_THRESHOLD_PX = 14
 
+// Spreads are always anchored on an odd-numbered left page (base, base+1).
+// `chapter` itself is not guaranteed to be odd — a "go to chapter" jump, a
+// search result, or a restored reading position can land on any integer — so
+// every place that turns `chapter` into a spread or a turn target reads it
+// through this normalisation instead of assuming the invariant holds.
+const toSpreadBase = (ch: number) => (ch % 2 === 1 ? ch : ch - 1)
+
 export default function BiblePage() {
   const [bookId, setBookId] = useState('JHN')
   const [chapter, setChapter] = useState(3)
@@ -27,24 +34,29 @@ export default function BiblePage() {
   const book = getBooks().find(b => b.id === bookId)
   const lastChapter = book?.chapters ?? 1
 
+  // The base of the currently settled (or settling) spread — see
+  // `toSpreadBase`. Everything that positions the spread or the turning leaf
+  // reads from this, not from `chapter` directly.
+  const spreadBase = toSpreadBase(chapter)
+
   useEffect(() => {
     let cancelled = false
-    // Two behind and three ahead. The window has to cover every chapter that
-    // can be on screen during a turn, not just the settled spread: the leaf's
-    // two faces (`chapter+1` / `chapter+2` forward, `chapter` / `chapter-1`
-    // back) and — since the half under the lifted sheet already shows what the
-    // turn will reveal — `chapter+3` forward and `chapter-2` back.
-    const wanted = [chapter - 2, chapter - 1, chapter, chapter + 1, chapter + 2, chapter + 3]
+    // Two behind and three ahead of the base. The window has to cover every
+    // chapter that can be on screen during a turn, not just the settled
+    // spread: the leaf's two faces (`base+1` / `base+2` forward, `base` /
+    // `base-1` back) and — since the half under the lifted sheet already
+    // shows what the turn will reveal — `base+3` forward and `base-2` back.
+    const wanted = [spreadBase - 2, spreadBase - 1, spreadBase, spreadBase + 1, spreadBase + 2, spreadBase + 3]
       .filter(c => c >= 1 && c <= lastChapter)
     Promise.all(wanted.map(async c => [c, await getChapter(bookId, c)] as const))
       .then(entries => { if (!cancelled) setPages(Object.fromEntries(entries)) })
     return () => { cancelled = true }
-  }, [bookId, chapter, lastChapter])
+  }, [bookId, spreadBase, lastChapter])
 
   const canTurn = useCallback((dir: 'next' | 'prev') => {
-    if (dir === 'prev') return chapter > 1
-    return chapter + 1 < lastChapter
-  }, [chapter, lastChapter])
+    if (dir === 'prev') return spreadBase > 1
+    return spreadBase + 1 < lastChapter
+  }, [spreadBase, lastChapter])
 
   // The one entry point for starting a turn. `originX` present means a finger
   // is driving it; absent means the leaf animates itself.
@@ -62,7 +74,11 @@ export default function BiblePage() {
     setDragOriginX(null)
     if (!completed) return
     setChapter(c => {
-      const target = turning === 'prev' ? c - STEP : c + STEP
+      // Normalise the same way `spreadBase` does: the turn moves the base
+      // that was actually on screen, regardless of whether `c` itself was
+      // odd when the turn started.
+      const base = toSpreadBase(c)
+      const target = turning === 'prev' ? base - STEP : base + STEP
       return Math.max(1, Math.min(lastChapter, target))
     })
   }, [turning, lastChapter])
@@ -88,12 +104,17 @@ export default function BiblePage() {
   // page both still work.
   const pressed = useRef<{ x: number; y: number } | null>(null)
 
-  // The pointer is captured the instant a turn starts, so the release is
-  // guaranteed to come back to this element even if the finger leaves the
-  // window. `releaseSignal` hands it to the leaf, which may not have bound its
-  // own window listeners yet — its mount effect is passive and can be flushed
-  // after the pointer has already come up.
+  // Capture is attempted the instant a turn starts, so the release is
+  // normally guaranteed to come back to this element even if the finger
+  // leaves the window. But `setPointerCapture` can throw (see the try/catch
+  // below), and release delivery must not depend on it succeeding — so
+  // `awaitingRelease` tracks "a drag turn is waiting for its release" on its
+  // own, independent of whether `captured` ever got populated. `releaseSignal`
+  // hands the release to the leaf, which may not have bound its own window
+  // listeners yet — its mount effect is passive and can be flushed after the
+  // pointer has already come up.
   const captured = useRef<{ el: HTMLElement; id: number } | null>(null)
+  const awaitingRelease = useRef(false)
   const [releaseSignal, setReleaseSignal] = useState(0)
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -118,20 +139,26 @@ export default function BiblePage() {
     } catch {
       captured.current = null
     }
+    // Set regardless of whether capture above succeeded — the leaf still
+    // needs its release signal either way.
+    awaitingRelease.current = true
     startTurn(dx < 0 ? 'next' : 'prev', from.x)
   }
 
   // pointerup, pointercancel and lostpointercapture all land here; whichever
-  // arrives first consumes the capture and the rest are inert.
+  // arrives first consumes the pending release and the rest are inert.
   const signalRelease = () => {
     pressed.current = null
+    if (!awaitingRelease.current) return
+    awaitingRelease.current = false
     const cap = captured.current
-    if (!cap) return
     captured.current = null
-    try {
-      if (cap.el.hasPointerCapture(cap.id)) cap.el.releasePointerCapture(cap.id)
-    } catch {
-      /* the pointer is already gone; the signal below is what matters */
+    if (cap) {
+      try {
+        if (cap.el.hasPointerCapture(cap.id)) cap.el.releasePointerCapture(cap.id)
+      } catch {
+        /* the pointer is already gone; the signal below is what matters */
+      }
     }
     setReleaseSignal(s => s + 1)
   }
@@ -160,9 +187,12 @@ export default function BiblePage() {
   // Forward: the right-hand sheet lifts, its recto is the page you were
   // reading and its verso is the chapter that becomes the new left page.
   // Backward: the left-hand sheet lifts and reveals the chapter before it.
+  // Both are expressed off `spreadBase` (the left page of the settled
+  // spread), not off `chapter`, so the geometry holds for any starting
+  // chapter, odd or even.
   const leafFaces = turning === 'prev'
-    ? { front: page(chapter), back: page(chapter - 1) }
-    : { front: page(chapter + 1), back: page(chapter + 2) }
+    ? { front: page(spreadBase), back: page(spreadBase - 1) }
+    : { front: page(spreadBase + 1), back: page(spreadBase + 2) }
 
   // While a sheet is in flight, the half it lifts off already shows what the
   // turn will reveal, exactly as a real book does — otherwise that half sits
@@ -172,8 +202,9 @@ export default function BiblePage() {
   // turn start is invisible; at 180 degrees the leaf's back face covers the
   // *other* half, whose content likewise matches the settled spread. Cancel is
   // safe too: `turning` clears in the same commit that unmounts the leaf.
-  const spreadLeft = turning === 'prev' ? chapter - 2 : chapter
-  const spreadRight = turning === 'next' ? chapter + 3 : chapter + 1
+  // Based on `spreadBase` rather than `chapter` for the same reason as above.
+  const spreadLeft = turning === 'prev' ? spreadBase - 2 : spreadBase
+  const spreadRight = turning === 'next' ? spreadBase + 3 : spreadBase + 1
 
   return (
     <div className="flex h-full flex-col bg-aihub-bg text-aihub-text p-8">
