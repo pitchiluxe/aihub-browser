@@ -728,7 +728,7 @@ export default function SettingsPage() {
           <button
             onClick={async () => {
               if (!confirm('Delete every highlight, note and saved verse? This cannot be undone.')) return
-              await window.electronAPI.bible.setMarks({ highlights: {}, saved: [], notes: {}, lastRead: null })
+              await window.electronAPI.bible.setMarks({ highlights: {}, saved: [], notes: {}, lastRead: null }, { allowEmpty: true })
               alert('Bible marks cleared.')
             }}
             className="rounded-xl px-3 py-1.5 text-xs font-medium"

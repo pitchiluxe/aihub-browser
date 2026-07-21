@@ -1983,24 +1983,88 @@ interface BibleMarks {
 }
 const BIBLE_MARKS_FILE = join(APP_DIR, 'bible-marks.json')
 
-ipcMain.handle('bible:getMarks', (): BibleMarks => {
-  const stored = readJson(BIBLE_MARKS_FILE, { highlights: {}, saved: [], notes: {}, lastRead: null })
-  // Guard against null, arrays, and non-object values from valid JSON.
-  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) {
-    return { highlights: {}, saved: [], notes: {}, lastRead: null }
-  }
-  // Merge onto the empty shape so a file written by an older build (missing a
-  // key) can't crash the reader.
+// A reader's highlights, notes and saved verses are the one thing in this app
+// they cannot recreate, so this store is deliberately more careful than the
+// others. Three things could destroy it before:
+//   1. writeJson truncates in place — a crash mid-write left corrupt JSON;
+//   2. a corrupt file parsed as "empty", and the next save wrote that emptiness
+//      back over the only copy;
+//   3. a failed load looked identical to "nothing saved yet" to the renderer.
+// Writes are now atomic with a rotating backup, and an empty write over
+// existing data is refused unless the caller says it means it.
+const BIBLE_MARKS_BAK = `${BIBLE_MARKS_FILE}.bak`
+
+const EMPTY_BIBLE_MARKS = (): BibleMarks => ({ highlights: {}, saved: [], notes: {}, lastRead: null })
+
+function normaliseMarks(stored: any): BibleMarks | null {
+  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) return null
   return {
     highlights: stored.highlights ?? {},
     saved:      Array.isArray(stored.saved) ? stored.saved : [],
     notes:      stored.notes ?? {},
     lastRead:   stored.lastRead ?? null,
   }
+}
+
+function marksHaveContent(m: BibleMarks): boolean {
+  return Object.keys(m.highlights).length > 0 || m.saved.length > 0 || Object.keys(m.notes).length > 0
+}
+
+// `status` lets the renderer tell "nothing saved yet" (safe to write) apart
+// from "couldn't read your data" (never write, or we'd erase it).
+ipcMain.handle('bible:getMarks', (): BibleMarks & { status: 'ok' | 'empty' | 'unreadable' } => {
+  const readFile = (f: string): BibleMarks | null => {
+    try { return normaliseMarks(JSON.parse(fs.readFileSync(f, 'utf-8'))) } catch { return null }
+  }
+  const primaryExists = fs.existsSync(BIBLE_MARKS_FILE)
+  if (!primaryExists && !fs.existsSync(BIBLE_MARKS_BAK)) {
+    return { ...EMPTY_BIBLE_MARKS(), status: 'empty' }   // first run
+  }
+  const primary = primaryExists ? readFile(BIBLE_MARKS_FILE) : null
+  if (primary) return { ...primary, status: 'ok' }
+
+  // Primary is missing or corrupt but something was there — fall back to the
+  // last known-good copy and put it back as the primary.
+  const backup = readFile(BIBLE_MARKS_BAK)
+  if (backup) {
+    try { fs.copyFileSync(BIBLE_MARKS_BAK, BIBLE_MARKS_FILE) } catch {}
+    console.warn('[aihub] bible marks recovered from backup')
+    return { ...backup, status: 'ok' }
+  }
+  console.warn('[aihub] bible marks unreadable and no usable backup')
+  return { ...EMPTY_BIBLE_MARKS(), status: 'unreadable' }
 })
 
-ipcMain.handle('bible:setMarks', (_e, marks: BibleMarks) => {
-  writeJson(BIBLE_MARKS_FILE, marks)
+ipcMain.handle('bible:setMarks', (_e, marks: BibleMarks, opts?: { allowEmpty?: boolean }) => {
+  const next = normaliseMarks(marks)
+  if (!next) return { ok: false, error: 'bad-shape' }
+
+  // Refuse to erase real data unless this is a deliberate "clear all". Guards
+  // against a renderer that started from a blank slate after a failed load and
+  // would otherwise persist that blankness over the only copy.
+  if (!opts?.allowEmpty && !marksHaveContent(next)) {
+    const current = (() => {
+      try { return normaliseMarks(JSON.parse(fs.readFileSync(BIBLE_MARKS_FILE, 'utf-8'))) } catch { return null }
+    })()
+    if (current && marksHaveContent(current)) {
+      console.warn('[aihub] refused an empty bible-marks write over existing data')
+      return { ok: false, error: 'refused-empty' }
+    }
+  }
+
+  try {
+    ensureDir()
+    // Keep the previous good file as the backup, then write atomically: a
+    // crash can now only lose the temp file, never the real one.
+    if (fs.existsSync(BIBLE_MARKS_FILE)) {
+      try { fs.copyFileSync(BIBLE_MARKS_FILE, BIBLE_MARKS_BAK) } catch {}
+    }
+    const tmp = `${BIBLE_MARKS_FILE}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(next, null, 2))
+    fs.renameSync(tmp, BIBLE_MARKS_FILE)
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'write-failed' }
+  }
   return { ok: true }
 })
 

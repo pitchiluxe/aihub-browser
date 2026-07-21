@@ -69,10 +69,21 @@ export default function BiblePage() {
   // flipped to true and starts persisting their position going forward.
   const [marksLoaded, setMarksLoaded] = useState(false)
 
+  // If the marks could not be read, we must not write: persisting a blank
+  // slate would erase the reader's highlights, notes and saved verses — the
+  // one thing in this app they cannot get back.
+  const [marksSafeToWrite, setMarksSafeToWrite] = useState(false)
+  const [marksError, setMarksError] = useState(false)
+
   useEffect(() => {
     window.electronAPI.bible.getMarks()
-      .then((m: BibleMarks) => { marksRef.current = m; setMarks(m) })
-      .catch(() => {})
+      .then((m: BibleMarks & { status?: string }) => {
+        marksRef.current = m
+        setMarks(m)
+        if (m?.status === 'unreadable') setMarksError(true)
+        else setMarksSafeToWrite(true)
+      })
+      .catch(() => setMarksError(true))
       .finally(() => setMarksLoaded(true))
   }, [])
 
@@ -83,8 +94,10 @@ export default function BiblePage() {
     const next = update(marksRef.current)
     marksRef.current = next
     setMarks(next)
+    // Never write from a slate we didn't successfully load — see above.
+    if (!marksSafeToWrite) return
     window.electronAPI.bible.setMarks(next).catch(() => {})
-  }, [])
+  }, [marksSafeToWrite])
 
   const highlightVerse = useCallback((color: string | null) => {
     if (!selectedRef) return
@@ -602,6 +615,17 @@ export default function BiblePage() {
         selectedRef={selectedRef}
         onOpenRef={gotoRef}
       />
+
+      {/* A read failure must never be silent: the reader would keep marking
+          verses believing they were being kept, and nothing would be saved. */}
+      {marksError && (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-2 z-50 mx-auto w-fit rounded-xl px-4 py-2 text-xs font-medium"
+          style={{ background: 'rgba(239,68,68,0.16)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.35)' }}
+        >
+          Couldn’t read your saved highlights and verses, so nothing is being saved right now — your existing marks are untouched. Reopen the Bible to retry.
+        </div>
+      )}
 
       {selectedRef && (
         <VerseActions

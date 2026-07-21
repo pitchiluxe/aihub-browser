@@ -60,7 +60,9 @@ export default function BookCover({ onOpen, subtitle }: Props) {
         // Centred rather than pinned to the right half: a closed book sits on
         // the table in the middle of the space it will open into, and the board
         // still hinges on its own left edge exactly where the spine will be.
-        className="absolute inset-y-0 left-1/4 w-1/2 cursor-pointer select-none"
+        // `bottom-9` leaves a clear strip beneath the board for the hint, so
+        // the caption never sits on top of the cover itself.
+        className="absolute bottom-9 left-1/4 top-0 w-1/2 cursor-pointer select-none"
         style={{
           transformStyle: 'preserve-3d',
           transformOrigin: 'left center',
@@ -156,12 +158,12 @@ export default function BookCover({ onOpen, subtitle }: Props) {
 
       </div>
 
-      {/* Hint sits on the spread, not on the board, so it stays put while the
-          cover swings away. */}
+      {/* Hint sits in the strip below the board, never over the cover art, and
+          stays put while the cover swings away. */}
       <div
         className="pointer-events-none absolute inset-x-0 text-center"
         style={{
-          bottom: 14, fontSize: 11.5, letterSpacing: '0.06em',
+          bottom: 6, fontSize: 11.5, letterSpacing: '0.06em',
           color: 'rgba(255,255,255,0.72)',
           textShadow: '0 1px 3px rgba(0,0,0,0.6)',
           opacity: opening ? 0 : 1, transition: 'opacity 200ms linear',
