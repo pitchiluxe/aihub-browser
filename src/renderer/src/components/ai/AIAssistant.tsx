@@ -435,9 +435,29 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
     } catch {}
   }
 
-  // ── Voice input (Web Speech). Availability varies by build/platform, so we
-  // only show the mic when the API exists and surface a clear message if the
-  // engine refuses (common in some Electron builds). ────────────────────────
+  // ── Voice input (Web Speech) ──────────────────────────────────────────────
+  // `webkitSpeechRecognition` exists in Electron, but the recognition service
+  // behind it is a Google endpoint that Chromium only reaches with API keys
+  // baked in at build time — which Electron does not ship. So the object
+  // constructs, `start()` succeeds, and then it errors with `network`. There is
+  // no in-app fix short of bundling an offline recogniser (whisper.cpp and
+  // friends add hundreds of MB), so rather than a dead end the failure now
+  // points at the OS dictation that does work and types into this very box.
+  const dictationHint = navigator.platform.toLowerCase().includes('mac')
+    ? 'press Fn twice for macOS Dictation'
+    : navigator.platform.toLowerCase().includes('win')
+      ? 'press Win + H for Windows dictation'
+      : 'use your desktop’s dictation shortcut'
+
+  const voiceErrorMessage = (code?: string) => {
+    if (code === 'not-allowed' || code === 'service-not-allowed') {
+      return 'Microphone access was blocked. Allow it for AIHub in your system settings.'
+    }
+    if (code === 'no-speech') return 'Didn’t catch anything — try again.'
+    // 'network', 'audio-capture', 'unsupported', anything else: the engine.
+    return `Speech recognition has no engine in this desktop build. Click into the box and ${dictationHint} — it types straight in here.`
+  }
+
   const voiceSupported = useRef(typeof ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) !== 'undefined').current
   const [listening, setListening] = useState(false)
   const [voiceError, setVoiceError] = useState('')
@@ -465,18 +485,16 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
       }
       rec.onerror = (e: any) => {
         setListening(false)
-        setVoiceError(e?.error === 'not-allowed' || e?.error === 'service-not-allowed'
-          ? 'Voice input was blocked. Check microphone permission.'
-          : 'Voice input isn’t available in this build.')
-        setTimeout(() => setVoiceError(''), 4000)
+        setVoiceError(voiceErrorMessage(e?.error))
+        setTimeout(() => setVoiceError(''), 9000)
       }
       rec.onend = () => { setListening(false); setTimeout(() => inputRef.current?.focus(), 30) }
       recognitionRef.current = rec
       rec.start()
       setListening(true)
     } catch {
-      setVoiceError('Voice input isn’t available in this build.')
-      setTimeout(() => setVoiceError(''), 4000)
+      setVoiceError(voiceErrorMessage('unsupported'))
+      setTimeout(() => setVoiceError(''), 9000)
     }
   }
 

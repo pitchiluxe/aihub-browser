@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Palette, Bot, Shield, Info, CheckCircle2, Loader2, RefreshCw, Download, Wifi, Brain, Globe, Sparkles, Trash2, Mail, FileCode } from 'lucide-react'
+import { Palette, Bot, Shield, Info, CheckCircle2, Loader2, RefreshCw, Download, Wifi, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked } from 'lucide-react'
 import ClaudeKitSection from './ClaudeKitSection'
+import { useBibleSettings } from '../../services/bibleSettings'
 import { useBrowserStore } from '../../store/browserStore'
 import {
   THEMES, loadCustomThemes, deleteCustomTheme, generateThemes, CustomTheme,
@@ -17,6 +18,24 @@ const S = 'px-8 py-6 border-b border-aihub-border/20'
 const LBL = 'text-sm font-semibold text-aihub-text mb-0.5'
 const DESC = 'text-xs text-aihub-muted mb-3'
 const ROW = 'flex items-center justify-between py-3 border-b border-aihub-border/15 last:border-0'
+
+// Small pill switch used by the Bible section.
+function BibleToggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} aria-pressed={on}
+      style={{
+        width: 42, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer',
+        position: 'relative', transition: 'background 0.16s',
+        background: on ? 'rgb(var(--ds-accent) / 0.9)' : 'rgba(127,127,127,0.28)',
+      }}>
+      <span style={{
+        position: 'absolute', top: 3, left: on ? 21 : 3, width: 18, height: 18,
+        borderRadius: '50%', background: '#fff', transition: 'left 0.16s',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+      }} />
+    </button>
+  )
+}
 
 const TRANSPARENCY = [
   { value: 'none',    label: 'Solid',  desc: 'Standard window' },
@@ -82,6 +101,8 @@ export default function SettingsPage() {
   const [gClientId, setGClientId] = useState('')
   const [gClientSecret, setGClientSecret] = useState('')
   const [gmailError, setGmailError] = useState('')
+  // Bible reader preferences (localStorage; the open reader updates live)
+  const [bible, setBible] = useBibleSettings()
 
   useEffect(() => {
     // Real version from the main process (app.getVersion()) — never hardcode;
@@ -628,6 +649,93 @@ export default function SettingsPage() {
         <div className={ROW}>
           <div><div className={LBL}>Clear AI Memory</div><div className="text-xs text-aihub-muted">Reset personalization data</div></div>
           <button onClick={() => clearHistory()} className="px-4 py-1.5 rounded-xl text-xs bg-aihub-card hover:bg-aihub-border/40 text-aihub-muted transition-all">Reset</button>
+        </div>
+      </Section>
+
+      {/* Bible reader */}
+      <Section icon={<BookMarked size={15} />} title="Bible">
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Text size</div>
+            <div className="text-xs text-aihub-muted">How large the verses read on the page</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="range" min={0.85} max={1.5} step={0.05}
+              value={bible.fontScale}
+              onChange={e => setBible({ fontScale: parseFloat(e.target.value) })}
+              style={{ width: 130 }}
+            />
+            <span className="w-10 text-right text-xs text-aihub-muted">{Math.round(bible.fontScale * 100)}%</span>
+          </div>
+        </div>
+
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Paper</div>
+            <div className="text-xs text-aihub-muted">Aged parchment, or plain modern stock</div>
+          </div>
+          <div className="flex gap-1.5">
+            {(['aged', 'clean'] as const).map(p => (
+              <button key={p} onClick={() => setBible({ paper: p })}
+                className="rounded-xl px-3 py-1.5 text-xs font-medium capitalize transition-all"
+                style={bible.paper === p
+                  ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
+                  : { background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))' }}>
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Justified columns</div>
+            <div className="text-xs text-aihub-muted">Straight edges like a printed Bible</div>
+          </div>
+          <BibleToggle on={bible.justify} onClick={() => setBible({ justify: !bible.justify })} />
+        </div>
+
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Verse numbers</div>
+            <div className="text-xs text-aihub-muted">Superscript numbers before each verse</div>
+          </div>
+          <BibleToggle on={bible.verseNumbers} onClick={() => setBible({ verseNumbers: !bible.verseNumbers })} />
+        </div>
+
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Animate page turns</div>
+            <div className="text-xs text-aihub-muted">The 3D fold. Off changes the page instantly</div>
+          </div>
+          <BibleToggle on={bible.animateTurn} onClick={() => setBible({ animateTurn: !bible.animateTurn })} />
+        </div>
+
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Open on the cover</div>
+            <div className="text-xs text-aihub-muted">Off goes straight to where you left off</div>
+          </div>
+          <BibleToggle on={bible.showCover} onClick={() => setBible({ showCover: !bible.showCover })} />
+        </div>
+
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Highlights, notes &amp; saved verses</div>
+            <div className="text-xs text-aihub-muted">Stored on this device only — never uploaded</div>
+          </div>
+          <button
+            onClick={async () => {
+              if (!confirm('Delete every highlight, note and saved verse? This cannot be undone.')) return
+              await window.electronAPI.bible.setMarks({ highlights: {}, saved: [], notes: {}, lastRead: null })
+              alert('Bible marks cleared.')
+            }}
+            className="rounded-xl px-3 py-1.5 text-xs font-medium"
+            style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}
+          >
+            Clear all
+          </button>
         </div>
       </Section>
 

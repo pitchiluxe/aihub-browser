@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Sparkles, X, Send, Loader2, BookOpen } from 'lucide-react'
 import { buildIndex, isReady, search, context, expandQuery, type Hit } from '../../services/bibleSearch'
-import { parseRef, formatRef } from '../../services/bibleService'
+import { parseRef, formatRef, refKey } from '../../services/bibleService'
+import { parseTypedRef } from './VerseSearch'
 
 interface Msg { role: 'user' | 'assistant'; content: string; cites?: Hit[] }
 
@@ -94,6 +95,21 @@ export default function BibleAssistant({
     if (!q || busy) return
     setInput('')
     setMsgs(m => [...m, { role: 'user', content: q }])
+
+    // "open John 3:16", "go to Psalm 23", "take me to Romans 8" — a navigation
+    // request, not a question. Resolve it here and turn the page immediately
+    // rather than paying a model round trip to be told what we already parsed.
+    const nav = q.match(/\b(?:open|go\s+to|goto|take\s+me\s+to|show\s+me|turn\s+to|jump\s+to|read)\b\s+(.+)$/i)
+    if (nav) {
+      const parsed = parseTypedRef(nav[1])
+      if (parsed) {
+        const ref = refKey(parsed.bookId, parsed.chapter, parsed.verse ?? 1)
+        onOpenRef(ref)
+        setMsgs(m => [...m, { role: 'assistant', content: `Opened ${formatRef(ref)}.` }])
+        return
+      }
+    }
+
     setBusy(true)
 
     try {
@@ -153,7 +169,7 @@ export default function BibleAssistant({
     } finally {
       setBusy(false)
     }
-  }, [busy, selectedRef, bookId, bookName, chapter])
+  }, [busy, selectedRef, bookId, bookName, chapter, onOpenRef])
 
   // Turn [John 3:16] citations into buttons that actually open the passage.
   const render = (text: string, cites?: Hit[]) => {

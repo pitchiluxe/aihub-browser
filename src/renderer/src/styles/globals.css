@@ -974,18 +974,43 @@ input, textarea { user-select: text; }
 }
 
 /* ── Bible reader ─────────────────────────────────────────────────────── */
+/* Aged paper. The tint is warmer and less even than clean stock, with foxing
+   blooms scattered off-centre, a darker rim where a real page is handled most,
+   and a fine fibre grain over the top. All CSS — no texture image to ship. */
 .bible-paper {
-  background-color: #fbf6ea;
+  background-color: #f3e8d0;
   background-image:
-    radial-gradient(circle at 20% 10%, rgba(0, 0, 0, 0.028) 0%, transparent 55%),
-    radial-gradient(circle at 85% 80%, rgba(0, 0, 0, 0.022) 0%, transparent 60%);
+    /* foxing — the small brown blooms old paper develops */
+    radial-gradient(ellipse 42px 30px at 18% 22%, rgba(150, 106, 54, 0.10), transparent 70%),
+    radial-gradient(ellipse 26px 20px at 73% 14%, rgba(150, 106, 54, 0.08), transparent 70%),
+    radial-gradient(ellipse 34px 26px at 61% 68%, rgba(139, 96, 48, 0.07), transparent 72%),
+    radial-gradient(ellipse 22px 16px at 31% 84%, rgba(150, 106, 54, 0.075), transparent 70%),
+    radial-gradient(ellipse 30px 22px at 88% 52%, rgba(139, 96, 48, 0.06), transparent 72%),
+    /* uneven ageing across the sheet */
+    radial-gradient(circle at 22% 12%, rgba(120, 82, 38, 0.05) 0%, transparent 58%),
+    radial-gradient(circle at 84% 82%, rgba(120, 82, 38, 0.06) 0%, transparent 60%),
+    /* darker, more handled edges */
+    radial-gradient(120% 100% at 50% 50%, transparent 58%, rgba(112, 76, 34, 0.13) 100%),
+    /* fibre grain */
+    repeating-linear-gradient(94deg, rgba(120, 84, 40, 0.028) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(2deg, rgba(120, 84, 40, 0.022) 0 1px, transparent 1px 4px),
+    linear-gradient(168deg, #f7eeda 0%, #f1e5cb 46%, #e9dcbe 100%);
+  color: #2f2417;
+  box-shadow: inset 0 0 60px rgba(120, 82, 38, 0.10);
+}
+/* Plain modern stock, for readers who find the parchment busy. */
+.bible-paper-clean {
+  background-color: #fbf8f2;
+  background-image: none;
   color: #2a2118;
+  box-shadow: none;
 }
 .bible-prose {
   font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
-  font-size: 1.02rem;
+  /* Both driven by Settings → Bible; the vars are set on the spread wrapper. */
+  font-size: calc(1.02rem * var(--bible-font-scale, 1));
   line-height: 1.95;
-  text-align: justify;
+  text-align: var(--bible-align, justify);
   hyphens: auto;
 }
 /* The gutter shadow that makes two pages read as one bound volume. */

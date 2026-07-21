@@ -16,12 +16,13 @@ interface Props {
   highlights: Record<string, string>
   notes: Record<string, string>
   selectedRef: string | null
+  showNumbers?: boolean
   onSelectVerse: (ref: string) => void
 }
 
 // Verses render as inline spans inside one flowing column so the text wraps
 // like a printed page rather than sitting in a list of rows.
-export default function VerseText({ bookId, chapter, verses, highlights, notes, selectedRef, onSelectVerse }: Props) {
+export default function VerseText({ showNumbers = true, bookId, chapter, verses, highlights, notes, selectedRef, onSelectVerse }: Props) {
   return (
     <div className="bible-prose">
       {verses.map(v => {
@@ -48,7 +49,7 @@ export default function VerseText({ bookId, chapter, verses, highlights, notes, 
               boxShadow: selected ? '0 0 0 2px rgba(251,191,36,0.85)' : undefined,
             }}
           >
-            <sup className="mr-0.5 select-none opacity-50">{v.v}</sup>
+            {showNumbers && <sup className="mr-0.5 select-none opacity-50">{v.v}</sup>}
             {/* A note is otherwise invisible until the verse is selected, so
                 the verse carries a quiet marker of its own — same superscript
                 rhythm as the verse number, tinted like a highlight. */}

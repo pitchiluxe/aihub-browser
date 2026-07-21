@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Bookmark, Sparkles } from 'lucide-react'
+import { Bookmark, Sparkles, Search } from 'lucide-react'
 import { getBookMeta, getBooks, getChapter, parseRef, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
@@ -10,6 +10,8 @@ import NoteEditor from '../bible/NoteEditor'
 import SavedVerses from '../bible/SavedVerses'
 import BibleAssistant from '../bible/BibleAssistant'
 import BookCover from '../bible/BookCover'
+import VerseSearch from '../bible/VerseSearch'
+import { useBibleSettings } from '../../services/bibleSettings'
 
 // Shape persisted by the main process (see `bible:getMarks` / `bible:setMarks`
 // in src/main/index.ts) — highlights, saved verses, notes and the last
@@ -48,6 +50,8 @@ export default function BiblePage() {
   // The book starts closed. Opening it is the one bit of ceremony in the app,
   // and it also hides the first-load chapter fetch behind something to look at.
   const [coverOpen, setCoverOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [bibleSettings] = useBibleSettings()
 
   // Highlights, saved verses, notes and reading position. `marks` drives
   // rendering; `marksRef` mirrors it synchronously and is what every write
@@ -324,6 +328,11 @@ export default function BiblePage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!rootRef.current || rootRef.current.offsetParent === null) return
+      // Ctrl+F is checked before the modifier bail-out below, which exists to
+      // keep plain arrow-key turns from firing during app shortcuts.
+      if ((e.key === 'f' || e.key === 'F') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault(); setSearchOpen(true); return
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const el = e.target as HTMLElement | null
       const tag = el?.tagName
@@ -439,6 +448,7 @@ export default function BiblePage() {
         <div className="mb-4 shrink-0 text-xs uppercase tracking-widest opacity-45">{book?.name} {ch}</div>
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           <VerseText
+            showNumbers={bibleSettings.verseNumbers}
             bookId={bookId}
             chapter={ch}
             verses={chapterVerses(ch)}
@@ -474,7 +484,7 @@ export default function BiblePage() {
   const spreadLeft = turning === 'prev' ? spreadBase - 2 : spreadBase
   const spreadRight = turning === 'next' ? spreadBase + 3 : spreadBase + 1
 
-  if (!coverOpen) {
+  if (!coverOpen && bibleSettings.showCover) {
     return (
       <div ref={rootRef} className="relative h-full bg-aihub-bg text-aihub-text">
         <BookCover
@@ -517,9 +527,16 @@ export default function BiblePage() {
           className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm disabled:opacity-40"
         >Next</button>
         <button
+          onClick={() => setSearchOpen(true)}
+          title="Search the Bible (Ctrl+F)"
+          className="ml-auto flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
+        >
+          <Search size={14} /> Search
+        </button>
+        <button
           onClick={() => setAiOpen(o => !o)}
           title="Study with AI"
-          className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium"
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium"
           style={aiOpen
             ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
             : { background: 'rgb(var(--ds-accent) / 0.14)', color: 'rgb(var(--ds-accent-soft))' }}
@@ -543,6 +560,10 @@ export default function BiblePage() {
       <div
         ref={spreadRef}
         className="min-h-0 flex-1"
+        style={{
+          ['--bible-font-scale' as any]: bibleSettings.fontScale,
+          ['--bible-align' as any]: bibleSettings.justify ? 'justify' : 'left',
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={signalRelease}
@@ -554,12 +575,14 @@ export default function BiblePage() {
           left={page(spreadLeft)}
           right={page(spreadRight)}
           leafSide={turning === 'prev' ? 'left' : 'right'}
+          paper={bibleSettings.paper}
           leaf={turning ? (
             <PageLeaf
               direction={turning}
               angle={angle}
-              animating={animating}
+              animating={animating && bibleSettings.animateTurn}
               durationMs={TURN_MS}
+              paper={bibleSettings.paper}
               front={leafFaces.front}
               back={leafFaces.back}
             />
@@ -567,6 +590,8 @@ export default function BiblePage() {
         />
       </div>
       </div>
+
+      <VerseSearch open={searchOpen} onClose={() => setSearchOpen(false)} onGoto={gotoRef} />
 
       <BibleAssistant
         open={aiOpen}
