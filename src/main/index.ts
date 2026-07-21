@@ -1974,6 +1974,33 @@ ipcMain.handle('rewind:remove', (_e, id: string) => {
 })
 ipcMain.handle('rewind:clear', () => { _rewind = []; writeJson(REWIND_FILE, []); return { ok: true } })
 
+// ── Bible marks — highlights, saved verses, notes, reading position ────────
+interface BibleMarks {
+  highlights: Record<string, string>
+  saved: { ref: string; ts: number }[]
+  notes: Record<string, string>
+  lastRead: { book: string; chapter: number } | null
+}
+const BIBLE_MARKS_FILE = join(APP_DIR, 'bible-marks.json')
+const EMPTY_MARKS: BibleMarks = { highlights: {}, saved: [], notes: {}, lastRead: null }
+
+ipcMain.handle('bible:getMarks', (): BibleMarks => {
+  const stored = readJson(BIBLE_MARKS_FILE, EMPTY_MARKS) as Partial<BibleMarks>
+  // Merge onto the empty shape so a file written by an older build (missing a
+  // key) can't crash the reader.
+  return {
+    highlights: stored.highlights ?? {},
+    saved:      Array.isArray(stored.saved) ? stored.saved : [],
+    notes:      stored.notes ?? {},
+    lastRead:   stored.lastRead ?? null,
+  }
+})
+
+ipcMain.handle('bible:setMarks', (_e, marks: BibleMarks) => {
+  writeJson(BIBLE_MARKS_FILE, marks)
+  return { ok: true }
+})
+
 // ── Watch & Ping ───────────────────────────────────────────────────────────
 // Background monitors: re-check a page on a schedule and fire a desktop
 // notification when it changes (or when a keyword appears). Turns the browser

@@ -124,6 +124,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     remove: (id: string) => ipcRenderer.invoke('rewind:remove', id),
     clear:  () => ipcRenderer.invoke('rewind:clear'),
   },
+  bible: {
+    getMarks: () => ipcRenderer.invoke('bible:getMarks'),
+    setMarks: (marks: any) => ipcRenderer.invoke('bible:setMarks', marks),
+  },
   siteMemory: {
     get:    (url: string) => ipcRenderer.invoke('siteMemory:get', url),
     set:    (url: string, text: string, title?: string) => ipcRenderer.invoke('siteMemory:set', url, text, title),
