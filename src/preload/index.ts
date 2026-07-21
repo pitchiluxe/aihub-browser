@@ -214,6 +214,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setBounds:       (bounds: { x: number; y: number; width: number; height: number })          => ipcRenderer.invoke('tabview:setBounds', bounds),
     setOverlayHidden:(hidden: boolean)                                                          => ipcRenderer.invoke('tabview:setOverlayHidden', hidden),
     navigate:        (tabId: string, url: string)                                               => ipcRenderer.invoke('tabview:navigate', tabId, url),
+    preconnect:      (url: string)                                                              => ipcRenderer.invoke('tabview:preconnect', url),
     goBack:          (tabId: string)                                                             => ipcRenderer.invoke('tabview:goBack', tabId),
     goForward:       (tabId: string)                                                             => ipcRenderer.invoke('tabview:goForward', tabId),
     reload:          (tabId: string)                                                             => ipcRenderer.invoke('tabview:reload', tabId),

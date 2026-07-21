@@ -224,11 +224,6 @@ export default function HomePage({ onNavigate }: Props) {
             <SearchBar onNavigate={onNavigate} />
           </motion.div>
 
-          {/* Focus session */}
-          <motion.div className="mt-4"
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <FocusWidget isLight={isLight} />
-          </motion.div>
         </div>
 
         {/* ── Feature shortcuts ── */}
@@ -244,6 +239,12 @@ export default function HomePage({ onNavigate }: Props) {
             onClick={() => setView('sphere')} />
           <FeaturePill icon={<Search size={13} />} label="History Search" color="#c084fc"
             onClick={() => onNavigate('aihub://history')} />
+        </motion.div>
+
+        {/* ── Focus session — sits under the shortcut pills ── */}
+        <motion.div className="flex justify-center px-6 pb-5"
+          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <FocusWidget isLight={isLight} />
         </motion.div>
 
         {/* ── Bookmarks ── */}

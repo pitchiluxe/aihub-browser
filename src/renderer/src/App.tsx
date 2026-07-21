@@ -116,6 +116,10 @@ export default function App() {
       finalUrl = `https://${finalUrl}`
     }
 
+    // Start the DNS/TCP/TLS handshake now, so it runs in parallel with the
+    // state update and view creation below rather than after them.
+    window.electronAPI.tabView.preconnect?.(finalUrl)
+
     const wasHome = useBrowserStore.getState().tabs.find(t => t.id === activeTabId)?.isHome ?? false
     let tempTitle = finalUrl
     try { tempTitle = new URL(finalUrl).hostname.replace(/^www\./, '') } catch {}

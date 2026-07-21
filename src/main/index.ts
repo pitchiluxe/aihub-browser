@@ -33,7 +33,21 @@ app.commandLine.appendSwitch('gpu-disk-cache-dir', join(APP_DIR, 'gpu-cache'))
 if (process.platform === 'win32') {
   app.commandLine.appendSwitch('no-sandbox')
   app.commandLine.appendSwitch('disable-gpu-sandbox')
+  // Windows-only: Chromium's native occlusion detection repeatedly decides our
+  // frameless/transparent window is hidden and throttles or blanks the tab's
+  // renderer, which shows up as a page that "stops loading" until you click it.
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 }
+
+// ── Browsing performance ──────────────────────────────────────────────────
+// 512 MB of on-disk HTTP cache (Chromium's default for a fresh profile is far
+// smaller) so revisited sites come off disk instead of the network.
+app.commandLine.appendSwitch('disk-cache-size', String(512 * 1024 * 1024))
+// Split a single download across connections, and let the GPU do raster work
+// instead of the CPU — both are straight wins for page paint on this hardware.
+app.commandLine.appendSwitch('enable-features', 'ParallelDownloading')
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
 
 // ── Single-instance lock — prevent cache conflicts ─────────────────────────
 // If a second instance launches, focus the existing window instead.
@@ -219,7 +233,13 @@ function ollamaChatStream(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(`${base}/api/chat`)
-    const body = JSON.stringify({ model, messages, stream: true, options: { num_ctx: 8192 } })
+    // keep_alive: Ollama evicts an idle model after 5 minutes by default, so
+    // the next message in a conversation pays the full multi-second reload.
+    // Holding it resident for 30m makes follow-up replies start almost
+    // instantly, which is most of the perceived "AI is slow" problem.
+    const body = JSON.stringify({
+      model, messages, stream: true, keep_alive: '30m', options: { num_ctx: 8192 },
+    })
     const req = http.request({
       hostname: parsed.hostname,
       port:     parsed.port || 80,
@@ -267,11 +287,18 @@ function ollamaChatStream(
 // A "not running" result probes up to 4 endpoints — cache it briefly so a user
 // without Ollama isn't stalled on repeated timeouts before the cloud fallback.
 let ollamaProbeCache: { at: number; value: { running: boolean; models: string[] } } | null = null
+// Positive results expire quickly (a model list can change as the user pulls
+// models). A NEGATIVE result is cached far longer: when Ollama isn't installed
+// every probe round costs up to 4 × 1.5s of dead time, and with a 5s TTL that
+// was re-paid on essentially every chat message before falling back to the
+// cloud. Settings' explicit "check again" passes force=true.
 const OLLAMA_PROBE_TTL = 5000
+const OLLAMA_MISS_TTL  = 60000
 
 async function checkOllamaRunning(force = false): Promise<{ running: boolean; models: string[] }> {
-  if (!force && ollamaProbeCache && Date.now() - ollamaProbeCache.at < OLLAMA_PROBE_TTL) {
-    return ollamaProbeCache.value
+  if (!force && ollamaProbeCache) {
+    const ttl = ollamaProbeCache.value.running ? OLLAMA_PROBE_TTL : OLLAMA_MISS_TTL
+    if (Date.now() - ollamaProbeCache.at < ttl) return ollamaProbeCache.value
   }
   const { olBase } = getAIConfig()
   // Try both the configured base AND a 127.0.0.1 fallback to handle systems
@@ -1526,6 +1553,16 @@ ipcMain.handle('tabview:setOverlayHidden', (e, hidden: boolean) => {
 })
 ipcMain.handle('tabview:navigate', (e, tabId: string, url: string) => {
   try { ctxFromEvent(e)?.views.get(tabId)?.webContents.loadURL(url) } catch {}
+})
+// Warm DNS + TCP + TLS for a host before the page is actually asked for. The
+// renderer fires this the moment a navigation is requested, so the handshake
+// overlaps the React re-render and BrowserView creation that follow instead of
+// happening after them. Purely additive — a failed preconnect costs nothing.
+ipcMain.handle('tabview:preconnect', (_e, url: string) => {
+  try {
+    const origin = new URL(url).origin
+    session.fromPartition('persist:main').preconnect({ url: origin, numSockets: 2 })
+  } catch {}
 })
 ipcMain.handle('tabview:goBack', (e, tabId: string) => {
   const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
