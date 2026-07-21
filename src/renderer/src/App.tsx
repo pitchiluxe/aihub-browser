@@ -27,6 +27,7 @@ import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import FindBar from './components/browser/FindBar'
 import AIAssistant from './components/ai/AIAssistant'
 import CommandPalette from './components/browser/CommandPalette'
+import CompareModal from './components/browser/CompareModal'
 import { loadBookmarks } from './services/bookmarkService'
 import { buildPageExtractionScript } from './services/pageExtractor'
 import { loadCustomExts } from './extensions/customExts'
@@ -51,12 +52,12 @@ export default function App() {
   const {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
-    isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen,
+    isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
     isAnnotationMode: s.isAnnotationMode, isAddBookmarkOpen: s.isAddBookmarkOpen, isAIPanelOpen: s.isAIPanelOpen,
-    isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen,
+    isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen, isCompareOpen: s.isCompareOpen,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -452,8 +453,8 @@ export default function App() {
     // Any host-HTML overlay (Add-to-Sphere modal, QR modal) must detach the
     // active tab's BrowserView, which otherwise always paints on top of and
     // steals clicks from our HTML — making the modal look frozen/invisible.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen)
-  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen])
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen])
 
   // ── Single listener for all tab content events, forwarded from main ───────
   useEffect(() => {
@@ -643,7 +644,9 @@ export default function App() {
         onReadAloud={readAloud}
         onFind={() => setFindOpen(true)}
         onAddBookmark={addBookmarkFromPalette}
+        onCompare={() => useBrowserStore.getState().setCompareOpen(true)}
       />
+      <CompareModal />
 
       {/* Narration control — visible while the page is being read aloud */}
       {speaking && (

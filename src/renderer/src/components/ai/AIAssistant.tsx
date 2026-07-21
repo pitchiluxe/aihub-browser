@@ -85,6 +85,21 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
     return () => document.removeEventListener('aihub-ai-prefill', handler)
   }, [])
 
+  // Programmatic send (Compare Mode): opens the panel and sends a full prompt
+  // while the chat shows a short human label. Kept as a ref-free listener so it
+  // always sees the current sendText via closure re-registration.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent).detail as { text: string; display?: string }
+      if (!d?.text) return
+      if (!isAIPanelOpen) toggleAIPanel()
+      setTimeout(() => sendText(d.text, { displayText: d.display }), 60)
+    }
+    document.addEventListener('aihub-ai-send', handler)
+    return () => document.removeEventListener('aihub-ai-send', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAIPanelOpen, isAILoading, currentUrl, siteMemory, bookmarks])
+
   // Auto-grow the composer to fit everything the user has typed (up to the
   // maxHeight cap, then it scrolls). Without this the textarea stays one row
   // tall and multi-line entries are hidden behind an internal scroll.
@@ -256,15 +271,20 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
   // ── Send message — agent loop: the model can request tool actions via a
   // JSON block (see agentTools.ts); we execute them and loop, until it
   // answers with plain text or a safety cap is hit. ─────────────────────────
-  const sendMessage = async () => {
-    const msg = input.trim()
+  const sendMessage = () => sendText(input, { showAsUser: true })
+
+  // Core send path — used by the composer and by programmatic senders (e.g.
+  // Compare Mode). `displayText` lets a big machine prompt be sent while the
+  // chat shows a short human label instead of the raw payload.
+  const sendText = async (rawText: string, opts?: { showAsUser?: boolean; displayText?: string }) => {
+    const msg = rawText.trim()
     if (!msg || isAILoading) return
     setInput('')
 
     // Check navigation intent first — no AI call needed
     if (tryNavIntent(msg)) return
 
-    addAIMessage({ role: 'user', content: msg })
+    addAIMessage({ role: 'user', content: opts?.displayText || msg })
     setAILoading(true)
     stopRequestedRef.current = false
 
@@ -279,6 +299,12 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
     // that are never pushed into the visible aiMessages store.
     let loopHistory: { role: string; content: string }[] =
       useBrowserStore.getState().aiMessages.map(m => ({ role: m.role, content: m.content }))
+    // When the chat shows a short label but the model must see the full prompt
+    // (Compare Mode), swap the real payload into the last user turn.
+    if (opts?.displayText && loopHistory.length) {
+      const last = loopHistory[loopHistory.length - 1]
+      if (last.role === 'user') last.content = msg
+    }
 
     try {
       for (let turn = 1; turn <= MAX_TURNS; turn++) {

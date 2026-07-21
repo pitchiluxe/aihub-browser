@@ -44,6 +44,8 @@ interface BrowserState {
   setVpnMenuOpen: (v: boolean) => void
   isCmdPaletteOpen: boolean
   setCmdPaletteOpen: (v: boolean) => void
+  isCompareOpen: boolean
+  setCompareOpen: (v: boolean) => void
   // URL to pre-fill the Add-to-Sphere modal with (set from the page context menu)
   bookmarkPrefill: string
   setBookmarkPrefill: (u: string) => void
@@ -217,6 +219,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setVpnMenuOpen: (v) => set({ isVpnMenuOpen: v }),
   isCmdPaletteOpen: false,
   setCmdPaletteOpen: (v) => set({ isCmdPaletteOpen: v }),
+  isCompareOpen: false,
+  setCompareOpen: (v) => set({ isCompareOpen: v }),
 
   bookmarkPrefill: '',
   setBookmarkPrefill: (u) => set({ bookmarkPrefill: u }),

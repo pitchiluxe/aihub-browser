@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   Search, Plus, RotateCcw, Bot, PanelLeft, Pencil, BookmarkPlus, Volume2,
   Home, FlaskConical, Sparkles, StickyNote, History, Download, Puzzle, Wifi,
-  Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft,
+  Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft, GitCompare,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
@@ -25,11 +25,12 @@ interface Props {
   onReadAloud: () => void
   onFind: () => void
   onAddBookmark: () => void
+  onCompare: () => void
 }
 
 // A single fuzzy launcher (Ctrl+K) for everything: jump to any open tab or
 // bookmark, open any app page, or fire a common action — all from the keyboard.
-export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, onFind, onAddBookmark }: Props) {
+export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, onFind, onAddBookmark, onCompare }: Props) {
   const {
     isCmdPaletteOpen, setCmdPaletteOpen,
     tabs, bookmarks, setActiveTab, addTab, reopenClosedTab,
@@ -70,6 +71,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     act('read', 'Read this Page Aloud', <Volume2 size={15} />, () => onReadAloud(), 'tts speak listen voice audio')
     act('find', 'Find in Page', <Search size={15} />, () => onFind(), 'search text', 'Ctrl+F')
     act('bookmark', 'Add this Page to Sphere', <BookmarkPlus size={15} />, () => onAddBookmark(), 'save', 'Ctrl+D')
+    act('compare', 'Compare two pages', <GitCompare size={15} />, () => onCompare(), 'versus vs comparison table diff')
 
     const pages: [PageType, string][] = [
       ['research', 'Research Mode'], ['agents', 'Agent Mode'], ['notes', 'Sticky Notes'],
