@@ -1,20 +1,20 @@
 import React, { memo } from 'react'
 import {
   Home, History, Download, Settings, Plus, Sparkles,
-  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing,
+  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing, BookMarked,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 
 interface Props {
   onNavigate: (url: string) => void
-  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch') => void
+  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch' | 'bible') => void
 }
 
 interface NavItem {
   icon: React.ElementType
   label: string
-  page: null | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch'
+  page: null | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch' | 'bible'
   type: string
   accent?: string
 }
@@ -26,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: StickyNote,   label: 'Sticky Notes', page: 'notes',        type: 'notes',      accent: '#facc15' },
   { icon: Rewind,       label: 'Rewind',       page: 'rewind',       type: 'rewind',     accent: '#c4b5fd' },
   { icon: BellRing,     label: 'Watch & Ping', page: 'watch',        type: 'watch',      accent: '#f472b6' },
+  { icon: BookMarked,   label: 'Bible',        page: 'bible',        type: 'bible',      accent: '#fbbf24' },
   { icon: History,      label: 'History',      page: 'history',      type: 'history'    },
   { icon: Download,     label: 'Downloads',    page: 'downloads',    type: 'downloads'  },
   { icon: Puzzle,       label: 'Extensions',   page: 'extensions',   type: 'extensions', accent: '#fb923c' },
