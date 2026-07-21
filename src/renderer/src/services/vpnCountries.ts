@@ -8,14 +8,24 @@ export interface FreeCountry {
 }
 
 export const FREE_COUNTRIES: FreeCountry[] = [
-  { cc: 'FR', name: 'France',         flag: '🇫🇷' },
-  { cc: 'BE', name: 'Belgium',        flag: '🇧🇪' },
-  { cc: 'CA', name: 'Canada',         flag: '🇨🇦' },
   { cc: 'US', name: 'United States',  flag: '🇺🇸' },
   { cc: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
+  { cc: 'CA', name: 'Canada',         flag: '🇨🇦' },
+  { cc: 'FR', name: 'France',         flag: '🇫🇷' },
   { cc: 'DE', name: 'Germany',        flag: '🇩🇪' },
   { cc: 'NL', name: 'Netherlands',    flag: '🇳🇱' },
+  { cc: 'BE', name: 'Belgium',        flag: '🇧🇪' },
+  { cc: 'ES', name: 'Spain',          flag: '🇪🇸' },
+  { cc: 'IT', name: 'Italy',          flag: '🇮🇹' },
+  { cc: 'CH', name: 'Switzerland',    flag: '🇨🇭' },
+  { cc: 'SE', name: 'Sweden',         flag: '🇸🇪' },
+  { cc: 'PL', name: 'Poland',         flag: '🇵🇱' },
+  { cc: 'IE', name: 'Ireland',        flag: '🇮🇪' },
   { cc: 'JP', name: 'Japan',          flag: '🇯🇵' },
+  { cc: 'SG', name: 'Singapore',      flag: '🇸🇬' },
+  { cc: 'IN', name: 'India',          flag: '🇮🇳' },
+  { cc: 'AU', name: 'Australia',      flag: '🇦🇺' },
+  { cc: 'BR', name: 'Brazil',         flag: '🇧🇷' },
 ]
 
 export const flagFor = (cc?: string): string =>

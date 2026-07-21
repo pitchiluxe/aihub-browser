@@ -49,11 +49,12 @@ export default function App() {
   const {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
-    isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen,
+    isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
     isAnnotationMode: s.isAnnotationMode, isAddBookmarkOpen: s.isAddBookmarkOpen, isAIPanelOpen: s.isAIPanelOpen,
+    isVpnMenuOpen: s.isVpnMenuOpen,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -392,8 +393,8 @@ export default function App() {
     // Any host-HTML overlay (Add-to-Sphere modal, QR modal) must detach the
     // active tab's BrowserView, which otherwise always paints on top of and
     // steals clicks from our HTML — making the modal look frozen/invisible.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl)
-  }, [isAddBookmarkOpen, qrUrl])
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen])
 
   // ── Single listener for all tab content events, forwarded from main ───────
   useEffect(() => {
