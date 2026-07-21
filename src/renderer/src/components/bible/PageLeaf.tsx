@@ -53,8 +53,9 @@ export default function PageLeaf({ front, back, onComplete, onCancel, direction,
     if (settled.current) return
     settled.current = true
     setDragging(false)
-    // Under reduced motion the leaf never animates — it holds still and the
-    // page simply changes when the (zero-length) settle timer fires.
+    // Under reduced motion the leaf never rotates at all — it stays at 0
+    // degrees, which is pixel-for-pixel the page already underneath it, and
+    // the spread simply changes when the zero-length settle timer fires.
     if (!prefersReduced) {
       const resting = complete ? 180 : 0
       angleRef.current = resting
@@ -69,9 +70,19 @@ export default function PageLeaf({ front, back, onComplete, onCancel, direction,
 
   // Tear down anything still pending. Kept separate from the driving effect so
   // it runs on unmount no matter which path the leaf took.
+  //
+  // `settled` is released here as well. Under StrictMode the mount effects run
+  // create → destroy → create, and a settle raised in the first pass would
+  // otherwise leave the guard latched with its timer already cleared: the
+  // second pass would early-return and the outcome would never fire at all.
+  // Releasing it in the same cleanup that clears the timer keeps flag and
+  // timer in step, so exactly one outcome is always in flight.
   useEffect(() => () => {
     if (timer.current !== null) window.clearTimeout(timer.current)
     if (frame.current !== null) cancelAnimationFrame(frame.current)
+    timer.current = null
+    frame.current = null
+    settled.current = false
   }, [])
 
   // Mount-time driver, run once. Either the leaf animates itself (button or
@@ -86,9 +97,17 @@ export default function PageLeaf({ front, back, onComplete, onCancel, direction,
       if (prefersReduced) {
         settle(true)
       } else {
+        // Two frames, not one: a rAF callback runs before the style pass of the
+        // frame it belongs to, and React flushes the state change in the
+        // following microtask, so a single frame can hand the compositor 0 and
+        // 180 degrees with no computed style in between and the transition
+        // never starts. The second frame guarantees the 0-degree start style
+        // has been committed first.
         frame.current = requestAnimationFrame(() => {
-          frame.current = null
-          settle(true)
+          frame.current = requestAnimationFrame(() => {
+            frame.current = null
+            settle(true)
+          })
         })
       }
       return
@@ -106,8 +125,12 @@ export default function PageLeaf({ front, back, onComplete, onCancel, direction,
       // Dragging right-to-left turns forward; the sign flips going back.
       const travelled = direction === 'next' ? startX.current - e.clientX : e.clientX - startX.current
       const ratio = Math.max(0, Math.min(1, travelled / width.current))
+      // `angleRef` is the drag's progress and always tracks the finger, since
+      // the release decision reads it. Only the rendered angle is withheld
+      // under reduced motion, so the sheet never rotates while the drag still
+      // navigates normally.
       angleRef.current = ratio * 180
-      setAngle(angleRef.current)
+      if (!prefersReduced) setAngle(angleRef.current)
     }
 
     const onRelease = () => {

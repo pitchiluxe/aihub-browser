@@ -135,7 +135,10 @@ export default function BiblePage() {
         <select
           value={bookId}
           onChange={e => { setBookId(e.target.value); setChapter(1); setSelectedRef(null) }}
-          className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm"
+          // Locked mid-turn: the sheet already in flight would otherwise land
+          // its completion on the new book and step past chapter 1.
+          disabled={!!turning}
+          className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm disabled:opacity-40"
         >
           {getBooks().map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
