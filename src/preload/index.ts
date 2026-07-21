@@ -38,6 +38,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     list:  (q?: string, pageToken?: string) => ipcRenderer.invoke('drive:list', { q, pageToken }),
     about: () => ipcRenderer.invoke('drive:about'),
   },
+  handoff: {
+    push:  (tabs: { url: string; title: string }[]) => ipcRenderer.invoke('handoff:push', { tabs }),
+    pull:  () => ipcRenderer.invoke('handoff:pull'),
+    clear: () => ipcRenderer.invoke('handoff:clear'),
+  },
   calendar: {
     list:   () => ipcRenderer.invoke('calendar:list'),
     events: (args?: { calendarId?: string; timeMin?: string; timeMax?: string; maxResults?: number }) => ipcRenderer.invoke('calendar:events', args || {}),

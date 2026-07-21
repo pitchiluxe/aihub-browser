@@ -4,6 +4,7 @@ import {
   Search, Plus, RotateCcw, Bot, PanelLeft, Pencil, BookmarkPlus, Volume2,
   Home, FlaskConical, Sparkles, StickyNote, History, Download, Puzzle, Wifi,
   Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft, GitCompare, BellRing,
+  Smartphone, Laptop,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
@@ -26,11 +27,13 @@ interface Props {
   onFind: () => void
   onAddBookmark: () => void
   onCompare: () => void
+  onSendTabs: () => void
+  onReceiveTabs: () => void
 }
 
 // A single fuzzy launcher (Ctrl+K) for everything: jump to any open tab or
 // bookmark, open any app page, or fire a common action — all from the keyboard.
-export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, onFind, onAddBookmark, onCompare }: Props) {
+export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, onFind, onAddBookmark, onCompare, onSendTabs, onReceiveTabs }: Props) {
   const {
     isCmdPaletteOpen, setCmdPaletteOpen,
     tabs, bookmarks, setActiveTab, addTab, reopenClosedTab,
@@ -72,6 +75,8 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     act('find', 'Find in Page', <Search size={15} />, () => onFind(), 'search text', 'Ctrl+F')
     act('bookmark', 'Add this Page to Sphere', <BookmarkPlus size={15} />, () => onAddBookmark(), 'save', 'Ctrl+D')
     act('compare', 'Compare two pages', <GitCompare size={15} />, () => onCompare(), 'versus vs comparison table diff')
+    act('handoff-send', 'Send my tabs to another device', <Smartphone size={15} />, () => onSendTabs(), 'handoff continue phone laptop sync move transfer')
+    act('handoff-recv', 'Open tabs from another device', <Laptop size={15} />, () => onReceiveTabs(), 'handoff continue receive pull phone laptop sync')
 
     const pages: [PageType, string][] = [
       ['research', 'Research Mode'], ['agents', 'Agent Mode'], ['notes', 'Sticky Notes'],

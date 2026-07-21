@@ -190,6 +190,43 @@ export default function App() {
     }
   }, [])
 
+  // ── Cross-device handoff (via the user's own Google Drive) ────────────────
+  const [handoffMsg, setHandoffMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const flashHandoff = (text: string, ok: boolean) => {
+    setHandoffMsg({ text, ok })
+    setTimeout(() => setHandoffMsg(null), 4000)
+  }
+  const notConnected = (err?: string) =>
+    err === 'not-connected' || err === 'needs-reauth' ||
+    /not.?connected|reauth|invalid|token|401|insufficient|scope/i.test(err || '')
+
+  const sendTabsToDevices = useCallback(async () => {
+    const store = useBrowserStore.getState()
+    const tabs = store.tabs
+      .filter(t => !t.isHome && t.pageType === 'browser' && /^https?:\/\//i.test(t.url))
+      .map(t => ({ url: t.url, title: t.title || t.url }))
+    if (!tabs.length) { flashHandoff('No open web pages to send.', false); return }
+    const r = await window.electronAPI.handoff.push(tabs)
+    if (r?.ok) flashHandoff(`Sent ${r.count} tab${r.count === 1 ? '' : 's'} — open AIHub on your other device and pick “Continue here”.`, true)
+    else if (notConnected(r?.error)) flashHandoff('Connect Google (with Drive) in Settings to hand off between devices.', false)
+    else flashHandoff(`Couldn’t send: ${r?.error || 'unknown error'}`, false)
+  }, [])
+
+  const receiveTabsFromDevice = useCallback(async () => {
+    const r = await window.electronAPI.handoff.pull()
+    if (!r?.ok) {
+      if (notConnected(r?.error)) flashHandoff('Connect Google (with Drive) in Settings to hand off between devices.', false)
+      else flashHandoff(`Couldn’t check: ${r?.error || 'unknown error'}`, false)
+      return
+    }
+    const payload = r.payload
+    if (!payload || !payload.tabs?.length) { flashHandoff('No handed-off session waiting.', false); return }
+    const store = useBrowserStore.getState()
+    for (const t of payload.tabs) store.addTab(t.url, 'browser')
+    window.electronAPI.handoff.clear().catch(() => {})
+    flashHandoff(`Opened ${payload.tabs.length} tab${payload.tabs.length === 1 ? '' : 's'} from ${payload.device}.`, true)
+  }, [])
+
   // ── Bookmarks + theme + IPC ────────────────────────────────────────────────
   useEffect(() => { loadBookmarks().then(setBookmarks) }, [])
 
@@ -671,8 +708,18 @@ export default function App() {
         onFind={() => setFindOpen(true)}
         onAddBookmark={addBookmarkFromPalette}
         onCompare={() => useBrowserStore.getState().setCompareOpen(true)}
+        onSendTabs={sendTabsToDevices}
+        onReceiveTabs={receiveTabsFromDevice}
       />
       <CompareModal />
+
+      {/* Cross-device handoff toast */}
+      {handoffMsg && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 9999 }}
+          className={`px-4 py-3 rounded-xl text-sm font-medium shadow-2xl border max-w-md text-center ${handoffMsg.ok ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200' : 'bg-aihub-surface border-aihub-border/60 text-aihub-text'}`}>
+          {handoffMsg.text}
+        </div>
+      )}
 
       {/* Narration control — visible while the page is being read aloud */}
       {speaking && (

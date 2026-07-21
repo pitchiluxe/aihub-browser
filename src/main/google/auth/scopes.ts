@@ -12,7 +12,12 @@ export const API_SCOPES: Record<GoogleApiId, string[]> = {
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/gmail.send',
   ],
-  drive: ['https://www.googleapis.com/auth/drive.readonly'],
+  // readonly → browse the user's files; appdata → private per-app hidden
+  // folder used by cross-device handoff (never exposes the rest of Drive).
+  drive: [
+    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/drive.appdata',
+  ],
   calendar: ['https://www.googleapis.com/auth/calendar.readonly'],
 }
 

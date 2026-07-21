@@ -274,11 +274,12 @@
       <a href="#tools">Agent toolbox</a>
       <a href="#research">Research &amp; Agent</a>
       <div class="rail-grp">Power features</div>
-      <a href="#power">The 9 power tools</a>
+      <a href="#power">The power tools</a>
       <a href="#command">Command palette</a>
       <a href="#rewind">Rewind</a>
       <a href="#watch">Watch &amp; Ping</a>
       <a href="#focus">Focus &amp; sleep</a>
+      <a href="#handoff">Device handoff</a>
       <div class="rail-grp">Knowledge</div>
       <a href="#sphere">Bookmark Sphere</a>
       <a href="#notes">Notes &amp; annotation</a>
@@ -675,7 +676,7 @@
 
       <!-- POWER FEATURES -->
       <section id="power">
-        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Nine power tools</h2><span class="sec-line"></span></div>
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Ten power tools</h2><span class="sec-line"></span></div>
         <p class="sec-sub">Small, sharp features that most browsers never gave you. Every one is real — nothing here is a demo.</p>
         <div class="body-col">
           <div class="grid g2">
@@ -688,6 +689,7 @@
             <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Per-site AI memory</h4><p>Give the assistant standing notes for a specific site — it remembers them every time you return there.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Focus sessions</h4><p>A Pomodoro timer on the homepage that actually blocks the sites you name for the length of the sprint.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Tab sleeping</h4><p>Idle tabs quietly free their memory and wake instantly when you click back — right-click any tab to sleep it now.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Device handoff</h4><p>Send every open tab to your other computer through your own Google Drive — no server in the middle. Pick up on the other machine right where you left off.</p></div>
           </div>
         </div>
       </section>
@@ -753,6 +755,26 @@
             <div class="feat"><h4>Tab sleeping</h4><p>Tabs you haven&rsquo;t touched in a while go to sleep and hand their memory back to the system, so a wall of open tabs stops slowing you down. A sleeping tab wakes the instant you click it. Want it now? Right-click any tab → <em>Sleep Tab (free memory)</em>.</p></div>
           </div>
           <div class="note">Per-site AI memory pairs well here: open the assistant on a site, hit the green <strong>Memory</strong> button, and jot standing instructions the AI should always apply on that site.</div>
+        </div>
+      </section>
+
+      <!-- HANDOFF -->
+      <section id="handoff">
+        <div class="sec-head"><span class="node" style="background:var(--emerald)"></span><h2>Cross-device handoff</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Move your whole browsing session to your other computer in two clicks — through your own Google account, with nobody in the middle.</p>
+        <div class="body-col">
+          <p>On the machine you&rsquo;re leaving, open the command palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>) and run <strong>Send my tabs to another device</strong>. Every open web page is bundled up and stored in a private, hidden folder inside <em>your</em> Google Drive.</p>
+          <p>On the other machine — signed into the same Google account and running AIHub — open the palette and run <strong>Open tabs from another device</strong>. Your tabs reopen exactly as they were, and the handed-off copy is cleared automatically.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Step</th><th>Where</th></tr></thead>
+              <tbody>
+                <tr><td>Send my tabs to another device</td><td>Command palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>), on the machine you&rsquo;re leaving</td></tr>
+                <tr><td>Open tabs from another device</td><td>Command palette, on the machine you&rsquo;re moving to</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Handoff uses Google Drive&rsquo;s <em>app-data</em> space — a hidden per-app folder that never shows up in your Drive and that no other app can read. Connect Google in <strong>Settings</strong> (with Drive enabled) on each device once, and it just works. Nothing passes through any server we run.</div>
         </div>
       </section>
 

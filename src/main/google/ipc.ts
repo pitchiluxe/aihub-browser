@@ -4,7 +4,9 @@ import path, { join } from 'path'
 import { connect, disconnect, status, setCredentials, isEncryptionAvailable, GoogleApiId } from './auth'
 import { listThreads, getThread, getAttachmentData, sendMessage, markThreadRead } from './apis/gmail'
 import { listFiles, getAbout } from './apis/drive'
+import { pushHandoff, pullHandoff, clearHandoff, HandoffTab } from './apis/handoff'
 import { listCalendars, listEvents } from './apis/calendar'
+import os from 'os'
 
 type Ok<T> = { ok: true } & T
 const ok = <T extends object>(data: T): Ok<T> => ({ ok: true, ...data })
@@ -39,6 +41,22 @@ export function registerGoogleIpc(safelySend: (channel: string, ...args: any[]) 
   })
   ipcMain.handle('drive:about', async () => {
     try { return ok(await getAbout()) } catch (e: any) { return fail(e.message) }
+  })
+
+  // ── Cross-device handoff (via the user's own Drive appDataFolder) ──────────
+  ipcMain.handle('handoff:push', async (_e, args: { tabs: HandoffTab[] }) => {
+    try {
+      const tabs = (args?.tabs || []).filter(t => t && /^https?:\/\//i.test(t.url))
+      if (!tabs.length) return fail('no-tabs')
+      await pushHandoff({ tabs, device: os.hostname() || 'This device', sentAt: Date.now() })
+      return ok({ count: tabs.length })
+    } catch (e: any) { return fail(e.message) }
+  })
+  ipcMain.handle('handoff:pull', async () => {
+    try { return ok({ payload: await pullHandoff() }) } catch (e: any) { return fail(e.message) }
+  })
+  ipcMain.handle('handoff:clear', async () => {
+    try { return ok(await clearHandoff()) } catch (e: any) { return fail(e.message) }
   })
 
   // ── Calendar ──────────────────────────────────────────────────────────────
