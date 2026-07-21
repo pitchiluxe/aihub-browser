@@ -787,7 +787,7 @@
       </div>
       <div class="vb-sep"></div>
       <div class="vb-item">
-        🌍 <span>People browsing AIHub right now</span>
+        ⬇️ <span><span class="vb-num" id="dl-count">—</span> downloads</span>
       </div>
     </div>
   </div>
@@ -1177,6 +1177,16 @@
       }
     } catch {
       totalEl.textContent = '—'
+    }
+
+    // Live download count from GitHub Releases (via our cached edge function).
+    const dlEl = document.getElementById('dl-count')
+    if (dlEl) {
+      try {
+        const r = await fetch('/api/downloads')
+        const d = await r.json()
+        dlEl.textContent = (d && typeof d.downloads === 'number') ? d.downloads.toLocaleString() : '—'
+      } catch { dlEl.textContent = '—' }
     }
   }
   loadVisitorCounts()
