@@ -102,6 +102,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   focus: {
     apply: (blocked: string[] | null) => ipcRenderer.invoke('focus:apply', blocked),
   },
+  rewind: {
+    add:    (entry: { url: string; title?: string; favicon?: string; text?: string }) => ipcRenderer.invoke('rewind:add', entry),
+    search: (query: string) => ipcRenderer.invoke('rewind:search', query),
+    stats:  () => ipcRenderer.invoke('rewind:stats'),
+    remove: (id: string) => ipcRenderer.invoke('rewind:remove', id),
+    clear:  () => ipcRenderer.invoke('rewind:clear'),
+  },
   siteMemory: {
     get:    (url: string) => ipcRenderer.invoke('siteMemory:get', url),
     set:    (url: string, text: string, title?: string) => ipcRenderer.invoke('siteMemory:set', url, text, title),

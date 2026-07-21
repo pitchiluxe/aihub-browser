@@ -1859,6 +1859,84 @@ ipcMain.handle('siteMemory:set', (_e, url: string, text: string, title?: string)
 })
 ipcMain.handle('siteMemory:getAll', () => getSiteMemory())
 
+// ── Rewind / Time Machine ──────────────────────────────────────────────────
+// A local, searchable record of the readable content of pages the user has
+// actually dwelt on. Lets them find "that article I read last week" by what it
+// SAID, not just its URL. Stored locally, capped, never leaves the machine.
+interface RewindEntry { id: string; url: string; title: string; favicon: string; text: string; ts: number }
+const REWIND_FILE = join(APP_DIR, 'rewind.json')
+let _rewind: RewindEntry[] | null = null
+function getRewind(): RewindEntry[] { if (!_rewind) _rewind = (readJson(REWIND_FILE, []) as RewindEntry[]) || []; return _rewind! }
+const REWIND_CAP = 3000
+
+function rewindListItem(e: RewindEntry, snippet?: string) {
+  return { id: e.id, url: e.url, title: e.title, favicon: e.favicon, ts: e.ts, snippet: snippet ?? e.text.slice(0, 180) }
+}
+function rewindSnippet(text: string, terms: string[]): string {
+  const lower = text.toLowerCase()
+  let at = -1
+  for (const t of terms) { const i = lower.indexOf(t); if (i !== -1 && (at === -1 || i < at)) at = i }
+  if (at === -1) return text.slice(0, 180)
+  const start = Math.max(0, at - 60)
+  return (start > 0 ? '…' : '') + text.slice(start, start + 220).trim() + '…'
+}
+
+ipcMain.handle('rewind:add', (_e, entry: { url: string; title?: string; favicon?: string; text?: string }) => {
+  try {
+    if (!entry?.url || !/^https?:\/\//i.test(entry.url)) return { ok: false }
+    const store = getRewind()
+    // Merge captures of the same URL within 30 min instead of piling up dupes.
+    const recent = store.find(e => e.url === entry.url && Date.now() - e.ts < 30 * 60 * 1000)
+    if (recent) {
+      if (entry.title) recent.title = entry.title
+      if (entry.text) recent.text = entry.text.slice(0, 6000)
+      recent.ts = Date.now()
+    } else {
+      store.unshift({
+        id: `rw-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        url: entry.url, title: entry.title || entry.url, favicon: entry.favicon || '',
+        text: (entry.text || '').slice(0, 6000), ts: Date.now(),
+      })
+      if (store.length > REWIND_CAP) store.length = REWIND_CAP
+    }
+    writeJson(REWIND_FILE, store)
+    return { ok: true }
+  } catch (e: any) { return { ok: false, error: e.message } }
+})
+
+ipcMain.handle('rewind:search', (_e, query: string) => {
+  const q = String(query || '').toLowerCase().trim()
+  const store = getRewind()
+  if (!q) return store.slice(0, 80).map(e => rewindListItem(e))
+  const terms = q.split(/\s+/).filter(Boolean)
+  const scored: { e: RewindEntry; score: number }[] = []
+  for (const e of store) {
+    const title = e.title.toLowerCase(), hay = `${title} ${e.url.toLowerCase()} ${e.text.toLowerCase()}`
+    let score = 0, missed = false
+    for (const t of terms) {
+      const n = hay.split(t).length - 1
+      if (n === 0) { missed = true; break }
+      score += n + (title.includes(t) ? 5 : 0) // title matches weigh more
+    }
+    if (missed) continue
+    score += Math.max(0, 7 - (Date.now() - e.ts) / 86400000) * 0.4 // gentle recency boost
+    scored.push({ e, score })
+  }
+  scored.sort((a, b) => b.score - a.score)
+  return scored.slice(0, 100).map(s => rewindListItem(s.e, rewindSnippet(s.e.text, terms)))
+})
+
+ipcMain.handle('rewind:stats', () => {
+  const store = getRewind()
+  return { count: store.length, oldest: store.length ? store[store.length - 1].ts : 0 }
+})
+ipcMain.handle('rewind:remove', (_e, id: string) => {
+  const store = getRewind(); const i = store.findIndex(e => e.id === id)
+  if (i !== -1) { store.splice(i, 1); writeJson(REWIND_FILE, store) }
+  return { ok: true }
+})
+ipcMain.handle('rewind:clear', () => { _rewind = []; writeJson(REWIND_FILE, []); return { ok: true } })
+
 const NOTES_FILE = join(APP_DIR, 'sticky-notes.json')
 let _stickyNotes: Record<string, { url: string; pageTitle: string; updatedAt: number; notes: any[] }> | null = null
 

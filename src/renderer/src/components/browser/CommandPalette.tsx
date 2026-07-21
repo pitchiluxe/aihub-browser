@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
-type PageType = 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual'
+type PageType = 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind'
 
 interface Cmd {
   id: string
@@ -53,7 +53,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
 
   const pageIcon: Record<string, React.ReactNode> = {
     research: <FlaskConical size={15} />, agents: <Bot size={15} />, notes: <StickyNote size={15} />,
-    history: <History size={15} />, downloads: <Download size={15} />, extensions: <Puzzle size={15} />,
+    rewind: <History size={15} />, history: <History size={15} />, downloads: <Download size={15} />, extensions: <Puzzle size={15} />,
     wifi: <Wifi size={15} />, vpn: <Shield size={15} />, mail: <Mail size={15} />,
     manual: <BookOpen size={15} />, settings: <Settings size={15} />,
   }
@@ -75,8 +75,8 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
 
     const pages: [PageType, string][] = [
       ['research', 'Research Mode'], ['agents', 'Agent Mode'], ['notes', 'Sticky Notes'],
-      ['history', 'History'], ['downloads', 'Downloads'], ['extensions', 'Extensions'],
-      ['wifi', 'Free WiFi'], ['vpn', 'VPN / Proxy'], ['mail', 'Mail'],
+      ['rewind', 'Rewind — search what you\'ve read'], ['history', 'History'], ['downloads', 'Downloads'],
+      ['extensions', 'Extensions'], ['wifi', 'Free WiFi'], ['vpn', 'VPN / Proxy'], ['mail', 'Mail'],
       ['manual', 'User Manual'], ['settings', 'Settings'],
     ]
     out.push({ id: 'go-home', label: 'Home', group: 'Go to', icon: <Home size={15} />, run: () => { addTab('home', 'browser'); close() }, keywords: 'start new tab' })

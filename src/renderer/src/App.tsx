@@ -20,6 +20,7 @@ const ExtensionsPage = lazy(() => import('./components/pages/ExtensionsPage'))
 const MailPage       = lazy(() => import('./components/pages/MailPage'))
 const NotesPage      = lazy(() => import('./components/pages/NotesPage'))
 const ManualPage     = lazy(() => import('./components/pages/ManualPage'))
+const RewindPage     = lazy(() => import('./components/pages/RewindPage'))
 import AddBookmarkModal from './components/homepage/AddBookmarkModal'
 import QRCodeModal from './components/browser/QRCodeModal'
 import UpdateNotification from './components/browser/UpdateNotification'
@@ -69,6 +70,7 @@ export default function App() {
   // Per-tab "just started loading" debounce timers, so a fast navigation
   // doesn't flash the loading spinner.
   const loadTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const rewindTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const contentAreaRef = useRef<HTMLDivElement>(null)
 
@@ -142,7 +144,7 @@ export default function App() {
   }, [activeTabId, navigate])
 
   // ── Special pages ──────────────────────────────────────────────────────────
-  const openSpecialPage = useCallback((pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual') => {
+  const openSpecialPage = useCallback((pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind') => {
     useBrowserStore.getState().addTab(`aihub://${pageType}`, pageType)
   }, [])
 
@@ -557,6 +559,27 @@ export default function App() {
           if (tabId === store.activeTabId) {
             window.electronAPI.tabView.getNavState(tabId).then((s: any) => store.setNavState(s)).catch(() => {})
           }
+
+          // Rewind capture — after a 5s dwell (so redirects/skims aren't kept),
+          // if this tab is still on the same page, save its readable text so it
+          // can be found later by content, not just URL.
+          if (url && /^https?:\/\//i.test(url) && wcId) {
+            const prev = rewindTimers.current.get(tabId)
+            if (prev) clearTimeout(prev)
+            rewindTimers.current.set(tabId, setTimeout(async () => {
+              rewindTimers.current.delete(tabId)
+              const s2 = useBrowserStore.getState()
+              const stillHere = s2.tabs.find(t => t.id === tabId)
+              if (!stillHere || stillHere.url !== url) return
+              try {
+                const res = await window.electronAPI.webview.execScript(wcId, buildPageExtractionScript())
+                const text = res?.ok ? String(res.result || '').trim() : ''
+                if (text && text.length > 120) {
+                  window.electronAPI.rewind.add({ url, title: title || url, favicon, text })
+                }
+              } catch {}
+            }, 5000))
+          }
           break
         }
       }
@@ -613,6 +636,7 @@ export default function App() {
                     {tab.pageType === 'mail'       && <MailPage />}
                     {tab.pageType === 'notes'      && <NotesPage onNavigate={navigate} />}
                     {tab.pageType === 'manual'     && <ManualPage />}
+                    {tab.pageType === 'rewind'     && <RewindPage onNavigate={navigate} />}
                   </Suspense>
                 </div>
               )

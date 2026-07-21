@@ -1,20 +1,20 @@
 import React, { memo } from 'react'
 import {
   Home, History, Download, Settings, Plus, Sparkles,
-  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen,
+  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 
 interface Props {
   onNavigate: (url: string) => void
-  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual') => void
+  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind') => void
 }
 
 interface NavItem {
   icon: React.ElementType
   label: string
-  page: null | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual'
+  page: null | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind'
   type: string
   accent?: string
 }
@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: FlaskConical, label: 'Research',     page: 'research',     type: 'research',   accent: '#38bdf8' },
   { icon: Bot,          label: 'Agent Mode',   page: 'agents',       type: 'agents',     accent: '#a78bfa' },
   { icon: StickyNote,   label: 'Sticky Notes', page: 'notes',        type: 'notes',      accent: '#facc15' },
+  { icon: Rewind,       label: 'Rewind',       page: 'rewind',       type: 'rewind',     accent: '#c4b5fd' },
   { icon: History,      label: 'History',      page: 'history',      type: 'history'    },
   { icon: Download,     label: 'Downloads',    page: 'downloads',    type: 'downloads'  },
   { icon: Puzzle,       label: 'Extensions',   page: 'extensions',   type: 'extensions', accent: '#fb923c' },
