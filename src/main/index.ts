@@ -1218,18 +1218,23 @@ async function currentPublicIp(timeoutMs = 12000): Promise<string> {
 }
 
 // Route a probe through an isolated in-memory session so testing never touches
-// the user's real browsing session. Returns the IP seen through the proxy.
-async function probeProxy(rule: string, partition: string, timeoutMs: number): Promise<string | null> {
+// the user's real browsing session. Returns the IP seen through the proxy AND
+// how long the round-trip took, so the connect logic can pick the FASTEST
+// working server rather than merely the first to answer — free proxies vary
+// wildly in speed and the first responder is often a slow one.
+async function probeProxy(rule: string, partition: string, timeoutMs: number): Promise<{ ip: string; ms: number } | null> {
   try {
     const ses = session.fromPartition(partition)
     await ses.setProxy({ proxyRules: rule })
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+    const t0 = Date.now()
     try {
       const res = await ses.fetch('https://api.ipify.org?format=json', { signal: ctrl.signal, cache: 'no-store' })
       if (!res.ok) return null
       const d = await res.json()
-      return typeof d?.ip === 'string' ? d.ip : null
+      if (typeof d?.ip !== 'string') return null
+      return { ip: d.ip, ms: Date.now() - t0 }
     } finally { clearTimeout(timer) }
   } catch { return null }
 }
@@ -1261,20 +1266,26 @@ ipcMain.handle('vpn:freeConnect', async (_e, cc: string, countryName?: string) =
       const batch = candidates.slice(i, i + BATCH)
       const results = await Promise.all(
         // Dead proxies fail fast; working ones answer well inside 5s
-        batch.map((rule, j) => probeProxy(rule, `vpn-probe-${j}`, 5000).then(ip => ({ rule, ip })))
+        batch.map((rule, j) => probeProxy(rule, `vpn-probe-${j}`, 5000).then(res => ({ rule, res })))
       )
-      const winner = results.find(r => r.ip && r.ip !== directIp)
-      if (winner) {
+      // Every proxy that answered AND masks the real IP, fastest first — so we
+      // connect through the quickest server in the batch, not just the first
+      // one to reply. Directly helps the "everything is slow" experience.
+      const workers = results
+        .filter(r => r.res && r.res.ip && r.res.ip !== directIp)
+        .sort((a, b) => a.res!.ms - b.res!.ms)
+
+      for (const w of workers) {
         if (freeVpnCancelled) return { success: false, error: 'Cancelled', cancelled: true }
-        const u = new URL(winner.rule)
+        const u = new URL(w.rule)
         // Apply to the sessions real browsing uses, then PROVE it took effect
         // by re-checking the public IP through the tab session. Without this
         // check "connected" could be reported while pages still went out
         // direct — which is exactly what used to happen.
-        await applyProxyToTraffic({ proxyRules: winner.rule, proxyBypassRules: '<local>' })
+        await applyProxyToTraffic({ proxyRules: w.rule, proxyBypassRules: '<local>' })
         const liveIp = await currentPublicIp(9000)
         if (!liveIp || (directIp && liveIp === directIp)) {
-          // Not actually routing — undo and keep hunting rather than lie
+          // Not actually routing — undo and try the next-fastest
           await applyProxyToTraffic({ mode: 'direct' })
           continue
         }
@@ -1283,7 +1294,7 @@ ipcMain.handle('vpn:freeConnect', async (_e, cc: string, countryName?: string) =
           free: true, countryCode: cc, countryName: label,
         }
         broadcastVpnState()
-        return { success: true, ip: liveIp, proxy: winner.rule }
+        return { success: true, ip: liveIp, proxy: w.rule, ms: w.res!.ms }
       }
     }
     return {

@@ -413,7 +413,9 @@ export default function VpnPage() {
           <div className="mt-3 flex items-start gap-2 px-1">
             <AlertTriangle size={11} style={{ color: 'rgba(251,191,36,0.5)', flexShrink: 0, marginTop: 2 }} />
             <p className="text-[11px] leading-relaxed" style={{ color: 'rgb(var(--ds-text-4) / 0.8)' }}>
-              Free servers are community-run and change often — speed varies, and if one drops we'll find another when you reconnect.
+              Free servers are community-run and change often — the browser now picks the fastest one it can find, but they're still much
+              slower than paid VPNs. <strong style={{ color: 'rgb(var(--ds-text-3))' }}>Video streaming (YouTube, Netflix) usually won't work</strong> — the bandwidth is too low and
+              streaming sites block shared proxy IPs. Turn the VPN off to stream, or add your own fast proxy under Advanced.
               Avoid logging into sensitive accounts (banking) while on a free server.
             </p>
           </div>
