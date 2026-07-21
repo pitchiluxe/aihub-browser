@@ -1304,6 +1304,48 @@ ipcMain.handle('vpn:freeConnect', async (_e, cc: string, countryName?: string) =
 
 ipcMain.handle('vpn:freeCancel', () => { freeVpnCancelled = true; return { success: true } })
 
+// ── Focus sessions ─────────────────────────────────────────────────────────
+// While a focus session is active the renderer sends the blocked domains here.
+// We intercept only top-level navigations to those domains on the browsing
+// session and redirect them to a small "blocked" page — everything else passes
+// straight through, and the whole thing is torn down when focus ends.
+// Chromium refuses to redirect a top-level navigation to a data: URL, so the
+// "blocked" page is hosted on the landing site. The blocked domain rides along
+// as ?site= for a tailored message.
+const FOCUS_BLOCK_PAGE = 'https://landing-sooty-omega-22.vercel.app/blocked.html'
+
+let focusBlocked: string[] | null = null
+function hostRoot(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase() } catch { return '' }
+}
+
+ipcMain.handle('focus:apply', (_e, blocked: string[] | null) => {
+  focusBlocked = (Array.isArray(blocked) && blocked.length)
+    ? blocked.map(d => String(d).replace(/^www\./, '').toLowerCase()).filter(Boolean)
+    : null
+  const ses = session.fromPartition('persist:main')
+  try {
+    if (focusBlocked) {
+      ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, cb) => {
+        try {
+          if (details.resourceType === 'mainFrame' && focusBlocked) {
+            const host = hostRoot(details.url)
+            // Don't re-block the block page itself, or we'd loop.
+            if (host && host !== 'landing-sooty-omega-22.vercel.app' &&
+                focusBlocked.some(b => host === b || host.endsWith('.' + b))) {
+              cb({ redirectURL: `${FOCUS_BLOCK_PAGE}?site=${encodeURIComponent(host)}` }); return
+            }
+          }
+        } catch {}
+        cb({}) // fail-open: never block anything we didn't mean to
+      })
+    } else {
+      ses.webRequest.onBeforeRequest(null)
+    }
+    return { ok: true }
+  } catch (e: any) { return { ok: false, error: e.message } }
+})
+
 // Native country picker for the toolbar VPN button. It has to be a native
 // menu: the nav bar is host HTML, and the active tab's BrowserView paints
 // above host HTML, so an HTML dropdown hanging below the bar is invisible

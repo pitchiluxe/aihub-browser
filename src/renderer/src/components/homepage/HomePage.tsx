@@ -13,6 +13,7 @@ import AddBookmarkModal from './AddBookmarkModal'
 import { useTheme } from '../../hooks/useTheme'
 import { getHoliday, holidayThemeEnabled } from '../../services/holidayService'
 import HolidayLayer from './HolidayLayer'
+import FocusWidget from './FocusWidget'
 
 // Code-split: the sphere pulls in d3 (~100KB+) — load it only when opened
 const BookmarkSphere = React.lazy(() => import('./BookmarkSphere'))
@@ -221,6 +222,12 @@ export default function HomePage({ onNavigate }: Props) {
           <motion.div className="w-full max-w-2xl mt-5"
             initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
             <SearchBar onNavigate={onNavigate} />
+          </motion.div>
+
+          {/* Focus session */}
+          <motion.div className="mt-4"
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            <FocusWidget isLight={isLight} />
           </motion.div>
         </div>
 

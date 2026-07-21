@@ -99,6 +99,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteUrl:  (url: string) => ipcRenderer.invoke('notes:deleteUrl', url),
     deleteNote: (url: string, noteId: string) => ipcRenderer.invoke('notes:deleteNote', url, noteId),
   },
+  focus: {
+    apply: (blocked: string[] | null) => ipcRenderer.invoke('focus:apply', blocked),
+  },
   wifi: {
     scan:    () => ipcRenderer.invoke('wifi:scan'),
     connect: (ssid:string, open?:boolean, password?:string, auth?:string) => ipcRenderer.invoke('wifi:connect', ssid, open, password, auth),
