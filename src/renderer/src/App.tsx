@@ -26,6 +26,7 @@ import UpdateNotification from './components/browser/UpdateNotification'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import FindBar from './components/browser/FindBar'
 import AIAssistant from './components/ai/AIAssistant'
+import CommandPalette from './components/browser/CommandPalette'
 import { loadBookmarks } from './services/bookmarkService'
 import { buildPageExtractionScript } from './services/pageExtractor'
 import { loadCustomExts } from './extensions/customExts'
@@ -49,12 +50,12 @@ export default function App() {
   const {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
-    isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen,
+    isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
     isAnnotationMode: s.isAnnotationMode, isAddBookmarkOpen: s.isAddBookmarkOpen, isAIPanelOpen: s.isAIPanelOpen,
-    isVpnMenuOpen: s.isVpnMenuOpen,
+    isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -153,6 +154,36 @@ export default function App() {
       return res?.ok ? String(res.result || '').trim() : ''
     } catch { return '' }
   }, [activeTabId])
+
+  // ── Read the current page aloud (Web Speech). Toggles: speak, or stop if
+  // already speaking. ────────────────────────────────────────────────────────
+  const [speaking, setSpeaking] = useState(false)
+  const readAloud = useCallback(async () => {
+    const synth = window.speechSynthesis
+    if (!synth) return
+    if (synth.speaking || synth.pending) { synth.cancel(); setSpeaking(false); return }
+    const text = await getPageContent()
+    if (!text) return
+    const u = new SpeechSynthesisUtterance(text.slice(0, 32000))
+    u.rate = 1.0
+    u.onend = () => setSpeaking(false)
+    u.onerror = () => setSpeaking(false)
+    synth.cancel()
+    synth.speak(u)
+    setSpeaking(true)
+  }, [getPageContent])
+
+  // Stop narration when leaving the page
+  useEffect(() => { window.speechSynthesis?.cancel(); setSpeaking(false) }, [activeTabId])
+
+  const addBookmarkFromPalette = useCallback(() => {
+    const store = useBrowserStore.getState()
+    const tab = store.tabs.find(tb => tb.id === store.activeTabId)
+    if (tab && !tab.isHome && tab.pageType === 'browser' && /^https?:\/\//i.test(tab.url)) {
+      store.setBookmarkPrefill(tab.url)
+      store.setAddBookmarkOpen(true)
+    }
+  }, [])
 
   // ── Bookmarks + theme + IPC ────────────────────────────────────────────────
   useEffect(() => { loadBookmarks().then(setBookmarks) }, [])
@@ -312,6 +343,9 @@ export default function App() {
         case 'find-in-page':
           setFindOpen(true)
           break
+        case 'command-palette':
+          store.setCmdPaletteOpen(!store.isCmdPaletteOpen)
+          break
       }
     })
     return () => { try { off?.() } catch {} }
@@ -393,8 +427,8 @@ export default function App() {
     // Any host-HTML overlay (Add-to-Sphere modal, QR modal) must detach the
     // active tab's BrowserView, which otherwise always paints on top of and
     // steals clicks from our HTML — making the modal look frozen/invisible.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen)
-  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen])
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen])
 
   // ── Single listener for all tab content events, forwarded from main ───────
   useEffect(() => {
@@ -577,6 +611,36 @@ export default function App() {
       <AddBookmarkModal />
       <QRCodeModal url={qrUrl} onClose={() => setQrUrl(null)} />
       <UpdateNotification />
+
+      <CommandPalette
+        onNavigate={navigate}
+        onOpenPage={openSpecialPage}
+        onReadAloud={readAloud}
+        onFind={() => setFindOpen(true)}
+        onAddBookmark={addBookmarkFromPalette}
+      />
+
+      {/* Narration control — visible while the page is being read aloud */}
+      {speaking && (
+        <button
+          onClick={() => { window.speechSynthesis?.cancel(); setSpeaking(false) }}
+          className="no-drag"
+          style={{
+            position: 'fixed', bottom: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 2147483100,
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 999, cursor: 'pointer',
+            background: 'rgb(var(--ds-accent) / 0.92)', color: '#fff', border: 'none',
+            boxShadow: '0 8px 30px rgb(var(--ds-accent) / 0.45)', fontSize: 12.5, fontWeight: 700,
+          }}
+        >
+          <span style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 12 }}>
+            {[0, 1, 2].map(n => (
+              <span key={n} style={{ width: 3, background: '#fff', borderRadius: 2, animation: `ttsBar 0.9s ease-in-out ${n * 0.15}s infinite` }} />
+            ))}
+          </span>
+          Reading aloud · click to stop
+          <style>{`@keyframes ttsBar{0%,100%{height:4px}50%{height:12px}}`}</style>
+        </button>
+      )}
     </div>
   )
 }

@@ -463,6 +463,7 @@ function matchAppShortcut(input: Electron.Input): string | null {
   if (key === 'w' && !input.shift) return 'close-tab'
   if (key === 'tab') return input.shift ? 'prev-tab' : 'next-tab'
   if (key === 'l' && !input.shift) return 'focus-url'
+  if (key === 'k' && !input.shift) return 'command-palette'
   if (key === 'r' && !input.shift) return 'reload-tab'
   if (key === 'd' && !input.shift) return 'bookmark-page'
   if (key === 'h' && !input.shift) return 'open-history'
@@ -506,7 +507,7 @@ function attachAppShortcuts(wc: Electron.WebContents) {
     // host UI first — otherwise the input focuses but keys keep going to the
     // BrowserView.
     const ctx = ctxOwning(wc)
-    if (action === 'focus-url' || action === 'find-in-page') ctx?.win.webContents.focus()
+    if (action === 'focus-url' || action === 'find-in-page' || action === 'command-palette') ctx?.win.webContents.focus()
     // Paste-and-Go carries the clipboard text with it so the renderer doesn't
     // need a separate clipboard round-trip.
     if (action === 'paste-and-go') { sendTo(ctx, 'urlbar-paste-and-go', clipboard.readText().trim()); return }

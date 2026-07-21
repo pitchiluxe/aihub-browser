@@ -41,6 +41,8 @@ interface BrowserState {
   // must detach while it's open (same reason as the modals).
   isVpnMenuOpen: boolean
   setVpnMenuOpen: (v: boolean) => void
+  isCmdPaletteOpen: boolean
+  setCmdPaletteOpen: (v: boolean) => void
   // URL to pre-fill the Add-to-Sphere modal with (set from the page context menu)
   bookmarkPrefill: string
   setBookmarkPrefill: (u: string) => void
@@ -200,6 +202,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setAddBookmarkOpen: (v) => set({ isAddBookmarkOpen: v }),
   isVpnMenuOpen: false,
   setVpnMenuOpen: (v) => set({ isVpnMenuOpen: v }),
+  isCmdPaletteOpen: false,
+  setCmdPaletteOpen: (v) => set({ isCmdPaletteOpen: v }),
 
   bookmarkPrefill: '',
   setBookmarkPrefill: (u) => set({ bookmarkPrefill: u }),
