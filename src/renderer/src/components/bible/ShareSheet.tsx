@@ -14,6 +14,29 @@ interface Props {
 // it has no web share-intent URL, and linking to one would just 404. Instead
 // the sheet offers "Save image", which is the only thing that actually works
 // for TikTok/Instagram — the user posts the exported PNG themselves.
+// Fixed layout constants for saveImage()'s canvas export.
+const CANVAS_WIDTH = 1080
+const MIN_CANVAS_HEIGHT = 1080
+const WRAP_MAX_WIDTH = 860
+const VERTICAL_PADDING = 120 // breathing room above the first line and below the reference
+const MAX_FONT_SIZE = 44
+const MIN_FONT_SIZE = 22
+const REFERENCE_GAP = 70 // gap between the last verse line and the reference line
+const REFERENCE_FONT_RATIO = 34 / 44 // reference stays proportionally sized to the verse font
+
+// Greedy word-wrap against the canvas's current font — pulled out so the
+// font-size search below can re-run it cheaply at each candidate size.
+function wrapWords(ctx: CanvasRenderingContext2D, words: string[], maxWidth: number): string[] {
+  const lines: string[] = []
+  let line = ''
+  for (const w of words) {
+    if (ctx.measureText(`${line} ${w}`).width > maxWidth && line) { lines.push(line); line = w }
+    else line = line ? `${line} ${w}` : w
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
 const TARGETS = [
   { id: 'facebook', label: 'Facebook', url: (t: string) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent('https://bible.com')}&quote=${encodeURIComponent(t)}` },
   { id: 'x',        label: 'X',        url: (t: string) => `https://twitter.com/intent/tweet?text=${encodeURIComponent(t)}` },
@@ -57,31 +80,57 @@ export default function ShareSheet({ verseRef, text, onClose }: Props) {
     if (!c) return
     const ctx = c.getContext('2d')
     if (!ctx) return
-    c.width = 1080; c.height = 1080
 
-    const grad = ctx.createLinearGradient(0, 0, 1080, 1080)
+    // Long verses (Esther 8:9, the Revelation 21 wall-measurement verses,
+    // etc.) wrap to more lines than a fixed 1080px canvas can hold at the
+    // default font size. Shrink the font — and its proportional line
+    // height / reference size — until the wrapped verse plus the reference
+    // line fit the available height, down to a readable floor. If even the
+    // floor doesn't fit, grow the canvas instead of cropping: the
+    // reference line must always end up visible.
+    const words = text.split(' ')
+    const availableHeight = MIN_CANVAS_HEIGHT - VERTICAL_PADDING * 2
+    let fontSize = MAX_FONT_SIZE
+    let lines: string[] = []
+    let lineHeight = 0
+    let refFontSize = 0
+    let textBlockHeight = 0
+    for (; fontSize >= MIN_FONT_SIZE; fontSize -= 2) {
+      ctx.font = `${fontSize}px Georgia, serif`
+      lines = wrapWords(ctx, words, WRAP_MAX_WIDTH)
+      lineHeight = fontSize * 1.5
+      refFontSize = Math.round(fontSize * REFERENCE_FONT_RATIO)
+      textBlockHeight = lines.length * lineHeight
+      if (textBlockHeight + REFERENCE_GAP + refFontSize <= availableHeight) break
+    }
+    // If the loop ran to completion without an early break (still doesn't
+    // fit at the floor), its `-= 2` update fires once more before the
+    // condition fails, leaving fontSize one step below MIN_FONT_SIZE even
+    // though lines/lineHeight/refFontSize above were computed at the
+    // floor. Clamp it back so rendering matches what was measured.
+    fontSize = Math.max(fontSize, MIN_FONT_SIZE)
+
+    const requiredHeight = textBlockHeight + REFERENCE_GAP + refFontSize + VERTICAL_PADDING * 2
+    const canvasHeight = Math.max(MIN_CANVAS_HEIGHT, requiredHeight)
+    // Assigning width/height clears the canvas and resets context state,
+    // so everything below (fillStyle, font, textAlign) is re-applied fresh.
+    c.width = CANVAS_WIDTH; c.height = canvasHeight
+
+    const grad = ctx.createLinearGradient(0, 0, CANVAS_WIDTH, canvasHeight)
     grad.addColorStop(0, '#1e1b4b'); grad.addColorStop(1, '#4c1d95')
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, 1080, 1080)
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, CANVAS_WIDTH, canvasHeight)
 
     ctx.fillStyle = '#fdf6e3'
-    ctx.font = '44px Georgia, serif'
+    ctx.font = `${fontSize}px Georgia, serif`
     ctx.textAlign = 'center'
 
-    const words = text.split(' ')
-    const lines: string[] = []
-    let line = ''
-    for (const w of words) {
-      if (ctx.measureText(`${line} ${w}`).width > 860 && line) { lines.push(line); line = w }
-      else line = line ? `${line} ${w}` : w
-    }
-    if (line) lines.push(line)
+    const centerX = CANVAS_WIDTH / 2
+    const startY = canvasHeight / 2 - (lines.length - 1) * (lineHeight / 2)
+    lines.forEach((l, i) => ctx.fillText(l, centerX, startY + i * lineHeight))
 
-    const startY = 540 - (lines.length - 1) * 33
-    lines.forEach((l, i) => ctx.fillText(l, 540, startY + i * 66))
-
-    ctx.font = 'bold 34px Georgia, serif'
+    ctx.font = `bold ${refFontSize}px Georgia, serif`
     ctx.fillStyle = '#fbbf24'
-    ctx.fillText(formatRef(verseRef), 540, startY + lines.length * 66 + 70)
+    ctx.fillText(formatRef(verseRef), centerX, startY + lines.length * lineHeight + REFERENCE_GAP)
 
     const a = document.createElement('a')
     a.download = `${verseRef.replace(/\./g, '-')}.png`

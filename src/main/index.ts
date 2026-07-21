@@ -2011,7 +2011,30 @@ ipcMain.handle('bible:setMarks', (_e, marks: BibleMarks) => {
 // can never reach shell.openExternal with something other than a web link
 // or a mailto: compose.
 ipcMain.handle('shell:openExternal', (_e, url: string) => {
-  if (typeof url === 'string' && /^(https?|mailto):/i.test(url)) shell.openExternal(url)
+  if (typeof url !== 'string') return
+  // Parse with the WHATWG URL constructor rather than a hand-rolled regex —
+  // it rejects UNC paths and tolerates the leading/embedded whitespace the
+  // spec strips before parsing, so we don't have to. One thing it does NOT
+  // reject on its own: for "special" schemes (http/https) it silently
+  // rewrites a schemeless-slash input like "https:evil" into
+  // "https://evil/", so a bare protocol-allowlist check would let it back
+  // in. Guard against that by requiring "//" to already be present right
+  // after the scheme in the (whitespace-normalized) input. mailto: has no
+  // authority component, so it's the one scheme allowed without "//".
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return
+  }
+  if (parsed.protocol === 'mailto:') {
+    shell.openExternal(url)
+    return
+  }
+  if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+    const normalized = url.replace(/[\t\n\r]/g, '').trim().toLowerCase()
+    if (normalized.startsWith(`${parsed.protocol}//`)) shell.openExternal(url)
+  }
 })
 
 // ── Watch & Ping ───────────────────────────────────────────────────────────
