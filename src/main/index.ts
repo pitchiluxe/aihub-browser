@@ -2004,6 +2004,16 @@ ipcMain.handle('bible:setMarks', (_e, marks: BibleMarks) => {
   return { ok: true }
 })
 
+// Opens a URL in the user's real, out-of-app browser (or mail client for
+// mailto:) via shell.openExternal — never a BrowserWindow/WebView, so it
+// can't be used to navigate the app shell itself. Scheme-checked so a
+// malformed or injected value (e.g. a verse containing stray characters)
+// can never reach shell.openExternal with something other than a web link
+// or a mailto: compose.
+ipcMain.handle('shell:openExternal', (_e, url: string) => {
+  if (typeof url === 'string' && /^(https?|mailto):/i.test(url)) shell.openExternal(url)
+})
+
 // ── Watch & Ping ───────────────────────────────────────────────────────────
 // Background monitors: re-check a page on a schedule and fire a desktop
 // notification when it changes (or when a keyword appears). Turns the browser

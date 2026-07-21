@@ -128,6 +128,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getMarks: () => ipcRenderer.invoke('bible:getMarks'),
     setMarks: (marks: any) => ipcRenderer.invoke('bible:setMarks', marks),
   },
+  // Opens a URL in the user's default system browser (or default mail
+  // client for mailto:), never inside the app shell. Used by the Bible
+  // share sheet to hand social-share links off to the real browser instead
+  // of navigating AIHub itself away from the reader.
+  openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   siteMemory: {
     get:    (url: string) => ipcRenderer.invoke('siteMemory:get', url),
     set:    (url: string, text: string, title?: string) => ipcRenderer.invoke('siteMemory:set', url, text, title),

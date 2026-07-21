@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { formatRef, getBookMeta, getBooks, getChapter, parseRef, type Verse } from '../../services/bibleService'
+import { getBookMeta, getBooks, getChapter, parseRef, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
 import PageLeaf from '../bible/PageLeaf'
 import VerseActions from '../bible/VerseActions'
+import ShareSheet from '../bible/ShareSheet'
 
 // Shape persisted by the main process (see `bible:getMarks` / `bible:setMarks`
 // in src/main/index.ts) — highlights, saved verses, notes and the last
@@ -142,17 +143,18 @@ export default function BiblePage() {
   // the faces the turning leaf reveals on either side.
   const [pages, setPages] = useState<Record<number, Verse[]>>({})
 
-  // Copies the reference and verse text to the clipboard. There's no share
-  // sheet/modal in scope for this task, so this is the whole feature — a real
-  // action rather than a dangling "open share panel" toggle with nothing to
-  // open.
-  const shareVerse = useCallback(() => {
-    if (!selectedRef) return
+  // Text of the currently selected verse, looked up from the `pages` cache
+  // (Task 7's replacement for the old `verses`/`nextVerses` pair). Falls back
+  // to '' if the containing chapter hasn't loaded into the cache yet — the
+  // share sheet still renders fine with an empty quote in that edge case.
+  const selectedVerseText = (() => {
+    if (!selectedRef) return ''
     const parsed = parseRef(selectedRef)
-    const verseText = parsed ? pages[parsed.chapter]?.find(v => v.v === parsed.verse)?.t : undefined
-    const text = verseText ? `${formatRef(selectedRef)} — ${verseText}` : formatRef(selectedRef)
-    navigator.clipboard?.writeText(text).catch(() => {})
-  }, [selectedRef, pages])
+    if (!parsed) return ''
+    return pages[parsed.chapter]?.find(v => v.v === parsed.verse)?.t ?? ''
+  })()
+
+  const [shareOpen, setShareOpen] = useState(false)
 
   const [turning, setTurning] = useState<'next' | 'prev' | null>(null)
   const [autoTurn, setAutoTurn] = useState(false)   // true when a button/key started the turn
@@ -396,8 +398,16 @@ export default function BiblePage() {
           onHighlight={highlightVerse}
           onSave={toggleSave}
           onNote={addNote}
-          onShare={shareVerse}
-          onClose={() => setSelectedRef(null)}
+          onShare={() => setShareOpen(true)}
+          onClose={() => { setShareOpen(false); setSelectedRef(null) }}
+        />
+      )}
+
+      {shareOpen && selectedRef && (
+        <ShareSheet
+          verseRef={selectedRef}
+          text={selectedVerseText}
+          onClose={() => setShareOpen(false)}
         />
       )}
     </div>
