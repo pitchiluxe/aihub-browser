@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, X, Send, Loader2, Sparkles, FileText, Trash2, AlertCircle,
-  Zap, Paperclip, Download, BookmarkPlus, Check, Newspaper, Square,
+  Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, executeAction, AGENT_TOOLS_DOC } from '../../services/agentTools'
@@ -49,6 +49,9 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
   const [savedBookmark, setSavedBookmark] = useState(false)
   const [fetchingNews,  setFetchingNews]  = useState(false)
   const [browseHistory, setBrowseHistory] = useState<string[]>([])
+  const [siteMemory,    setSiteMemory]    = useState('')
+  const [memoryOpen,    setMemoryOpen]    = useState(false)
+  const [memoryDraft,   setMemoryDraft]   = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
   const stopRequestedRef = useRef(false)
@@ -128,6 +131,26 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
     setSavedBookmark(false)
   }, [currentUrl])
 
+  // ── Per-site memory — load for the current origin; refresh if the AI's
+  // `remember` tool (or another window) changes it. ───────────────────────────
+  const loadSiteMemory = useCallback(() => {
+    const url = currentUrl
+    if (!url || !/^https?:\/\//i.test(url)) { setSiteMemory(''); return }
+    ;(window.electronAPI as any).siteMemory?.get?.(url).then((t: string) => setSiteMemory(t || '')).catch(() => setSiteMemory(''))
+  }, [currentUrl])
+  useEffect(() => { loadSiteMemory(); setMemoryOpen(false) }, [loadSiteMemory])
+  useEffect(() => {
+    const off = (window.electronAPI as any).siteMemory?.onChanged?.(() => loadSiteMemory())
+    return () => { try { off?.() } catch {} }
+  }, [loadSiteMemory])
+
+  const saveSiteMemory = async (text: string) => {
+    if (!currentUrl) return
+    try { await (window.electronAPI as any).siteMemory.set(currentUrl, text, currentTitle) } catch {}
+    setSiteMemory(text.trim())
+    setMemoryOpen(false)
+  }
+
   const checkOllama = async () => {
     try {
       const status = await window.electronAPI.ollama.status()
@@ -179,6 +202,12 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
       ? `\n\n### Recently visited\n` + browseHistory.map(h => `- ${h}`).join('\n')
       : ''
 
+    let memoryOrigin = ''
+    try { memoryOrigin = currentUrl ? new URL(currentUrl).origin : '' } catch {}
+    const memoryCtx = siteMemory
+      ? `\n\n### What you remember about this site (${memoryOrigin})\n${siteMemory}\n(Saved by you or the user on a past visit. Use it naturally and don't re-ask for things you already know.)`
+      : ''
+
     const appCtx = appInfo
       ? `\n\n## This installation\n- AIHub Browser **v${appInfo.version}** on ${appInfo.platform === 'darwin' ? 'macOS' : appInfo.platform === 'win32' ? 'Windows' : 'Linux'}\n- Engine: Electron ${appInfo.electron} (Chromium ${appInfo.chrome})\n- Updates: in-app auto-update from GitHub Releases (Settings shows the current version)`
       : ''
@@ -221,8 +250,8 @@ Your chat renders full GitHub-flavored markdown: tables, fenced code, headings, 
 - **Research answers** end with a "Sources" section of markdown links to what you actually consulted.
 - Never say you can't browse the internet — you have web_search and fetch_url. Use them.
 
-Be concise, warm, and genuinely helpful.${pageCtx}${bookmarkCtx}${historyCtx}${AGENT_TOOLS_DOC}`
-  }, [currentUrl, currentTitle, bookmarks, browseHistory, appInfo])
+Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${historyCtx}${AGENT_TOOLS_DOC}`
+  }, [currentUrl, currentTitle, bookmarks, browseHistory, appInfo, siteMemory])
 
   // ── Send message — agent loop: the model can request tool actions via a
   // JSON block (see agentTools.ts); we execute them and loop, until it
@@ -300,7 +329,7 @@ Be concise, warm, and genuinely helpful.${pageCtx}${bookmarkCtx}${historyCtx}${A
         const results: any[] = []
         for (let i = 0; i < actions.length; i++) {
           if (stopRequestedRef.current) break
-          const res = await executeAction(actions[i], { getPageContent, confirmExec })
+          const res = await executeAction(actions[i], { getPageContent, confirmExec, currentUrl })
           actionsUsed++
           results.push({ tool: actions[i].tool, ...res })
         }
@@ -447,8 +476,54 @@ Be concise, warm, and genuinely helpful.${pageCtx}${bookmarkCtx}${historyCtx}${A
               <div style={{ display: 'flex', gap: 6 }}>
                 <QuickBtn onClick={summarizePage} disabled={!hasUrl || isAILoading} color="blue" icon={<FileText size={12} />} label="Summarize" title="Summarize current page" />
                 <QuickBtn onClick={attachPage} disabled={!hasUrl || isAILoading || !getPageContent} color="purple" icon={<Paperclip size={12} />} label="Attach Page" title="Attach page content" />
-                <QuickBtn onClick={() => { setInput('Latest AI news and articles'); setTimeout(() => inputRef.current?.focus(), 50) }} disabled={isAILoading} color="amber" icon={<Newspaper size={12} />} label="AI News" title="Fetch latest AI news" />
+                <QuickBtn
+                  onClick={() => { setMemoryDraft(siteMemory); setMemoryOpen(o => !o) }}
+                  disabled={!hasUrl}
+                  color="green"
+                  icon={<Brain size={12} />}
+                  label={siteMemory ? 'Memory •' : 'Memory'}
+                  title="What the assistant remembers about this site"
+                />
               </div>
+
+              {/* Per-site memory editor */}
+              <AnimatePresence>
+                {memoryOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <div style={{ marginTop: 8, padding: 10, borderRadius: 11, background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.22)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <Brain size={12} style={{ color: '#34d399' }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>Memory for this site</span>
+                        <span style={{ fontSize: 9.5, color: 'rgb(var(--ds-text-4))', marginLeft: 'auto' }}>the AI reads this every time</span>
+                      </div>
+                      <textarea
+                        value={memoryDraft}
+                        onChange={e => setMemoryDraft(e.target.value)}
+                        placeholder="e.g. My seat preference is aisle · Account #4021 · I use the pro plan here"
+                        rows={4}
+                        style={{
+                          width: '100%', boxSizing: 'border-box', resize: 'vertical', minHeight: 60,
+                          background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', borderRadius: 9,
+                          padding: '8px 10px', fontSize: 12, color: 'rgb(var(--ds-text-2))', outline: 'none', userSelect: 'text',
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: 6, marginTop: 7 }}>
+                        <button
+                          onClick={() => saveSiteMemory(memoryDraft)}
+                          style={{ flex: 1, padding: '6px 0', borderRadius: 8, border: '1px solid rgba(52,211,153,0.35)', background: 'rgba(52,211,153,0.16)', color: '#34d399', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                        >Save</button>
+                        <button
+                          onClick={() => setMemoryOpen(false)}
+                          style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--ds-border-sm)', background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-3))', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                        >Cancel</button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <AnimatePresence>
                 {lastSummary && (
@@ -726,11 +801,12 @@ Be concise, warm, and genuinely helpful.${pageCtx}${bookmarkCtx}${historyCtx}${A
 }
 
 // ── Shared button components ──────────────────────────────────────────────────
-type BtnColor = 'blue' | 'purple' | 'amber'
+type BtnColor = 'blue' | 'purple' | 'amber' | 'green'
 const COLOR_MAP: Record<BtnColor, { normal: string; hover: string; border: string; text: string }> = {
   blue:   { normal: 'rgba(59,130,246,0.1)',  hover: 'rgba(59,130,246,0.18)', border: 'rgba(59,130,246,0.22)',  text: '#93c5fd' },
   purple: { normal: 'rgba(139,92,246,0.1)',  hover: 'rgba(139,92,246,0.18)', border: 'rgba(139,92,246,0.22)', text: '#c4b5fd' },
   amber:  { normal: 'rgba(245,158,11,0.08)', hover: 'rgba(245,158,11,0.16)', border: 'rgba(245,158,11,0.22)', text: '#fbbf24' },
+  green:  { normal: 'rgba(52,211,153,0.1)',  hover: 'rgba(52,211,153,0.18)', border: 'rgba(52,211,153,0.24)', text: '#6ee7b7' },
 }
 
 function QuickBtn({ onClick, disabled, color, icon, label, title }: {

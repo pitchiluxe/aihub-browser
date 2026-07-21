@@ -124,6 +124,7 @@ export function describeAction(a: ToolAction): string {
     case 'remove_bookmark': return 'Removing bookmark'
     case 'read_page':       return 'Reading page content'
     case 'web_search':      return `Searching the web: "${String(a.query || '').slice(0, 50)}"`
+    case 'remember':        return 'Saving to this site’s memory'
     case 'fetch_url':       return `Fetching ${String(a.url || '').slice(0, 60)}`
     case 'read_tab':        return 'Reading tab content'
     case 'scan_page':       return 'Scanning page elements'
@@ -150,6 +151,8 @@ export interface ToolContext {
   /** Renders an Approve/Deny card in the chat and resolves with the user's
    *  choice. exec_command is refused outright when this isn't provided. */
   confirmExec?: (command: string, cwd: string) => Promise<boolean>
+  /** URL of the active tab — lets `remember` scope memory to this site. */
+  currentUrl?: string
 }
 
 // Neutralize the actions-block marker anywhere inside a tool result so
@@ -363,6 +366,19 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
         return sanitizeResult(res)
       }
 
+      case 'remember': {
+        const text = String(action.text || '').trim()
+        if (!text) return { error: 'text is required — what should I remember?' }
+        const url = ctx.currentUrl
+        if (!url || !/^https?:\/\//i.test(url)) return { error: 'no website open to attach this memory to' }
+        try {
+          const existing = await (window.electronAPI as any).siteMemory.get(url)
+          const next = existing ? `${existing}\n- ${text}` : `- ${text}`
+          await (window.electronAPI as any).siteMemory.set(url, next)
+          return { ok: true, remembered: text }
+        } catch (e: any) { return { error: e?.message || String(e) } }
+      }
+
       case 'read_tab': {
         if (!action.tabId) return { error: 'tabId is required' }
         return await execInTab(action.tabId, READ_TAB_SCRIPT)
@@ -483,6 +499,7 @@ Available tools:
 - add_bookmark({url, title, category?}) — saves a bookmark. This is what "save this link/page for me" means — category is optional, auto-detected if omitted.
 - remove_bookmark({id}) — deletes a bookmark by id.
 - read_page() — returns the visible text of the page in the CURRENT active tab. Use this whenever you need to actually know what a page says (summarizing, answering questions about it, or writing a good bookmark title) rather than guessing from the URL alone.
+- remember({text}) — saves a durable note about the CURRENT website (scoped to its origin) so you recall it on future visits. Use it whenever the user tells you something to keep about a site ("remember my seat is 14C", "my account number here is …", "I prefer the dark theme on this site"). Any memory you've saved for the current site is shown to you at the top of this prompt under "What you remember about this site" — use it naturally, and don't ask again for things you already know.
 
 Research tools (fast — no tab needed; prefer these for questions about current events, prices, comparisons, or anything you're not sure about):
 - web_search({query}) — live web search. Returns up to 8 results with title, url, and snippet. NEVER guess or say "I can't browse the internet" — search instead.

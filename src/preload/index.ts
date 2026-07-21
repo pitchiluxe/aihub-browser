@@ -102,6 +102,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   focus: {
     apply: (blocked: string[] | null) => ipcRenderer.invoke('focus:apply', blocked),
   },
+  siteMemory: {
+    get:    (url: string) => ipcRenderer.invoke('siteMemory:get', url),
+    set:    (url: string, text: string, title?: string) => ipcRenderer.invoke('siteMemory:set', url, text, title),
+    getAll: () => ipcRenderer.invoke('siteMemory:getAll'),
+    onChanged: (cb: (e: { origin: string }) => void) => {
+      const h = (_: any, d: any) => cb(d)
+      ipcRenderer.on('siteMemory:changed', h)
+      return () => ipcRenderer.removeListener('siteMemory:changed', h)
+    },
+  },
   wifi: {
     scan:    () => ipcRenderer.invoke('wifi:scan'),
     connect: (ssid:string, open?:boolean, password?:string, auth?:string) => ipcRenderer.invoke('wifi:connect', ssid, open, password, auth),

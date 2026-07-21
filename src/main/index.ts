@@ -1825,6 +1825,39 @@ ipcMain.handle('wifi:connect', async (_e, ssid: string, open?: boolean, password
 // Notes used to live only in each site's localStorage, which made them
 // invisible outside that exact page and easy to lose. The app file is now
 // the source of truth: keyed by origin+pathname, one entry per page.
+// ── Per-site AI memory ─────────────────────────────────────────────────────
+// Freeform context the assistant should remember for a given site, keyed by
+// origin (so it applies across the whole site, not one page). Injected into the
+// AI system prompt when the user is on that origin, and writable both by the
+// user (memory editor) and the AI (the `remember` tool).
+const SITE_MEMORY_FILE = join(APP_DIR, 'site-memory.json')
+let _siteMemory: Record<string, { title?: string; text: string; updatedAt: number }> | null = null
+function getSiteMemory() {
+  if (!_siteMemory) _siteMemory = readJson(SITE_MEMORY_FILE, {}) || {}
+  return _siteMemory!
+}
+function originKey(url: string): string {
+  try { return new URL(url).origin } catch { return '' }
+}
+ipcMain.handle('siteMemory:get', (_e, url: string) => {
+  const k = originKey(url)
+  return k ? (getSiteMemory()[k]?.text || '') : ''
+})
+ipcMain.handle('siteMemory:set', (_e, url: string, text: string, title?: string) => {
+  try {
+    const store = getSiteMemory()
+    const k = originKey(url)
+    if (!k) return { ok: false, error: 'no origin' }
+    const clean = String(text || '').trim()
+    if (!clean) delete store[k]
+    else store[k] = { title, text: clean.slice(0, 4000), updatedAt: Date.now() }
+    writeJson(SITE_MEMORY_FILE, store)
+    safelySend('siteMemory:changed', { origin: k })
+    return { ok: true }
+  } catch (e: any) { return { ok: false, error: e.message } }
+})
+ipcMain.handle('siteMemory:getAll', () => getSiteMemory())
+
 const NOTES_FILE = join(APP_DIR, 'sticky-notes.json')
 let _stickyNotes: Record<string, { url: string; pageTitle: string; updatedAt: number; notes: any[] }> | null = null
 
