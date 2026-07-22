@@ -1023,6 +1023,17 @@ input, textarea { user-select: text; }
   line-height: 1.95;
   text-align: var(--bible-align, justify);
   hyphens: auto;
+  /* The app body is user-select:none; scripture is meant to be read, quoted and
+     copied, so opt the verse column back in. Verse numbers/markers keep
+     select-none so a copied selection is clean prose. */
+  user-select: text;
+  -webkit-user-select: text;
+}
+/* Content people read and copy — Bible verses (above) and AI answers — are the
+   two places selection is explicitly allowed despite the global lock. */
+.selectable-text, .selectable-text * {
+  user-select: text;
+  -webkit-user-select: text;
 }
 /* The gutter shadow that makes two pages read as one bound volume. */
 .bible-gutter {

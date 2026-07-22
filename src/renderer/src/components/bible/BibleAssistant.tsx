@@ -269,7 +269,7 @@ export default function BibleAssistant({
         {msgs.map((m, i) => (
           <div key={i} className={`mb-4 ${m.role === 'user' ? 'text-right' : ''}`}>
             <div
-              className={`inline-block max-w-full rounded-2xl px-3.5 py-2.5 text-left text-[13px] leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'font-medium' : ''}`}
+              className={`selectable-text inline-block max-w-full rounded-2xl px-3.5 py-2.5 text-left text-[13px] leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'font-medium' : ''}`}
               style={m.role === 'user'
                 ? { background: 'rgb(var(--ds-accent) / 0.16)' }
                 : { background: 'var(--ds-surface, rgba(127,127,127,0.10))' }}

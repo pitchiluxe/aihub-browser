@@ -376,6 +376,12 @@ export default function BiblePage() {
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
     if (turning || settleTimer.current !== null) return
+    // A drag that starts ON the verse text is the reader selecting words to
+    // read/copy — let the browser handle it and do NOT arm a page turn, or the
+    // sheet would fly over the moment they drag sideways and the selection would
+    // never form. Page turns still come from the margins/gutter (empty space
+    // around the column), the Prev/Next buttons and the arrow keys.
+    if ((e.target as HTMLElement)?.closest?.('.bible-prose')) return
     pressed.current = { x: e.clientX, y: e.clientY }
   }
 
