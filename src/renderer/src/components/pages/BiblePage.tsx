@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Bookmark, Sparkles, Search } from 'lucide-react'
-import { getBookMeta, getBooks, getChapter, parseRef, type Verse } from '../../services/bibleService'
+import { Bookmark, Sparkles, Search, Share2 } from 'lucide-react'
+import { getBookMeta, getBooks, getChapter, parseRef, refKey, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
 import PageLeaf from '../bible/PageLeaf'
@@ -11,6 +11,7 @@ import SavedVerses from '../bible/SavedVerses'
 import BibleAssistant from '../bible/BibleAssistant'
 import BookCover from '../bible/BookCover'
 import VerseSearch from '../bible/VerseSearch'
+import VerseGraph from '../bible/VerseGraph'
 import { useBibleSettings } from '../../services/bibleSettings'
 
 // Shape persisted by the main process (see `bible:getMarks` / `bible:setMarks`
@@ -51,6 +52,7 @@ export default function BiblePage() {
   // and it also hides the first-load chapter fetch behind something to look at.
   const [coverOpen, setCoverOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [graphOpen, setGraphOpen] = useState(false)
   const [bibleSettings] = useBibleSettings()
 
   // Highlights, saved verses, notes and reading position. `marks` drives
@@ -454,6 +456,22 @@ export default function BiblePage() {
     setSavedOpen(false)
   }, [turning])
 
+  // Toolbar chapter/verse pickers — jump straight to a chapter, or to a
+  // specific verse within it, instead of flipping pages to find it. Both are
+  // refused mid-turn for the same reason the book dropdown is: a sheet in
+  // flight would land its completion on the new position. Selecting a verse
+  // sets `selectedRef`, which VerseText scrolls into view.
+  const jumpToChapter = useCallback((ch: number) => {
+    if (turning) return
+    setChapter(Math.max(1, Math.min(lastChapter, ch)))
+    setSelectedRef(null); setNoteOpen(false); setShareOpen(false)
+  }, [turning, lastChapter])
+
+  const jumpToVerse = useCallback((verse: number) => {
+    if (turning) return
+    setSelectedRef(refKey(bookId, chapter, verse))
+  }, [turning, bookId, chapter])
+
   const page = (ch: number) => {
     if (ch < 1 || ch > lastChapter) return null      // blank leaf past the end of the book
     return (
@@ -529,6 +547,35 @@ export default function BiblePage() {
         >
           {getBooks().map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
+        <select
+          value={chapter}
+          onChange={e => jumpToChapter(Number(e.target.value))}
+          disabled={!!turning}
+          title="Jump to chapter"
+          className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-40"
+        >
+          {Array.from({ length: lastChapter }, (_, i) => i + 1).map(c => (
+            <option key={c} value={c}>Ch {c}</option>
+          ))}
+        </select>
+        <select
+          // Empty while the chapter's verses are still loading, or when nothing
+          // in this chapter is selected. Picking a verse selects it and scrolls
+          // it into view — no page-flipping to reach verse 30 of a long chapter.
+          value={(() => {
+            const p = selectedRef ? parseRef(selectedRef) : null
+            return p && p.bookId === bookId && p.chapter === chapter ? p.verse : ''
+          })()}
+          onChange={e => jumpToVerse(Number(e.target.value))}
+          disabled={!!turning || chapterVerses(chapter).length === 0}
+          title="Jump to verse"
+          className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-40"
+        >
+          <option value="" disabled>Verse</option>
+          {chapterVerses(chapter).map(v => (
+            <option key={v.v} value={v.v}>v{v.v}</option>
+          ))}
+        </select>
         <button
           onClick={() => startTurn('prev')}
           disabled={!canTurn('prev') || !!turning}
@@ -545,6 +592,18 @@ export default function BiblePage() {
           className="ml-auto flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
         >
           <Search size={14} /> Search
+        </button>
+        <button
+          onClick={() => setGraphOpen(true)}
+          title="Verse constellation — your saved verses as a graph"
+          className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
+        >
+          <Share2 size={14} /> Graph
+          {marks.saved.length > 0 && (
+            <span className="rounded-full bg-aihub-accent/20 px-1.5 text-[10px] font-bold text-aihub-accent">
+              {marks.saved.length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setAiOpen(o => !o)}
@@ -605,6 +664,14 @@ export default function BiblePage() {
       </div>
 
       <VerseSearch open={searchOpen} onClose={() => setSearchOpen(false)} onGoto={gotoRef} />
+
+      <VerseGraph
+        open={graphOpen}
+        onClose={() => setGraphOpen(false)}
+        saved={marks.saved}
+        notes={marks.notes}
+        onOpenRef={gotoRef}
+      />
 
       <BibleAssistant
         open={aiOpen}

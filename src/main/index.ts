@@ -720,6 +720,13 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
       // Google refuse with "this browser or app may not be secure". The old
       // <webview> guests ran with security on, which is why login worked then.
       webSecurity: true,
+      // JavaScript and image loading kept explicitly ON: sites like USAjobs.gov
+      // and login.gov are script-driven and won't render or sign in without
+      // them. Cookies persist automatically through the 'persist:main'
+      // partition above, so logins and sessions survive across tabs and
+      // restarts — nothing here blocks first- or third-party cookies.
+      javascript: true,
+      images: true,
       // Background tabs may throttle timers/rAF — big CPU/battery win with
       // many tabs open; the active tab is never throttled.
       backgroundThrottling: true,
@@ -761,6 +768,7 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
             partition: 'persist:main',
             contextIsolation: true,
             webSecurity: true,
+            javascript: true,
             nodeIntegration: false,
           },
         },

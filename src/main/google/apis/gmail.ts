@@ -12,6 +12,7 @@ export interface ThreadRow {
   snippet: string
   date: string
   unread: boolean
+  starred: boolean
 }
 
 const base = API_BASES.gmail
@@ -39,6 +40,7 @@ export async function listThreads(q: string, pageToken?: string): Promise<{ thre
       snippet: t.snippet || first?.snippet || '',
       date: header(headers, 'Date'),
       unread: (meta.messages || []).some((m: any) => (m.labelIds || []).includes('UNREAD')),
+      starred: (meta.messages || []).some((m: any) => (m.labelIds || []).includes('STARRED')),
     })
   }
   return { threads: rows, nextPageToken: list.nextPageToken }
@@ -53,6 +55,27 @@ export async function getThread(id: string): Promise<ParsedMessage[]> {
 // marking a conversation read once you open it.
 export async function markThreadRead(id: string): Promise<void> {
   await post(`/users/me/threads/${id}/modify`, { removeLabelIds: ['UNREAD'] })
+}
+
+// Generic label modify — the single primitive behind the right-click menu.
+// Gmail's own actions are all just label edits on the thread:
+//   • Star / unstar   → add / remove STARRED
+//   • Mark unread     → add UNREAD
+//   • Mark read       → remove UNREAD
+//   • Archive         → remove INBOX (keeps the thread, hides it from Inbox)
+//   • Move to Inbox    → add INBOX
+export async function modifyThread(
+  id: string,
+  addLabelIds: string[] = [],
+  removeLabelIds: string[] = [],
+): Promise<void> {
+  await post(`/users/me/threads/${id}/modify`, { addLabelIds, removeLabelIds })
+}
+
+// Send a whole thread to Trash (recoverable in Gmail for 30 days). Distinct
+// from a permanent delete, which this app deliberately does not expose.
+export async function trashThread(id: string): Promise<void> {
+  await post(`/users/me/threads/${id}/trash`, {})
 }
 
 export async function getAttachmentData(messageId: string, attachmentId: string): Promise<Buffer> {

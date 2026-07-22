@@ -27,6 +27,7 @@ import AddBookmarkModal from './components/homepage/AddBookmarkModal'
 import QRCodeModal from './components/browser/QRCodeModal'
 import UpdateNotification from './components/browser/UpdateNotification'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
+import HostAnnotationCanvas from './components/browser/HostAnnotationCanvas'
 import FindBar from './components/browser/FindBar'
 import AIAssistant from './components/ai/AIAssistant'
 import CommandPalette from './components/browser/CommandPalette'
@@ -696,7 +697,12 @@ export default function App() {
               <FindBar key={activeTabId} tabId={activeTabId} onClose={() => setFindOpen(false)} />
             )}
 
-            {isAnnotationMode && <AnnotationCanvas />}
+            {/* Guest tabs get the injected canvas (inside the BrowserView);
+                the app's own pages (Bible, Notes, home…) have no BrowserView,
+                so they get a host-rendered overlay instead. */}
+            {isAnnotationMode && (needsTabView(activeTab)
+              ? <AnnotationCanvas />
+              : <HostAnnotationCanvas />)}
           </div>
 
           <AIAssistant currentUrl={currentUrl} currentTitle={currentTitle} getPageContent={getPageContent} />

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Sparkles, X, Send, Loader2, BookOpen } from 'lucide-react'
+import { Sparkles, X, Send, Loader2, BookOpen, Trash2 } from 'lucide-react'
 import { buildIndex, isReady, search, context, expandQuery, type Hit } from '../../services/bibleSearch'
 import { parseRef, formatRef, refKey } from '../../services/bibleService'
 import { parseTypedRef } from './VerseSearch'
@@ -53,6 +53,13 @@ const SYSTEM = [
   '',
   'Style: speak like a person, not a commentary. Short paragraphs. Warm, direct, never',
   'preachy about being preachy. Lead with the answer, then the scripture that carries it.',
+  '',
+  'SHAPE most answers like this (adapt, don\'t robotically follow):',
+  '• One or two sentences that answer the question plainly.',
+  '• The 1–3 passages that carry it best, each quoted briefly and cited in [Book C:V].',
+  '• A short, concrete "so what" — how this lands in an ordinary day, in plain words.',
+  'Keep it tight. Two or three short paragraphs is usually plenty; don\'t pad.',
+  'When someone is hurting or afraid, be gentle first and doctrinal second.',
 ].join('\n')
 
 export default function BibleAssistant({
@@ -197,7 +204,7 @@ export default function BibleAssistant({
   if (!open) return null
 
   return (
-    <div className="flex h-full w-[380px] shrink-0 flex-col border-l"
+    <div className="flex h-full w-[400px] shrink-0 flex-col border-l"
       style={{ borderColor: 'var(--ds-border-sm)', background: 'var(--ds-page-bg)' }}>
 
       <div className="flex shrink-0 items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--ds-border-sm)' }}>
@@ -206,6 +213,14 @@ export default function BibleAssistant({
           <div className="text-sm font-semibold">Study with AI</div>
           <div className="text-[11px] opacity-55">Answers grounded in the text you're reading</div>
         </div>
+        <button
+          onClick={() => setMsgs([])}
+          disabled={msgs.length === 0}
+          className="rounded-lg p-1.5 opacity-60 hover:opacity-100 disabled:opacity-25"
+          title="Clear chat"
+        >
+          <Trash2 size={15} />
+        </button>
         <button onClick={onClose} className="rounded-lg p-1.5 opacity-60 hover:opacity-100" title="Close (Esc)">
           <X size={15} />
         </button>
@@ -258,7 +273,7 @@ export default function BibleAssistant({
         )}
       </div>
 
-      <div className="shrink-0 p-3" style={{ borderTop: '1px solid var(--ds-border-sm)' }}>
+      <div className="shrink-0 px-3 pt-3 pb-5" style={{ borderTop: '1px solid var(--ds-border-sm)' }}>
         {selectedRef && (
           <button
             onClick={() => ask(`Explain ${formatRef(selectedRef)} to me — what does it mean and how do I live it?`)}

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, X, Send, Loader2, Sparkles, FileText, Trash2, AlertCircle,
-  Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain, Mic,
+  Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, executeAction, AGENT_TOOLS_DOC } from '../../services/agentTools'
@@ -253,6 +253,13 @@ You are deeply aware of the user's browser context: their bookmarks, recent hist
 - **Privacy/Security**: OAuth tokens encrypted at rest, API keys stored locally, PKCE for Google sign-in.
 - **Auto-update**: checks GitHub Releases on startup and periodically; notifies in-app when a new version ships.${appCtx}
 
+## When to ANSWER vs. when to ACT — read this first
+Most questions just want a good answer. Only reach for tools when the user asks you to *do* something (open/navigate, fetch a live page, search the web, build a project, run a command, fill a form).
+- **Informational, how-to, "where do I…", "what is…", advice, explanations → answer directly in prose.** Never emit an actions block for these. If it helps, add the official link (e.g. a university's registrar/transcript page) and concrete step-by-step instructions, plus a phone number if you know it.
+- If you genuinely don't know a current fact (an address, phone number, live price), use \`web_search\`/\`fetch_url\` to find it — don't refuse and don't guess.
+- **Always produce a real answer.** Never reply with only an empty or apologetic line. If a request is ambiguous, make a reasonable assumption, answer, and note the assumption — don't stall with "please rephrase".
+- Example — "How do I request a transcript from Kennesaw State University?": give the steps (log into the student portal / use the National Student Clearinghouse), link the KSU registrar transcript page, and include the registrar's phone number. Do not open a tab unless asked.
+
 ## Navigation commands
 When user asks to open a site, reply concisely: "Opening [Site Name] ↗" — the browser detects this and opens the tab automatically.
 
@@ -294,6 +301,10 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
     const MAX_TURNS = 12
     const MAX_ACTIONS = 60
     let actionsUsed = 0
+    // A model that answers with neither prose nor a valid action block gets one
+    // corrective nudge before we give up — that empty first turn was what
+    // surfaced the bare "please rephrase" reply on plain informational asks.
+    let emptyRetried = false
 
     // Mirrors what's sent to ai.chat — includes synthetic tool-result turns
     // that are never pushed into the visible aiMessages store.
@@ -334,10 +345,24 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
 
         if (!actions || actions.length === 0 || stopRequestedRef.current) {
           // Never fall back to `raw` — that is what leaked the ###ACTIONS###
-          // block to the chat. Show the cleaned prose; if the model gave only
-          // a (mis-formatted) action block and no prose, show a soft note
-          // instead of the JSON.
-          addAIMessage({ role: 'assistant', content: narration || "I couldn't complete that — please try rephrasing." })
+          // block to the chat. Show the cleaned prose if there is any.
+          if (narration) { addAIMessage({ role: 'assistant', content: narration }); return }
+          // Empty reply, not a deliberate stop: nudge the model once to just
+          // answer in plain prose, then loop. Only after a second empty turn do
+          // we surface a fallback — and a helpful one, not a dead end.
+          if (!stopRequestedRef.current && !emptyRetried) {
+            emptyRetried = true
+            loopHistory.push({ role: 'assistant', content: raw })
+            loopHistory.push({
+              role: 'user',
+              content: 'That reply was empty. Answer my previous message directly in plain, helpful prose (with a link and steps if relevant). Do NOT use an actions block.',
+            })
+            continue
+          }
+          addAIMessage({
+            role: 'assistant',
+            content: "I'm not sure I got that. Could you rephrase, or add a bit more detail about what you're after? If you're looking something up, I can search the web for it — just say so.",
+          })
           return
         }
 
@@ -433,69 +458,6 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
       })
       setSavedBookmark(true)
     } catch {}
-  }
-
-  // ── Voice input (Web Speech) ──────────────────────────────────────────────
-  // `webkitSpeechRecognition` exists in Electron, but the recognition service
-  // behind it is a Google endpoint that Chromium only reaches with API keys
-  // baked in at build time — which Electron does not ship. So the object
-  // constructs, `start()` succeeds, and then it errors with `network`. There is
-  // no in-app fix short of bundling an offline recogniser (whisper.cpp and
-  // friends add hundreds of MB), so rather than a dead end the failure now
-  // points at the OS dictation that does work and types into this very box.
-  const dictationHint = navigator.platform.toLowerCase().includes('mac')
-    ? 'press Fn twice for macOS Dictation'
-    : navigator.platform.toLowerCase().includes('win')
-      ? 'press Win + H for Windows dictation'
-      : 'use your desktop’s dictation shortcut'
-
-  const voiceErrorMessage = (code?: string) => {
-    if (code === 'not-allowed' || code === 'service-not-allowed') {
-      return 'Microphone access was blocked. Allow it for AIHub in your system settings.'
-    }
-    if (code === 'no-speech') return 'Didn’t catch anything — try again.'
-    // 'network', 'audio-capture', 'unsupported', anything else: the engine.
-    return `Speech recognition has no engine in this desktop build. Click into the box and ${dictationHint} — it types straight in here.`
-  }
-
-  const voiceSupported = useRef(typeof ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) !== 'undefined').current
-  const [listening, setListening] = useState(false)
-  const [voiceError, setVoiceError] = useState('')
-  const recognitionRef = useRef<any>(null)
-
-  const toggleVoice = () => {
-    if (!voiceSupported) return
-    if (listening) { try { recognitionRef.current?.stop() } catch {}; setListening(false); return }
-    setVoiceError('')
-    try {
-      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      const rec = new SR()
-      rec.lang = 'en-US'
-      rec.interimResults = true
-      rec.continuous = false
-      let finalText = ''
-      rec.onresult = (e: any) => {
-        let interim = ''
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const r = e.results[i]
-          if (r.isFinal) finalText += r[0].transcript
-          else interim += r[0].transcript
-        }
-        setInput((finalText + interim).trim())
-      }
-      rec.onerror = (e: any) => {
-        setListening(false)
-        setVoiceError(voiceErrorMessage(e?.error))
-        setTimeout(() => setVoiceError(''), 9000)
-      }
-      rec.onend = () => { setListening(false); setTimeout(() => inputRef.current?.focus(), 30) }
-      recognitionRef.current = rec
-      rec.start()
-      setListening(true)
-    } catch {
-      setVoiceError(voiceErrorMessage('unsupported'))
-      setTimeout(() => setVoiceError(''), 9000)
-    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -809,11 +771,6 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
 
             {/* ── Input ── */}
             <div style={{ padding: 12, borderTop: '1px solid var(--ds-border-sm)', flexShrink: 0 }}>
-              {(listening || voiceError) && (
-                <div style={{ marginBottom: 7, fontSize: 11, fontWeight: 600, color: voiceError ? '#f87171' : '#f87171', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {voiceError || <>🎙️ <span style={{ color: 'rgb(var(--ds-text-3))' }}>Listening… speak now</span></>}
-                </div>
-              )}
               <div
                 style={{
                   display: 'flex', alignItems: 'flex-end', gap: 8,
@@ -837,23 +794,6 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
                     userSelect: 'text',
                   }}
                 />
-                {voiceSupported && (
-                  <button
-                    onClick={toggleVoice}
-                    title={listening ? 'Stop listening' : 'Speak your request'}
-                    style={{
-                      width: 30, height: 30, borderRadius: 10, border: 'none', cursor: 'pointer', flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: listening ? 'rgba(239,68,68,0.18)' : 'var(--ds-glass-sm)',
-                      color: listening ? '#f87171' : 'rgb(var(--ds-text-4))',
-                      boxShadow: listening ? '0 0 0 3px rgba(239,68,68,0.15)' : 'none',
-                      animation: listening ? 'micPulse 1.1s ease-in-out infinite' : 'none',
-                    }}
-                  >
-                    <Mic size={13} />
-                    <style>{`@keyframes micPulse{0%,100%{box-shadow:0 0 0 2px rgba(239,68,68,0.12)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0.05)}}`}</style>
-                  </button>
-                )}
                 <button onClick={sendMessage} disabled={!input.trim() || isAILoading} style={{
                   width: 30, height: 30, borderRadius: 10, border: 'none', cursor: input.trim() ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,

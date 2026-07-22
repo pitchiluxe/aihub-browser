@@ -1,10 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Mail, RefreshCw, Loader2, LogOut, Search } from 'lucide-react'
+import { Mail, RefreshCw, Loader2, LogOut, Search, Star } from 'lucide-react'
 import {
-  mailStatus, mailConnect, mailDisconnect, mailListThreads, mailMarkRead, onMailConnected, ThreadRow, ParsedMessage,
+  mailStatus, mailConnect, mailDisconnect, mailListThreads, mailMarkRead,
+  mailMarkUnread, mailSetStarred, mailArchive, mailTrash,
+  onMailConnected, ThreadRow, ParsedMessage,
 } from '../../services/mailService'
 import ThreadReader from './mail/ThreadReader'
 import Compose from './mail/Compose'
+import MailContextMenu from './mail/MailContextMenu'
 
 export default function MailPage() {
   const [connected, setConnected] = useState<boolean | null>(null)
@@ -16,7 +19,20 @@ export default function MailPage() {
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; thread: ThreadRow } | null>(null)
   const [compose, setCompose] = useState<null | { to: string; subject: string; body: string; inReplyTo?: string; references?: string; threadId?: string }>(null)
+
+  // Patch a single row in place — every right-click action updates the row
+  // optimistically so the list reacts instantly, before Gmail confirms.
+  const patchThread = useCallback((id: string, patch: Partial<ThreadRow>) => {
+    setThreads(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)))
+  }, [])
+
+  // Drop a thread out of the list entirely (archive / trash).
+  const dropThread = useCallback((id: string) => {
+    setThreads(prev => prev.filter(t => t.id !== id))
+    setActiveId(cur => (cur === id ? null : cur))
+  }, [])
 
   const refreshStatus = useCallback(async () => {
     const s = await mailStatus()
@@ -55,6 +71,31 @@ export default function MailPage() {
       setThreads(prev => prev.map(x => x.id === t.id ? { ...x, unread: false } : x))
       mailMarkRead(t.id).catch(() => {})
     }
+  }
+
+  // ── Right-click menu actions ──────────────────────────────────────────────
+  // Each updates the row (or removes it) immediately, then calls Gmail; a
+  // failed call rolls the optimistic change back so the list never lies.
+  const toggleStar = (t: ThreadRow) => {
+    const next = !t.starred
+    patchThread(t.id, { starred: next })
+    mailSetStarred(t.id, next).catch(() => patchThread(t.id, { starred: t.starred }))
+  }
+  const markUnread = (t: ThreadRow) => {
+    patchThread(t.id, { unread: true })
+    mailMarkUnread(t.id).catch(() => patchThread(t.id, { unread: t.unread }))
+  }
+  const markRead = (t: ThreadRow) => {
+    patchThread(t.id, { unread: false })
+    mailMarkRead(t.id).catch(() => patchThread(t.id, { unread: t.unread }))
+  }
+  const archive = (t: ThreadRow) => {
+    dropThread(t.id)
+    mailArchive(t.id).catch(() => load(q))
+  }
+  const trash = (t: ThreadRow) => {
+    dropThread(t.id)
+    mailTrash(t.id).catch(() => load(q))
   }
 
   const handleReply = (m: ParsedMessage) => setCompose({
@@ -111,11 +152,15 @@ export default function MailPage() {
           {error && <div style={{ padding: 12, color: '#f87171', fontSize: 12 }}>{error}</div>}
           {threads.map(t => (
             <button key={t.id} onClick={() => openThread(t)}
+              onContextMenu={e => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, thread: t }) }}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', cursor: 'pointer',
                 borderBottom: '1px solid var(--ds-border-sm)', background: activeId === t.id ? 'var(--ds-glass-sm)' : 'transparent' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12.5, fontWeight: t.unread ? 700 : 500, color: 'rgb(var(--ds-text-2))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.from || '(unknown)'}</span>
-                {t.unread && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgb(var(--ds-accent))', flexShrink: 0, marginTop: 4 }} />}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  {t.starred && <Star size={12} fill="#f5b301" stroke="#f5b301" />}
+                  {t.unread && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgb(var(--ds-accent))' }} />}
+                </span>
               </div>
               <div style={{ fontSize: 12.5, color: 'rgb(var(--ds-text-3))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.subject || '(no subject)'}</div>
               <div style={{ fontSize: 11, color: 'rgb(var(--ds-text-4))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.snippet}</div>
@@ -131,6 +176,20 @@ export default function MailPage() {
         {activeId ? <ThreadReader threadId={activeId} accountEmail={email || ''} onReply={handleReply} /> : <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: 'rgb(var(--ds-text-4))' }}>Select a message</div>}
       </div>
       {compose && <Compose initial={compose} onClose={() => setCompose(null)} onSent={() => load(q)} />}
+      {menu && (
+        <MailContextMenu
+          x={menu.x}
+          y={menu.y}
+          thread={menu.thread}
+          onClose={() => setMenu(null)}
+          onOpen={t => openThread(t)}
+          onToggleStar={toggleStar}
+          onMarkRead={markRead}
+          onMarkUnread={markUnread}
+          onArchive={archive}
+          onTrash={trash}
+        />
+      )}
     </div>
   )
 }

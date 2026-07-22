@@ -2,7 +2,7 @@ import { ipcMain, app } from 'electron'
 import fs from 'fs'
 import path, { join } from 'path'
 import { connect, disconnect, status, setCredentials, isEncryptionAvailable, GoogleApiId } from './auth'
-import { listThreads, getThread, getAttachmentData, sendMessage, markThreadRead } from './apis/gmail'
+import { listThreads, getThread, getAttachmentData, sendMessage, markThreadRead, modifyThread, trashThread } from './apis/gmail'
 import { listFiles, getAbout } from './apis/drive'
 import { pushHandoff, pullHandoff, clearHandoff, HandoffTab } from './apis/handoff'
 import { listCalendars, listEvents } from './apis/calendar'
@@ -100,6 +100,26 @@ export function registerGoogleIpc(safelySend: (channel: string, ...args: any[]) 
 
   ipcMain.handle('gmail:markRead', async (_e, args: { id: string }) => {
     try { await markThreadRead(args.id); return ok({}) } catch (e: any) { return fail(e.message) }
+  })
+
+  // Right-click actions on a thread — one label-modify primitive, one trash.
+  ipcMain.handle('gmail:markUnread', async (_e, args: { id: string }) => {
+    try { await modifyThread(args.id, ['UNREAD'], []); return ok({}) } catch (e: any) { return fail(e.message) }
+  })
+
+  ipcMain.handle('gmail:setStarred', async (_e, args: { id: string; starred: boolean }) => {
+    try {
+      await modifyThread(args.id, args.starred ? ['STARRED'] : [], args.starred ? [] : ['STARRED'])
+      return ok({})
+    } catch (e: any) { return fail(e.message) }
+  })
+
+  ipcMain.handle('gmail:archive', async (_e, args: { id: string }) => {
+    try { await modifyThread(args.id, [], ['INBOX']); return ok({}) } catch (e: any) { return fail(e.message) }
+  })
+
+  ipcMain.handle('gmail:trash', async (_e, args: { id: string }) => {
+    try { await trashThread(args.id); return ok({}) } catch (e: any) { return fail(e.message) }
   })
 
   ipcMain.handle('gmail:getAttachment', async (_e, args: { messageId: string; attachmentId: string; filename: string }) => {

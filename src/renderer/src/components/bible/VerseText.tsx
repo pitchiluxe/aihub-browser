@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { refKey, type Verse } from '../../services/bibleService'
 
 export const HIGHLIGHT_COLORS: Record<string, string> = {
@@ -23,6 +23,16 @@ interface Props {
 // Verses render as inline spans inside one flowing column so the text wraps
 // like a printed page rather than sitting in a list of rows.
 export default function VerseText({ showNumbers = true, bookId, chapter, verses, highlights, notes, selectedRef, onSelectVerse }: Props) {
+  // Bring the selected verse into view. Only the page whose chapter actually
+  // contains the ref holds the matching element, so the effect on every other
+  // page is a no-op. Deep-linking to a verse (the toolbar's verse picker, a
+  // saved verse, an AI citation) can land far down a long chapter, so it must
+  // scroll rather than leave the reader to hunt for the highlight.
+  const selectedEl = useRef<HTMLSpanElement | null>(null)
+  useEffect(() => {
+    if (selectedEl.current) selectedEl.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [selectedRef])
+
   return (
     <div className="bible-prose">
       {verses.map(v => {
@@ -39,6 +49,7 @@ export default function VerseText({ showNumbers = true, bookId, chapter, verses,
         return (
           <span
             key={v.v}
+            ref={selected ? selectedEl : undefined}
             role="button"
             tabIndex={0}
             onClick={() => onSelectVerse(ref)}

@@ -21,9 +21,19 @@ const SWING_MS = 900
 // and costs nothing to ship.
 export default function BookCover({ onOpen, subtitle }: Props) {
   const [opening, setOpening] = useState(false)
+  // The book settles onto the table on first paint rather than being there
+  // already — a short entrance is what makes it read as a real object arriving
+  // rather than a static splash. `entered` flips one frame after mount so the
+  // CSS transition from the pre-entrance state actually runs.
+  const [entered, setEntered] = useState(false)
   const [prefersReduced] = useState(() =>
     typeof window !== 'undefined'
       && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)))
+    return () => cancelAnimationFrame(id)
+  }, [])
 
   const open = () => {
     if (opening) return
@@ -52,6 +62,25 @@ export default function BookCover({ onOpen, subtitle }: Props) {
       style={{ perspective: 2400, background: 'radial-gradient(circle at 50% 40%, rgba(0,0,0,0.30), rgba(0,0,0,0.62))' }}
     >
      <div className={COVER_WRAP}>
+      {/* Cream page-block sitting under the cover, so swinging the board open
+          reveals real pages rather than empty space — the illusion breaks
+          without something printed beneath the lid. It brightens as the cover
+          lifts off it. */}
+      <div
+        className="pointer-events-none absolute bottom-9 left-1/4 top-0 w-1/2"
+        style={{
+          borderRadius: '6px 12px 12px 6px',
+          background: 'linear-gradient(105deg, #b9a888 0%, #efe6d0 10%, #fbf6e9 55%, #f1e8d3 100%)',
+          boxShadow: 'inset 14px 0 22px rgba(0,0,0,0.22), 0 24px 50px rgba(0,0,0,0.45)',
+          opacity: opening && !prefersReduced ? 1 : 0,
+          transition: `opacity ${SWING_MS * 0.6}ms ease-out ${SWING_MS * 0.25}ms`,
+        }}
+      >
+        {/* Fore-edge page striations, revealed as the lid rises */}
+        <div className="absolute inset-y-3 right-1" style={{ width: 10,
+          background: 'repeating-linear-gradient(180deg,#d8c9a4 0px,#efe4c6 1px,#c7b788 2px,#e2d4ab 3px)',
+          borderRadius: '0 4px 4px 0' }} />
+      </div>
       <div
         role="button"
         tabIndex={0}
@@ -65,15 +94,35 @@ export default function BookCover({ onOpen, subtitle }: Props) {
         className="absolute bottom-9 left-1/4 top-0 w-1/2 cursor-pointer select-none"
         style={{
           transformStyle: 'preserve-3d',
-          transformOrigin: 'left center',
-          transform: opening && !prefersReduced ? 'rotateY(-118deg) translateZ(12px)' : 'rotateY(0deg)',
-          opacity: opening && prefersReduced ? 0 : 1,
+          // Hinge slightly behind the spine and above centre — a hardcover
+          // pivots on its joint, not its dead centre, so the far edge dips as
+          // it swings. This is what separates a book opening from a flat card
+          // flipping.
+          transformOrigin: 'left 42%',
+          transform: prefersReduced
+            ? 'none'
+            : opening
+              ? 'rotateY(-152deg) rotateX(3deg) translateZ(18px)'
+              : entered
+                ? 'rotateY(0deg)'
+                // Pre-entrance: dropped slightly back and down, so it settles
+                // onto the table.
+                : 'rotateY(-6deg) rotateX(6deg) translateY(26px) scale(0.95)',
+          opacity: prefersReduced ? (opening ? 0 : 1) : entered ? 1 : 0,
           transition: prefersReduced
             ? 'opacity 160ms linear'
-            : `transform ${SWING_MS}ms cubic-bezier(0.53, 0.02, 0.24, 1)`,
-          boxShadow: '0 30px 70px rgba(0,0,0,0.65), 0 4px 14px rgba(0,0,0,0.5)',
+            : opening
+              ? `transform ${SWING_MS}ms cubic-bezier(0.45, 0.03, 0.24, 1), box-shadow ${SWING_MS}ms ease-out, filter ${SWING_MS}ms ease-out`
+              : `transform 720ms cubic-bezier(0.22, 1, 0.36, 1), opacity 520ms ease-out`,
+          // Shadow throws further and softer as the raised lid climbs.
+          boxShadow: opening
+            ? '38px 60px 120px rgba(0,0,0,0.72), 0 4px 14px rgba(0,0,0,0.5)'
+            : '0 30px 70px rgba(0,0,0,0.65), 0 4px 14px rgba(0,0,0,0.5)',
+          // Catch the light on the raised face mid-swing.
+          filter: opening ? 'brightness(1.14)' : 'brightness(1)',
           borderRadius: '6px 12px 12px 6px',
           background: leather,
+          backfaceVisibility: 'hidden',
         }}
       >
         {/* Gilt page block peeking out along the fore-edge */}
