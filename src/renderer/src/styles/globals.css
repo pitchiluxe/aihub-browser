@@ -877,15 +877,10 @@ body.light-mode .text-slate-600 { color: rgb(var(--ds-text-4)); }
 
 /* ── Bible page turn ──
    A button/arrow turn animates the leaf's rotation purely in CSS (a single
-   transition), so any JS-computed value read at that moment sits at its resting
-   state and never peaks. These keyframes give the mid-turn effects — the free
-   half folding back, and the light/shadow that crosses the sheet — their own
-   compositor-driven peak, so the fold shows on tap turns exactly as it does
-   when a finger drags the page. Each element supplies its own peak via a var. */
-@keyframes bible-page-fold {
-  0%, 100% { transform: rotateY(0deg); }
-  50%      { transform: rotateY(var(--fold-max, 0deg)); }
-}
+   transition), so any JS-computed shading read at that moment sits at its
+   resting value and never peaks. This keyframe gives the mid-turn light/shadow
+   that crosses the sheet its own compositor-driven peak, so a tap turn shades
+   exactly like a dragged one. Each overlay supplies its own peak via a var. */
 @keyframes bible-page-peak {
   0%, 100% { opacity: 0; }
   50%      { opacity: var(--peak, 0); }
