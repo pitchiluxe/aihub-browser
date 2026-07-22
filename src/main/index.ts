@@ -402,18 +402,36 @@ function sendTo(ctx: AppWin | undefined, channel: string, ...args: any[]) {
 // that make Google's sign-in reject the tab ("This browser or app may not be
 // secure"). Build a clean, plain-Chrome UA.
 //
-// We deliberately claim a CURRENT Chrome version, NOT the bundled Chromium
-// version (Electron 28 ships Chromium 120, old enough that Google's sign-in
-// flags it). This value goes stale the same way — bump it every few months
-// to the latest stable (https://chromiumdash.appspot.com/releases?platform=Windows).
-// 149.0.7827.201 = Windows stable as of 2026-07-04.
-const CHROME_FULL_VERSION = '149.0.7827.201'
-const CHROME_MAJOR = CHROME_FULL_VERSION.split('.')[0]
-// Real Chrome sends a REDUCED UA — minor/build/patch frozen to 0.0.0. Sending
-// the full build number here is itself a tell (no real Chrome does it); the
-// full version only travels via Client Hints / userAgentData.
+// Two problems have to be solved together, or Google's sign-in ("This browser
+// or app may not be secure") keeps rejecting the tab:
+//
+//   1. AGE — Electron 28 bundles Chromium 120 (Dec 2023). Google now refuses
+//      sign-in from an engine that old. This used to work precisely because 120
+//      was current then; Google raised the floor, so we must PRESENT as a
+//      recent Chrome. Claiming the real engine version (120) is rejected as
+//      outdated — verified live.
+//   2. CONSISTENCY — the moment we claim a newer version in the UA string,
+//      Chromium keeps emitting `Sec-CH-UA` client-hint headers from its REAL
+//      build (120). Google compares the two; UA=149 vs Sec-CH-UA=120 is the
+//      spoof tell that broke it before. Bumping the UA alone is not enough.
+//
+// So: claim a current Chrome in the UA AND rewrite every Sec-CH-UA* request
+// header to the SAME version (see the onBeforeSendHeaders hook in
+// setupSharedApp). Server-side, Google then sees one internally consistent,
+// recent Chrome — which is what its check is actually looking for. No CDP, no
+// TLS games; purely the UA string plus the client-hint headers that ride with
+// it. Bump CHROME_MAJOR/CHROME_FULL every few months to a real Windows stable
+// (https://chromiumdash.appspot.com/releases?platform=Windows); the real fix is
+// upgrading Electron so the engine is genuinely current and no spoof is needed.
+const CHROME_MAJOR = '138'
+const CHROME_FULL = '138.0.7204.169'
 const CHROME_UA =
   `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_MAJOR}.0.0.0 Safari/537.36`
+// Low-entropy hint sent on every secure request. GREASE brand first, matching
+// real Chrome's ordering; Google parses the Chromium / Google Chrome entries.
+const SEC_CH_UA = `"Not/A)Brand";v="8", "Chromium";v="${CHROME_MAJOR}", "Google Chrome";v="${CHROME_MAJOR}"`
+// High-entropy list, only sent once the server requests it via Accept-CH.
+const SEC_CH_UA_FULL = `"Not/A)Brand";v="8.0.0.0", "Chromium";v="${CHROME_FULL}", "Google Chrome";v="${CHROME_FULL}"`
 
 // ── Google sign-in identity: keep it SIMPLE (regression fix, 2026-07-14) ────
 // This app used to sign in to Gmail/Google fine. It regressed after a stack of
@@ -842,11 +860,33 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   const webviewSession = session.fromPartition('persist:main')
 
   // Spoof Chrome UA so sites serve full content (many degrade or block Electron's default UA).
-  // We do NOT rewrite Sec-CH-UA / X-Client-Data here anymore: forcing hand-forged
-  // client hints was part of the "secure browser" spoofing that broke Google
-  // sign-in. The old, working version let Chromium emit its own headers — so we
-  // do the same and only override the UA string. (See the CHROME_UA note above.)
   webviewSession.setUserAgent(CHROME_UA)
+
+  // Keep the Sec-CH-UA client-hint headers in lockstep with the spoofed UA.
+  // Chromium generates these from its real build (120); left alone they say
+  // "120" while the UA says "138", and Google reads that mismatch as a spoof
+  // and blocks sign-in. We only touch requests that ALREADY carry the hints (a
+  // real Chrome sends them only on secure/https contexts) and only the
+  // sec-ch-ua* family — never inventing hints where a browser sends none, and
+  // never touching auth tokens or anything else. Matching values in, matching
+  // values out: Google sees one consistent, recent Chrome. (See CHROME_MAJOR.)
+  webviewSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    const headers = details.requestHeaders
+    // Find the actual casing Chromium used for the low-entropy brand hint; its
+    // presence is our signal that this request carries client hints at all.
+    const brandKey = Object.keys(headers).find(k => k.toLowerCase() === 'sec-ch-ua')
+    if (brandKey) {
+      for (const key of Object.keys(headers)) {
+        const lk = key.toLowerCase()
+        if (lk === 'sec-ch-ua') headers[key] = SEC_CH_UA
+        else if (lk === 'sec-ch-ua-full-version-list') headers[key] = SEC_CH_UA_FULL
+        else if (lk === 'sec-ch-ua-full-version') headers[key] = `"${CHROME_FULL}"`
+        else if (lk === 'sec-ch-ua-mobile') headers[key] = '?0'
+        else if (lk === 'sec-ch-ua-platform') headers[key] = '"Windows"'
+      }
+    }
+    callback({ requestHeaders: headers })
+  })
 
   webviewSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(ALLOWED_PERMISSIONS.has(permission))
