@@ -1,10 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Sparkles, X, Send, Loader2, BookOpen, Trash2 } from 'lucide-react'
+import { Sparkles, X, Send, Loader2, BookOpen, Trash2, Copy, Check } from 'lucide-react'
 import { buildIndex, isReady, search, context, expandQuery, type Hit } from '../../services/bibleSearch'
 import { parseRef, formatRef, refKey } from '../../services/bibleService'
 import { parseTypedRef } from './VerseSearch'
 
 interface Msg { role: 'user' | 'assistant'; content: string; cites?: Hit[] }
+
+// Shown whenever the model can't be reached (Ollama not running, no OpenRouter
+// key, network hiccup). Deliberately hides every technical detail.
+const AI_UNAVAILABLE =
+  "The study companion isn't connected right now. Open Settings to turn on AI — run Ollama locally or add an OpenRouter key — then ask again."
 
 interface Props {
   open: boolean
@@ -70,6 +75,16 @@ export default function BibleAssistant({
   const [busy, setBusy] = useState(false)
   const [indexing, setIndexing] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
+
+  // Copy the answer's plain text (the model's own words, citations left as
+  // [Book C:V] — the same thing the reader sees, minus the app's button chrome).
+  const copyMsg = useCallback((idx: number, text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIdx(idx)
+      setTimeout(() => setCopiedIdx(cur => (cur === idx ? null : cur)), 1500)
+    }).catch(() => {})
+  }, [])
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -162,17 +177,15 @@ export default function BibleAssistant({
       const res = await window.electronAPI.ai.chat(messages)
       const content = (res?.content || '').trim()
       if (!content) {
-        setMsgs(m => [...m, {
-          role: 'assistant',
-          content: res?.error
-            ? `I couldn't reach the AI: ${res.error}\n\nCheck Settings — you need either Ollama running locally or an OpenRouter key.`
-            : "I couldn't get an answer just then. Try asking again.",
-        }])
+        // Never surface the raw provider error (connection refused, model tags,
+        // stack text) — it means nothing to a reader and looks broken. Show one
+        // calm, plain sentence pointing at the one thing they can act on.
+        setMsgs(m => [...m, { role: 'assistant', content: AI_UNAVAILABLE }])
       } else {
         setMsgs(m => [...m, { role: 'assistant', content, cites: passages }])
       }
-    } catch (e: any) {
-      setMsgs(m => [...m, { role: 'assistant', content: `Something went wrong: ${e?.message || e}` }])
+    } catch {
+      setMsgs(m => [...m, { role: 'assistant', content: AI_UNAVAILABLE }])
     } finally {
       setBusy(false)
     }
@@ -263,6 +276,21 @@ export default function BibleAssistant({
             >
               {m.role === 'assistant' ? render(m.content, m.cites) : m.content}
             </div>
+            {/* Copy the answer — offered on real answers, not the "not connected"
+                notice (which carries nothing worth copying). */}
+            {m.role === 'assistant' && m.content !== AI_UNAVAILABLE && (
+              <div>
+                <button
+                  onClick={() => copyMsg(i, m.content)}
+                  className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] opacity-55 transition-opacity hover:opacity-100"
+                  title="Copy answer"
+                >
+                  {copiedIdx === i
+                    ? <><Check size={12} /> Copied</>
+                    : <><Copy size={12} /> Copy</>}
+                </button>
+              </div>
+            )}
           </div>
         ))}
 
