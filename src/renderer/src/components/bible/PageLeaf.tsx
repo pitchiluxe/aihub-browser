@@ -10,40 +10,112 @@ interface Props {
   paper?: 'aged' | 'clean'
 }
 
+// How far the free half of the sheet folds back at the peak of the turn. A real
+// page bows as it lifts — the spine edge stays pinned while the free edge trails
+// behind, creasing the paper. Keep it modest: enough to read as "folded," not so
+// much that the text warps into unreadability.
+const FOLD_PEAK_DEG = 26
+// Where along the width the sheet creases (percent from the spine edge). The
+// larger spine-side panel stays flat; the smaller free-side panel folds.
+const CREASE_PCT = 62
+
 // One turning sheet, rendered from an angle the page hands it.
 //
-// This is deliberately a dumb view. An earlier version owned the gesture
-// itself and bound its own pointer listeners in an effect — but an effect runs
-// after React commits and paints, and a real drag is over in a couple of
-// hundred milliseconds, so the whole gesture routinely finished before the
-// listeners existed and the page simply never moved. The page now tracks the
-// pointer it already captured on pointerdown and drives this component, so the
-// sheet follows the finger from the very first pixel.
+// This is deliberately a dumb view: the page owns the gesture and drives this
+// component through `angle`, so the sheet follows the finger from the first pixel.
 //
-// Only `transform` and `opacity` animate, so the turn stays on the compositor.
+// The sheet is NOT a flat card. Each face is built from two panels hinged at a
+// crease — a fixed spine-side panel and a free-side panel that folds back — so
+// the paper bends as it turns instead of pivoting like a rigid board. During a
+// dragged turn every frame re-renders, so the fold and its shading are driven
+// inline from `angle`. During a button/arrow turn the rotation animates purely
+// in CSS with no per-frame render, so those same effects run as CSS keyframes
+// (see globals.css) that peak at the halfway point.
 export default function PageLeaf({ front, back, direction, angle, animating, durationMs, paper = 'aged' }: Props) {
   const paperClass = paper === 'clean' ? 'bible-paper bible-paper-clean' : 'bible-paper'
   const t = angle / 180
-  // Deepest at the halfway point, where the sheet stands upright to the light.
-  const shadow = Math.sin(t * Math.PI) * 0.45
-  // Paper is not a flat card: it lifts most at the free edge and stays pinned
-  // at the spine, so the sheet leans slightly out of plane as it swings. A few
-  // degrees is all it takes to stop the turn reading as a rotating rectangle.
-  const curl = Math.sin(t * Math.PI) * (direction === 'next' ? -2.6 : 2.6)
-  // The turning sheet drops a shadow onto the page underneath, sweeping across
-  // it as the leaf rises and fading out as the leaf lands.
-  const cast = Math.sin(t * Math.PI) * 0.30
+  const arc = Math.sin(t * Math.PI)          // 0 at rest, 1 upright at the halfway point
+
   const easing = 'cubic-bezier(0.32, 0.10, 0.22, 1)'
   const transition = animating ? `transform ${durationMs}ms ${easing}` : 'none'
-  const shadeTransition = animating ? `opacity ${durationMs}ms ${easing}` : 'none'
-  // Light rakes from the spine, so the gutter edge stays darkest on the recto
-  // and the free edge catches the light — reversed on the verso.
+  const foldAnim = animating ? `bible-page-fold ${durationMs}ms ${easing} both` : undefined
+  const peakAnim = animating ? `bible-page-peak ${durationMs}ms ${easing} both` : undefined
+
+  // Slight lean of the whole sheet out of plane (drag only; on button turns the
+  // fold keyframe carries the bend).
+  const curl = arc * (direction === 'next' ? -2.2 : 2.2)
+  const cast = arc * 0.30                    // shadow the sheet throws on the page beneath
+
+  // Light rakes from the spine: the gutter edge stays dark, the free edge catches
+  // the light — reversed on the verso.
   const frontShade = direction === 'next'
     ? 'linear-gradient(to left, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.12) 45%, rgba(0,0,0,0) 78%)'
     : 'linear-gradient(to right, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.12) 45%, rgba(0,0,0,0) 78%)'
   const backShade = direction === 'next'
     ? 'linear-gradient(to right, rgba(0,0,0,0.50) 0%, rgba(0,0,0,0.10) 50%, rgba(0,0,0,0) 80%)'
     : 'linear-gradient(to left, rgba(0,0,0,0.50) 0%, rgba(0,0,0,0.10) 50%, rgba(0,0,0,0) 80%)'
+  const sheenBand = direction === 'next'
+    ? 'linear-gradient(100deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0) 70%)'
+    : 'linear-gradient(260deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0) 70%)'
+
+  // A shading overlay: keyframe-driven (peaks mid-turn) on button turns, inline
+  // (from the live arc) while dragging.
+  const shadeLayer = (bg: string, peak: number, blend?: 'soft-light'): React.CSSProperties =>
+    animating
+      ? { background: bg, animation: peakAnim, ...( { ['--peak' as any]: peak } ), ...(blend ? { mixBlendMode: blend } : {}) }
+      : { background: bg, opacity: arc * peak, ...(blend ? { mixBlendMode: blend } : {}) }
+
+  // Build one face from a fixed spine panel + a folding free-edge panel. The
+  // content is drawn full-size in both panels (identical position), and each
+  // panel simply clips to its half, so the text stays continuous across the
+  // crease while only the free half tilts away.
+  const face = (content: React.ReactNode, isBack: boolean) => {
+    // On the back face the whole thing is mirrored (rotateY 180), so the free
+    // edge sits on the opposite side in local coordinates.
+    const freeRight = direction === 'next' ? !isBack : isBack
+    const crease = freeRight ? CREASE_PCT : 100 - CREASE_PCT
+    // clip-path insets: (top right bottom left)
+    const fixedClip = freeRight ? `inset(0 ${100 - crease}% 0 0)` : `inset(0 0 0 ${crease}%)`
+    const foldClip = freeRight ? `inset(0 0 0 ${crease}%)` : `inset(0 ${100 - crease}% 0 0)`
+    const foldMax = `${freeRight ? -FOLD_PEAK_DEG : FOLD_PEAK_DEG}deg`
+
+    const foldPanelStyle: React.CSSProperties = animating
+      ? { clipPath: foldClip, transformOrigin: `${crease}% 50%`, transformStyle: 'preserve-3d', backfaceVisibility: 'hidden', animation: foldAnim, ...( { ['--fold-max' as any]: foldMax } ) }
+      : { clipPath: foldClip, transformOrigin: `${crease}% 50%`, transformStyle: 'preserve-3d', backfaceVisibility: 'hidden', transform: `rotateY(${arc * (freeRight ? -FOLD_PEAK_DEG : FOLD_PEAK_DEG)}deg)` }
+
+    return (
+      <div
+        className="absolute inset-0"
+        style={{
+          backfaceVisibility: 'hidden',
+          transformStyle: 'preserve-3d',
+          transform: isBack ? 'rotateY(180deg)' : undefined,
+          boxShadow: '0 12px 34px rgba(0,0,0,0.28)',
+        }}
+      >
+        {/* Fixed spine-side panel */}
+        <div className={`absolute inset-0 ${paperClass} overflow-hidden`} style={{ clipPath: fixedClip, backfaceVisibility: 'hidden' }}>
+          <div className="absolute inset-0 p-10">{content}</div>
+        </div>
+        {/* Folding free-edge panel */}
+        <div className={`absolute inset-0 ${paperClass} overflow-hidden`} style={foldPanelStyle}>
+          <div className="absolute inset-0 p-10">{content}</div>
+        </div>
+        {/* Crease shadow — a soft dark seam where the paper bends */}
+        <div
+          className="pointer-events-none absolute inset-y-0"
+          style={{
+            left: `calc(${crease}% - 14px)`, width: 28,
+            background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.22) 50%, rgba(0,0,0,0) 100%)',
+            ...shadeLayer('linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.22) 50%, rgba(0,0,0,0) 100%)', 0.9),
+          }}
+        />
+        {/* Rake shading + specular sheen across the whole face */}
+        <div className="pointer-events-none absolute inset-0" style={shadeLayer(isBack ? backShade : frontShade, isBack ? 0.5 : 0.6)} />
+        <div className="pointer-events-none absolute inset-0" style={shadeLayer(sheenBand, isBack ? 0.42 : 0.5, 'soft-light')} />
+      </div>
+    )
+  }
 
   // The leaf is purely a picture of the turn — the page drives it, so it must
   // never swallow clicks meant for the text underneath.
@@ -56,7 +128,10 @@ export default function PageLeaf({ front, back, direction, angle, animating, dur
           background: direction === 'next'
             ? 'linear-gradient(to right, rgba(0,0,0,0.5), rgba(0,0,0,0) 62%)'
             : 'linear-gradient(to left, rgba(0,0,0,0.5), rgba(0,0,0,0) 62%)',
-          opacity: cast, transition: shadeTransition, willChange: 'opacity',
+          ...(animating
+            ? { animation: peakAnim, ...( { ['--peak' as any]: 0.6 } ) }
+            : { opacity: cast }),
+          willChange: 'opacity',
         }}
       />
       <div
@@ -68,27 +143,8 @@ export default function PageLeaf({ front, back, direction, angle, animating, dur
           willChange: 'transform',
         }}
       >
-        <div
-          className={`absolute inset-0 ${paperClass} overflow-hidden p-10`}
-          style={{ backfaceVisibility: 'hidden', boxShadow: '0 12px 34px rgba(0,0,0,0.28)' }}
-        >
-          {front}
-          {/* Opacity-only so the shading rides the compositor with the rotation. */}
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{ background: frontShade, opacity: shadow * 1.15, transition: shadeTransition, willChange: 'opacity' }}
-          />
-        </div>
-        <div
-          className={`absolute inset-0 ${paperClass} overflow-hidden p-10`}
-          style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', boxShadow: '0 12px 34px rgba(0,0,0,0.28)' }}
-        >
-          {back}
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{ background: backShade, opacity: shadow * 1.0, transition: shadeTransition, willChange: 'opacity' }}
-          />
-        </div>
+        {face(front, false)}
+        {face(back, true)}
       </div>
     </div>
   )

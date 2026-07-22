@@ -32,7 +32,9 @@ const STEP = 2
 // turn rather than a click on a verse or a vertical scroll.
 const DRAG_THRESHOLD_PX = 14
 const FLICK_PX_PER_EVENT = 6
-const TURN_MS = 420
+// A real sheet has weight — it lifts, arcs over, and settles rather than
+// snapping. ~560ms with an eased curve reads as paper turning, not a slide.
+const TURN_MS = 560
 
 // Spreads are always anchored on an odd-numbered left page (base, base+1).
 // `chapter` itself is not guaranteed to be odd — a "go to chapter" jump, a
@@ -222,10 +224,14 @@ export default function BiblePage() {
   const settleTimer = useRef<number | null>(null)
   const spreadRef = useRef<HTMLDivElement>(null)
 
-  const prefersReduced = useRef(
-    typeof window !== 'undefined'
-      && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
-  ).current
+  // The page turn is a deliberate, central part of this reader — a book that
+  // turns its pages. So the reader's own "Animate page turn" setting (on by
+  // default) is what governs it, NOT the OS `prefers-reduced-motion` flag.
+  // Keying off the OS flag is exactly what silently killed the turn: with
+  // Windows animations reduced, every turn snapped instantly even though the
+  // reader setting was on. A user who genuinely wants no motion turns the
+  // setting off. `animateTurn` false ⇒ instant; true ⇒ the 3D leaf swings.
+  const animateTurn = bibleSettings.animateTurn
 
   const book = getBooks().find(b => b.id === bookId)
   const lastChapter = book?.chapters ?? 1
@@ -261,7 +267,7 @@ export default function BiblePage() {
     const resting = complete ? 180 : 0
     angleRef.current = resting
     dragRef.current = null
-    if (prefersReduced) {
+    if (!animateTurn) {
       setAnimating(false)
       setAngle(0)
     } else {
@@ -274,8 +280,8 @@ export default function BiblePage() {
       setAngle(0)
       angleRef.current = 0
       endTurnRef.current(complete)
-    }, prefersReduced ? 0 : TURN_MS)
-  }, [prefersReduced])
+    }, animateTurn ? TURN_MS : 0)
+  }, [animateTurn])
 
   // `endTurn` is defined below but `settle` is referenced by handlers declared
   // above it; a ref keeps the ordering honest without a forward declaration.
@@ -382,8 +388,8 @@ export default function BiblePage() {
       const travelled = turning === 'next' ? drag.startX - e.clientX : e.clientX - drag.startX
       const ratio = Math.max(0, Math.min(1, travelled / drag.width))
       angleRef.current = ratio * 180
-      // Under reduced motion the sheet stays flat; the drag still navigates.
-      if (!prefersReduced) setAngle(angleRef.current)
+      // With the turn animation off the sheet stays flat; the drag still navigates.
+      if (animateTurn) setAngle(angleRef.current)
       return
     }
 
@@ -412,7 +418,7 @@ export default function BiblePage() {
     if (d) {
       const travelled = Math.abs(dx)
       angleRef.current = Math.max(0, Math.min(1, travelled / d.width)) * 180
-      if (!prefersReduced) setAngle(angleRef.current)
+      if (animateTurn) setAngle(angleRef.current)
     }
   }
 
