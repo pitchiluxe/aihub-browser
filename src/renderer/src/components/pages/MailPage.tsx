@@ -69,33 +69,45 @@ export default function MailPage() {
     setActiveId(t.id)
     if (t.unread) {
       setThreads(prev => prev.map(x => x.id === t.id ? { ...x, unread: false } : x))
-      mailMarkRead(t.id).catch(() => {})
+      // Roll the unread dot back if Gmail rejects the change, rather than
+      // swallowing it — a silently-failing markRead (missing gmail.modify scope)
+      // is exactly what made "read" mail spring back to unread on refresh.
+      mailMarkRead(t.id).then(r => {
+        if (!r?.ok) patchThread(t.id, { unread: true })
+      }).catch(() => patchThread(t.id, { unread: true }))
     }
   }
 
   // ── Right-click menu actions ──────────────────────────────────────────────
   // Each updates the row (or removes it) immediately, then calls Gmail; a
   // failed call rolls the optimistic change back so the list never lies.
+  // A rejected promise OR a resolved { ok:false } both mean Gmail refused the
+  // change — the IPC layer turns API errors into { ok:false } rather than
+  // throwing, so rolling back on `.catch` alone would miss them and the row
+  // would keep lying until the next refresh. `undo` runs on either failure.
+  const onFail = (p: Promise<{ ok: boolean }>, undo: () => void) => {
+    p.then(r => { if (!r?.ok) undo() }).catch(undo)
+  }
   const toggleStar = (t: ThreadRow) => {
     const next = !t.starred
     patchThread(t.id, { starred: next })
-    mailSetStarred(t.id, next).catch(() => patchThread(t.id, { starred: t.starred }))
+    onFail(mailSetStarred(t.id, next), () => patchThread(t.id, { starred: t.starred }))
   }
   const markUnread = (t: ThreadRow) => {
     patchThread(t.id, { unread: true })
-    mailMarkUnread(t.id).catch(() => patchThread(t.id, { unread: t.unread }))
+    onFail(mailMarkUnread(t.id), () => patchThread(t.id, { unread: t.unread }))
   }
   const markRead = (t: ThreadRow) => {
     patchThread(t.id, { unread: false })
-    mailMarkRead(t.id).catch(() => patchThread(t.id, { unread: t.unread }))
+    onFail(mailMarkRead(t.id), () => patchThread(t.id, { unread: t.unread }))
   }
   const archive = (t: ThreadRow) => {
     dropThread(t.id)
-    mailArchive(t.id).catch(() => load(q))
+    onFail(mailArchive(t.id), () => load(q))
   }
   const trash = (t: ThreadRow) => {
     dropThread(t.id)
-    mailTrash(t.id).catch(() => load(q))
+    onFail(mailTrash(t.id), () => load(q))
   }
 
   const handleReply = (m: ParsedMessage) => setCompose({

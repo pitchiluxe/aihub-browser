@@ -9,7 +9,13 @@ export const BASE_SCOPES = ['openid', 'email', 'profile']
 
 export const API_SCOPES: Record<GoogleApiId, string[]> = {
   gmail: [
-    'https://www.googleapis.com/auth/gmail.readonly',
+    // gmail.modify (NOT gmail.readonly) — the Mail page writes labels: marking a
+    // thread read on open, and the right-click star / mark-unread / archive
+    // actions all hit threads.modify, which read-only forbids (403). With
+    // read-only those writes silently failed and every refresh reverted read
+    // mail to unread and dropped stars. gmail.modify grants all read + label
+    // writes + trash, but never permanent deletion. Send stays a separate scope.
+    'https://www.googleapis.com/auth/gmail.modify',
     'https://www.googleapis.com/auth/gmail.send',
   ],
   // readonly → browse the user's files; appdata → private per-app hidden
