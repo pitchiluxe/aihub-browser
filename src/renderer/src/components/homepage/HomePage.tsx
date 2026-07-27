@@ -41,12 +41,8 @@ export default function HomePage({ onNavigate }: Props) {
   const [bmToast,         setBmToast]         = useState<{ msg: string; ok: boolean } | null>(null)
 
   useEffect(() => {
-    // Clock shows HH:MM — returning the same reference when the minute hasn't
-    // changed skips ~59 of every 60 full-homepage re-renders.
-    const t = setInterval(() => setTime(prev => {
-      const now = new Date()
-      return prev.getMinutes() === now.getMinutes() && prev.getHours() === now.getHours() ? prev : now
-    }), 1000)
+    // Clock shows HH:MM:SS — update every second to animate seconds display.
+    const t = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
 
@@ -122,7 +118,7 @@ export default function HomePage({ onNavigate }: Props) {
     }
   }
 
-  const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   const dateStr = time.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })
 
   const totalPages = Math.ceil(bookmarks.length / ITEMS_PER_PAGE)
