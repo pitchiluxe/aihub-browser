@@ -75,6 +75,35 @@ const DEFAULT_BOOKMARKS = [
   { id: 'bm-4',  url: 'https://technobiz-trader-agent.vercel.app/',     title: 'TechnoBiz Agent',  favicon: '', category: 'AI',            addedAt: 0, color: '#a78bfa' },
 ]
 
+// Defaults that must sit at the top of the home grid, in this order. A saved
+// data.json replaces the whole bookmark list, so installs that predate a new
+// pinned default would never see it — seed it once per id and record that in
+// `seededBookmarks`, so a bookmark the user later deletes stays deleted.
+const PINNED_DEFAULT_IDS = ['bm-b', 'bm-m']
+
+function seedPinnedBookmarks(d: any): boolean {
+  const seeded: string[] = Array.isArray(d.seededBookmarks) ? d.seededBookmarks : []
+  const bms: any[] = Array.isArray(d.bookmarks) ? d.bookmarks : []
+  let changed = false
+
+  // Reverse order: each unshift pushes the previous one down, so the array ends
+  // up in PINNED_DEFAULT_IDS order.
+  for (const id of [...PINNED_DEFAULT_IDS].reverse()) {
+    if (seeded.includes(id)) continue
+    seeded.push(id)
+    changed = true
+    const def = DEFAULT_BOOKMARKS.find(b => b.id === id)
+    if (!def) continue
+    // Already present (possibly added by hand under another id) — move, don't duplicate.
+    const at = bms.findIndex(b => b.id === id || b.url === def.url)
+    bms.unshift(at >= 0 ? bms.splice(at, 1)[0] : { ...def, addedAt: Date.now() })
+  }
+
+  d.bookmarks = bms
+  d.seededBookmarks = seeded
+  return changed
+}
+
 function ensureDir() { if (!fs.existsSync(APP_DIR)) fs.mkdirSync(APP_DIR, { recursive: true }) }
 function readJson(f: string, fb: any): any { try { return JSON.parse(fs.readFileSync(f, 'utf-8')) } catch { return fb } }
 function writeJson(f: string, d: any) { try { ensureDir(); fs.writeFileSync(f, JSON.stringify(d, null, 2)) } catch {} }
@@ -86,6 +115,7 @@ function getData(): any {
     _data = s
       ? { ...{ bookmarks: DEFAULT_BOOKMARKS, settings: defaultSettings() }, ...s, settings: { ...defaultSettings(), ...(s.settings || {}) } }
       : { bookmarks: DEFAULT_BOOKMARKS.map(b => ({ ...b, addedAt: Date.now() })), settings: defaultSettings() }
+    if (seedPinnedBookmarks(_data)) saveData()
   }
   return _data
 }

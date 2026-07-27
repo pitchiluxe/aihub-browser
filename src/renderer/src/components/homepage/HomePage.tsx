@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Sparkles, LayoutGrid, Network, RefreshCw, Zap, Clock, X,
   ChevronLeft, ChevronRight, Download, Upload, Eye, EyeOff,
-  FlaskConical, Bot, Newspaper, BookOpen, Search,
+  FlaskConical, Bot, Newspaper, BookOpen, Search, Mail, StickyNote, Settings, History,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { loadBookmarks, removeBookmark } from '../../services/bookmarkService'
@@ -526,11 +526,21 @@ function MenuItem({ isLight, icon, label, sub, onClick }: { isLight: boolean; ic
   )
 }
 
+// Bookmarks pointing at AIHub's own pages have no favicon to fetch — the remote
+// favicon service 404s on an aihub:// URL — so they draw a built-in icon instead.
+const INTERNAL_BM_ICONS: Record<string, React.ComponentType<any>> = {
+  bible: BookOpen, mail: Mail, notes: StickyNote, research: FlaskConical,
+  agents: Bot, history: History, settings: Settings,
+}
+
 // ── Bookmark tile ─────────────────────────────────────────────────────────────
 function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
   bm: any; index: number; isLight: boolean; onNavigate: (u: string) => void; onRemove: (id: string) => void
 }) {
   const [hovered, setHovered] = useState(false)
+  const InternalIcon = bm.url?.startsWith('aihub://')
+    ? INTERNAL_BM_ICONS[bm.url.slice('aihub://'.length)]
+    : undefined
 
   return (
     <motion.div
@@ -568,19 +578,23 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
           boxShadow: `0 4px 20px ${bm.color}18, inset 0 1px 0 rgba(255,255,255,0.08)`,
         }}
       >
-        <img
-          src={`https://www.google.com/s2/favicons?domain=${bm.url}&sz=48`}
-          className="w-8 h-8 object-contain"
-          onError={e => {
-            const t = e.target as HTMLImageElement
-            t.style.display = 'none'
-            const p = t.parentElement!
-            const span = document.createElement('span')
-            span.textContent = bm.title.charAt(0)
-            span.style.cssText = 'font-size:26px;line-height:1'
-            p.appendChild(span)
-          }}
-        />
+        {InternalIcon ? (
+          <InternalIcon size={28} strokeWidth={1.7} style={{ color: bm.color }} />
+        ) : (
+          <img
+            src={`https://www.google.com/s2/favicons?domain=${bm.url}&sz=48`}
+            className="w-8 h-8 object-contain"
+            onError={e => {
+              const t = e.target as HTMLImageElement
+              t.style.display = 'none'
+              const p = t.parentElement!
+              const span = document.createElement('span')
+              span.textContent = bm.title.charAt(0)
+              span.style.cssText = 'font-size:26px;line-height:1'
+              p.appendChild(span)
+            }}
+          />
+        )}
         <div className="absolute inset-0 rounded-[17px] bg-white/0 group-hover:bg-white/[0.05] transition-all duration-200" />
       </button>
 
