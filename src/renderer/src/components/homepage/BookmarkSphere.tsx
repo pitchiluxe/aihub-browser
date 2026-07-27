@@ -3,6 +3,7 @@ import * as d3 from 'd3'
 import { Search, X, ZoomIn, ZoomOut, ChevronLeft, Maximize2, Play, Square, Crosshair, RefreshCw } from 'lucide-react'
 import { Bookmark } from '../../store/browserStore'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
+import { isBookmarkProtected } from '../../services/bookmarkService'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ExtNode extends d3.SimulationNodeDatum {
@@ -1109,13 +1110,15 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
           >
             Copy URL
           </button>
-          <div className="h-px bg-white/[0.07] my-1" />
-          <button
-            className="w-full text-left px-3.5 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
-            onClick={() => { onRemove(ctxMenu.node.id); setCtxMenu(null) }}
-          >
-            Remove Bookmark
-          </button>
+          {!isBookmarkProtected(ctxMenu.node.bookmark.url) && (<>
+            <div className="h-px bg-white/[0.07] my-1" />
+            <button
+              className="w-full text-left px-3.5 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+              onClick={() => { onRemove(ctxMenu.node.id); setCtxMenu(null) }}
+            >
+              Remove Bookmark
+            </button>
+          </>)}
         </div>
       )}
 

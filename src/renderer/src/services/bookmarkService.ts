@@ -38,6 +38,16 @@ export async function addBookmarkWithAI(
   }
 }
 
+// Permanent bookmarks — the main process refuses to delete these (see
+// UNDELETABLE_BOOKMARK_URLS there, which is the authority). Mirrored here only
+// so the UI can hide the remove affordance instead of offering a button that
+// silently does nothing.
+const UNDELETABLE_BOOKMARK_URLS = ['aihub://bible']
+
+export function isBookmarkProtected(url?: string): boolean {
+  return !!url && UNDELETABLE_BOOKMARK_URLS.includes(url)
+}
+
 export async function removeBookmark(id: string): Promise<boolean> {
   return window.electronAPI.bookmarks.remove(id)
 }

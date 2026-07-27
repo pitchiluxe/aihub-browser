@@ -338,7 +338,11 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
 
       case 'remove_bookmark': {
         if (!action.id) return { error: 'id is required' }
-        await window.electronAPI.bookmarks.remove(action.id)
+        // Main refuses protected bookmarks; report that back rather than
+        // dropping it from the store and claiming success.
+        if (!await window.electronAPI.bookmarks.remove(action.id)) {
+          return { error: 'that bookmark is protected and cannot be removed' }
+        }
         store.removeBookmark(action.id)
         return { ok: true }
       }

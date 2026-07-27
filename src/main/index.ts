@@ -81,6 +81,11 @@ const DEFAULT_BOOKMARKS = [
 // `seededBookmarks`, so a bookmark the user later deletes stays deleted.
 const PINNED_DEFAULT_IDS = ['bm-b', 'bm-m']
 
+// Permanent bookmarks: the home grid always keeps a way into the reader, so the
+// Bible tile can't be removed. Matched on url, not id, so a copy the user added
+// by hand is protected too and the seeding above stays consistent with it.
+const UNDELETABLE_BOOKMARK_URLS = ['aihub://bible']
+
 function seedPinnedBookmarks(d: any): boolean {
   const seeded: string[] = Array.isArray(d.seededBookmarks) ? d.seededBookmarks : []
   const bms: any[] = Array.isArray(d.bookmarks) ? d.bookmarks : []
@@ -1725,7 +1730,12 @@ ipcMain.handle('bookmarks:add', (_e, bm) => {
   d.bookmarks.push(b); saveData(); return b
 })
 ipcMain.handle('bookmarks:remove', (_e, id: string) => {
-  const d = getData(); d.bookmarks = d.bookmarks.filter((b: any) => b.id !== id); saveData(); return true
+  const d = getData()
+  const bm = d.bookmarks.find((b: any) => b.id === id)
+  // Refused here rather than only in the UI, so no other caller — the sphere,
+  // the agent tools, a future import/sync — can drop a protected bookmark.
+  if (bm && UNDELETABLE_BOOKMARK_URLS.includes(bm.url)) return false
+  d.bookmarks = d.bookmarks.filter((b: any) => b.id !== id); saveData(); return true
 })
 ipcMain.handle('bookmarks:update', (_e, id: string, u: any) => {
   const d = getData(); const i = d.bookmarks.findIndex((b: any) => b.id === id)

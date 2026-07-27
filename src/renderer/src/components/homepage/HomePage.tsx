@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { useBrowserStore } from '../../store/browserStore'
-import { loadBookmarks, removeBookmark } from '../../services/bookmarkService'
+import { loadBookmarks, removeBookmark, isBookmarkProtected } from '../../services/bookmarkService'
 import SearchBar from './SearchBar'
 import AddBookmarkModal from './AddBookmarkModal'
 import { useTheme } from '../../hooks/useTheme'
@@ -92,8 +92,9 @@ export default function HomePage({ onNavigate }: Props) {
   }
 
   const handleRemove = async (id: string) => {
-    await removeBookmark(id)
-    storeRemove(id)
+    // Main refuses protected bookmarks — don't drop it from the store either,
+    // or the tile would vanish until the next reload and reappear after it.
+    if (await removeBookmark(id)) storeRemove(id)
   }
 
   const showToast = (msg: string, ok: boolean) => {
@@ -547,9 +548,9 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Remove badge */}
+      {/* Remove badge — omitted entirely for protected bookmarks */}
       <AnimatePresence>
-        {hovered && (
+        {hovered && !isBookmarkProtected(bm.url) && (
           <motion.button
             initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }}
             transition={{ duration: 0.1 }}
