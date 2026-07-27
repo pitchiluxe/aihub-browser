@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, RotateCw, Home, Bookmark, Bot,
-  Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe, Camera, Video, Square,
+  Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe, Camera, Video, Square, X,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
@@ -14,6 +14,8 @@ interface Props {
   onBack:     () => void
   onForward:  () => void
   onReload:   () => void
+  onStop:     () => void
+  isLoading:  boolean
   canGoBack:    boolean
   canGoForward: boolean
 }
@@ -25,7 +27,7 @@ function isUrl(s: string): boolean {
 }
 
 export default function NavigationBar({
-  onNavigate, onHome, onBack, onForward, onReload,
+  onNavigate, onHome, onBack, onForward, onReload, onStop, isLoading,
   canGoBack, canGoForward,
 }: Props) {
   // Narrow subscription — keeps the nav bar out of unrelated store churn
@@ -230,6 +232,27 @@ export default function NavigationBar({
       className="drag-region flex items-center ds-navbar"
       style={{ height: 52, padding: '0 10px', gap: 8, position: 'relative' }}
     >
+      {/* Indeterminate load bar across the bottom of the nav bar — the single
+          clearest "the page is loading" signal, like every real browser. It
+          sits just above the page content and disappears the moment the load
+          finishes (held on a short floor by App so fast loads still flash). */}
+      {isLoading && (
+        <div
+          className="no-drag"
+          style={{
+            position: 'absolute', left: 0, right: 0, bottom: 0, height: 3,
+            overflow: 'hidden', zIndex: 70, pointerEvents: 'none',
+          }}
+        >
+          <div style={{
+            position: 'absolute', top: 0, height: '100%', width: '40%', borderRadius: 2,
+            background: 'linear-gradient(90deg, transparent, rgb(var(--ds-accent-soft)), transparent)',
+            animation: 'aihubLoadSlide 1.1s ease-in-out infinite',
+          }} />
+          <style>{`@keyframes aihubLoadSlide{0%{left:-40%}100%{left:100%}}
+            @keyframes aihubSpin{to{transform:rotate(360deg)}}`}</style>
+        </div>
+      )}
       {/* Add-to-sphere toast — rendered inside the nav-bar chrome (above the
           BrowserView, which always paints over host HTML placed in the page
           region), vertically centered and anchored left of the action group. */}
@@ -274,9 +297,33 @@ export default function NavigationBar({
           <ChevronRight size={16} />
         </NavBtn>
 
-        <NavBtn onClick={onReload} disabled={isSpecialPage} title="Reload (Ctrl+R)">
-          <RotateCw size={13} />
-        </NavBtn>
+        {/* Refresh/Stop button: spins while loading to make reload unmistakably
+            "doing something", even fast refreshes (App holds spinner visible for
+            minimum 350ms floor). The spinning icon is the clearest UX signal. */}
+        <button
+          onClick={isLoading ? onStop : onReload}
+          disabled={isSpecialPage}
+          title={isLoading ? 'Stop loading (Esc)' : 'Reload (Ctrl+R)'}
+          className="no-drag flex items-center gap-1 rounded-xl"
+          style={{
+            height: 32, padding: '0 8px', cursor: isSpecialPage ? 'default' : 'pointer',
+            opacity: isSpecialPage ? 0.2 : 1,
+            color: 'rgb(var(--ds-text-4))',
+            background: 'transparent',
+            border: '1px solid transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center' }}>
+            {isLoading ? (
+              <RotateCw size={13} style={{ animation: 'aihubSpin 1s linear infinite' }} />
+            ) : (
+              <RotateCw size={13} />
+            )}
+          </span>
+          {isLoading && <X size={12} style={{ marginLeft: 4, opacity: 0.7 }} />}
+          <style>{`@keyframes aihubSpin { to { transform: rotate(360deg); } }`}</style>
+        </button>
 
         <NavBtn onClick={onHome} title="Home">
           <Home size={13} />

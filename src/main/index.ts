@@ -716,11 +716,30 @@ function syncActiveBrowserView(ctx: AppWin | undefined) {
   const view = (!ctx.overlayHidden && ctx.activeId) ? ctx.views.get(ctx.activeId) : undefined
   const current = ctx.win.getBrowserView()
   if (view) {
-    if (current !== view) ctx.win.setBrowserView(view)
-    view.setBounds({
+    const reattaching = current !== view
+    if (reattaching) ctx.win.setBrowserView(view)
+    // Always set/update bounds to ensure proper rendering
+    const bounds = {
       x: Math.round(ctx.bounds.x), y: Math.round(ctx.bounds.y),
       width: Math.max(0, Math.round(ctx.bounds.width)), height: Math.max(0, Math.round(ctx.bounds.height)),
-    })
+    }
+    view.setBounds(bounds)
+    // A view that was detached is treated as hidden by Chromium; on re-attach
+    // it can show a blank/stale frame until something forces a paint. Nudge it
+    // aggressively so a returned tab shows its live content immediately rather
+    // than looking dead until the user interacts. `invalidate()` marks for repaint
+    // without reloading; multiple calls and delays ensure paint succeeds.
+    if (reattaching) {
+      const wc = view.webContents
+      // Immediate invalidate on reattach
+      try { wc.invalidate() } catch {}
+      // Follow-up invalidates to ensure paint completes across different Chromium codepaths
+      setTimeout(() => { try { if (!wc.isDestroyed()) wc.invalidate() } catch {} }, 4)
+      setTimeout(() => { try { if (!wc.isDestroyed()) wc.invalidate() } catch {} }, 12)
+      setTimeout(() => { try { if (!wc.isDestroyed()) wc.invalidate() } catch {} }, 32)
+      // Final invalidate after reasonable settle time
+      setTimeout(() => { try { if (!wc.isDestroyed()) wc.invalidate() } catch {} }, 80)
+    }
   } else if (current) {
     ctx.win.setBrowserView(null)
   }
@@ -745,9 +764,15 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
       // restarts — nothing here blocks first- or third-party cookies.
       javascript: true,
       images: true,
-      // Background tabs may throttle timers/rAF — big CPU/battery win with
-      // many tabs open; the active tab is never throttled.
-      backgroundThrottling: true,
+      // Keep background tabs fully alive. With throttling on, a tab you
+      // switched away from had its timers/rAF frozen and its renderer marked
+      // hidden, so returning to it showed a stale or blank page until it
+      // "woke up" — which is exactly the "every previous tab goes idle, I have
+      // to reload" complaint. Off, a backgrounded page keeps running and
+      // re-appears instantly with live content when you switch back. Costs a
+      // little CPU with many heavy tabs; the 30-minute sleep still reclaims
+      // memory from tabs left untouched.
+      backgroundThrottling: false,
       // Cache compiled JS eagerly — repeat visits skip re-parse/compile.
       v8CacheOptions: 'bypassHeatCheck',
       nodeIntegration: false,
@@ -1602,6 +1627,9 @@ ipcMain.handle('tabview:setOverlayHidden', (e, hidden: boolean) => {
 ipcMain.handle('tabview:navigate', (e, tabId: string, url: string) => {
   try { ctxFromEvent(e)?.views.get(tabId)?.webContents.loadURL(url) } catch {}
 })
+ipcMain.handle('tabview:stop', (e, tabId: string) => {
+  try { ctxFromEvent(e)?.views.get(tabId)?.webContents.stop() } catch {}
+})
 // Warm DNS + TCP + TLS for a host before the page is actually asked for. The
 // renderer fires this the moment a navigation is requested, so the handshake
 // overlaps the React re-render and BrowserView creation that follow instead of
@@ -2081,6 +2109,11 @@ ipcMain.handle('bible:getMarks', (): BibleMarks & { status: 'ok' | 'empty' | 'un
   }
   console.warn('[aihub] bible marks unreadable and no usable backup')
   return { ...EMPTY_BIBLE_MARKS(), status: 'unreadable' }
+})
+
+// TEMP debug — removed before release.
+ipcMain.handle('debug:write', (_e, name: string, data: string) => {
+  try { fs.writeFileSync(join(APP_DIR, `debug-${name}.txt`), String(data)) } catch {}
 })
 
 ipcMain.handle('bible:setMarks', (_e, marks: BibleMarks, opts?: { allowEmpty?: boolean }) => {

@@ -73,6 +73,10 @@ export default function App() {
   // Per-tab "just started loading" debounce timers, so a fast navigation
   // doesn't flash the loading spinner.
   const loadTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  // When each tab's current load began, so the spinner can be held on screen
+  // for a minimum time — a reload that finishes in 30ms still reads as an
+  // action that happened rather than a dead button.
+  const loadStartedAt = useRef<Map<string, number>>(new Map())
   const rewindTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const contentAreaRef = useRef<HTMLDivElement>(null)
@@ -94,8 +98,23 @@ export default function App() {
     if (activeTabId) window.electronAPI.tabView.goForward(activeTabId)
   }, [activeTabId])
   const reload = useCallback(() => {
-    if (activeTabId) window.electronAPI.tabView.reload(activeTabId)
-  }, [activeTabId])
+    if (!activeTabId) return
+    // Show the spinner the instant the button is clicked, not after the
+    // did-start-loading event round-trips back — otherwise a fast reload gives
+    // no feedback at all and the button feels dead. The real load events take
+    // over from here; a floor timer (see did-stop-loading handling) guarantees
+    // the spin is visible even when the reload finishes in a few ms.
+    updateTab(activeTabId, { isLoading: true })
+    loadStartedAt.current.set(activeTabId, Date.now())
+    window.electronAPI.tabView.reload(activeTabId)
+  }, [activeTabId, updateTab])
+  // Stop an in-flight load (the reload button turns into a stop control while
+  // the page is loading, mirroring every real browser).
+  const stopLoad = useCallback(() => {
+    if (!activeTabId) return
+    updateTab(activeTabId, { isLoading: false })
+    window.electronAPI.tabView.stop?.(activeTabId)
+  }, [activeTabId, updateTab])
 
   // ── Navigate ───────────────────────────────────────────────────────────────
   const navigate = useCallback((url: string) => {
@@ -469,13 +488,14 @@ export default function App() {
   // ── Tab sleeping — free the memory of tabs left in the background too long.
   // Sleeping destroys the BrowserView (via needsTabView + the lifecycle effect
   // above); the page is recreated and reloaded when the tab is next activated.
-  // The active tab is never slept. ────────────────────────────────────────────
+  // The active tab is never slept. Increased to 2 hours to keep normal
+  // tab rotations alive without memory pressure. ──────────────────────────────
   const lastActiveAt = useRef<Map<string, number>>(new Map())
   useEffect(() => {
     if (activeTabId) lastActiveAt.current.set(activeTabId, Date.now())
   }, [activeTabId])
   useEffect(() => {
-    const SLEEP_AFTER_MS = 30 * 60 * 1000 // 30 minutes idle in the background
+    const SLEEP_AFTER_MS = 2 * 60 * 60 * 1000 // 2 hours idle in the background
     const timer = setInterval(() => {
       const now = Date.now()
       const store = useBrowserStore.getState()
@@ -486,7 +506,7 @@ export default function App() {
         const seen = lastActiveAt.current.get(t.id) ?? now
         if (now - seen > SLEEP_AFTER_MS) store.sleepTab(t.id)
       }
-    }, 60 * 1000)
+    }, 5 * 60 * 1000) // check every 5 minutes
     return () => clearInterval(timer)
   }, [])
 
@@ -502,6 +522,25 @@ export default function App() {
     window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen)
   }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen])
 
+  // Clear a tab's loading state, but keep the spinner up for a short floor so
+  // a load that finished almost instantly still registers as an action. Any
+  // pending debounce timer is cleared here too.
+  const finishLoading = (tabId: string) => {
+    const t = loadTimers.current.get(tabId)
+    if (t) { clearTimeout(t); loadTimers.current.delete(tabId) }
+    const started = loadStartedAt.current.get(tabId)
+    const MIN_VISIBLE = 350
+    const clear = () => {
+      loadStartedAt.current.delete(tabId)
+      useBrowserStore.getState().updateTab(tabId, { isLoading: false })
+    }
+    if (started != null) {
+      const elapsed = Date.now() - started
+      if (elapsed < MIN_VISIBLE) { setTimeout(clear, MIN_VISIBLE - elapsed); return }
+    }
+    clear()
+  }
+
   // ── Single listener for all tab content events, forwarded from main ───────
   useEffect(() => {
     const off = window.electronAPI.tabView.onEvent((tabId: string, type: string, payload: any) => {
@@ -515,16 +554,17 @@ export default function App() {
         case 'did-start-loading': {
           const existing = loadTimers.current.get(tabId)
           if (existing) clearTimeout(existing)
+          if (!loadStartedAt.current.has(tabId)) loadStartedAt.current.set(tabId, Date.now())
+          // Short debounce so a genuine load shows the spinner promptly (the
+          // old 200ms was long enough that quick reloads finished invisibly).
           loadTimers.current.set(tabId, setTimeout(() => {
             useBrowserStore.getState().updateTab(tabId, { isLoading: true })
-          }, 200))
+          }, 60))
           break
         }
 
         case 'did-fail-load': {
-          const t = loadTimers.current.get(tabId)
-          if (t) { clearTimeout(t); loadTimers.current.delete(tabId) }
-          store.updateTab(tabId, { isLoading: false })
+          finishLoading(tabId)
           break
         }
 
@@ -571,14 +611,12 @@ export default function App() {
         }
 
         case 'did-stop-loading': {
-          const t = loadTimers.current.get(tabId)
-          if (t) { clearTimeout(t); loadTimers.current.delete(tabId) }
-
           const { title, url } = payload
           const favicon = url ? `https://www.google.com/s2/favicons?domain=${url}&sz=32` : ''
           if (title) store.updateTab(tabId, { title })
-          if (url)   store.updateTab(tabId, { url, isLoading: false })
+          if (url)   store.updateTab(tabId, { url })
           if (favicon) store.updateTab(tabId, { favicon })
+          finishLoading(tabId)
           if (url && url !== 'about:blank') {
             window.electronAPI?.history?.add({ url, title: title || url, favicon })
           }
@@ -643,6 +681,8 @@ export default function App() {
         onBack={goBack}
         onForward={goForward}
         onReload={reload}
+        onStop={stopLoad}
+        isLoading={!!activeTab?.isLoading && needsTabView(activeTab)}
         canGoBack={canGoBack}
         canGoForward={canGoForward}
       />
