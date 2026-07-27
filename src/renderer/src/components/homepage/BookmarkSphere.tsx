@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useCallback, useState, memo } from 'react'
 import * as d3 from 'd3'
 import { Search, X, ZoomIn, ZoomOut, ChevronLeft, Maximize2, Play, Square, Crosshair, RefreshCw } from 'lucide-react'
 import { Bookmark } from '../../store/browserStore'
+import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ExtNode extends d3.SimulationNodeDatum {
@@ -1132,11 +1133,16 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
             className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: `${selNode.color}18` }}
           >
-            <img
-              src={`https://www.google.com/s2/favicons?domain=${selNode.bookmark.url}&sz=32`}
-              className="w-5 h-5"
-              onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-            />
+            {(() => {
+              const internal = getInternalBookmarkIcon(selNode.bookmark.url)
+              return internal ? <internal.Icon size={22} /> : (
+                <img
+                  src={`https://www.google.com/s2/favicons?domain=${selNode.bookmark.url}&sz=32`}
+                  className="w-5 h-5"
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                />
+              )
+            })()}
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-slate-100 truncate">{selNode.bookmark.title}</div>

@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Sparkles, LayoutGrid, Network, RefreshCw, Zap, Clock, X,
   ChevronLeft, ChevronRight, Download, Upload, Eye, EyeOff,
-  FlaskConical, Bot, Newspaper, BookOpen, Search, Mail, StickyNote, Settings, History,
+  FlaskConical, Bot, Newspaper, BookOpen, Search,
 } from 'lucide-react'
+import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { useBrowserStore } from '../../store/browserStore'
 import { loadBookmarks, removeBookmark } from '../../services/bookmarkService'
 import SearchBar from './SearchBar'
@@ -526,21 +527,15 @@ function MenuItem({ isLight, icon, label, sub, onClick }: { isLight: boolean; ic
   )
 }
 
-// Bookmarks pointing at AIHub's own pages have no favicon to fetch — the remote
-// favicon service 404s on an aihub:// URL — so they draw a built-in icon instead.
-const INTERNAL_BM_ICONS: Record<string, React.ComponentType<any>> = {
-  bible: BookOpen, mail: Mail, notes: StickyNote, research: FlaskConical,
-  agents: Bot, history: History, settings: Settings,
-}
-
 // ── Bookmark tile ─────────────────────────────────────────────────────────────
 function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
   bm: any; index: number; isLight: boolean; onNavigate: (u: string) => void; onRemove: (id: string) => void
 }) {
   const [hovered, setHovered] = useState(false)
-  const InternalIcon = bm.url?.startsWith('aihub://')
-    ? INTERNAL_BM_ICONS[bm.url.slice('aihub://'.length)]
-    : undefined
+  const internal = getInternalBookmarkIcon(bm.url)
+  // Internal pages own their tile colour — the saved bm.color is already baked
+  // into the user's data.json and can't be corrected there after the fact.
+  const tint = internal?.accent ?? bm.color
 
   return (
     <motion.div
@@ -573,13 +568,13 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
         className="w-16 h-16 flex items-center justify-center relative overflow-hidden bm-tile-icon"
         style={{
           borderRadius: 18,
-          background: `linear-gradient(145deg, ${bm.color}22, ${bm.color}10)`,
-          border: `1.5px solid ${bm.color}30`,
-          boxShadow: `0 4px 20px ${bm.color}18, inset 0 1px 0 rgba(255,255,255,0.08)`,
+          background: `linear-gradient(145deg, ${tint}22, ${tint}10)`,
+          border: `1.5px solid ${tint}30`,
+          boxShadow: `0 4px 20px ${tint}18, inset 0 1px 0 rgba(255,255,255,0.08)`,
         }}
       >
-        {InternalIcon ? (
-          <InternalIcon size={28} strokeWidth={1.7} style={{ color: bm.color }} />
+        {internal ? (
+          <internal.Icon size={30} />
         ) : (
           <img
             src={`https://www.google.com/s2/favicons?domain=${bm.url}&sz=48`}
