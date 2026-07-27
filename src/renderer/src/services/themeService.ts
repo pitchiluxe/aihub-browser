@@ -113,6 +113,80 @@ const trip = (h: number, s: number, l: number) => hslToRgb(h, s, l).join(' ')
 const hex  = (h: number, s: number, l: number) =>
   '#' + hslToRgb(h, s, l).map(c => c.toString(16).padStart(2, '0')).join('')
 
+// A full palette spec. The single-hue builder below is a special case of this
+// where every hue is the same — which is exactly why those themes looked flat
+// and monochrome. Real, modern themes set the background and the accent to
+// DIFFERENT hues (a deep indigo room lit by a warm amber lamp), and carry a
+// second accent a step around the wheel for gradients and hover states.
+export interface PaletteSpec {
+  bgHue: number
+  bgSat: number          // background saturation — low = neutral/graphite, high = moody colour
+  accentHue: number
+  accentHue2: number     // secondary accent (gradients, the -2 vars)
+  accentSat: number
+}
+
+export function buildThemeFromPalette(name: string, base: 'dark' | 'light', p: PaletteSpec): CustomTheme {
+  const bh = ((p.bgHue % 360) + 360) % 360
+  const ah = ((p.accentHue % 360) + 360) % 360
+  const ah2 = ((p.accentHue2 % 360) + 360) % 360
+  const bs = Math.max(0, Math.min(60, p.bgSat))
+  const as = Math.max(45, Math.min(100, p.accentSat))
+
+  const vars: Record<string, string> =
+    base === 'dark'
+      ? {
+          '--ds-bg':   trip(bh, bs, 9),
+          '--ds-bg-2': trip(bh, bs, 13),
+          '--ds-bg-3': trip(bh, Math.max(0, bs - 2), 17),
+          '--ds-accent':      trip(ah, as, 62),
+          '--ds-accent-2':    trip(ah2, as, 58),
+          '--ds-accent-3':    trip(ah, as, 68),
+          '--ds-accent-soft': trip(ah, Math.min(100, as + 2), 74),
+          '--ds-accent-pale': trip(ah, Math.min(100, as + 4), 84),
+          '--ds-accent-hex':      hex(ah, as, 62),
+          '--ds-accent-2-hex':    hex(ah2, as, 58),
+          '--ds-accent-soft-hex': hex(ah, Math.min(100, as + 2), 74),
+          '--ds-accent-ink':      hex(ah, Math.min(100, as + 2), 74),
+          // A two-hue background gradient reads as depth, not a flat wash.
+          '--ds-page-bg': `linear-gradient(160deg, ${hex(bh, bs, 7)} 0%, ${hex(ah2, Math.min(bs + 6, 40), 9)} 100%)`,
+          '--ds-page-header': `linear-gradient(180deg, ${hex(bh, bs, 8)}fa 80%, transparent)`,
+          '--ds-app-bg': `linear-gradient(160deg, ${hex(bh, bs, 9)} 0%, ${hex(bh, bs, 6)} 100%)`,
+          '--aihub-bg':      trip(bh, bs, 9),
+          '--aihub-surface': trip(bh, bs, 13),
+          '--aihub-card':    trip(bh, Math.max(0, bs - 2), 17),
+          '--aihub-accent':  trip(ah, as, 62),
+        }
+      : {
+          '--ds-bg':   trip(bh, Math.min(bs, 40), 97),
+          '--ds-bg-2': trip(bh, Math.min(bs, 38), 94),
+          '--ds-bg-3': trip(bh, Math.min(bs, 36), 91),
+          '--ds-accent':      trip(ah, Math.min(as, 80), 45),
+          '--ds-accent-2':    trip(ah2, Math.min(as, 78), 42),
+          '--ds-accent-3':    trip(ah, Math.min(as, 80), 52),
+          '--ds-accent-soft': trip(ah, Math.min(as, 78), 50),
+          '--ds-accent-pale': trip(ah, Math.min(as, 76), 70),
+          '--ds-accent-hex':      hex(ah, Math.min(as, 80), 45),
+          '--ds-accent-2-hex':    hex(ah2, Math.min(as, 78), 42),
+          '--ds-accent-soft-hex': hex(ah, Math.min(as, 78), 50),
+          '--ds-accent-ink':      hex(ah, Math.min(as, 82), 30),
+          '--ds-page-bg': `linear-gradient(160deg, ${hex(bh, Math.min(bs, 42), 98)} 0%, ${hex(ah2, Math.min(bs, 30), 96)} 100%)`,
+          '--ds-page-header': `linear-gradient(180deg, ${hex(bh, Math.min(bs, 42), 98)}fa 80%, transparent)`,
+          '--ds-app-bg': `linear-gradient(160deg, ${hex(bh, Math.min(bs, 42), 98)} 0%, ${hex(bh, Math.min(bs, 40), 95)} 100%)`,
+          '--aihub-bg':      trip(bh, Math.min(bs, 40), 97),
+          '--aihub-surface': trip(bh, Math.min(bs, 38), 94),
+          '--aihub-card':    '255 255 255',
+          '--aihub-accent':  trip(ah, Math.min(as, 80), 45),
+        }
+  return {
+    id: `custom-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+    name, base, custom: true, hue: ah,
+    desc: `${base === 'dark' ? 'Dark' : 'Light'} · designed`,
+    swatch: base === 'dark' ? [hex(bh, bs, 9), hex(ah, as, 62)] : [hex(bh, Math.min(bs, 42), 97), hex(ah, Math.min(as, 80), 45)],
+    vars,
+  }
+}
+
 export function buildCustomTheme(name: string, base: 'dark' | 'light', hue: number): CustomTheme {
   hue = ((hue % 360) + 360) % 360
   const vars: Record<string, string> =
@@ -190,6 +264,49 @@ function nameForHue(hue: number, taken: Set<string>): string {
   return `${bucket[0]} ${i}`
 }
 
+// Hand-tuned modern palettes: background and accent on different hues, the way
+// a designer actually picks colours. These are the offline fallback and the
+// seed pool, so even with no AI the generator produces something beautiful
+// rather than another monochrome wash. Each: [name, base, bgHue, bgSat,
+// accentHue, accentHue2, accentSat].
+const DESIGNER_PALETTES: [string, 'dark' | 'light', number, number, number, number, number][] = [
+  ['Nebula',    'dark',  262, 34, 28,  330, 92],  // indigo room, warm coral lamp
+  ['Synthwave', 'dark',  280, 40, 315, 190, 95],  // violet dusk, magenta + cyan
+  ['Emberglow', 'dark',  20,  30, 32,  350, 90],  // charcoal, ember orange → rose
+  ['Deep Sea',  'dark',  205, 38, 168, 260, 85],  // abyss blue, teal + indigo
+  ['Verdant',   'dark',  158, 26, 96,  45,  82],  // pine, lime → gold
+  ['Amethyst',  'dark',  250, 30, 285, 200, 88],  // slate indigo, amethyst + ice
+  ['Sunset Blvd','dark', 235, 28, 28,  300, 92],  // twilight blue, amber + orchid
+  ['Neon Noir', 'dark',  220, 22, 155, 320, 96],  // near-black blue, spring green + pink
+  ['Terracotta','light', 24,  36, 12,  190, 72],  // warm cream, clay red + teal
+  ['Sorbet',    'light', 330, 30, 340, 40,  74],  // blush, raspberry + peach
+  ['Meadow',    'light', 120, 26, 150, 90,  66],  // pale mint, emerald + citrus
+  ['Porcelain', 'light', 210, 20, 220, 280, 70],  // cool white, azure + violet
+]
+
+/** Build a designer palette by name-index, spreading through the list. */
+export function generateDesignerThemes(count: number): CustomTheme[] {
+  const existing = getAllThemes()
+  const takenNames = new Set(existing.map(t => t.name.toLowerCase()))
+  const out: CustomTheme[] = []
+  const start = Math.floor(Math.random() * DESIGNER_PALETTES.length)
+  for (let i = 0; out.length < count && i < DESIGNER_PALETTES.length; i++) {
+    const [pname, base, bgHue, bgSat, accentHue, accentHue2, accentSat] =
+      DESIGNER_PALETTES[(start + i) % DESIGNER_PALETTES.length]
+    let name = pname
+    if (takenNames.has(name.toLowerCase())) {
+      let n = 2
+      while (takenNames.has(`${pname.toLowerCase()} ${n}`)) n++
+      name = `${pname} ${n}`
+    }
+    takenNames.add(name.toLowerCase())
+    out.push(buildThemeFromPalette(name, base, { bgHue, bgSat, accentHue, accentHue2, accentSat }))
+  }
+  // If more requested than curated palettes, top up with hue-spaced randoms.
+  if (out.length < count) out.push(...generateLocalThemes(count - out.length))
+  return out
+}
+
 /** Random, hue-spaced themes that avoid colors already in the catalog. */
 export function generateLocalThemes(count: number): CustomTheme[] {
   const existing = getAllThemes()
@@ -216,6 +333,21 @@ export function generateLocalThemes(count: number): CustomTheme[] {
 
 /** AI-assisted generation with a fully offline fallback. Returns the new
  *  themes after persisting them. */
+// Detect if two themes are visually too similar. Checks hue distance on
+// background and accent to ensure each theme is genuinely distinct.
+function isVisuallyDistinct(t1: { bgHue: number; accentHue: number; base: 'dark' | 'light' }, t2: { bgHue: number; accentHue: number; base: 'dark' | 'light' }): boolean {
+  if (t1.base !== t2.base) return true // Different base modes are always distinct
+  const hueDistance = (h1: number, h2: number) => {
+    const d = Math.abs(h1 - h2)
+    return Math.min(d, 360 - d)
+  }
+  // Both background and accent must have meaningful distance
+  const bgDist = hueDistance(t1.bgHue, t2.bgHue)
+  const accentDist = hueDistance(t1.accentHue, t2.accentHue)
+  // Require at least 30° separation on BOTH hues to ensure visual variety
+  return bgDist >= 30 && accentDist >= 30
+}
+
 export async function generateThemes(count = 7): Promise<CustomTheme[]> {
   const existingNames = getAllThemes().map(t => t.name).join(', ')
   let fresh: CustomTheme[] = []
@@ -224,28 +356,56 @@ export async function generateThemes(count = 7): Promise<CustomTheme[]> {
       [{
         role: 'user',
         content:
-          `Design ${count} distinct browser color themes. Existing theme names (do NOT reuse): ${existingNames}. ` +
-          `Reply with ONLY a JSON array, no prose: [{"name":"one short word","base":"dark"|"light","hue":0-359}] — ` +
-          `hues must be spread apart, names evocative of the hue.`,
+          `You are a senior UI designer. Design ${count} distinct, modern, BEAUTIFUL browser color themes — the kind you'd see in Arc, Linear, or Raycast. ` +
+          `Existing theme names (do NOT reuse): ${existingNames}.\n` +
+          `CRITICAL: Each theme's BACKGROUND hue and ACCENT hue must be DIFFERENT — a deep indigo background lit by warm amber, NOT indigo-on-indigo. Monochrome is forbidden.\n` +
+          `CRITICAL: Themes must spread across the color wheel — ensure NO two themes have similar background OR accent hues. Variety only.\n` +
+          `For each theme give a full palette:\n` +
+          `- name: one or two evocative words\n` +
+          `- base: "dark" (moody, most) or "light" (a couple, airy)\n` +
+          `- bgHue: 0-359, background color\n` +
+          `- bgSat: 12-45, background color intensity (low=neutral, high=saturated)\n` +
+          `- accentHue: 0-359, MUST differ from bgHue by 40+ degrees\n` +
+          `- accentHue2: 0-359, secondary accent for gradients (different from accentHue)\n` +
+          `- accentSat: 70-100, accents vivid and confident\n` +
+          `Spread across spectrum: jewels, sunset warmth, cyber cool, earthy naturals. Maximize variety.\n` +
+          `Reply ONLY with JSON array, no prose:\n` +
+          `[{"name":"...","base":"dark","bgHue":262,"bgSat":32,"accentHue":30,"accentHue2":330,"accentSat":92}]`,
       }],
       undefined, { preferCloud: true }
     )
     const m = String(res?.content || '').match(/\[[\s\S]*\]/)
     if (m && res?.provider !== 'error') {
       const takenNames = new Set(getAllThemes().map(t => t.name.toLowerCase()))
-      const seeds = JSON.parse(m[0]) as { name?: string; base?: string; hue?: number }[]
+      const allExistingThemes = getAllThemes().map(t => ({
+        bgHue: 'custom' in t ? t.hue : t.swatch[0],
+        accentHue: 'hue' in t ? t.hue : (t.id.includes('ocean') ? 180 : t.id.includes('forest') ? 120 : 0),
+        base: t.base,
+      }))
+      type Seed = { name?: string; base?: string; hue?: number; bgHue?: number; bgSat?: number; accentHue?: number; accentHue2?: number; accentSat?: number }
+      const seeds = JSON.parse(m[0]) as Seed[]
       for (const s of seeds.slice(0, count)) {
-        const hue = typeof s.hue === 'number' ? s.hue : Math.random() * 360
         const base: 'dark' | 'light' = s.base === 'light' ? 'light' : 'dark'
-        let name = (s.name || '').trim().slice(0, 18) || nameForHue(hue, takenNames)
-        if (takenNames.has(name.toLowerCase())) name = nameForHue(hue, takenNames)
+        const num = (v: any, fb: number) => (typeof v === 'number' && isFinite(v) ? v : fb)
+        const bgHue = num(s.bgHue, num(s.hue, Math.random() * 360))
+        let accentHue = num(s.accentHue, s.hue != null ? s.hue : (bgHue + 150))
+        // Enforce 40° separation rule even if model ignored it
+        if (Math.abs(((accentHue - bgHue + 540) % 360) - 180) < 40) accentHue = (bgHue + 160) % 360
+        const accentHue2 = num(s.accentHue2, (accentHue + 28) % 360)
+        const bgSat = num(s.bgSat, 30)
+        const accentSat = num(s.accentSat, 88)
+        // Skip themes too similar to existing ones
+        const candidate = { bgHue, accentHue, base }
+        if (!allExistingThemes.every(e => isVisuallyDistinct(candidate, e))) continue
+        let name = (s.name || '').trim().slice(0, 20) || nameForHue(accentHue, takenNames)
+        if (takenNames.has(name.toLowerCase())) name = nameForHue(accentHue, takenNames)
         takenNames.add(name.toLowerCase())
-        fresh.push(buildCustomTheme(name, base, hue))
+        fresh.push(buildThemeFromPalette(name, base, { bgHue, bgSat, accentHue, accentHue2, accentSat }))
       }
     }
-  } catch { /* offline or AI unavailable — fall through to local generator */ }
+  } catch { /* offline or AI unavailable — fall through to curated designer palettes */ }
 
-  if (fresh.length < count) fresh = fresh.concat(generateLocalThemes(count - fresh.length))
+  if (fresh.length < count) fresh = fresh.concat(generateDesignerThemes(count - fresh.length))
 
   const all = [...loadCustomThemes(), ...fresh]
   saveCustomThemes(all)

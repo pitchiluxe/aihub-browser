@@ -40,35 +40,46 @@ function isFunctionalDupe(name: string, tagline: string, existing: ExistingExtIn
 // window.__ext_<key> IIFE contract (same pattern as extensionDefs.ts).
 export function buildGenerationPrompt(topic: string, existing: ExistingExtInfo[]): string {
   const theme = topic.trim()
-    ? `All extensions must serve this theme: "${topic.trim()}".`
+    ? `EVERY SINGLE extension MUST genuinely and accurately deliver on: "${topic.trim()}". If the request names a service (maps, Earth, weather, translate, video, dictionary, calculator…), build the REAL, WORKING thing — see embeds below. NOT a fake panel or placeholder title bar. User will TEST each one immediately.`
     : 'Invent a broadly useful, varied mix (productivity, reading, privacy, media, accessibility, developer tools).'
-  return `You are an expert browser-extension author for AIHub Browser.
+  return `You are a senior browser-extension engineer for AIHub Browser. EVERY extension MUST work perfectly and do EXACTLY what the user asked.
+Write extensions that ACTUALLY WORK — never stubs, placeholders, "coming soon", or empty boxes. Each is sandboxed, tested, and removed if dead.
 
-Generate 5 to 10 small, genuinely useful page-enhancement extensions. ${theme}
+Generate 4 to 6 small, 100% FUNCTIONING, spec-accurate extensions. ${theme}
+Each is vanilla JS run inside the current web page when enabled. Keep each focused and compact. User will immediately test your work.
 
-Each extension is plain JavaScript injected into every web page when the user enables it.
+CRITICAL: Verify your code:
+1. Does this ACTUALLY do what the user asked? (Not close-enough, actually)
+2. Will it show visible change to the page when enabled?
+3. Will it clean up with zero residue when disabled?
+If unsure, build a simpler version that definitely works instead of ambitious code that fails.
 
-STRICT CONTRACT for each extension:
-- injectCode: an IIFE following EXACTLY this pattern (choose a unique short key per extension):
-(function(){
-  var K='__ext_<uniquekey>';
-  if(window[K])return;
-  // do the work: create elements, add listeners, modify styles...
-  window[K]={remove:function(){ /* undo EVERYTHING done above */ delete window[K];}};
-})()
-- removeCode: exactly this one line: window.__ext_<uniquekey>&&window.__ext_<uniquekey>.remove()
-- Vanilla ES5-safe JavaScript only. No external network requests, no libraries, no fetch.
-- Must not break pages. Any visual element uses z-index 2147483000 or higher.
+RULE 1 — NEVER FAKE A CAPABILITY. If you can't truly deliver it, build the closest thing that really works. A "Google Earth locator" showing an empty box = fail. One that embeds a live, pannable satellite map of a place the user types = success.
 
-Respond with ONLY a JSON array (no prose, no markdown fences) of 5 to 10 objects shaped:
-[{"name":"...","tagline":"one line, under 80 chars","icon":"one emoji","category":"Media|Privacy|Productivity|Accessibility|Developer|Reading","howTo":"1-2 sentences telling the user exactly how to use it: what appears on the page and what to click","injectCode":"...","removeCode":"..."}]
+RULE 2 — SHOW REAL CONTENT WITH AN IFRAME. These embed and work inside a page (create with document.createElement('iframe'), set .src, style width/height 100%, border 0):
+- Google Maps satellite/3D:  https://maps.google.com/maps?q=<PLACE or LAT,LNG>&t=k&z=15&output=embed   (t=k=satellite; drag to pan, scroll to zoom — real Google data)
+- OpenStreetMap:  https://www.openstreetmap.org/export/embed.html?bbox=...
+- YouTube:  https://www.youtube.com/embed/<id>
+- Wikipedia:  https://<lang>.wikipedia.org/wiki/<Title>
+Do NOT use fetch/XHR, external libraries, or eval.
 
-icon rules: pick ONE bold, solid, saturated emoji that stays clearly visible on a dark UI (good: 🔥 🛡️ 📌 🎯 ⚡ 🧲 🔍 📖 🎨 🔒). Avoid pale, thin-line, or mostly-white emojis (bad: 🤍 💭 🕊️ ◻️ 🌫️) — they wash out on dark backgrounds.
+RULE 3 — POLISHED FLOATING PANEL for anything with a UI: position:fixed; z-index 2147483000+; rounded 14px; dark glass card background rgba(17,18,30,0.97); border rgba(255,255,255,0.12); box-shadow; a header with the title + a × button that calls remove(); light ~13px system-ui text. If it takes input (a place, word, video), give it an <input>+button wired with addEventListener so it truly responds.
 
-The user already has these extensions installed — do NOT duplicate their NAME or their FUNCTIONALITY (a renamed clone of an existing extension counts as a duplicate and will be rejected):
+CODE CONTRACT (exact):
+- injectCode is an IIFE; pick a unique short key. It MUST append at least one real element to document.body (or inject a <style>) — adding nothing = rejected. Only append your own nodes; never overwrite document.body.innerHTML.
+  (function(){var K='__ext_<key>';if(window[K])return;var p=document.createElement('div');/* build panel/iframe/controls with real styles + listeners */document.body.appendChild(p);window[K]={remove:function(){p.remove();delete window[K];}};})()
+- removeCode is exactly: window.__ext_<key>&&window.__ext_<key>.remove()
+- For a maps/earth request, follow the RULE 2 Google Maps embed pattern: an <input> for the place, a Go button, and an <iframe> whose src is rebuilt from the input. That is the standard for "locator" extensions.
+
+OUTPUT — ONLY a JSON array (no prose, no fences) of 4 to 6 objects:
+[{"name":"...","tagline":"under 80 chars","icon":"one emoji","category":"Media|Privacy|Productivity|Accessibility|Developer|Reading","howTo":"1-2 sentences: what appears and how to use it","injectCode":"...","removeCode":"..."}]
+
+icon: ONE bold saturated emoji visible on dark UI (good: 🔥 🛡️ 📌 🎯 ⚡ 🔍 📖 🎨 🔒 🌍 🗺️ ⏱️; avoid pale/thin 🤍 💭 🕊️).
+
+Already installed — do NOT duplicate a NAME or its FUNCTION:
 ${existing.map(e => `- ${e.name}${e.category ? ` [${e.category}]` : ''}: ${e.tagline}`).join('\n') || '(none)'}
-Every generated extension must do something genuinely DIFFERENT from all of the above.
-JSON string rules: injectCode/removeCode are single-line JSON strings — use \\n escapes for newlines and escape double quotes.`
+
+JSON: injectCode/removeCode are single-line strings — prefer single quotes inside the JS, escape any double quote as \\", use \\n only if needed.`
 }
 
 // Extracts and validates the model's response. Never throws. Invalid items
