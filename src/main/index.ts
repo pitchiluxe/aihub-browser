@@ -65,6 +65,8 @@ const DL_FILE     = join(APP_DIR, 'downloads.json')
 const AGENTS_FILE = join(APP_DIR, 'agents.json')
 
 const DEFAULT_BOOKMARKS = [
+  { id: 'bm-b',  url: 'aihub://bible',                                  title: 'Bible',            favicon: '', category: 'Reading',       addedAt: 0, color: '#DC2626' },
+  { id: 'bm-m',  url: 'aihub://mail',                                   title: 'Mail',             favicon: '', category: 'Productivity',  addedAt: 0, color: '#EA4335' },
   { id: 'bm-g',  url: 'https://www.google.com',                        title: 'Google',           favicon: '', category: 'Search',        addedAt: 0, color: '#4285F4' },
   { id: 'bm-yt', url: 'https://www.youtube.com',                       title: 'YouTube',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#FF0000' },
   { id: 'bm-nf', url: 'https://www.netflix.com',                       title: 'Netflix',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#E50914' },
