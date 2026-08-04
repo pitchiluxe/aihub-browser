@@ -1,4 +1,5 @@
 import { CustomExt } from '../extensions/customExts'
+import { PANEL_RUNTIME } from '../extensions/panelRuntime'
 
 // Runtime verification for generated extensions.
 //
@@ -52,6 +53,11 @@ function harnessHtml(injectCode: string, removeCode: string, token: string): str
   window.__cs = function(){ return document.querySelectorAll('style, link[rel="stylesheet"]').length; };
   window.__H.beforeNodes = window.__cn();
   window.__H.beforeStyles = window.__cs();
+</script>
+<script>
+  // Same panel chrome the extension gets in a real page — verifying without it
+  // would reject every extension that builds its UI on AIHubPanel.
+  ${scriptSafe(PANEL_RUNTIME)}
 </script>
 <script>
   try { ${scriptSafe(injectCode)} } catch (e) { window.__H.injectErr = String(e && e.message || e); }

@@ -35,6 +35,7 @@ import CompareModal from './components/browser/CompareModal'
 import { loadBookmarks } from './services/bookmarkService'
 import { buildPageExtractionScript } from './services/pageExtractor'
 import { loadCustomExts } from './extensions/customExts'
+import { withPanelRuntime } from './extensions/panelRuntime'
 import { applyThemeToDom } from './services/themeService'
 
 declare global {
@@ -633,7 +634,9 @@ export default function App() {
             })
             loadCustomExts().forEach(ext => {
               if (extensionStates[ext.id]?.enabled) {
-                window.electronAPI?.webview?.execScript?.(wcId, ext.injectCode)?.catch?.(() => {})
+                // Custom/generated extensions build their UI on the shared
+                // panel chrome, so the runtime has to land first.
+                window.electronAPI?.webview?.execScript?.(wcId, withPanelRuntime(ext.injectCode))?.catch?.(() => {})
               }
             })
           }

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { Search, Plus, X, ChevronDown, ChevronUp, Trash2, Code2, Puzzle, Sparkles } from 'lucide-react'
 import { EXTENSION_DEFS, ExtensionDef } from '../../extensions/extensionDefs'
 import { CustomExt, loadCustomExts, saveCustomExts } from '../../extensions/customExts'
+import { withPanelRuntime } from '../../extensions/panelRuntime'
 import { buildGenerationPrompt, parseGeneratedExtensions } from '../../services/extensionGenerator'
 import { verifyExtensions } from '../../services/extensionVerifier'
 import { useBrowserStore } from '../../store/browserStore'
@@ -51,7 +52,7 @@ export default function ExtensionsPage() {
     if (enabled) {
       const settings = extensionStates[ext.id]?.settings || {}
       const script = 'isCustom' in ext
-        ? ext.injectCode
+        ? withPanelRuntime(ext.injectCode)
         : ext.inject(settings)
       execInAllTabs(script)
     } else {
@@ -434,7 +435,7 @@ function CreateExtModal({ onClose, onCreate }: {
 
           {/* Inject code */}
           <div>
-            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}>Inject Code <span style={{ color: 'rgb(var(--ds-text-4) / 0.8)', textTransform: 'none', fontWeight: 400 }}>— runs on every page when enabled</span></label>
+            <label className="text-[10px] uppercase tracking-widest font-bold block mb-1.5" style={{ color: 'rgb(var(--ds-text-4) / 0.75)' }}>Inject Code <span style={{ color: 'rgb(var(--ds-text-4) / 0.8)', textTransform: 'none', fontWeight: 400 }}>— runs on every page when enabled. Call <code>AIHubPanel.create({'{'}key,title,icon{'}'})</code> for a draggable panel with minimise and close built in.</span></label>
             <textarea
               value={inject}
               onChange={e => setInject(e.target.value)}

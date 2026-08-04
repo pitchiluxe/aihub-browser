@@ -38,7 +38,25 @@ function isFunctionalDupe(name: string, tagline: string, existing: ExistingExtIn
 // Builds the single-shot generation prompt for ai:chat. The model must reply
 // with ONLY a JSON array of extension objects following the codebase's
 // window.__ext_<key> IIFE contract (same pattern as extensionDefs.ts).
-export function buildGenerationPrompt(topic: string, existing: ExistingExtInfo[]): string {
+// Without a nudge, a model asked for "creative extensions" converges on the
+// same handful of ideas every run. Each generation gets a different lens so
+// consecutive batches explore genuinely different ground.
+const CREATIVE_LENSES = [
+  'Reveal something the page is doing that the user cannot normally see.',
+  'Let the user interrogate the page and get answers back, not just read it.',
+  'Turn a property of the page (structure, timing, colour, density) into something visual or playable.',
+  'Give the user a control the site deliberately withheld from them.',
+  'Change how the page behaves over time — replay it, slow it down, watch it change.',
+  'Re-cut the page for a purpose its designers never had in mind.',
+  'Make comparison possible: across the page, across tabs, or against a reference.',
+  'Turn attention itself into the subject — what the user actually reads, misses, or returns to.',
+]
+
+export function buildGenerationPrompt(
+  topic: string,
+  existing: ExistingExtInfo[],
+  lens: string = CREATIVE_LENSES[Math.floor(Math.random() * CREATIVE_LENSES.length)],
+): string {
   const theme = topic.trim()
     ? `EVERY SINGLE extension MUST genuinely and accurately deliver on: "${topic.trim()}". If the request names a service (maps, Earth, weather, translate, video, dictionary, calculator…), build the REAL, WORKING thing — see embeds below. NOT a fake panel or placeholder title bar. User will TEST each one immediately.`
     : 'Invent a broadly useful, varied mix (productivity, reading, privacy, media, accessibility, developer tools).'
@@ -63,13 +81,24 @@ RULE 2 — SHOW REAL CONTENT WITH AN IFRAME. These embed and work inside a page 
 - Wikipedia:  https://<lang>.wikipedia.org/wiki/<Title>
 Do NOT use fetch/XHR, external libraries, or eval.
 
-RULE 3 — POLISHED FLOATING PANEL for anything with a UI: position:fixed; z-index 2147483000+; rounded 14px; dark glass card background rgba(17,18,30,0.97); border rgba(255,255,255,0.12); box-shadow; a header with the title + a × button that calls remove(); light ~13px system-ui text. If it takes input (a place, word, video), give it an <input>+button wired with addEventListener so it truly responds.
+RULE 3 — NEVER BUILD YOUR OWN WINDOW. The browser provides the window chrome. For ANY extension with a UI, call:
+  var panel = AIHubPanel.create({ key:'<key>', title:'Name', icon:'🎯', width:340 });
+It returns a ready-made draggable glass panel with a title bar, a MINIMISE button and a close button already wired. You only fill panel.body — append your controls/content to it. Inputs, buttons, selects and iframes inside panel.body are styled for you, so plain <input>/<button>/<iframe> elements already look right; do not restyle the shell, do not add your own header, close button, position:fixed wrapper or z-index. panel.remove() tears the whole thing down.
+Only a passive, non-interactive overlay (a reading ruler, a tint layer, a badge that never needs closing) may skip the panel — those append their own element directly.
 
 CODE CONTRACT (exact):
-- injectCode is an IIFE; pick a unique short key. It MUST append at least one real element to document.body (or inject a <style>) — adding nothing = rejected. Only append your own nodes; never overwrite document.body.innerHTML.
-  (function(){var K='__ext_<key>';if(window[K])return;var p=document.createElement('div');/* build panel/iframe/controls with real styles + listeners */document.body.appendChild(p);window[K]={remove:function(){p.remove();delete window[K];}};})()
+- injectCode is an IIFE; pick a unique short key. It MUST add at least one real element to the page (via AIHubPanel or your own node) — adding nothing = rejected. Only append your own nodes; never overwrite document.body.innerHTML.
+  (function(){var K='__ext_<key>';if(window[K])return;var p=AIHubPanel.create({key:'<key>',title:'...',icon:'🎯',width:340,onClose:function(){delete window[K];}});/* build controls into p.body with real listeners */window[K]={remove:function(){p.remove();delete window[K];}};})()
+  Use the SAME short key for AIHubPanel.create and for the __ext_<key> global, and pass the onClose shown above — that is what lets the panel's own × button be reopened later.
 - removeCode is exactly: window.__ext_<key>&&window.__ext_<key>.remove()
-- For a maps/earth request, follow the RULE 2 Google Maps embed pattern: an <input> for the place, a Go button, and an <iframe> whose src is rebuilt from the input. That is the standard for "locator" extensions.
+- For a maps/earth request, follow the RULE 2 Google Maps embed pattern inside panel.body: an <input> for the place, a Go button, and an <iframe> whose src is rebuilt from the input. That is the standard for "locator" extensions.
+
+RULE 4 — MAKE IT SOMETHING NOBODY HAS SHIPPED BEFORE. These already exist a thousand times over and are an automatic fail: dark mode / night theme, ad or cookie-banner blockers, word counters, reading-time badges, note stickies, generic to-do lists, screenshot buttons, plain colour pickers, QR generators, password generators, tab counters, bare "summarise this page" buttons.
+Instead invent a mechanic that only makes sense inside a browser. Good thinking looks like: turning something invisible on the page into something you can see or steer; letting the reader interrogate the page ("show me every number and what it's compared to"); replaying or rewinding what the page did; making the page's own structure playable, measurable or navigable in a way the site never intended; giving the user a control the site deliberately withheld.
+Each extension must pass this test: a browsing friend would say "wait, how did you do that?" — not "oh, I have that one already".
+Every extension in the batch must use a DIFFERENT mechanic from the others. Ship the strange, specific idea over the safe, generic one — as long as it genuinely works.
+
+ANGLE FOR THIS BATCH (bend every idea through it): ${lens}
 
 OUTPUT — ONLY a JSON array (no prose, no fences) of 4 to 6 objects:
 [{"name":"...","tagline":"under 80 chars","icon":"one emoji","category":"Media|Privacy|Productivity|Accessibility|Developer|Reading","howTo":"1-2 sentences: what appears and how to use it","injectCode":"...","removeCode":"..."}]
