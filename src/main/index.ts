@@ -349,22 +349,33 @@ async function checkOllamaRunning(force = false): Promise<{ running: boolean; mo
   }
 
   for (const base of uniqueBases) {
-    for (const path of ['/api/tags', '/api/version']) {
-      try {
-        // 1.5s per probe (was 4s): Ollama on localhost answers in a few ms when
-        // present, so a longer wait only ever adds dead time when it's absent.
-        const { status, body } = await httpGet(`${base}${path}`, 1500)
-        if (status >= 200 && status < 400) {
-          try {
-            const json = JSON.parse(body)
-            const models = (json.models || []).map((m: any) => (typeof m === 'string' ? m : m.name || 'unknown')).filter(Boolean)
-            return cache({ running: true, models: models.length ? models : ['llama3'] })
-          } catch {
-            return cache({ running: true, models: ['llama3'] })
-          }
-        }
-      } catch { /* try next */ }
-    }
+    // /api/tags is the only endpoint that lists installed models. It gets a
+    // longer budget than the liveness probe because a busy Ollama (loading a
+    // model into VRAM) can take a second or two to answer, and a timeout here
+    // used to leave us with no model list at all.
+    try {
+      const { status, body } = await httpGet(`${base}/api/tags`, 4000)
+      if (status >= 200 && status < 400) {
+        const json = JSON.parse(body)
+        const models: string[] = (json.models || [])
+          .map((m: any) => (typeof m === 'string' ? m : m.name || ''))
+          .filter(Boolean)
+          // Embedding models can't answer a chat request; keeping them out of
+          // the list stops one being auto-picked as "the first model".
+          .filter((n: string) => !/embed/i.test(n))
+        if (models.length) return cache({ running: true, models })
+      }
+    } catch { /* fall through to the liveness probe */ }
+
+    // Ollama answered but we couldn't read its model list (timeout, or a
+    // version endpoint that doesn't carry one). Report it as running with an
+    // UNKNOWN model list — never invent a model name here: a fabricated
+    // 'llama3' is what produced "model 'llama3' not found" 404s on machines
+    // whose actual models were fine.
+    try {
+      const { status } = await httpGet(`${base}/api/version`, 1500)
+      if (status >= 200 && status < 400) return cache({ running: true, models: [] })
+    } catch { /* try next base */ }
   }
   return cache({ running: false, models: [] })
 }
@@ -2529,10 +2540,24 @@ async function buildOrCandidates(orBase: string, orMdl: string): Promise<string[
   return [...new Set(ordered)]
 }
 
-// Strip DeepSeek/reasoning model chain-of-thought tags before returning content
+// Strip reasoning tags and chat-template control tokens before returning
+// content. Local models leak these constantly (<think> from DeepSeek/Qwen,
+// <|channel|>/<|message|> from gpt-oss, <end_of_turn> from Gemma) and every
+// one of them is plumbing the user must never see. The renderer sanitises
+// again at display time — this is the first line, not the only one.
 function stripThinkTags(s: string): string {
-  return s.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+  return s
+    .replace(/<(think|thinking|thought|reasoning|scratchpad)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+    .replace(/<\|[^|>]*\|>/g, ' ')
+    .replace(/<\/?(?:end|start)_of_turn>|<\/?s>|<\/?(?:eos|bos|pad)>/gi, ' ')
+    .replace(/(?<=\S) {2,}/g, ' ')
+    .trim()
 }
+
+// Why the last candidate chain gave up, so a total failure can be explained
+// precisely ("account has no credits") instead of "all models unavailable".
+// Reset by ai:chat before each run.
+const orSkip = { credits: false, rateLimited: false }
 
 async function openRouterChat(
   orBase: string, orKey: string, model: string,
@@ -2558,12 +2583,17 @@ async function openRouterChat(
       const raw = choice?.message?.content || ''
       return stripThinkTags(raw) || null
     }
-    // 404 = model not found on this account, 429 = rate-limited — skip to next model
-    if (status === 404 || status === 429) return null
+    // 404 = model not found on this account, 429 = rate-limited,
+    // 402 = this model needs credits the account doesn't have — all three are
+    // per-model problems, so try the next candidate (a free model may work)
+    // instead of failing the whole request.
+    if (status === 402) { orSkip.credits = true; return null }
+    if (status === 429) { orSkip.rateLimited = true; return null }
+    if (status === 404) return null
     // 401 = bad key, 5xx = server error — stop chain immediately
     throw new Error(`HTTP ${status}: ${body.slice(0, 200)}`)
   } catch (e: any) {
-    if (e.message?.startsWith('HTTP 404') || e.message?.startsWith('HTTP 429')) return null
+    if (/^HTTP (404|429|402)/.test(e.message || '')) return null
     throw e
   }
 }
@@ -2580,9 +2610,18 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, o
   const tryOllama = async (): Promise<{ content: string; model: string; provider: string } | null> => {
     try {
       const ol = await checkOllamaRunning()
-      if (ol.running && ol.models.length > 0) {
+      if (ol.running) {
         const preferred = preferredModel || getData().settings.aiModel || ''
-        const model = (preferred && ol.models.includes(preferred)) ? preferred : ol.models[0]
+        // An empty list means "couldn't read the models", not "none installed"
+        // — go with what the user configured and let Ollama be the judge.
+        const model = (!ol.models.length || (preferred && ol.models.includes(preferred)))
+          ? preferred
+          : ol.models[0]
+        if (!model) {
+          ollamaDiag = 'Ollama is running but has no chat model installed — run: ollama pull llama3.2'
+          console.warn('[aihub] ai:chat Ollama fallback:', ollamaDiag)
+          return null
+        }
         try {
           // Streamed so slow hardware / cold model loads can't trip the idle
           // timeout mid-generation; num_ctx 8192 so long replies aren't
@@ -2603,6 +2642,8 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, o
   }
 
   let cloudError = ''
+  orSkip.credits = false
+  orSkip.rateLimited = false
   const tryCloud = async (): Promise<{ content: string; model: string; provider: string } | null> => {
     if (!orKey) return null
     // Candidate list: configured model first, then live-verified free fallbacks
@@ -2640,8 +2681,18 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, o
         model: 'error', provider: 'error',
       }
     }
+    // Every candidate was refused for a per-model reason. Name it — "out of
+    // credits" and "rate-limited" need completely different actions from the user.
+    const headline = orSkip.credits
+      ? 'Your OpenRouter account has no credits, so every model it tried was refused (HTTP 402).'
+      : orSkip.rateLimited
+        ? 'OpenRouter rate-limited every model it tried (HTTP 429).'
+        : 'All cloud models are currently unavailable.'
+    const steps = orSkip.credits
+      ? '• Add credits at openrouter.ai/settings/credits\n• Or use local AI: Ollama is free — Settings → AI Configuration → pick an installed model'
+      : '• Wait 1–2 minutes and retry\n• Install Ollama at ollama.com and run: ollama pull llama3.2\n• Check your OpenRouter API key in Settings → AI Configuration'
     return {
-      content: `All cloud models are currently unavailable.${ollamaDiag ? `\n\n(Local Ollama also failed: ${ollamaDiag})` : ''}\n\n• Wait 1–2 minutes and retry\n• Install Ollama at ollama.com and run: ollama pull llama3.1\n• Check your OpenRouter API key in Settings → AI Configuration`,
+      content: `${headline}${ollamaDiag ? `\n\n(Local Ollama also failed: ${ollamaDiag})` : ''}\n\n${steps}`,
       model: 'none', provider: 'none',
     }
   }

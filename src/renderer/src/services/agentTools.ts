@@ -1,4 +1,5 @@
 import { useBrowserStore } from '../store/browserStore'
+import { pageTypeForUrl } from './navIntent'
 
 export interface ToolAction {
   tool: string
@@ -15,23 +16,71 @@ export interface ParsedResponse {
   actions: ToolAction[] | null
 }
 
-const ACTIONS_MARKER = '###ACTIONS###'
+// The documented ###ACTIONS### marker, plus the spacing/casing variants models
+// produce ("### ACTION ###", "##actions##").
+const ACTIONS_MARKER_RE = /#{2,}\s*ACTIONS?\s*#{2,}/i
 
-// Strip anything that looks like the machine protocol from user-facing text,
-// so the raw actions JSON, the marker, or a stray ```json fence never appear in
-// the chat. The user should only ever see prose, never the plumbing.
-function cleanNarration(text: string): string {
-  let out = text
+// Tags models wrap tool calls (or their private reasoning) in. Small local
+// models emit whatever their fine-tune used rather than the documented marker,
+// so all of these have to be recognised as protocol — never shown as text.
+const PROTOCOL_TAGS = [
+  'action', 'actions', 'tool', 'tools', 'tool_call', 'tool_calls', 'toolcall',
+  'tool_code', 'function_call', 'functioncall', 'invoke', 'antml:invoke',
+  'think', 'thinking', 'thought', 'reasoning', 'scratchpad', 'internal',
+].join('|')
+const TAG_PAIR     = new RegExp(`<(${PROTOCOL_TAGS})\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>`, 'gi')
+// An opener the model never closed: everything after it is machine output.
+const TAG_UNCLOSED = new RegExp(`<(?:${PROTOCOL_TAGS})\\b[^>]*>[\\s\\S]*$`, 'i')
+const TAG_STRAY    = new RegExp(`<\\/?(?:${PROTOCOL_TAGS})\\b[^>]*>`, 'gi')
+// Chat-template control tokens: <|im_start|>, <|channel|>, <|eot_id|>,
+// [TOOL_CALLS], [INST], <s>, <end_of_turn> …
+const CONTROL_TOKENS = /<\|[^|>]*\|>|\[\/?(?:TOOL_CALLS?|INST|OUT|AVAILABLE_TOOLS)\]|<\/?s>|<\/?(?:end|start)_of_turn>|<\/?(?:eos|bos|pad)>/gi
+
+// Placeholder-protect fenced blocks and inline code so a user's own HTML,
+// template tags or JSON survive the strippers below untouched.
+const protectCode = (text: string): { text: string; blocks: string[] } => {
+  const blocks: string[] = []
+  const out = text.replace(/```[\s\S]*?```|`[^`\n]*`/g, block => {
+    blocks.push(block)
+    return `%%__CODE${blocks.length - 1}__%%`
+  })
+  return { text: out, blocks }
+}
+const restoreCode = (text: string, blocks: string[]): string =>
+  text.replace(/%%__CODE(\d+)__%%/g, (_m, i) => blocks[Number(i)] ?? '')
+
+/**
+ * Strip every trace of the machine protocol from user-facing text: the marker,
+ * XML-style tool tags and their contents, chat-template control tokens, and
+ * bare action JSON. Code the user asked for is protected and comes back
+ * verbatim. The chat should only ever show prose.
+ */
+export function cleanNarration(text: string): string {
   // Everything from the marker onward is machine protocol — drop it.
-  const m = out.indexOf(ACTIONS_MARKER)
-  if (m !== -1) out = out.slice(0, m)
-  // Any JSON action object/array the model emitted without the marker —
-  // {"actions":[…]}, a bare {"tool":…}, or a […] array of tool calls.
+  const marker = text.match(ACTIONS_MARKER_RE)
+  let out = marker ? text.slice(0, text.indexOf(marker[0])) : text
+
+  // A fenced block that carries an action call is protocol, not an example.
   out = out.replace(/```(?:json)?\s*[\s\S]*?```/gi, block =>
     /"(?:actions|tool)"\s*:/.test(block) ? '' : block)
+
+  const { text: masked, blocks } = protectCode(out)
+  out = masked
+
+  // Control tokens become a space so "<|channel|>analysis" doesn't fuse into
+  // the next word; runs of spaces mid-line collapse back afterwards.
+  out = out.replace(CONTROL_TOKENS, ' ')
+  out = out.replace(TAG_PAIR, '')
+  out = out.replace(TAG_UNCLOSED, '')
+  out = out.replace(TAG_STRAY, '')
+
+  // Bare action JSON the model emitted with no marker and no tags.
   out = out.replace(/\{\s*"actions"\s*:\s*\[[\s\S]*?\]\s*\}/g, '')
   out = out.replace(/\[\s*\{\s*"tool"[\s\S]*?\}\s*\]/g, '')
   out = out.replace(/\{\s*"tool"\s*:\s*"[\s\S]*?(?:\}|$)/g, '')
+
+  out = restoreCode(out, blocks)
+  out = out.replace(/(?<=\S) {2,}/g, ' ').replace(/\n{3,}/g, '\n\n')
   return out.trim()
 }
 
@@ -90,26 +139,68 @@ export function parseActionsBlock(raw: string): ParsedResponse {
   const narration = cleanNarration(raw)
 
   // 1) The documented path: text after the ###ACTIONS### marker.
-  const idx = raw.indexOf(ACTIONS_MARKER)
-  if (idx !== -1) {
-    let jsonPart = raw.slice(idx + ACTIONS_MARKER.length).trim()
-    jsonPart = jsonPart.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
-    const actions = toActions(tryParseLoose(jsonPart))
-    if (actions && actions.length) return { narration, actions }
+  const marker = raw.match(ACTIONS_MARKER_RE)
+  if (marker) {
+    const start = raw.indexOf(marker[0]) + marker[0].length
+    const jsonPart = stripFences(raw.slice(start))
+    const actions = findActionJson(jsonPart)
+    if (actions) return { narration, actions }
     return { narration, actions: null }
   }
 
-  // 2) No marker, but the model still emitted a JSON action call somewhere
-  //    (a common mistake). Pull the first {...} or [...] that carries a
-  //    "tool"/"actions" key and try to run it rather than print it.
-  const candidate = raw.match(/(\{[\s\S]*"(?:actions|tool)"[\s\S]*)$/)
-  if (candidate) {
-    let jsonPart = candidate[1].replace(/```$/, '').trim()
-    const actions = toActions(tryParseLoose(jsonPart))
-    if (actions && actions.length) return { narration, actions }
+  // 2) The call came wrapped in a tag (<ACTION>…</ACTION>, <tool_call>…) —
+  //    run what's inside instead of printing it.
+  const tagged = raw.match(new RegExp(`<(?:${PROTOCOL_TAGS})\\b[^>]*>([\\s\\S]*)`, 'i'))
+  if (tagged) {
+    const actions = findActionJson(stripFences(tagged[1]))
+    if (actions) return { narration, actions }
   }
 
+  // 3) No marker, no tags, but the model still emitted a JSON action call
+  //    somewhere (a common mistake) — run it rather than print it.
+  const actions = findActionJson(raw)
+  if (actions) return { narration, actions }
+
   return { narration, actions: null }
+}
+
+const stripFences = (s: string): string =>
+  s.trim().replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim()
+
+// Walk out a balanced {...} / [...] starting at `from`, string-aware. Returns
+// the rest of the text when it never closes — tryParseLoose repairs those.
+function balancedSlice(text: string, from: number): string {
+  let depth = 0, inStr = false, esc = false
+  for (let i = from; i < text.length; i++) {
+    const ch = text[i]
+    if (esc) { esc = false; continue }
+    if (ch === '\\') { esc = true; continue }
+    if (ch === '"') { inStr = !inStr; continue }
+    if (inStr) continue
+    if (ch === '{' || ch === '[') depth++
+    else if (ch === '}' || ch === ']') {
+      depth--
+      if (depth === 0) return text.slice(from, i + 1)
+    }
+  }
+  return text.slice(from)
+}
+
+// Find the first JSON value in `text` that is an action call, ignoring any
+// prose or leftover tags around it. Bounded so a long code answer can't turn
+// this into a quadratic scan.
+const MAX_JSON_CANDIDATES = 20
+function findActionJson(text: string): ToolAction[] | null {
+  if (!/"(?:tool|actions)"\s*:/.test(text)) return null
+  let tried = 0
+  for (let i = 0; i < text.length && tried < MAX_JSON_CANDIDATES; i++) {
+    const ch = text[i]
+    if (ch !== '{' && ch !== '[') continue
+    tried++
+    const actions = toActions(tryParseLoose(balancedSlice(text, i)))
+    if (actions && actions.length) return actions
+  }
+  return null
 }
 
 export function describeAction(a: ToolAction): string {
@@ -143,6 +234,8 @@ export function describeAction(a: ToolAction): string {
 }
 
 function deriveTitle(url: string): string {
+  const page = pageTypeForUrl(url)
+  if (page !== 'browser') return page.charAt(0).toUpperCase() + page.slice(1)
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url }
 }
 
@@ -285,7 +378,9 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
 
       case 'open_tab': {
         if (!action.url) return { error: 'url is required' }
-        const tabId = store.addTab(action.url, 'browser')
+        // aihub:// targets are the app's own pages — they render in React and
+        // have no BrowserView, so they must carry their pageType.
+        const tabId = store.addTab(action.url, pageTypeForUrl(action.url))
         return { tabId, url: action.url }
       }
 
@@ -299,10 +394,13 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
       case 'navigate_tab': {
         if (!action.tabId || !action.url) return { error: 'tabId and url are required' }
         if (!store.tabs.some(t => t.id === action.tabId)) return { error: 'tab not found' }
+        const pageType = pageTypeForUrl(action.url)
         store.updateTab(action.tabId, {
-          url: action.url, title: deriveTitle(action.url), isHome: false, isLoading: true, pageType: 'browser',
+          url: action.url, title: deriveTitle(action.url), isHome: false, isLoading: pageType === 'browser', pageType,
         })
-        window.electronAPI.tabView.navigate(action.tabId, action.url)
+        // In-app pages have no BrowserView to drive — the store update above is
+        // the whole navigation.
+        if (pageType === 'browser') window.electronAPI.tabView.navigate(action.tabId, action.url)
         return { ok: true }
       }
 
@@ -492,10 +590,12 @@ Rules:
 - You can include multiple actions in one block — they run in order.
 - Only include the block when you actually need to act. Plain questions get a plain answer, no block.
 - After actions run, you'll be told the results and can respond again — either take more actions or give a final answer (no block = done).
+- NEVER use XML-style tags for this. No <ACTION>, <action>, <tool_call>, <function_call>, <invoke>, <think>, <reasoning> or any other tag wrapper — the marker above is the only accepted format, and tags are shown to the user as broken text.
+- The part the user reads must be plain prose and markdown only: no tags, no control tokens, no JSON, no mention of tools or of this protocol. Code the user asked for belongs in a fenced code block.
 
 Available tools:
 - list_tabs() — no args. Returns open tabs.
-- open_tab({url}) — opens a new tab at url.
+- open_tab({url}) — opens a new tab at url. Use the exact bookmark URL: an aihub:// URL (aihub://bible, aihub://mail, aihub://notes …) opens that page inside AIHub; a normal https URL opens the website.
 - close_tab({tabId}) — closes a tab by id (get ids from list_tabs).
 - navigate_tab({tabId, url}) — navigates an existing tab to url.
 - switch_tab({tabId}) — makes a tab the active one.

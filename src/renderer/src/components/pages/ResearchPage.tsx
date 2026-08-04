@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FlaskConical, Loader2, Sparkles, ExternalLink, FileText, Download, RefreshCw, Plus, X } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
+import { cleanNarration } from '../../services/agentTools'
 
 interface Props { onNavigate?: (url: string) => void }
 
@@ -53,7 +54,7 @@ export default function ResearchPage({ onNavigate }: Props) {
         { role: 'system', content: 'You are an expert research analyst. Produce well-structured, insightful reports in markdown format.' },
         { role: 'user', content: prompt },
       ])
-      setReport(result.content || 'No response from AI.')
+      setReport(cleanNarration(result.content || '') || 'No response from AI.')
     } catch {
       setError('AI request failed. Check your AI configuration in Settings.')
     } finally {

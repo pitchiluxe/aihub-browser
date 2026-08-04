@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useBrowserStore } from '../../store/browserStore'
 import { buildPageExtractionScript } from '../../services/pageExtractor'
+import { cleanNarration } from '../../services/agentTools'
 
 // Canvas AND toolbar are both injected directly into the guest page's own
 // DOM — not rendered as host React overlays. BrowserView (the tab's native
@@ -577,7 +578,7 @@ export default function AnnotationCanvas() {
             let answer = ''
             try {
               const result = await window.electronAPI.ai.chat([{ role: 'user', content: prompt }])
-              answer = result?.content || 'No response from AI.'
+              answer = cleanNarration(result?.content || '') || 'No response from AI.'
             } catch (e: any) {
               answer = `AI error: ${e?.message || e}`
             }

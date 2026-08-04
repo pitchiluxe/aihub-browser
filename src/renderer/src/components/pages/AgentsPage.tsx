@@ -6,7 +6,7 @@ import {
   FolderOpen, AlertCircle, Briefcase,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
-import { parseActionsBlock, describeAction, executeAction, AGENT_TOOLS_DOC } from '../../services/agentTools'
+import { parseActionsBlock, describeAction, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
 
 interface Agent {
   id: string
@@ -182,7 +182,7 @@ export default function AgentsPage() {
         { role: 'system', content: agentSystemPrompt(agent) },
         { role: 'user', content: `Start the ${agent.name} agent. Introduce yourself briefly and ask me the first question you need to get started.` },
       ])
-      const msg = result.content || 'Agent ready. How can I help?'
+      const msg = cleanNarration(result.content || '') || 'Agent ready. How can I help?'
       const history: ChatMessage[] = [{ role: 'assistant', content: msg }]
       setChatHistory(history)
       persistConvo(agent, history)
@@ -240,7 +240,9 @@ export default function AgentsPage() {
         const { narration, actions } = parseActionsBlock(raw)
 
         if (!actions || actions.length === 0) {
-          pushVisible({ role: 'assistant', content: narration || raw })
+          // Never fall back to `raw` — that is exactly how an action block or a
+          // <think> tag reaches the user's screen.
+          pushVisible({ role: 'assistant', content: narration || 'Done.' })
           break
         }
         if (actionsUsed + actions.length > MAX_ACTIONS) {

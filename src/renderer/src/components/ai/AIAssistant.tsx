@@ -5,7 +5,8 @@ import {
   Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
-import { parseActionsBlock, executeAction, AGENT_TOOLS_DOC } from '../../services/agentTools'
+import { parseActionsBlock, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
+import { resolveNavTarget } from '../../services/navIntent'
 import Markdown from './Markdown'
 
 interface Props {
@@ -24,11 +25,6 @@ const SUGGESTIONS = [
 ]
 
 const AI_NEWS_INTENT  = /latest\s+ai|ai\s+news|ai\s+articles?|ai\s+updates?|what.?s\s+new\s+in\s+ai|recent\s+ai|top\s+ai/i
-const OPEN_PATTERNS   = [
-  /^(?:open|go to|take me to|navigate to|show me|visit|launch|open up)\s+(.+?)[\s?!.]*$/i,
-  /^(?:can you|please)\s+(?:open|visit|go to|navigate to|take me to)\s+(.+?)[\s?!.]*$/i,
-  /^(?:open|navigate to|go to)\s+my\s+(.+?)[\s?!.]*$/i,
-]
 
 export default function AIAssistant({ currentUrl, currentTitle, getPageContent }: Props) {
   const {
@@ -174,32 +170,23 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
   }
 
   // ── Navigation intent — detect "open X" before sending to AI ─────────────
+  // Resolution (scoring, built-in app names, known sites) lives in navIntent so
+  // it is unit-testable; here we only open what it resolved. The pageType is
+  // what makes "open the bible" land in the in-app reader: an aihub:// URL in a
+  // 'browser' tab has no page to load.
   const tryNavIntent = useCallback((msg: string): boolean => {
-    for (const pattern of OPEN_PATTERNS) {
-      const m = msg.match(pattern)
-      if (!m) continue
-      const query = m[1].trim().toLowerCase().replace(/['"]/g, '')
+    const target = resolveNavTarget(msg, bookmarks)
+    if (!target) return false
 
-      const bm = bookmarks.find(b => {
-        const title  = b.title.toLowerCase()
-        let   domain = ''
-        try { domain = new URL(b.url).hostname.replace(/^www\./, '') } catch {}
-        const domainRoot = domain.split('.')[0]
-        return (
-          title.includes(query)     || query.includes(title) ||
-          domain.includes(query)    || query.includes(domain) ||
-          domainRoot.includes(query)|| query.includes(domainRoot)
-        )
-      })
-
-      if (bm) {
-        addTab(bm.url, 'browser')
-        addAIMessage({ role: 'user',      content: msg })
-        addAIMessage({ role: 'assistant', content: `Opening **${bm.title}** in a new tab ↗\n\nAnything else I can help with?` })
-        return true
-      }
-    }
-    return false
+    addTab(target.url, target.pageType)
+    addAIMessage({ role: 'user',      content: msg })
+    addAIMessage({
+      role: 'assistant',
+      content: target.pageType === 'browser'
+        ? `Opening **${target.title}** in a new tab ↗\n\nAnything else I can help with?`
+        : `Opening **${target.title}** here in AIHub ↗\n\nAnything else I can help with?`,
+    })
+    return true
   }, [bookmarks, addTab, addAIMessage])
 
   // ── System prompt with full context ──────────────────────────────────────
@@ -209,7 +196,7 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
       : '\n\n### Current page\nUser is on the AIHub Browser home screen.'
 
     const bookmarkCtx = bookmarks.length > 0
-      ? `\n\n### User's bookmarks (you can open any of these when asked — just say "Opening [title] ↗" and the browser will open it automatically)\n` +
+      ? `\n\n### User's bookmarks (open one with open_tab using its exact URL — \`aihub://…\` entries are AIHub's own pages and open inside the app, everything else is a website)\n` +
         bookmarks.map(b => `- ${b.title} [${b.category}]: ${b.url}`).join('\n')
       : ''
 
@@ -261,7 +248,7 @@ Most questions just want a good answer. Only reach for tools when the user asks 
 - Example — "How do I request a transcript from Kennesaw State University?": give the steps (log into the student portal / use the National Student Clearinghouse), link the KSU registrar transcript page, and include the registrar's phone number. Do not open a tab unless asked.
 
 ## Navigation commands
-When user asks to open a site, reply concisely: "Opening [Site Name] ↗" — the browser detects this and opens the tab automatically.
+Simple "open X" requests are handled by the browser before they ever reach you. If one does reach you, open it with \`open_tab\` using the exact URL from the bookmark list (never substitute a different bookmark), then reply "Opening [Name] ↗". Requests for the Bible, Mail, Notes, History, Downloads, Settings, Extensions, Research, Agents, Watch, Rewind, WiFi or VPN mean AIHub's own pages — open \`aihub://bible\`, \`aihub://mail\`, and so on.
 
 ## Answer formatting — ALWAYS follow these
 Your chat renders full GitHub-flavored markdown: tables, fenced code, headings, task lists. Use it.
@@ -414,11 +401,12 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
     try {
       const pageText = getPageContent ? await getPageContent() : ''
       const result   = await window.electronAPI.ai.summarizePage(pageText, currentUrl)
-      addAIMessage({ role: 'assistant', content: result.summary })
+      const summary  = cleanNarration(result.summary || '') || 'Unable to summarize at this time.'
+      addAIMessage({ role: 'assistant', content: summary })
       const mdContent = [
         `# ${currentTitle || currentUrl}`, ``, `**URL:** ${currentUrl}`,
         `**Date:** ${new Date().toLocaleDateString()}`, `**Summarized by:** AIHub Browser AI`,
-        ``, `---`, ``, result.summary,
+        ``, `---`, ``, summary,
       ].join('\n')
       setLastSummary({ title: currentTitle || 'Article Summary', url: currentUrl, mdContent })
     } catch {
@@ -694,6 +682,7 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
                       background: 'linear-gradient(135deg, rgb(var(--ds-accent) / 0.82), rgb(var(--ds-accent-2) / 0.72))',
                       color: '#fff', boxShadow: '0 2px 14px rgb(var(--ds-accent) / 0.28)',
                       userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text',
+                      wordBreak: 'break-word', overflowWrap: 'break-word',
                     } : {
                       // Assistant bubbles render full markdown (tables, code) —
                       // wider, and no pre-wrap (markdown handles its own layout).
@@ -701,7 +690,7 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
                       padding: '9px 12px', fontSize: 12, lineHeight: 1.55,
                       background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
                       color: 'rgb(var(--ds-text-2))', userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text',
-                      overflow: 'hidden',
+                      overflow: 'hidden', wordBreak: 'break-word', overflowWrap: 'break-word',
                     }}>
                       {msg.content && (msg.role === 'assistant'
                         ? <Markdown content={msg.content} onNavigate={url => addTab(url, 'browser')} />

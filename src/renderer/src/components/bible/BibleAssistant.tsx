@@ -3,6 +3,7 @@ import { Sparkles, X, Send, Loader2, BookOpen, Trash2, Copy, Check } from 'lucid
 import { buildIndex, isReady, search, context, expandQuery, type Hit } from '../../services/bibleSearch'
 import { parseRef, formatRef, refKey } from '../../services/bibleService'
 import { parseTypedRef } from './VerseSearch'
+import { cleanNarration } from '../../services/agentTools'
 
 interface Msg { role: 'user' | 'assistant'; content: string; cites?: Hit[] }
 
@@ -175,7 +176,9 @@ export default function BibleAssistant({
       ]
 
       const res = await window.electronAPI.ai.chat(messages)
-      const content = (res?.content || '').trim()
+      // Strip any protocol tags/tokens the model wrapped its answer in — a
+      // reader must never see <think> or an action block.
+      const content = cleanNarration(res?.content || '')
       if (!content) {
         // Never surface the raw provider error (connection refused, model tags,
         // stack text) — it means nothing to a reader and looks broken. Show one
