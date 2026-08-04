@@ -262,13 +262,18 @@ function httpPost(url: string, data: object, headers: Record<string, string> = {
 
 // ── Streaming Ollama chat ──────────────────────────────────────────────────
 // stream:false keeps the socket silent for the ENTIRE generation, and Node's
-// `timeout` is an IDLE timeout — so a slow machine loading a cold model
-// looked like "timeout" even though Ollama was working fine. Streaming keeps
-// tokens flowing, so the idle timer only fires when Ollama truly stalls.
+// Two budgets, because the two waits are nothing alike. Nothing streams while
+// Ollama loads the model and evaluates the prompt — and this app's prompt is
+// large (tool docs + bookmarks + page context), so on a CPU-bound machine the
+// first token can legitimately be minutes away. Once tokens start, a 2-minute
+// gap really does mean it stalled. One 120s socket timeout for both was killing
+// healthy generations before they ever produced a byte.
 function ollamaChatStream(
-  base: string, model: string, messages: any[], idleTimeoutMs = 120000
+  base: string, model: string, messages: any[],
+  idleTimeoutMs = 120000, firstTokenTimeoutMs = 420000
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    let streamStarted = false
     const parsed = new URL(`${base}/api/chat`)
     // keep_alive: Ollama evicts an idle model after 5 minutes by default, so
     // the next message in a conversation pays the full multi-second reload.
@@ -282,7 +287,7 @@ function ollamaChatStream(
       port:     parsed.port || 80,
       path:     parsed.pathname,
       method:   'POST',
-      timeout:  idleTimeoutMs,
+      timeout:  firstTokenTimeoutMs,
       headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
     }, (res) => {
       if ((res.statusCode ?? 0) >= 400) {
@@ -294,6 +299,8 @@ function ollamaChatStream(
       let content = ''
       let buf = ''
       res.on('data', c => {
+        // First byte back: drop to the tighter between-tokens budget.
+        if (!streamStarted) { streamStarted = true; req.setTimeout(idleTimeoutMs) }
         buf += c
         // NDJSON: one {"message":{"content":"…"},"done":false} object per line
         let nl: number
@@ -312,7 +319,12 @@ function ollamaChatStream(
       res.on('error', reject)
     })
     req.on('error', reject)
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout — Ollama stopped responding mid-generation')) })
+    req.on('timeout', () => {
+      req.destroy()
+      reject(new Error(streamStarted
+        ? 'timeout — Ollama stopped responding mid-generation'
+        : `timeout — Ollama took over ${Math.round(firstTokenTimeoutMs / 1000)}s to start replying (the model is still loading or the prompt is too large for this machine). Try a smaller model in Settings → AI.`))
+    })
     req.write(body)
     req.end()
   })
