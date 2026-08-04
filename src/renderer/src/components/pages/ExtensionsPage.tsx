@@ -3,6 +3,7 @@ import { Search, Plus, X, ChevronDown, ChevronUp, Trash2, Code2, Puzzle, Sparkle
 import { EXTENSION_DEFS, ExtensionDef } from '../../extensions/extensionDefs'
 import { CustomExt, loadCustomExts, saveCustomExts } from '../../extensions/customExts'
 import { buildGenerationPrompt, parseGeneratedExtensions } from '../../services/extensionGenerator'
+import { verifyExtensions } from '../../services/extensionVerifier'
 import { useBrowserStore } from '../../store/browserStore'
 
 const CATEGORIES = ['All', 'Media', 'Privacy', 'Productivity', 'Accessibility', 'Developer', 'Reading'] as const
@@ -496,6 +497,8 @@ function GenerateExtModal({ existing, onClose, onGenerated }: {
   const [error, setError]     = useState('')
   const [summary, setSummary] = useState('')
   const [attempt, setAttempt] = useState(0)
+  const [verifying, setVerifying] = useState(false)
+  const [verifyProgress, setVerifyProgress] = useState({ done: 0, total: 0 })
 
   const MAX_ATTEMPTS = 3
 
@@ -525,9 +528,23 @@ function GenerateExtModal({ existing, onClose, onGenerated }: {
           lastError = `The AI response couldn't be parsed (model: ${result.model}).`
           continue
         }
-        onGenerated(extensions)
-        setSummary(`Added ${extensions.length} extension${extensions.length === 1 ? '' : 's'}${discarded > 0 ? ` · ${discarded} discarded as invalid` : ''}`)
-        setTimeout(onClose, 1800)
+        // Actually run each one in a sandbox and keep only the extensions that
+        // visibly work. This is what stops "created but does nothing" from ever
+        // reaching the shelf — a dead panel is caught here, not by the user.
+        setVerifying(true)
+        setVerifyProgress({ done: 0, total: extensions.length })
+        const { passed, rejected } = await verifyExtensions(extensions, (done, total) =>
+          setVerifyProgress({ done, total }),
+        )
+        setVerifying(false)
+        if (passed.length === 0) {
+          lastError = `The AI produced ${extensions.length} extension${extensions.length === 1 ? '' : 's'}, but none actually worked when tested. Retrying may get a better batch.`
+          continue
+        }
+        onGenerated(passed)
+        const dropped = discarded + rejected.length
+        setSummary(`Added ${passed.length} working extension${passed.length === 1 ? '' : 's'}${dropped > 0 ? ` · ${dropped} discarded (didn’t work or duplicate)` : ''}`)
+        setTimeout(onClose, 2000)
         return
       }
       setError(`${lastError}\n\nTried ${MAX_ATTEMPTS} times — the free AI models are having a moment. Wait a minute and try again, or set a stronger model in Settings → AI Configuration.`)
@@ -571,9 +588,14 @@ function GenerateExtModal({ existing, onClose, onGenerated }: {
             />
           </div>
 
-          {busy && (
+          {busy && !verifying && (
             <p className="text-xs" style={{ color: 'rgb(var(--ds-text-4))' }}>
-              ✨ Generating 5–10 extensions{attempt > 1 ? ` — attempt ${attempt}/${MAX_ATTEMPTS}` : ''}… can take 30–60s.
+              ✨ Generating 4–6 extensions{attempt > 1 ? ` — attempt ${attempt}/${MAX_ATTEMPTS}` : ''}… can take 30–60s.
+            </p>
+          )}
+          {verifying && (
+            <p className="text-xs" style={{ color: 'rgb(var(--ds-text-4))' }}>
+              🧪 Testing each extension to make sure it actually works… {verifyProgress.done}/{verifyProgress.total}
             </p>
           )}
           {error && (

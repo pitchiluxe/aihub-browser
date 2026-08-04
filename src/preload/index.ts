@@ -231,6 +231,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     goBack:          (tabId: string)                                                             => ipcRenderer.invoke('tabview:goBack', tabId),
     goForward:       (tabId: string)                                                             => ipcRenderer.invoke('tabview:goForward', tabId),
     reload:          (tabId: string)                                                             => ipcRenderer.invoke('tabview:reload', tabId),
+    stop:            (tabId: string)                                                             => ipcRenderer.invoke('tabview:stop', tabId),
     getNavState:     (tabId: string): Promise<{ canGoBack: boolean; canGoForward: boolean }>     => ipcRenderer.invoke('tabview:getNavState', tabId),
     execJs:          (tabId: string, script: string)                                             => ipcRenderer.invoke('tabview:execJs', tabId, script),
     find:            (tabId: string, text: string, forward?: boolean, findNext?: boolean)        => ipcRenderer.invoke('tabview:find', tabId, text, forward, findNext),
