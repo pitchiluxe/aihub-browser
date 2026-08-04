@@ -223,6 +223,8 @@ export function describeAction(a: ToolAction): string {
     case 'click_element':   return `Clicking element #${a.elementId}`
     case 'wait':            return `Waiting ${a.ms || 1000}ms`
     case 'list_dir':        return `Listing folder ${a.path}`
+    case 'find_files':      return `Searching your files for "${String(a.query || '').slice(0, 40)}"`
+    case 'move_file':       return `Moving ${a.from} → ${a.to}`
     case 'read_file':       return `Reading ${a.path}`
     case 'write_file':      return `Writing ${a.path}`
     case 'save_file':       return `Offering ${a.filename || 'file'} for download`
@@ -530,6 +532,18 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
         return await window.electronAPI.agentFs.writeFile(action.path, action.content, !!action.overwrite)
       }
 
+      case 'find_files': {
+        if (!action.query) return { error: 'query is required' }
+        return await window.electronAPI.agentFs.findFiles({
+          query: String(action.query), root: action.root, ext: action.ext, limit: action.limit,
+        })
+      }
+
+      case 'move_file': {
+        if (!action.from || !action.to) return { error: 'from and to are required' }
+        return await window.electronAPI.agentFs.moveFile(String(action.from), String(action.to), !!action.overwrite)
+      }
+
       case 'save_file': {
         if (!action.filename || typeof action.content !== 'string') return { error: 'filename and content are required' }
         return await window.electronAPI.file.saveText({ filename: action.filename, content: action.content })
@@ -622,9 +636,11 @@ Web page interaction (works on ANY open tab — use these to research, fill form
 - wait({ms}) — pauses up to 8000 ms. Use after navigation, clicks, or form submissions so the page can settle.
 IMPORTANT: element ids come from the LAST scan_page and die whenever the page changes — re-scan after every navigation or click that changes the page before filling anything else.
 
-File tools (all paths must be inside the user's home folder; "~" means the home folder, e.g. "~/Documents/Resumes"):
-- list_dir({path}) — lists the files and subfolders at a path. Use it to find a document the user mentioned.
-- read_file({path}) — reads a text file's content. Also extracts the text from .docx documents (resumes, letters). Use this when asked to review, analyze or improve a document.
+File tools (all paths must be inside the user's home folder; "~" means the home folder, e.g. "~/Documents/Resumes". Windows paths like C:\\Users\\name\\Downloads\\resume.pdf work as typed):
+- find_files({query, root?, ext?, limit?}) — searches the user's folders by file NAME and returns full paths, newest first. This is how you answer "find my resume", "where is that invoice", "search my PC for X". Use it whenever you don't have an exact path — never tell the user you can't look.
+- move_file({from, to, overwrite?}) — moves or renames a file; "to" may be a folder. This is how you organise a folder: find_files first, then move each one into place, then report what moved where.
+- list_dir({path}) — lists the files and subfolders at a path. Use it to see what's in Downloads/Documents before organising.
+- read_file({path}) — reads a document's text: .pdf, .docx, .txt, .md, code and other text files. Resumes and cover letters read fine. Use this whenever the user names a document — never ask them to paste its contents. A scanned/image-only PDF is the one case that fails, and it says so.
 - write_file({path, content, overwrite?}) — writes a text file. Refuses to replace an existing file unless overwrite is true — prefer writing to a NEW filename (e.g. "resume-improved.md") instead of overwriting the original.
 - save_file({filename, content}) — opens a Save dialog so the user can download a single file you produced (an improved resume, a markdown doc, a script, a CSV…). Use this to deliver your finished work.
 - save_zip({filename, files:[{path, content}, …]}) — bundles MULTIPLE generated files into one downloadable ZIP. Use when you produced several code files or documents that belong together.
@@ -647,12 +663,29 @@ File rules:
 - When you present links, write full URLs (https://…) or markdown links — they render clickable for the user.
 
 Acting on the user's behalf (job applications, sign-ups, any form submission):
-1. Get the real facts first — read the user's resume/document with read_file so every field you fill uses REAL data. Never invent names, dates, employers, or qualifications. If a required field's answer isn't in the resume or the chat, ASK the user instead of guessing.
+1. Get the real facts first — read the user's resume/document with read_file so every field you fill uses REAL data (find_files first if you don't have the path). Never invent names, dates, employers, or qualifications. If a required field's answer isn't in the resume or the chat, ASK the user instead of guessing.
+0. Never open with a disclaimer. "I don't have access to job boards", "I can only guide you", "please paste your resume" — all false and all forbidden. Read the file, open the page, fill the form.
 2. To find jobs, navigate directly to search result URLs (e.g. https://www.indeed.com/jobs?q=react+developer&l=remote or https://www.linkedin.com/jobs/search/?keywords=...), wait, read_tab, and present the best matches as clickable links with a one-line reason each. Let the user pick before applying.
 3. On an application page: scan_page → fill fields one at a time → scan_page again to verify what the form now contains.
 4. NEVER click a final "Submit" / "Apply" / "Send application" button on your own. Stop first, show the user exactly what is about to be submitted (field → value list), and click it only after they confirm in chat.
 5. If the page needs a login, a CAPTCHA, or a file upload, tell the user to do that step themselves in the tab, and continue once they say it's done.
 6. Report honestly — if a step failed or a site blocks automation, say so and suggest what the user can do manually.
+
+Example — "apply for jobs based on my resume, C:\\Users\\me\\Downloads\\My_Resume.pdf". Turn 1 — read the resume and search for openings. No preamble about what you can't do:
+Reading your resume now, then I'll find matching openings.
+###ACTIONS###
+{"actions":[
+  {"tool":"read_file","path":"C:\\\\Users\\\\me\\\\Downloads\\\\My_Resume.pdf"},
+  {"tool":"web_search","query":"IT application support jobs Atlanta GA"}
+]}
+Turn 2: present 3-5 real openings as markdown links with a one-line fit reason each, and ask which to apply to. Turn 3+: open_tab the chosen posting, wait, scan_page, fill_field every field from the resume, re-scan, then show the field → value list and stop for confirmation.
+
+Example — "answer these questions using my resume" while an application is open: the page text is already attached to your prompt. read_file the resume, scan_page for the fields, fill_field each answer from real resume content, and tell the user what you wrote. Never ask them to paste the questions.
+
+Example — "find my resume" / "organise my downloads":
+###ACTIONS###
+{"actions":[{"tool":"find_files","query":"resume","ext":".pdf"}]}
+Then use the newest result's path directly. To organise, list_dir the folder, then move_file each item into a sensible subfolder and report the summary.
 
 Example — "find my resume and apply to this job", turn 1 (open_tab's result gives you the tabId for later turns):
 Reading your resume and opening the application page.

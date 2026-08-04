@@ -1,5 +1,5 @@
 import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, webContents as electronWebContents } from 'electron'
-import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname } from 'path'
+import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname, basename } from 'path'
 import zlib from 'zlib'
 import http from 'http'
 import https from 'https'
@@ -10,6 +10,7 @@ import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
 import { initAutoUpdater } from './updater'
+import { pickAgentModel } from './modelRouting'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -335,7 +336,9 @@ function ollamaChatStream(
 // so without it every AI action re-probes the network before doing any work.
 // A "not running" result probes up to 4 endpoints — cache it briefly so a user
 // without Ollama isn't stalled on repeated timeouts before the cloud fallback.
-let ollamaProbeCache: { at: number; value: { running: boolean; models: string[] } } | null = null
+interface OllamaModelInfo { name: string; tools: boolean; params: number; cloud: boolean }
+interface OllamaProbe { running: boolean; models: string[]; info?: OllamaModelInfo[] }
+let ollamaProbeCache: { at: number; value: OllamaProbe } | null = null
 // Positive results expire quickly (a model list can change as the user pulls
 // models). A NEGATIVE result is cached far longer: when Ollama isn't installed
 // every probe round costs up to 4 × 1.5s of dead time, and with a 5s TTL that
@@ -344,7 +347,7 @@ let ollamaProbeCache: { at: number; value: { running: boolean; models: string[] 
 const OLLAMA_PROBE_TTL = 5000
 const OLLAMA_MISS_TTL  = 60000
 
-async function checkOllamaRunning(force = false): Promise<{ running: boolean; models: string[] }> {
+async function checkOllamaRunning(force = false): Promise<OllamaProbe> {
   if (!force && ollamaProbeCache) {
     const ttl = ollamaProbeCache.value.running ? OLLAMA_PROBE_TTL : OLLAMA_MISS_TTL
     if (Date.now() - ollamaProbeCache.at < ttl) return ollamaProbeCache.value
@@ -355,7 +358,7 @@ async function checkOllamaRunning(force = false): Promise<{ running: boolean; mo
   const bases = [olBase, 'http://127.0.0.1:11434']
   const uniqueBases = [...new Set(bases)]
 
-  const cache = (value: { running: boolean; models: string[] }) => {
+  const cache = (value: OllamaProbe) => {
     ollamaProbeCache = { at: Date.now(), value }
     return value
   }
@@ -369,13 +372,23 @@ async function checkOllamaRunning(force = false): Promise<{ running: boolean; mo
       const { status, body } = await httpGet(`${base}/api/tags`, 4000)
       if (status >= 200 && status < 400) {
         const json = JSON.parse(body)
-        const models: string[] = (json.models || [])
-          .map((m: any) => (typeof m === 'string' ? m : m.name || ''))
-          .filter(Boolean)
-          // Embedding models can't answer a chat request; keeping them out of
-          // the list stops one being auto-picked as "the first model".
-          .filter((n: string) => !/embed/i.test(n))
-        if (models.length) return cache({ running: true, models })
+        const entries: OllamaModelInfo[] = (json.models || [])
+          .map((m: any) => {
+            const name = typeof m === 'string' ? m : m.name || ''
+            const caps: string[] = Array.isArray(m?.capabilities) ? m.capabilities : []
+            const sizeStr = String(m?.details?.parameter_size || '')
+            const params = parseFloat(sizeStr) || 0   // "7.6B" → 7.6, "134.52M" → 134.52
+            return {
+              name,
+              tools: caps.includes('tools'),
+              // Parameter counts arrive as "7.6B" or "134.52M" — normalise to B.
+              params: /M$/i.test(sizeStr) ? params / 1000 : params,
+              cloud: !!m?.remote_host,
+            }
+          })
+          .filter((e: OllamaModelInfo) => e.name && !/embed/i.test(e.name))
+        const models = entries.map(e => e.name)
+        if (models.length) return cache({ running: true, models, info: entries })
       }
     } catch { /* fall through to the liveness probe */ }
 
@@ -2615,7 +2628,12 @@ async function openRouterChat(
 // opts.preferCloud flips that — structured-output features (extension
 // generation) need models that reliably emit strict JSON, which small local
 // models fumble; cloud goes first and Ollama becomes the fallback.
-ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, opts?: { preferCloud?: boolean }) => {
+// Models that have already failed to produce a first token in time on this
+// machine. Measured, not guessed: a 7B model that needs >7 minutes to start
+// answering here must never be auto-selected again this session.
+const slowModels = new Set<string>()
+
+ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, opts?: { preferCloud?: boolean; needsTools?: boolean }) => {
   const { olBase, orKey, orBase, orMdl } = getAIConfig()
 
   let ollamaDiag = ''
@@ -2623,7 +2641,22 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, o
     try {
       const ol = await checkOllamaRunning()
       if (ol.running) {
-        const preferred = preferredModel || getData().settings.aiModel || ''
+        const configured = preferredModel || getData().settings.aiModel || ''
+        // A turn that has to drive tools gets routed to a model that actually
+        // can. Plain chat keeps whatever the user chose — no reason to make
+        // "what's 2+2" wait on a 14B model.
+        let preferred = configured
+        if (opts?.needsTools && ol.info && ol.info.length) {
+          // Models this machine has already proven it cannot serve in time are
+          // out of the running — on a CPU-only box a 7B upgrade turns a slow
+          // answer into no answer at all.
+          const usable = ol.info.filter(m => !slowModels.has(m.name))
+          const agent = pickAgentModel(usable, configured)
+          if (agent && agent !== configured) {
+            console.log(`[aihub] agent turn: routing ${configured || '(unset)'} → ${agent}`)
+            preferred = agent
+          }
+        }
         // An empty list means "couldn't read the models", not "none installed"
         // — go with what the user configured and let Ollama be the judge.
         const model = (!ol.models.length || (preferred && ol.models.includes(preferred)))
@@ -2634,16 +2667,36 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, o
           console.warn('[aihub] ai:chat Ollama fallback:', ollamaDiag)
           return null
         }
-        try {
-          // Streamed so slow hardware / cold model loads can't trip the idle
-          // timeout mid-generation; num_ctx 8192 so long replies aren't
-          // truncated (Ollama's 4096 default cut extension JSON mid-output).
-          const raw = await ollamaChatStream(olBase, model, messages)
-          const content = stripThinkTags(raw)
-          if (content) return { content, model, provider: 'ollama' }
-          ollamaDiag = `Ollama returned an empty response (model: ${model})`
-        } catch (e: any) {
-          ollamaDiag = `Ollama request failed: ${e?.message || e} (model: ${model})`
+        // Streamed so slow hardware / cold model loads can't trip the idle
+        // timeout mid-generation; num_ctx 8192 so long replies aren't
+        // truncated (Ollama's 4096 default cut extension JSON mid-output).
+        //
+        // The routed model gets one chance: if this machine can't produce a
+        // first token for it in time, remember that, drop back to the model
+        // the user actually configured, and answer with that instead of
+        // failing the turn.
+        const attempts = model === configured || !configured ? [model] : [model, configured]
+        for (const attempt of attempts) {
+          // An upgrade the user did not ask for gets a short leash: if this
+          // machine cannot start answering with it quickly, fall back to the
+          // configured model while there is still patience left, rather than
+          // burning the full budget twice.
+          const isRoutedUpgrade = attempts.length > 1 && attempt !== configured
+          try {
+            const raw = await ollamaChatStream(olBase, attempt, messages, 120000, isRoutedUpgrade ? 90000 : 420000)
+            const content = stripThinkTags(raw)
+            if (content) return { content, model: attempt, provider: 'ollama' }
+            ollamaDiag = `Ollama returned an empty response (model: ${attempt})`
+          } catch (e: any) {
+            const msg = e?.message || String(e)
+            ollamaDiag = `Ollama request failed: ${msg} (model: ${attempt})`
+            if (/timeout/i.test(msg) && attempt !== configured) {
+              slowModels.add(attempt)
+              console.warn(`[aihub] ${attempt} timed out on this machine — falling back to ${configured} and not routing to it again`)
+              continue
+            }
+          }
+          break
         }
       }
     } catch (e: any) {
@@ -2933,6 +2986,348 @@ function docxToText(buf: Buffer): string | null {
     .trim()
 }
 
+// ── PDF text extraction ────────────────────────────────────────────────────
+// Resumes, cover letters and forms arrive as PDFs, so the assistant has to be
+// able to read one. Done by hand for the same reason the .docx reader is: no
+// dependency, and the file never leaves the machine.
+//
+// Handles what real documents actually use: objects packed into compressed
+// object streams, per-font ToUnicode CMaps (Identity-H subsets decode to glyph
+// ids without them), and layout derived from the text matrix — Word writes one
+// BT/ET per styled run, so breaking lines on ET shatters every sentence.
+interface PdfObj { dict: string; stream: Buffer | null }
+interface PdfFont { cmap: Map<number, string> | null; twoByte: boolean }
+
+function inflateAny(buf: Buffer): Buffer | null {
+  try { return zlib.inflateSync(buf) } catch {}
+  try { return zlib.inflateRawSync(buf) } catch {}
+  return null
+}
+
+function pdfParseObjects(buf: Buffer): Map<number, PdfObj> {
+  const objs = new Map<number, PdfObj>()
+  const src = buf.toString('latin1')
+  const re = /(\d+)\s+(\d+)\s+obj\b/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(src))) {
+    const id = parseInt(m[1], 10)
+    const start = m.index + m[0].length
+    const end = src.indexOf('endobj', start)
+    if (end === -1) continue
+    const body = src.slice(start, end)
+    const sIdx = body.indexOf('stream')
+    let stream: Buffer | null = null
+    if (sIdx !== -1) {
+      let d = start + sIdx + 6
+      if (buf[d] === 0x0d) d++
+      if (buf[d] === 0x0a) d++
+      const e = src.indexOf('endstream', d)
+      if (e !== -1) {
+        const raw = buf.subarray(d, e)
+        stream = /FlateDecode/.test(body.slice(0, sIdx)) ? inflateAny(raw) : raw
+      }
+    }
+    objs.set(id, { dict: sIdx === -1 ? body : body.slice(0, sIdx), stream })
+  }
+
+  for (const [, o] of [...objs]) {
+    if (!o.stream || !/\/Type\s*\/ObjStm/.test(o.dict)) continue
+    const n = parseInt((o.dict.match(/\/N\s+(\d+)/) || [])[1] || '0', 10)
+    const first = parseInt((o.dict.match(/\/First\s+(\d+)/) || [])[1] || '0', 10)
+    const body = o.stream.toString('latin1')
+    const header = body.slice(0, first).trim().split(/\s+/).map(Number)
+    for (let i = 0; i < n; i++) {
+      const id = header[i * 2]
+      const off = header[i * 2 + 1]
+      if (!Number.isFinite(id) || !Number.isFinite(off)) continue
+      const nextOff = i + 1 < n ? header[(i + 1) * 2 + 1] : null
+      const end = nextOff !== null ? first + nextOff : body.length
+      if (!objs.has(id)) objs.set(id, { dict: body.slice(first + off, end), stream: null })
+    }
+  }
+  return objs
+}
+
+function pdfParseCMap(text: string): Map<number, string> {
+  const map = new Map<number, string>()
+  const hex = (h: string) => parseInt(h, 16)
+  const toStr = (h: string) => {
+    let s = ''
+    for (let i = 0; i + 3 < h.length + 1; i += 4) s += String.fromCharCode(parseInt(h.slice(i, i + 4), 16))
+    return s || String.fromCharCode(hex(h))
+  }
+  let m: RegExpExecArray | null
+  const charRe = /beginbfchar([\s\S]*?)endbfchar/g
+  while ((m = charRe.exec(text))) {
+    const pairRe = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g
+    let p: RegExpExecArray | null
+    while ((p = pairRe.exec(m[1]))) map.set(hex(p[1]), toStr(p[2]))
+  }
+  const rangeRe = /beginbfrange([\s\S]*?)endbfrange/g
+  while ((m = rangeRe.exec(text))) {
+    const body = m[1]
+    let r: RegExpExecArray | null
+    const simple = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g
+    while ((r = simple.exec(body))) {
+      const lo = hex(r[1]), hi = hex(r[2]), base = hex(r[3])
+      for (let c = lo; c <= hi && c - lo < 65535; c++) map.set(c, String.fromCharCode(base + (c - lo)))
+    }
+    const arrayed = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*\[([\s\S]*?)\]/g
+    while ((r = arrayed.exec(body))) {
+      const lo = hex(r[1])
+      const items = r[3].match(/<([0-9a-fA-F]+)>/g) || []
+      items.forEach((it, i) => map.set(lo + i, toStr(it.slice(1, -1))))
+    }
+  }
+  return map
+}
+
+function pdfBuildFonts(objs: Map<number, PdfObj>): Map<string, PdfFont> {
+  const byObjId = new Map<number, PdfFont>()
+  for (const [id, o] of objs) {
+    if (!/\/Type\s*\/Font/.test(o.dict)) continue
+    const tu = o.dict.match(/\/ToUnicode\s+(\d+)\s+\d+\s+R/)
+    const twoByte = /\/Encoding\s*\/Identity-[HV]/.test(o.dict) || /\/Subtype\s*\/Type0/.test(o.dict)
+    let cmap: Map<number, string> | null = null
+    if (tu) {
+      const cm = objs.get(parseInt(tu[1], 10))
+      if (cm && cm.stream) cmap = pdfParseCMap(cm.stream.toString('latin1'))
+    }
+    byObjId.set(id, { cmap, twoByte })
+  }
+
+  const resolveFontDict = (src: string): string | null => {
+    const inline = src.match(/\/Font\s*<<([\s\S]*?)>>/)
+    if (inline) return inline[1]
+    const ref = src.match(/\/Font\s+(\d+)\s+\d+\s+R/)
+    if (ref) { const o = objs.get(parseInt(ref[1], 10)); if (o) return o.dict }
+    return null
+  }
+
+  const byName = new Map<string, PdfFont>()
+  for (const [, o] of objs) {
+    const fontDict = resolveFontDict(o.dict)
+    if (!fontDict) continue
+    const entryRe = /\/([^\s/<>]+)\s+(\d+)\s+\d+\s+R/g
+    let e: RegExpExecArray | null
+    while ((e = entryRe.exec(fontDict))) {
+      const f = byObjId.get(parseInt(e[2], 10))
+      if (f) byName.set('/' + e[1], f)
+    }
+  }
+  if (!byName.size) {
+    const withMaps = [...byObjId.values()].filter(f => f.cmap && f.cmap.size)
+    if (withMaps.length) byName.set('*', withMaps[0])
+  }
+  return byName
+}
+
+const PDF_ESC: Record<string, string> = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', '(': '(', ')': ')', '\\': '\\' }
+function pdfBytesFromLiteral(s: string): number[] {
+  const out: number[] = []
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (c !== '\\') { out.push(c.charCodeAt(0) & 0xff); continue }
+    const n = s[++i]
+    if (n === undefined) break
+    if (PDF_ESC[n] !== undefined) { out.push(PDF_ESC[n].charCodeAt(0)); continue }
+    if (n >= '0' && n <= '7') {
+      let oct = n
+      while (oct.length < 3 && s[i + 1] >= '0' && s[i + 1] <= '7') oct += s[++i]
+      out.push(parseInt(oct, 8) & 0xff)
+      continue
+    }
+    if (n === '\n') continue
+    out.push(n.charCodeAt(0) & 0xff)
+  }
+  return out
+}
+function pdfBytesFromHex(h: string): number[] {
+  const clean = h.replace(/[^0-9a-fA-F]/g, '')
+  const out: number[] = []
+  for (let i = 0; i + 1 < clean.length; i += 2) out.push(parseInt(clean.slice(i, i + 2), 16))
+  if (clean.length % 2) out.push(parseInt(clean[clean.length - 1] + '0', 16))
+  return out
+}
+
+function pdfDecode(bytes: number[], font: PdfFont | null): string {
+  const cmap = font && font.cmap
+  if (cmap && cmap.size) {
+    let out = ''
+    if (font!.twoByte) {
+      for (let i = 0; i + 1 < bytes.length; i += 2) {
+        const c = cmap.get((bytes[i] << 8) | bytes[i + 1])
+        out += c === undefined ? '' : c
+      }
+    } else {
+      for (const b of bytes) {
+        const c = cmap.get(b)
+        out += c === undefined ? String.fromCharCode(b) : c
+      }
+    }
+    return out
+  }
+  if (font && font.twoByte) {
+    let out = ''
+    for (let i = 0; i + 1 < bytes.length; i += 2) out += String.fromCharCode((bytes[i] << 8) | bytes[i + 1])
+    return out
+  }
+  return bytes.map(b => String.fromCharCode(b)).join('')
+}
+
+const PDF_TOKEN = /\((?:\\.|[^\\()])*\)|<[0-9a-fA-F\s]*>|\[|\]|\/[^\s/[\]<>()]+|-?\d*\.?\d+|[A-Za-z'"*]+/g
+
+function pdfTextFromContent(content: string, fonts: Map<string, PdfFont>): string {
+  let out = ''
+  let stack: any[] = []
+  let inArray = false
+  let array: any[] = []
+  let font: PdfFont | null = null
+  let y: number | null = null
+  let m: RegExpExecArray | null
+  while ((m = PDF_TOKEN.exec(content))) {
+    const t = m[0]
+    if (t === '[') { inArray = true; array = []; continue }
+    if (t === ']') { inArray = false; stack.push({ arr: array }); continue }
+    if (t[0] === '(') { const v = { bytes: pdfBytesFromLiteral(t.slice(1, -1)) }; inArray ? array.push(v) : stack.push(v); continue }
+    if (t[0] === '<') { const v = { bytes: pdfBytesFromHex(t.slice(1, -1)) }; inArray ? array.push(v) : stack.push(v); continue }
+    if (/^-?\d*\.?\d+$/.test(t)) { const v = { num: parseFloat(t) }; inArray ? array.push(v) : stack.push(v); continue }
+    if (t[0] === '/') { stack.push({ name: t }); continue }
+
+    const nums = stack.filter(x => x.num !== undefined).map(x => x.num)
+    switch (t) {
+      case 'Tf': {
+        const n = [...stack].reverse().find(x => x.name)
+        if (n) font = fonts.get(n.name) || fonts.get('*') || null
+        break
+      }
+      case 'Tj': case "'": case '"': {
+        const s = [...stack].reverse().find(x => x.bytes)
+        if (t !== 'Tj') out += '\n'
+        if (s) out += pdfDecode(s.bytes, font)
+        break
+      }
+      case 'TJ': {
+        const a = [...stack].reverse().find(x => x.arr)
+        if (a) {
+          for (const el of a.arr) {
+            if (el.bytes) out += pdfDecode(el.bytes, font)
+            else if (el.num !== undefined && el.num < -120) out += ' '
+          }
+        }
+        break
+      }
+      case 'Tm': {
+        const ny = nums[nums.length - 1]
+        if (ny !== undefined) { if (y !== null && Math.abs(ny - y) > 1) out += '\n'; y = ny }
+        break
+      }
+      case 'Td': case 'TD': {
+        const ty = nums[nums.length - 1]
+        if (ty !== undefined) { if (Math.abs(ty) > 1) out += '\n'; if (y !== null) y += ty }
+        break
+      }
+      case 'T*': out += '\n'; break
+    }
+    stack = []
+  }
+  return out
+}
+
+function pdfToText(buf: Buffer): string {
+  const objs = pdfParseObjects(buf)
+  const fonts = pdfBuildFonts(objs)
+  let text = ''
+  for (const [, o] of objs) {
+    if (!o.stream) continue
+    const c = o.stream.toString('latin1')
+    if (!/\bBT\b/.test(c)) continue
+    text += pdfTextFromContent(c, fonts) + '\n'
+  }
+  return text
+    .replace(/ /g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+// Scanned/image-only PDFs and exotic font encodings yield glyph soup. Say so
+// rather than handing the model garbage it will confidently misread.
+function pdfLooksReadable(t: string): boolean {
+  if (!t || t.length < 40) return false
+  const letters = (t.match(/[A-Za-z]/g) || []).length
+  const words = (t.match(/\b[A-Za-z]{3,}\b/g) || []).length
+  return letters / t.length > 0.45 && words > 20
+}
+
+// Folders that are noise in a file search: caches, package trees, and the
+// Windows app-data mountain. Skipping them keeps a home-wide search fast.
+const FIND_SKIP = new Set([
+  'node_modules', '.git', '.cache', 'AppData', 'Application Data', 'OneDriveTemp',
+  '$RECYCLE.BIN', 'System Volume Information', '.gradle', '.m2', 'venv', '.venv',
+  '__pycache__', 'Library', '.npm', '.nuget', 'go', 'AndroidStudioProjects',
+])
+
+// Search the user's folders by name. Breadth-first with hard caps on time,
+// results and depth so "find my resume" answers in a moment instead of
+// walking a 200 GB drive.
+ipcMain.handle('agentfs:findFiles', (_e, opts: { query: string; root?: string; ext?: string; limit?: number }) => {
+  const query = String(opts?.query || '').trim().toLowerCase()
+  if (!query) return { error: 'query is required' }
+  const rootRes = resolveAgentPath(opts?.root || os.homedir())
+  if ('error' in rootRes) return rootRes
+
+  const limit = Math.min(Math.max(parseInt(String(opts?.limit ?? 40), 10) || 40, 1), 100)
+  const wantExt = opts?.ext ? String(opts.ext).toLowerCase().replace(/^\.?/, '.') : ''
+  const deadline = Date.now() + 6000
+  const results: { path: string; name: string; size: number; modified: number }[] = []
+  const queue: { dir: string; depth: number }[] = [{ dir: rootRes.path, depth: 0 }]
+
+  while (queue.length && results.length < limit && Date.now() < deadline) {
+    const { dir, depth } = queue.shift()!
+    if (depth > 6) continue
+    let entries: fs.Dirent[]
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { continue }
+    for (const d of entries) {
+      if (results.length >= limit || Date.now() >= deadline) break
+      if (d.name.startsWith('$') || FIND_SKIP.has(d.name)) continue
+      const full = join(dir, d.name)
+      if (d.isDirectory()) { queue.push({ dir: full, depth: depth + 1 }); continue }
+      const lower = d.name.toLowerCase()
+      if (!lower.includes(query)) continue
+      if (wantExt && !lower.endsWith(wantExt)) continue
+      try {
+        const s = fs.statSync(full)
+        results.push({ path: full, name: d.name, size: s.size, modified: s.mtimeMs })
+      } catch {}
+    }
+  }
+  // Most recently touched first — "my resume" almost always means the latest one.
+  results.sort((a, b) => b.modified - a.modified)
+  return { query, root: rootRes.path, results, truncated: results.length >= limit }
+})
+
+// Move or rename a file — the primitive behind "organise my downloads".
+ipcMain.handle('agentfs:moveFile', (_e, from: string, to: string, overwrite?: boolean) => {
+  const a = resolveAgentPath(from)
+  if ('error' in a) return a
+  const b = resolveAgentPath(to)
+  if ('error' in b) return b
+  try {
+    if (!fs.existsSync(a.path)) return { error: 'source file not found' }
+    // A bare folder as the destination means "put it in here under its own name".
+    let dest = b.path
+    try { if (fs.statSync(dest).isDirectory()) dest = join(dest, basename(a.path)) } catch {}
+    if (fs.existsSync(dest) && !overwrite) return { error: 'a file already exists at the destination — pass overwrite:true to replace it' }
+    fs.mkdirSync(dirname(dest), { recursive: true })
+    fs.renameSync(a.path, dest)
+    return { ok: true, from: a.path, to: dest }
+  } catch (e: any) {
+    return { error: e?.message || String(e) }
+  }
+})
+
 ipcMain.handle('agentfs:listDir', (_e, p: string) => {
   const r = resolveAgentPath(p)
   if ('error' in r) return r
@@ -2963,8 +3358,15 @@ ipcMain.handle('agentfs:readFile', (_e, p: string) => {
       if (!text) return { error: 'could not extract text from this .docx file' }
       return { path: r.path, text: text.slice(0, 60000) }
     }
-    if (ext === '.pdf' || ext === '.doc') {
-      return { error: `cannot read ${ext} directly — ask the user for a .docx, .txt or .md version of the document` }
+    if (ext === '.pdf') {
+      const text = pdfToText(fs.readFileSync(r.path))
+      if (!pdfLooksReadable(text)) {
+        return { error: 'this PDF has no extractable text — it looks like a scan or an image-only export. Ask the user for the .docx version, or for the text pasted into chat.' }
+      }
+      return { path: r.path, text: text.slice(0, 60000) }
+    }
+    if (ext === '.doc') {
+      return { error: 'cannot read legacy .doc — ask the user for a .docx or .pdf version of the document' }
     }
     const buf = fs.readFileSync(r.path)
     // Reject binary content: a real text file has no NUL bytes

@@ -169,6 +169,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listDir:   (p: string) => ipcRenderer.invoke('agentfs:listDir', p),
     readFile:  (p: string) => ipcRenderer.invoke('agentfs:readFile', p),
     writeFile: (p: string, content: string, overwrite?: boolean) => ipcRenderer.invoke('agentfs:writeFile', p, content, overwrite),
+    findFiles: (opts: { query: string; root?: string; ext?: string; limit?: number }) => ipcRenderer.invoke('agentfs:findFiles', opts),
+    moveFile:  (from: string, to: string, overwrite?: boolean) => ipcRenderer.invoke('agentfs:moveFile', from, to, overwrite),
     pickDirectory: () => ipcRenderer.invoke('agentfs:pickDirectory'),
     exec: (opts: { command: string; cwd: string; timeoutMs?: number }) => ipcRenderer.invoke('agentfs:exec', opts),
   },
@@ -176,7 +178,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ai: {
     checkDuplicate:     (url:string, e:string[]) => ipcRenderer.invoke('ai:checkDuplicate', url, e),
     categorizeBookmark: (url:string, t:string)   => ipcRenderer.invoke('ai:categorizeBookmark', url, t),
-    chat:               (msgs:any[], m?:string, opts?:{preferCloud?:boolean}) => ipcRenderer.invoke('ai:chat', msgs, m, opts),
+    chat:               (msgs:any[], m?:string, opts?:{preferCloud?:boolean; needsTools?:boolean}) => ipcRenderer.invoke('ai:chat', msgs, m, opts),
     summarizePage:      (t:string, url:string)   => ipcRenderer.invoke('ai:summarizePage', t, url),
     getLatestNews:      ()                       => ipcRenderer.invoke('ai:getLatestNews'),
     webSearch:          (query:string)           => ipcRenderer.invoke('ai:webSearch', query),

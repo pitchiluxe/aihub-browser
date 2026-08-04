@@ -7,6 +7,7 @@ import {
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
 import { resolveNavTarget } from '../../services/navIntent'
+import { PAGE_REFERENCE, REFUSAL, wantedTools, selectBookmarksForPrompt, CHAT_ONLY_NOTE } from '../../services/assistantIntent'
 import Markdown from './Markdown'
 
 interface Props {
@@ -25,6 +26,7 @@ const SUGGESTIONS = [
 ]
 
 const AI_NEWS_INTENT  = /latest\s+ai|ai\s+news|ai\s+articles?|ai\s+updates?|what.?s\s+new\s+in\s+ai|recent\s+ai|top\s+ai/i
+
 
 export default function AIAssistant({ currentUrl, currentTitle, getPageContent }: Props) {
   const {
@@ -51,6 +53,9 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
   const stopRequestedRef = useRef(false)
+  // The message currently being answered — used to pick which bookmarks are
+  // worth putting in the prompt (see selectBookmarksForPrompt).
+  const lastUserMsgRef = useRef('')
   const stopLoop = useCallback(() => {
     stopRequestedRef.current = true
     // A pending exec-approval card would otherwise keep the loop blocked
@@ -190,18 +195,29 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
   }, [bookmarks, addTab, addAIMessage])
 
   // ── System prompt with full context ──────────────────────────────────────
-  const buildSystemPrompt = useCallback(() => {
+  // Every token here is paid for on every turn, and on a local model that cost
+  // is brutal: measured on a CPU-only machine, a 9k-token prompt takes ~195s to
+  // reach the first token against ~30s for 500 tokens. So the prompt is built
+  // to fit the turn — the tool manual only ships when tools are in play, and a
+  // 230-bookmark list is filtered to what the message could plausibly need.
+  const buildSystemPrompt = useCallback((needsTools: boolean) => {
     const pageCtx = currentUrl && currentUrl !== 'home'
       ? `\n\n### Current page\n"${currentTitle || currentUrl}" — ${currentUrl}`
       : '\n\n### Current page\nUser is on the AIHub Browser home screen.'
 
-    const bookmarkCtx = bookmarks.length > 0
-      ? `\n\n### User's bookmarks (open one with open_tab using its exact URL — \`aihub://…\` entries are AIHub's own pages and open inside the app, everything else is a website)\n` +
-        bookmarks.map(b => `- ${b.title} [${b.category}]: ${b.url}`).join('\n')
+    // "open X" never reaches the model (navIntent handles it), so the full list
+    // buys almost nothing. Send what the message mentions, then recent ones.
+    const relevantBookmarks = selectBookmarksForPrompt(bookmarks, lastUserMsgRef.current, 25)
+    const bookmarkCtx = relevantBookmarks.length > 0
+      ? `\n\n### Some of the user's bookmarks (open one with open_tab using its exact URL — \`aihub://…\` entries are AIHub's own pages and open inside the app, everything else is a website)\n` +
+        relevantBookmarks.map(b => `- ${b.title} [${b.category}]: ${b.url}`).join('\n') +
+        (bookmarks.length > relevantBookmarks.length
+          ? `\n(${bookmarks.length - relevantBookmarks.length} more not shown — call list_bookmarks if you need them.)`
+          : '')
       : ''
 
-    const historyCtx = browseHistory.length > 0
-      ? `\n\n### Recently visited\n` + browseHistory.map(h => `- ${h}`).join('\n')
+    const historyCtx = browseHistory.length > 0 && needsTools
+      ? `\n\n### Recently visited\n` + browseHistory.slice(0, 5).map(h => `- ${h}`).join('\n')
       : ''
 
     let memoryOrigin = ''
@@ -227,7 +243,7 @@ You are deeply aware of the user's browser context: their bookmarks, recent hist
 • Answer questions about AIHub Browser features
 • Surface latest AI news from Hacker News
 
-## AIHub Browser — full feature map (answer any "can the browser do X?" from this)
+${needsTools ? '' : `## AIHub Browser — full feature map (answer any "can the browser do X?" from this)
 - **Tabs**: multi-tab strip with drag-reorder, context menu (duplicate / close others / close right), Ctrl+T new tab.
 - **Bookmark Sphere / Knowledge Graph**: force-directed graph of bookmarks clustered by category, with search, zoom, and per-node actions. Follows the active theme.
 - **Smart Homepage**: universal search, quick-access apps, AI site recommendations learned from browsing patterns.
@@ -238,10 +254,27 @@ You are deeply aware of the user's browser context: their bookmarks, recent hist
 - **Themes**: 19 built-in themes (12 dark, 7 light) plus AI-generated custom themes — Settings → Appearance. Applies everywhere, including the sphere.
 - **History**: searchable history with AI recommendations; **Downloads** manager; **Free WiFi** finder; **VPN/Proxy** page.
 - **Privacy/Security**: OAuth tokens encrypted at rest, API keys stored locally, PKCE for Google sign-in.
-- **Auto-update**: checks GitHub Releases on startup and periodically; notifies in-app when a new version ships.${appCtx}
+- **Auto-update**: checks GitHub Releases on startup and periodically; notifies in-app when a new version ships.${appCtx}`}
 
-## When to ANSWER vs. when to ACT — read this first
-Most questions just want a good answer. Only reach for tools when the user asks you to *do* something (open/navigate, fetch a live page, search the web, build a project, run a command, fill a form).
+## What you ARE — read this before anything else
+You are not a chat window. You are wired into this computer and this browser, and you have real tools listed at the end of this prompt. You can read the page the user is looking at, read their files, search the web, fill in forms, click buttons, run approved commands and write files.
+
+These sentences are FORBIDDEN — they are false here, and saying anything like them is a failure:
+- "I don't have direct access to…", "I can't see the current page", "I'm unable to browse"
+- "As a large language model / since I'm an AI, I can't…"
+- "Please provide me with the content of that file / paste the page text"
+- "I can only guide you through the process"
+If a tool exists for what was asked, USE IT. If you truly cannot do something, name the specific obstacle (a login wall, a CAPTCHA, a scanned PDF) — never a blanket claim about your nature.
+
+Act immediately, without asking permission, when the user's message contains any of these:
+- **"this page", "the current page", "the page I'm on", "this form", "the application that's open", "these questions"** → \`read_page\` (or \`scan_page\` for a form) in THIS turn. The page context is also injected above when available — use it.
+- **a file path** (\`C:\\Users\\…\`, \`~/Documents/…\`, "my resume in Downloads") → \`read_file\` that path in THIS turn. PDF, .docx, .txt and .md all read fine. Never ask the user to paste a document you can open yourself.
+- **"find/search my files", "organise my downloads"** → \`find_files\` / \`list_dir\`, then act on what came back.
+- **"apply for jobs", "fill this in for me", "answer these questions from my resume"** → read the resume, read/scan the page, fill the fields. Stop only at the final submit button.
+The one thing you always stop for: submitting a form, sending an application, or spending money. Fill everything, show the user the field → value list, and wait for their go-ahead.
+
+## When to ANSWER vs. when to ACT
+Questions about facts or how-to want a good answer. Requests that name a page, a file, a site, or an action want TOOLS — reach for them first and answer from what you actually read.
 - **Informational, how-to, "where do I…", "what is…", advice, explanations → answer directly in prose.** Never emit an actions block for these. If it helps, add the official link (e.g. a university's registrar/transcript page) and concrete step-by-step instructions, plus a phone number if you know it.
 - If you genuinely don't know a current fact (an address, phone number, live price), use \`web_search\`/\`fetch_url\` to find it — don't refuse and don't guess.
 - **Always produce a real answer.** Never reply with only an empty or apologetic line. If a request is ambiguous, make a reasonable assumption, answer, and note the assumption — don't stall with "please rephrase".
@@ -259,7 +292,7 @@ Your chat renders full GitHub-flavored markdown: tables, fenced code, headings, 
 - **Research answers** end with a "Sources" section of markdown links to what you actually consulted.
 - Never say you can't browse the internet — you have web_search and fetch_url. Use them.
 
-Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${historyCtx}${AGENT_TOOLS_DOC}`
+Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${historyCtx}${needsTools ? AGENT_TOOLS_DOC : CHAT_ONLY_NOTE}`
   }, [currentUrl, currentTitle, bookmarks, browseHistory, appInfo, siteMemory])
 
   // ── Send message — agent loop: the model can request tool actions via a
@@ -278,6 +311,8 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
     // Check navigation intent first — no AI call needed
     if (tryNavIntent(msg)) return
 
+    lastUserMsgRef.current = msg
+
     addAIMessage({ role: 'user', content: opts?.displayText || msg })
     setAILoading(true)
     stopRequestedRef.current = false
@@ -292,6 +327,10 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
     // corrective nudge before we give up — that empty first turn was what
     // surfaced the bare "please rephrase" reply on plain informational asks.
     let emptyRetried = false
+    // Smaller local models often answer an actionable request with a chatbot
+    // refusal ("I don't have access to your files, please paste them"). One
+    // corrective turn naming the exact tool recovers most of those.
+    let refusalRetried = false
 
     // Mirrors what's sent to ai.chat — includes synthetic tool-result turns
     // that are never pushed into the visible aiMessages store.
@@ -305,8 +344,27 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
     }
 
     try {
+      // The page the user is looking at, attached up front when they referred
+      // to it. A capable model would call read_page; a 3B one often just says
+      // it can't see the page — so don't make seeing it depend on the model.
+      let pageContext = ''
+      if (PAGE_REFERENCE.test(msg) && currentUrl && /^https?:\/\//i.test(currentUrl)) {
+        try {
+          const text = (await getPageContent?.()) || ''
+          if (text.trim()) {
+            // Capped hard: every 1k characters here is real seconds of prompt
+            // processing on a local model, and the useful signal is near the top.
+            pageContext = `\n\n## The page the user is looking at RIGHT NOW\n"${currentTitle || ''}" — ${currentUrl}\n\n${text.slice(0, 2500)}\n\n(This is the live page text, already fetched for you. Answer from it directly — never tell the user you cannot see the page. For form fields and buttons, call scan_page to get element ids.)`
+          }
+        } catch {}
+      }
+
       for (let turn = 1; turn <= MAX_TURNS; turn++) {
-        let systemPrompt = buildSystemPrompt()
+        // Turn 1 is a tool turn when the request points at a page, a file or an
+        // action; every later turn is by definition mid-tool-loop. This also
+        // decides how big the prompt gets — see buildSystemPrompt.
+        const needsTools = turn > 1 || !!wantedTools(msg)
+        let systemPrompt = buildSystemPrompt(needsTools) + pageContext
 
         if (AI_NEWS_INTENT.test(msg) && turn === 1) {
           setFetchingNews(true)
@@ -322,7 +380,11 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
           setFetchingNews(false)
         }
 
-        const result = await window.electronAPI.ai.chat([{ role: 'system', content: systemPrompt }, ...loopHistory])
+        const result = await window.electronAPI.ai.chat(
+          [{ role: 'system', content: systemPrompt }, ...loopHistory],
+          undefined,
+          { needsTools },
+        )
         const raw = result.content || ''
         if (result.provider === 'ollama' && !ollamaStatus?.running) {
           setOllamaStatus({ running: true, models: ollamaStatus?.models || [] })
@@ -333,7 +395,23 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
         if (!actions || actions.length === 0 || stopRequestedRef.current) {
           // Never fall back to `raw` — that is what leaked the ###ACTIONS###
           // block to the chat. Show the cleaned prose if there is any.
-          if (narration) { addAIMessage({ role: 'assistant', content: narration }); return }
+          if (narration) {
+            // The model answered an actionable request by claiming it has no
+            // access. It does. Name the tool it should have used and let it
+            // try once more before the user ever sees the refusal.
+            const wanted = wantedTools(msg)
+            if (!stopRequestedRef.current && !refusalRetried && wanted && REFUSAL.test(narration)) {
+              refusalRetried = true
+              loopHistory.push({ role: 'assistant', content: raw })
+              loopHistory.push({
+                role: 'user',
+                content: `That is wrong — you DO have that capability in this browser. Use ${wanted} now, in an ###ACTIONS### block, and then answer from the real content you get back. Do not ask me to paste anything, and do not say you lack access.`,
+              })
+              continue
+            }
+            addAIMessage({ role: 'assistant', content: narration })
+            return
+          }
           // Empty reply, not a deliberate stop: nudge the model once to just
           // answer in plain prose, then loop. Only after a second empty turn do
           // we surface a fallback — and a helpful one, not a dead end.
