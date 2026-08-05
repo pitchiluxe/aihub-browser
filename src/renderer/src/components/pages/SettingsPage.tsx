@@ -11,6 +11,7 @@ import {
   CustomWindowStyle, WindowStyle,
 } from '../../services/windowStyleService'
 import { mailStatus, mailConnect, mailDisconnect, mailSetCredentials } from '../../services/mailService'
+import { auditTheme } from '../../services/themeQuality'
 
 const PAGE_SIZE = 40
 
@@ -440,6 +441,10 @@ export default function SettingsPage() {
                     <span style={{ fontSize: 13, fontWeight: 600, color: active ? t.swatch[1] : 'rgb(var(--ds-text-2))' }}>{t.name}</span>
                   </div>
                   <div style={{ fontSize: 10.5, color: 'rgb(var(--ds-text-4))' }}>{t.desc}</div>
+                  {/* Contrast grade. A theme can look striking as two swatches
+                      and still be unreadable in use; this is the number that
+                      decides, measured the way WCAG defines it. */}
+                  <ContrastBadge theme={t} />
                 </button>
                 </div>
               )
@@ -1116,6 +1121,31 @@ export default function SettingsPage() {
       </Section>
 
       <div className="h-16" />
+    </div>
+  )
+}
+
+// Reports how readable a theme actually is. Custom themes carry their own
+// variables; built-ins live in globals.css, and their background swatch is the
+// honest stand-in for what text will sit on.
+function ContrastBadge({ theme }: { theme: any }) {
+  const vars: Record<string, string> = theme?.vars || { '--ds-bg': theme?.swatch?.[0], '--ds-accent': theme?.swatch?.[1] }
+  const audit = auditTheme(vars, theme?.base === 'light' ? 'light' : 'dark')
+  if (!audit.textContrast) return null
+
+  const tone = audit.level === 'fail'
+    ? { fg: '#f87171', label: 'Low contrast' }
+    : audit.level === 'AA-large'
+      ? { fg: '#fbbf24', label: 'AA large only' }
+      : { fg: '#34d399', label: audit.level }
+
+  return (
+    <div
+      style={{ fontSize: 9.5, color: tone.fg, marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}
+      title={`Body text contrast ${audit.textContrast.toFixed(1)}:1${audit.issues.length ? ' — ' + audit.issues[0].detail : ''}`}
+    >
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: tone.fg, display: 'inline-block' }} />
+      {tone.label} · {audit.textContrast.toFixed(1)}:1
     </div>
   )
 }

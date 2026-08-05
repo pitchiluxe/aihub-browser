@@ -215,6 +215,7 @@ export function describeAction(a: ToolAction): string {
     case 'remove_bookmark': return 'Removing bookmark'
     case 'read_page':       return 'Reading page content'
     case 'web_search':      return `Searching the web: "${String(a.query || '').slice(0, 50)}"`
+    case 'recall_pages':    return `Searching pages you've read: "${String(a.query || '').slice(0, 50)}"`
     case 'remember':        return 'Saving to this site’s memory'
     case 'fetch_url':       return `Fetching ${String(a.url || '').slice(0, 60)}`
     case 'read_tab':        return 'Reading tab content'
@@ -464,6 +465,23 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
         return sanitizeResult(res)
       }
 
+      case 'recall_pages': {
+        if (!action.query) return { error: 'query is required' }
+        // Meaning-based search over the pages this user has actually read
+        // (Rewind archive, embedded locally). Falls back to word matching when
+        // no embedding model is installed, so it always returns something
+        // usable rather than failing.
+        const res = await window.electronAPI.rewind.smartSearch(String(action.query))
+        const results = (res?.results || []).slice(0, 6).map((r: any) => ({
+          title: r.title, url: r.url, when: r.ts ? new Date(r.ts).toISOString().slice(0, 10) : undefined,
+          snippet: String(r.snippet || '').slice(0, 240),
+        }))
+        if (!results.length) {
+          return { results: [], note: 'Nothing in this user’s reading history matches. Use web_search instead.' }
+        }
+        return sanitizeResult({ results, matchedBy: res?.semantic ? 'meaning' : 'words' })
+      }
+
       case 'fetch_url': {
         if (!action.url) return { error: 'url is required' }
         const res = await window.electronAPI.ai.fetchPage(String(action.url))
@@ -621,6 +639,7 @@ Available tools:
 
 Research tools (fast — no tab needed; prefer these for questions about current events, prices, comparisons, or anything you're not sure about):
 - web_search({query}) — live web search. Returns up to 8 results with title, url, and snippet. NEVER guess or say "I can't browse the internet" — search instead.
+- recall_pages({query}) — searches the pages THIS USER has actually read (their own Rewind archive), by meaning rather than keywords. Use it FIRST whenever the question refers to something they saw before: "that article about X", "the page I read yesterday", "where did I read about Y". It answers questions the web cannot, because only this machine knows what they read. Returns title, url, date and a snippet — cite the page you used.
 - fetch_url({url}) — downloads a page's readable text (plus its title) WITHOUT opening a visible tab. Use it to read search results, articles, and docs during research. Only open_tab when the user should actually SEE the page.
 
 Research workflow for "research X / compare X / what's the latest on X":

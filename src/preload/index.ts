@@ -110,6 +110,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     save:        (note: { kind: 'clip' | 'bookmark' | 'answer'; title: string; url?: string; content: string; tags?: string[]; extra?: Record<string, any> }) =>
       ipcRenderer.invoke('obsidian:save', note),
   },
+  chat: {
+    load:  () => ipcRenderer.invoke('chat:load'),
+    save:  (messages: { role: string; content: string }[]) => ipcRenderer.invoke('chat:save', messages),
+    clear: () => ipcRenderer.invoke('chat:clear'),
+  },
   session: {
     save:        (tabs: any[], activeIndex: number) => ipcRenderer.invoke('session:save', tabs, activeIndex),
     getLast:     () => ipcRenderer.invoke('session:getLast'),

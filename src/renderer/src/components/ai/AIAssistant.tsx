@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
+import { planContext, summarizeCondensed, looksLikeRecall, buildRecallBlock } from '../../services/aiContext'
 import { resolveNavTarget } from '../../services/navIntent'
 import { PAGE_REFERENCE, REFUSAL, wantedTools, selectBookmarksForPrompt, CHAT_ONLY_NOTE } from '../../services/assistantIntent'
 import Markdown from './Markdown'
@@ -31,11 +32,36 @@ const AI_NEWS_INTENT  = /latest\s+ai|ai\s+news|ai\s+articles?|ai\s+updates?|what
 export default function AIAssistant({ currentUrl, currentTitle, getPageContent }: Props) {
   const {
     isAIPanelOpen, toggleAIPanel,
-    aiMessages, addAIMessage, clearAIMessages,
+    aiMessages, addAIMessage, clearAIMessages, setAIMessages,
     isAILoading, setAILoading,
     ollamaStatus, setOllamaStatus,
     bookmarks, addTab,
   } = useBrowserStore()
+
+  // Restore the previous conversation once, then keep the disk copy in step.
+  // Answers the assistant gave yesterday are worth as much as the ones it gave
+  // a minute ago; throwing them away on quit made it feel amnesiac.
+  const chatRestored = useRef(false)
+  useEffect(() => {
+    if (chatRestored.current) return
+    chatRestored.current = true
+    window.electronAPI.chat.load()
+      .then((saved: any[]) => {
+        if (Array.isArray(saved) && saved.length && !useBrowserStore.getState().aiMessages.length) {
+          setAIMessages(saved as any)
+        }
+      })
+      .catch(() => {})
+  }, [setAIMessages])
+
+  useEffect(() => {
+    if (!chatRestored.current) return
+    // Debounced: a streamed answer updates this array many times a second.
+    const t = setTimeout(() => {
+      window.electronAPI.chat.save(aiMessages.map(m => ({ role: m.role, content: m.content })))
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [aiMessages])
 
   const [input,         setInput]         = useState('')
   // Pending exec_command approval — the agent loop blocks on this until the
@@ -328,6 +354,10 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
     // need more turns than chat-style tasks; the stop button and per-command
     // approval remain the real safety rails.
     const MAX_TURNS = 12
+    // Roughly half of a 8k-context local model, leaving room for the system
+    // prompt, the page text and the model's own answer. Cloud models have far
+    // more room, but the same budget keeps a long chat fast and cheap there too.
+    const HISTORY_TOKEN_BUDGET = 3000
     const MAX_ACTIONS = 60
     let actionsUsed = 0
     // A model that answers with neither prose nor a valid action block gets one
@@ -341,8 +371,15 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
 
     // Mirrors what's sent to ai.chat — includes synthetic tool-result turns
     // that are never pushed into the visible aiMessages store.
+    // Budget the history rather than sending all of it. Ollama truncates from
+    // the FRONT when the context window fills, which silently eats the system
+    // prompt — the assistant then forgets its own tools and formatting rules
+    // halfway through a long chat. Keeping the newest turns and condensing the
+    // rest means the instructions always survive.
+    const contextPlan = planContext(useBrowserStore.getState().aiMessages, HISTORY_TOKEN_BUDGET)
+    const earlierDigest = summarizeCondensed(contextPlan.condensed)
     let loopHistory: { role: string; content: string }[] =
-      useBrowserStore.getState().aiMessages.map(m => ({ role: m.role, content: m.content }))
+      contextPlan.kept.map(m => ({ role: m.role, content: m.content }))
     // When the chat shows a short label but the model must see the full prompt
     // (Compare Mode), swap the real payload into the last user turn.
     if (opts?.displayText && loopHistory.length) {
@@ -366,12 +403,23 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
         } catch {}
       }
 
+      // The user's own reading, when the question points at something they saw
+      // before. Only this machine knows what they read, so the archive beats
+      // both the model's memory and a web search here.
+      let recallContext = ''
+      if (looksLikeRecall(msg)) {
+        try {
+          const res = await window.electronAPI.rewind.smartSearch(msg)
+          recallContext = buildRecallBlock(res?.results || [])
+        } catch {}
+      }
+
       for (let turn = 1; turn <= MAX_TURNS; turn++) {
         // Turn 1 is a tool turn when the request points at a page, a file or an
         // action; every later turn is by definition mid-tool-loop. This also
         // decides how big the prompt gets — see buildSystemPrompt.
         const needsTools = turn > 1 || !!wantedTools(msg)
-        let systemPrompt = buildSystemPrompt(needsTools) + pageContext
+        let systemPrompt = buildSystemPrompt(needsTools) + earlierDigest + recallContext + pageContext
 
         if (AI_NEWS_INTENT.test(msg) && turn === 1) {
           setFetchingNews(true)

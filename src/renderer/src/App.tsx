@@ -42,6 +42,7 @@ import AIAssistant from './components/ai/AIAssistant'
 import { loadBookmarks } from './services/bookmarkService'
 import { buildPageExtractionScript } from './services/pageExtractor'
 import { loadCustomExts } from './extensions/customExts'
+import { shouldRunOn } from './extensions/siteRules'
 import { withPanelRuntime } from './extensions/panelRuntime'
 import { applyThemeToDom } from './services/themeService'
 
@@ -718,15 +719,20 @@ export default function App() {
           const wcId = store.tabWcIds[tabId]
           if (wcId) {
             const { extensionStates } = store
+            // An enabled extension still has to be allowed on THIS site: a
+            // reading tweak has no business running on a banking page, and a
+            // dark-mode filter has to be switchable off for one site without
+            // losing it everywhere (see extensions/siteRules).
+            const allowedHere = (id: string) => shouldRunOn(url, extensionStates[id]?.sites)
             EXTENSION_DEFS.forEach(ext => {
               const state = extensionStates[ext.id]
-              if (state?.enabled) {
+              if (state?.enabled && allowedHere(ext.id)) {
                 const script = ext.inject(state.settings || {})
                 window.electronAPI?.webview?.execScript?.(wcId, script)?.catch?.(() => {})
               }
             })
             loadCustomExts().forEach(ext => {
-              if (extensionStates[ext.id]?.enabled) {
+              if (extensionStates[ext.id]?.enabled && allowedHere(ext.id)) {
                 // Custom/generated extensions build their UI on the shared
                 // panel chrome, so the runtime has to land first.
                 window.electronAPI?.webview?.execScript?.(wcId, withPanelRuntime(ext.injectCode))?.catch?.(() => {})

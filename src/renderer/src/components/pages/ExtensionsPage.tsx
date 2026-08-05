@@ -2,6 +2,10 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { Search, Plus, X, ChevronDown, ChevronUp, Trash2, Code2, Puzzle, Sparkles } from 'lucide-react'
 import { EXTENSION_DEFS, ExtensionDef } from '../../extensions/extensionDefs'
 import { CustomExt, loadCustomExts, saveCustomExts } from '../../extensions/customExts'
+import {
+  DEFAULT_SITE_RULES, addSite, removeSite, describeRules,
+  type SiteRules, type SiteMode,
+} from '../../extensions/siteRules'
 import { withPanelRuntime } from '../../extensions/panelRuntime'
 import { buildGenerationPrompt, parseGeneratedExtensions } from '../../services/extensionGenerator'
 import { verifyExtensions } from '../../services/extensionVerifier'
@@ -17,7 +21,7 @@ function execInAllTabs(script: string) {
 }
 
 export default function ExtensionsPage() {
-  const { extensionStates, setExtensionEnabled, setExtensionSettings } = useBrowserStore()
+  const { extensionStates, setExtensionEnabled, setExtensionSettings, setExtensionSites } = useBrowserStore()
 
   const [search, setSearch]       = useState('')
   const [category, setCategory]   = useState<string>('All')
@@ -268,6 +272,15 @@ export default function ExtensionsPage() {
                       </div>
                     )
                   })}
+
+                  {/* Where this extension may run. Enabled-everywhere is the
+                      default users expect; the other two modes are what make
+                      an extension safe to leave installed. */}
+                  <SiteRulesEditor
+                    rules={state?.sites || DEFAULT_SITE_RULES}
+                    accent={(ext as ExtensionDef).color || '#60a5fa'}
+                    onChange={rules => setExtensionSites(ext.id, rules)}
+                  />
                 </div>
               )}
             </div>
@@ -488,6 +501,86 @@ function CreateExtModal({ onClose, onCreate }: {
 }
 
 // ── Generate with AI Modal ───────────────────────────────────────────────────
+function SiteRulesEditor({ rules, accent, onChange }: {
+  rules: SiteRules
+  accent: string
+  onChange: (rules: SiteRules) => void
+}) {
+  const [draft, setDraft] = useState('')
+  const MODES: { value: SiteMode; label: string }[] = [
+    { value: 'all', label: 'All sites' },
+    { value: 'only', label: 'Only these' },
+    { value: 'except', label: 'Except these' },
+  ]
+
+  const commit = () => {
+    if (!draft.trim()) return
+    onChange(addSite(rules, draft))
+    setDraft('')
+  }
+
+  return (
+    <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--ds-border-sm)' }}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'rgb(var(--ds-text-4))' }}>
+          Runs on
+        </span>
+        <span className="text-[11px]" style={{ color: 'rgb(var(--ds-text-4) / 0.85)' }}>{describeRules(rules)}</span>
+      </div>
+
+      <div className="flex gap-1.5 mb-2">
+        {MODES.map(mode => (
+          <button
+            key={mode.value}
+            onClick={() => onChange({ ...rules, mode: mode.value })}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all"
+            style={rules.mode === mode.value
+              ? { background: accent + '22', color: accent, border: `1px solid ${accent}55` }
+              : { background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-3))', border: '1px solid var(--ds-border-sm)' }}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+
+      {rules.mode !== 'all' && (
+        <>
+          <div className="flex gap-1.5 mb-2">
+            <input
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit() } }}
+              placeholder="github.com"
+              className="flex-1 px-2.5 py-1.5 rounded-lg text-xs outline-none"
+              style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-2))' }}
+            />
+            <button
+              onClick={commit}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium"
+              style={{ background: accent + '22', color: accent, border: `1px solid ${accent}55` }}
+            >
+              Add
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {rules.patterns.map(pattern => (
+              <button
+                key={pattern}
+                onClick={() => onChange(removeSite(rules, pattern))}
+                title="Remove"
+                className="px-2 py-1 rounded-lg text-[11px] transition-opacity hover:opacity-70"
+                style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}
+              >
+                {pattern} ✕
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function GenerateExtModal({ existing, onClose, onGenerated }: {
   existing: { name: string; tagline: string; category?: string }[]
   onClose: () => void

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { proposeGroups, groupColorFor, type TabGroup } from '../services/tabGroups'
+import type { SiteRules } from '../extensions/siteRules'
 
 export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string }
 export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; asleep?: boolean; groupId?: string; containerId?: string; pageType?: 'browser'|'settings'|'history'|'downloads'|'wifi'|'vpn'|'research'|'agents'|'extensions'|'mail'|'notes'|'manual'|'rewind'|'watch'|'bible' }
@@ -73,6 +74,8 @@ interface BrowserState {
 
   // AI
   aiMessages: AIMessage[]
+  /** Replace the whole thread (restoring last session's conversation). */
+  setAIMessages: (m: AIMessage[]) => void
   addAIMessage: (m: AIMessage) => void
   clearAIMessages: () => void
   setAIMessageStepStatus: (msgIndex: number, stepIndex: number, status: 'done' | 'error') => void
@@ -87,9 +90,10 @@ interface BrowserState {
   upsertDownload: (d: DownloadItem) => void
 
   // Extensions
-  extensionStates: Record<string, { enabled: boolean; settings: Record<string, any> }>
+  extensionStates: Record<string, { enabled: boolean; settings: Record<string, any>; sites?: SiteRules }>
   setExtensionEnabled: (id: string, enabled: boolean) => void
   setExtensionSettings: (id: string, settings: Record<string, any>) => void
+  setExtensionSites: (id: string, sites: SiteRules) => void
   hydrateExtensionStates: (states: Record<string, { enabled: boolean; settings: Record<string, any> }>) => void
 
   // WebContentsId per browser tab (for extension injection)
@@ -356,7 +360,12 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
 
   aiMessages: [],
   addAIMessage: (m) => set(s => ({ aiMessages: [...s.aiMessages, m] })),
-  clearAIMessages: () => set({ aiMessages: [] }),
+  setAIMessages: (m) => set({ aiMessages: Array.isArray(m) ? m : [] }),
+  clearAIMessages: () => {
+    set({ aiMessages: [] })
+    // Clearing must reach the disk too, or the thread returns on next launch.
+    try { window.electronAPI?.chat?.clear?.() } catch {}
+  },
   setAIMessageStepStatus: (msgIndex, stepIndex, status) => set(s => {
     const messages = [...s.aiMessages]
     const msg = messages[msgIndex]
@@ -386,6 +395,15 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   },
   setExtensionEnabled: (id, enabled) => set(s => {
     const updated = { ...s.extensionStates, [id]: { ...s.extensionStates[id], enabled, settings: s.extensionStates[id]?.settings || {} } }
+    saveExtStates(updated)
+    return { extensionStates: updated }
+  }),
+  /** Where an extension may run — see extensions/siteRules. */
+  setExtensionSites: (id, sites) => set(s => {
+    const updated = {
+      ...s.extensionStates,
+      [id]: { ...s.extensionStates[id], sites, enabled: s.extensionStates[id]?.enabled || false, settings: s.extensionStates[id]?.settings || {} },
+    }
     saveExtStates(updated)
     return { extensionStates: updated }
   }),

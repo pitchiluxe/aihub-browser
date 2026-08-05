@@ -2420,6 +2420,25 @@ ipcMain.handle('obsidian:save', (_e, note: {
   return writeNote(vaultPath, note)
 })
 
+// ── IPC: Conversation history ──────────────────────────────────────────────
+// The assistant's chat used to live only in renderer state, so closing the app
+// threw away every answer it had given. Kept on disk instead, capped so a long
+// running conversation cannot grow without bound.
+const CHAT_CAP = 200
+const chatStore = createManagedJsonStore<{ role: string; content: string }[]>(
+  join(APP_DIR, 'chat-history.json'), () => [], { debounceMs: 2500 },
+)
+
+ipcMain.handle('chat:load', () => chatStore.get())
+ipcMain.handle('chat:save', (_e, messages: { role: string; content: string }[]) => {
+  const clean = (Array.isArray(messages) ? messages : [])
+    .filter(m => m && typeof m.content === 'string' && m.role !== 'system')
+    .slice(-CHAT_CAP)
+  chatStore.set(clean)
+  return true
+})
+ipcMain.handle('chat:clear', () => { chatStore.set([]); return true })
+
 // ── IPC: Sessions and workspaces ───────────────────────────────────────────
 // The renderer owns tab state (a sleeping or crashed view still belongs in the
 // session), so it publishes snapshots and the main process persists them.

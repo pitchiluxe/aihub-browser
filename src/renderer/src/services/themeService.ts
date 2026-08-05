@@ -1,3 +1,5 @@
+import { repairTheme } from './themeQuality'
+
 // ── Theme registry ───────────────────────────────────────────────────────────
 // Each theme is a CSS ruleset in globals.css keyed by body[data-theme="<id>"].
 // `base` decides the light-mode class (text/surface inversion); the data-theme
@@ -178,12 +180,16 @@ export function buildThemeFromPalette(name: string, base: 'dark' | 'light', p: P
           '--aihub-card':    '255 255 255',
           '--aihub-accent':  trip(ah, Math.min(as, 80), 45),
         }
+  // A palette that looks fine as two swatches can still be unreadable in use.
+  // Repair it against the text colours its base will actually pair it with,
+  // so a generated theme is never merely pretty (see themeQuality).
+  const safeVars = repairTheme(vars, base)
   return {
     id: `custom-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
     name, base, custom: true, hue: ah,
     desc: `${base === 'dark' ? 'Dark' : 'Light'} · designed`,
-    swatch: base === 'dark' ? [hex(bh, bs, 9), hex(ah, as, 62)] : [hex(bh, Math.min(bs, 42), 97), hex(ah, Math.min(as, 80), 45)],
-    vars,
+    swatch: base === 'dark' ? [safeVars['--ds-bg'] || hex(bh, bs, 9), hex(ah, as, 62)] : [safeVars['--ds-bg'] || hex(bh, Math.min(bs, 42), 97), hex(ah, Math.min(as, 80), 45)],
+    vars: safeVars,
   }
 }
 
@@ -233,12 +239,13 @@ export function buildCustomTheme(name: string, base: 'dark' | 'light', hue: numb
           '--aihub-card':    '255 255 255',
           '--aihub-accent':  trip(hue, 75, 45),
         }
+  const safeVars = repairTheme(vars, base)
   return {
     id: `custom-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
     name, base, custom: true, hue,
     desc: `${base === 'dark' ? 'Dark' : 'Light'} · generated`,
-    swatch: base === 'dark' ? [hex(hue, 32, 9), hex(hue, 88, 62)] : [hex(hue, 45, 97), hex(hue, 75, 45)],
-    vars,
+    swatch: base === 'dark' ? [safeVars['--ds-bg'] || hex(hue, 32, 9), hex(hue, 88, 62)] : [safeVars['--ds-bg'] || hex(hue, 45, 97), hex(hue, 75, 45)],
+    vars: safeVars,
   }
 }
 
@@ -335,6 +342,29 @@ export function generateLocalThemes(count: number): CustomTheme[] {
  *  themes after persisting them. */
 // Detect if two themes are visually too similar. Checks hue distance on
 // background and accent to ensure each theme is genuinely distinct.
+// Hue (0-360) of a #rrggbb / #rgb colour, so hex swatches can be compared
+// against the numeric hues custom themes store. Greys have no meaningful hue
+// and report 0.
+export function hexHue(hex: string): number {
+  const h = String(hex).trim().replace('#', '')
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h
+  if (full.length < 6) return 0
+  const r = parseInt(full.slice(0, 2), 16) / 255
+  const g = parseInt(full.slice(2, 4), 16) / 255
+  const b = parseInt(full.slice(4, 6), 16) / 255
+  if (![r, g, b].every(v => Number.isFinite(v))) return 0
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const delta = max - min
+  if (delta === 0) return 0
+  let hue: number
+  if (max === r) hue = ((g - b) / delta) % 6
+  else if (max === g) hue = (b - r) / delta + 2
+  else hue = (r - g) / delta + 4
+  hue *= 60
+  return hue < 0 ? hue + 360 : hue
+}
+
 function isVisuallyDistinct(t1: { bgHue: number; accentHue: number; base: 'dark' | 'light' }, t2: { bgHue: number; accentHue: number; base: 'dark' | 'light' }): boolean {
   if (t1.base !== t2.base) return true // Different base modes are always distinct
   const hueDistance = (h1: number, h2: number) => {
@@ -377,9 +407,15 @@ export async function generateThemes(count = 7): Promise<CustomTheme[]> {
     const m = String(res?.content || '').match(/\[[\s\S]*\]/)
     if (m && res?.provider !== 'error') {
       const takenNames = new Set(getAllThemes().map(t => t.name.toLowerCase()))
+      // Built-in themes carry hex swatches, not hues. Passing the raw '#0C1626'
+      // string into the hue math produced NaN, every distance comparison went
+      // false, and isVisuallyDistinct then rejected EVERY generated theme —
+      // the AI theme generator quietly returned nothing. Derive the hue from
+      // the swatch instead (and take the accent from the accent swatch rather
+      // than guessing it from the theme id).
       const allExistingThemes = getAllThemes().map(t => ({
-        bgHue: 'custom' in t ? t.hue : t.swatch[0],
-        accentHue: 'hue' in t ? t.hue : (t.id.includes('ocean') ? 180 : t.id.includes('forest') ? 120 : 0),
+        bgHue: 'custom' in t ? t.hue : hexHue(t.swatch[0]),
+        accentHue: 'hue' in t ? t.hue : hexHue(t.swatch[1]),
         base: t.base,
       }))
       type Seed = { name?: string; base?: string; hue?: number; bgHue?: number; bgSat?: number; accentHue?: number; accentHue2?: number; accentSat?: number }
