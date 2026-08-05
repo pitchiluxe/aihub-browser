@@ -54,7 +54,20 @@ export default defineConfig({
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        // Two preloads with different trust levels: `index` is the app UI's
+        // IPC bridge; `webcontent` is attached to untrusted site content and
+        // exposes nothing (see src/preload/webcontent.ts). They must build as
+        // separate entry points, not one bundle.
+        input: {
+          index:      resolve('src/preload/index.ts'),
+          webcontent: resolve('src/preload/webcontent.ts')
+        },
+        output: { format: 'cjs', entryFileNames: '[name].js' }
+      }
+    }
   },
   renderer: {
     resolve: {
