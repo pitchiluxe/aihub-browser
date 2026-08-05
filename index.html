@@ -818,7 +818,7 @@
   <div class="wrap">
     <div class="hero-inner">
       <div>
-        <div class="hero-eyebrow">✦ v1.3.1 — Free for Windows, macOS &amp; Linux</div>
+        <div class="hero-eyebrow">✦ <span id="hero-version">v1.33.0</span> — Free for Windows, macOS &amp; Linux</div>
         <h1 class="hero-title">
           The browser<br/>
           that <span class="underline-chalk">thinks</span><br/>
@@ -1196,6 +1196,10 @@
         const r = await fetch('/api/downloads')
         const d = await r.json()
         dlEl.textContent = (d && typeof d.downloads === 'number') ? d.downloads.toLocaleString() : '—'
+        // Same call carries the current release tag, so the hero version stops
+        // being a number somebody has to remember to edit.
+        const verEl = document.getElementById('hero-version')
+        if (verEl && d && d.version) verEl.textContent = d.version
       } catch { dlEl.textContent = '—' }
     }
   }

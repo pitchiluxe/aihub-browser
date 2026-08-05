@@ -15,12 +15,17 @@ export default async function handler() {
     if (res.ok) {
       const releases = await res.json()
       let total = 0
+      let version = ''
       for (const r of Array.isArray(releases) ? releases : []) {
         for (const a of r.assets || []) {
           if (/\.(exe|dmg|AppImage)$/i.test(a.name || '')) total += a.download_count || 0
         }
+        // The newest published (non-draft, non-prerelease) release names the
+        // current version. Reporting it here means the landing page can never
+        // advertise a version that shipped fifteen releases ago.
+        if (!version && !r.draft && !r.prerelease && r.tag_name) version = String(r.tag_name)
       }
-      return new Response(JSON.stringify({ downloads: total }), {
+      return new Response(JSON.stringify({ downloads: total, version }), {
         headers: {
           'content-type': 'application/json',
           'cache-control': 's-maxage=300, stale-while-revalidate=600',
