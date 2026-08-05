@@ -42,7 +42,20 @@ export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compa
       case 'close':        closeTab(tab.id); break
       case 'close-others': closeOtherTabs(tab.id); break
       case 'close-right':  closeTabsToRight(tab.id); break
+      case 'merge-all':    window.electronAPI.window.mergeAllInto(); break
+      default:
+        // "Move Tab to Window ▸ <name>" comes back as move:<windowId>.
+        if (action.startsWith('move:')) moveTabToWindow(tab, Number(action.slice(5)))
     }
+  }
+
+  // Send a tab back to another window — the way home from a detached window.
+  // The page opens there and closes here, so it exists exactly once.
+  const moveTabToWindow = async (tab: Tab, targetWindowId: number) => {
+    if (!Number.isFinite(targetWindowId)) return
+    if (tab.isHome || tab.pageType !== 'browser' || !/^https?:\/\//i.test(tab.url)) return
+    const r = await window.electronAPI.window.sendTabTo(targetWindowId, { url: tab.url, title: tab.title })
+    if (r?.success) closeTab(tab.id)
   }
 
   // Move a tab into its own standalone window (multi-monitor workflows).

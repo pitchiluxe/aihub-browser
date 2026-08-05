@@ -12,6 +12,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setTransparency: (m:string) => ipcRenderer.invoke('window:setTransparency', m),
     setOpacity:      (o:number) => ipcRenderer.invoke('window:setOpacity', o),
     detachTab:       (url:string, title?:string) => ipcRenderer.invoke('window:detachTab', url, title),
+    // Moving a tab BACK: list the other windows, hand one a page, or pull
+    // everything into this window.
+    list:            () => ipcRenderer.invoke('windows:list'),
+    sendTabTo:       (targetId:number, tab:{ url:string; title?:string }) => ipcRenderer.invoke('window:sendTabTo', targetId, tab),
+    mergeAllInto:    () => ipcRenderer.invoke('windows:mergeAllInto'),
+    onMergeInto:     (cb:(targetId:number)=>void) => {
+      const h = (_e:any, targetId:number) => cb(targetId)
+      ipcRenderer.on('merge-into-window', h)
+      return () => ipcRenderer.removeListener('merge-into-window', h)
+    },
   },
   gmail: {
     status:         () => ipcRenderer.invoke('gmail:status'),

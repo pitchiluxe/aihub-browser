@@ -6,6 +6,7 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import { addBookmarkWithAI } from '../../services/bookmarkService'
+import BookmarksButton from './BookmarksButton'
 import VpnButton from './VpnButton'
 
 interface Props {
@@ -411,6 +412,10 @@ export default function NavigationBar({
         >
           <Pencil size={13} />
         </NavBtn>
+
+        {/* Every saved bookmark, one click away — the sphere is for exploring,
+            this is for opening the one you already have in mind. */}
+        <BookmarksButton onNavigate={onNavigate} />
 
         <NavBtn onClick={takeScreenshot} title="Screenshot" disabled={isSpecialPage || !activeTabId}>
           <Camera size={13} />

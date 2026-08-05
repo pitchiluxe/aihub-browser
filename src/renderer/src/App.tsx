@@ -66,13 +66,13 @@ export default function App() {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
-    splitTabId,
+    splitTabId, isBookmarksMenuOpen,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
     isAnnotationMode: s.isAnnotationMode, isAddBookmarkOpen: s.isAddBookmarkOpen, isAIPanelOpen: s.isAIPanelOpen,
     isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen, isCompareOpen: s.isCompareOpen,
-    splitTabId: s.splitTabId,
+    splitTabId: s.splitTabId, isBookmarksMenuOpen: s.isBookmarksMenuOpen,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -525,6 +525,23 @@ export default function App() {
     return () => document.removeEventListener('aihub-tab-layout', onChange)
   }, [])
 
+  // ── Windows merging back together ──────────────────────────────────────
+  // Another window asked this one to hand over its tabs. Send each real page
+  // across, then close — so "Bring All Tabs Here" leaves exactly one window
+  // holding everything, and nothing is lost if a tab cannot travel.
+  useEffect(() => {
+    const off = window.electronAPI.window.onMergeInto?.(async (targetId: number) => {
+      const state = useBrowserStore.getState()
+      const movable = state.tabs.filter(t => !t.isHome && t.pageType === 'browser' && /^https?:\/\//i.test(t.url))
+      for (const tab of movable) {
+        try { await window.electronAPI.window.sendTabTo(targetId, { url: tab.url, title: tab.title }) } catch {}
+      }
+      // Only close this window once its pages are safely open elsewhere.
+      try { window.electronAPI.window.close?.() } catch {}
+    })
+    return () => { try { off?.() } catch {} }
+  }, [])
+
   // ── Split view ────────────────────────────────────────────────────────
   // The panes are two native BrowserViews sharing the content bounds, so the
   // geometry lives in the main process; the renderer only names the partner.
@@ -605,8 +622,8 @@ export default function App() {
     // Any host-HTML overlay (Add-to-Sphere modal, QR modal) must detach the
     // active tab's BrowserView, which otherwise always paints on top of and
     // steals clicks from our HTML — making the modal look frozen/invisible.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen)
-  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen])
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen])
 
   // Clear a tab's loading state, but keep the spinner up for a short floor so
   // a load that finished almost instantly still registers as an action. Any

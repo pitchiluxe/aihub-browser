@@ -1967,6 +1967,63 @@ function openDetachedWindow(url: string, _title?: string) {
   return createAppWindow(url).win
 }
 
+// ── Windows: listing, and moving tabs back between them ────────────────────
+// Detaching a tab was a one-way trip: once a page had its own window there was
+// no way to put it back, so a workspace that got split up stayed split up.
+// Windows are addressed by the id of their renderer webContents — the same id
+// every IPC event already carries, so no separate registry can drift.
+function windowLabel(ctx: AppWin, index: number): string {
+  try {
+    const active = ctx.activeId ? ctx.views.get(ctx.activeId)?.webContents : undefined
+    const title = active?.getTitle?.()
+    if (title && title.trim() && !/^https?:/i.test(title)) return title.slice(0, 48)
+    const url = active?.getURL?.()
+    if (url) { try { return new URL(url).hostname.replace(/^www\./, '') } catch {} }
+  } catch {}
+  return index === 0 ? 'Main window' : `Window ${index + 1}`
+}
+
+function listWindows(callerId?: number) {
+  return [...appWins.entries()]
+    .filter(([, ctx]) => !ctx.win.isDestroyed())
+    .map(([id, ctx], index) => ({
+      id,
+      label: windowLabel(ctx, index),
+      tabCount: ctx.views.size,
+      isCurrent: id === callerId,
+    }))
+}
+
+ipcMain.handle('windows:list', (e) => listWindows(e.sender.id))
+
+// Hand a page to another window: that window opens it, and the caller closes
+// its own copy. The page reloads there rather than being transplanted —
+// Electron cannot move a BrowserView between windows without tearing down its
+// renderer anyway, and a reload is honest about what happens to page state.
+ipcMain.handle('window:sendTabTo', (_e, targetId: number, tab: { url: string; title?: string }) => {
+  const target = appWins.get(targetId)
+  if (!target || target.win.isDestroyed()) return { success: false, error: 'That window is gone' }
+  if (!tab?.url) return { success: false, error: 'Nothing to move' }
+  try {
+    sendTo(target, 'open-in-new-tab', tab.url)
+    if (target.win.isMinimized()) target.win.restore()
+    target.win.focus()
+    return { success: true }
+  } catch (err: any) { return { success: false, error: err.message } }
+})
+
+// Ask every other window to hand its tabs to this one and close itself.
+ipcMain.handle('windows:mergeAllInto', (e) => {
+  const targetId = e.sender.id
+  let asked = 0
+  for (const [id, ctx] of appWins) {
+    if (id === targetId || ctx.win.isDestroyed()) continue
+    sendTo(ctx, 'merge-into-window', targetId)
+    asked++
+  }
+  return { success: true, windows: asked }
+})
+
 ipcMain.handle('window:detachTab', (_e, url: string, title?: string) => {
   try {
     if (!/^https?:\/\//i.test(url)) return { success: false, error: 'Only web pages can move to their own window' }
@@ -1986,10 +2043,22 @@ ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: bo
     const tabWc = info.tabId ? ctxFromEvent(e)?.views.get(info.tabId)?.webContents : undefined
     let muted = false
     try { muted = !!tabWc?.isAudioMuted() } catch {}
+    const otherWindows = listWindows(e.sender.id).filter(w => !w.isCurrent)
     const menu = Menu.buildFromTemplate([
       { label: 'New Tab',                 click: () => done('new-tab') },
       { label: 'Duplicate Tab',           click: () => done('duplicate') },
       { label: 'Move Tab to New Window',  enabled: info.isBrowser, click: () => done('detach') },
+      // The way back. Only shown when there is somewhere to move it to, so the
+      // menu doesn't carry a permanently empty submenu.
+      ...(otherWindows.length ? [{
+        label: 'Move Tab to Window',
+        enabled: info.isBrowser,
+        submenu: otherWindows.map(w => ({
+          label: `${w.label}${w.tabCount ? ` (${w.tabCount} tab${w.tabCount === 1 ? '' : 's'})` : ''}`,
+          click: () => done(`move:${w.id}`),
+        })),
+      }] : []),
+      ...(otherWindows.length ? [{ label: 'Bring All Tabs Here', click: () => done('merge-all') }] : []),
       { label: 'Sleep Tab (free memory)', enabled: !!info.canSleep, click: () => done('sleep') },
       { type: 'separator' },
       { label: 'Reload',                  enabled: info.isBrowser, click: () => done('reload') },

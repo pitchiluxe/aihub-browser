@@ -60,6 +60,10 @@ interface BrowserState {
   // must detach while it's open (same reason as the modals).
   isVpnMenuOpen: boolean
   setVpnMenuOpen: (v: boolean) => void
+  // The toolbar bookmarks panel is host HTML too, so it needs the same
+  // BrowserView detach while it is open.
+  isBookmarksMenuOpen: boolean
+  setBookmarksMenuOpen: (v: boolean) => void
   isCmdPaletteOpen: boolean
   setCmdPaletteOpen: (v: boolean) => void
   isCompareOpen: boolean
@@ -344,6 +348,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setAddBookmarkOpen: (v) => set({ isAddBookmarkOpen: v }),
   isVpnMenuOpen: false,
   setVpnMenuOpen: (v) => set({ isVpnMenuOpen: v }),
+  isBookmarksMenuOpen: false,
+  setBookmarksMenuOpen: (v) => set({ isBookmarksMenuOpen: v }),
   isCmdPaletteOpen: false,
   setCmdPaletteOpen: (v) => set({ isCmdPaletteOpen: v }),
   isCompareOpen: false,
