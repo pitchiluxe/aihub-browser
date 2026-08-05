@@ -101,6 +101,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getDoh: () => ipcRenderer.invoke('privacy:getDoh'),
     setDoh: (provider: string) => ipcRenderer.invoke('privacy:setDoh', provider),
   },
+  backup: {
+    // Export hands over the localStorage-only pieces (themes, window styles);
+    // everything else the main process reads from disk itself.
+    export:  (local: Record<string, string>) => ipcRenderer.invoke('backup:export', local),
+    preview: () => ipcRenderer.invoke('backup:preview'),
+    apply:   () => ipcRenderer.invoke('backup:apply'),
+  },
   sync: {
     status: () => ipcRenderer.invoke('sync:status'),
     push:   (passphrase: string) => ipcRenderer.invoke('sync:push', passphrase),

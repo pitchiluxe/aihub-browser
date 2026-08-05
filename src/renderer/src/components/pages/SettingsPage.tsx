@@ -12,6 +12,7 @@ import {
 } from '../../services/windowStyleService'
 import { mailStatus, mailConnect, mailDisconnect, mailSetCredentials } from '../../services/mailService'
 import { auditTheme } from '../../services/themeQuality'
+import { mergeLocalJsonArrays } from '../../services/backupLocal'
 
 const PAGE_SIZE = 40
 
@@ -98,6 +99,58 @@ export default function SettingsPage() {
     const next = !sortDownloads
     setSortDownloads(next)
     await window.electronAPI.settings.set({ sortDownloads: next })
+  }
+
+  // Backup file — move everything to another computer
+  const [backupBusy, setBackupBusy] = useState<'' | 'export' | 'import'>('')
+  const [backupMsg, setBackupMsg] = useState('')
+  const [pendingImport, setPendingImport] = useState<{ summary: any; device: string; createdAt: number } | null>(null)
+
+  // The pieces that live in localStorage rather than on disk travel too.
+  const LOCAL_BACKUP_KEYS = ['aihub-custom-themes', 'aihub-custom-window-styles', 'aihub-custom-exts']
+  const collectLocal = () => {
+    const out: Record<string, string> = {}
+    for (const key of LOCAL_BACKUP_KEYS) {
+      const value = localStorage.getItem(key)
+      if (value) out[key] = value
+    }
+    return out
+  }
+
+  const exportBackup = async () => {
+    setBackupBusy('export'); setBackupMsg('')
+    const res = await window.electronAPI.backup.export(collectLocal())
+    setBackupBusy('')
+    if (res?.cancelled) return
+    setBackupMsg(res?.ok
+      ? `Saved ${res.summary.verses} verses, ${res.summary.bookmarks} bookmarks and ${res.summary.highlights} highlights to ${res.path}`
+      : (res?.error || 'Export failed'))
+  }
+
+  const chooseBackup = async () => {
+    setBackupBusy('import'); setBackupMsg('')
+    const res = await window.electronAPI.backup.preview()
+    setBackupBusy('')
+    if (res?.cancelled) return
+    if (!res?.ok) { setBackupMsg(res?.error || 'Could not read that file'); return }
+    setPendingImport({ summary: res.summary, device: res.device, createdAt: res.createdAt })
+  }
+
+  const applyBackup = async () => {
+    setBackupBusy('import')
+    const res = await window.electronAPI.backup.apply()
+    setBackupBusy('')
+    setPendingImport(null)
+    if (!res?.ok) { setBackupMsg(res?.error || 'Import failed'); return }
+    // Merge the localStorage-only parts here, where localStorage actually is.
+    for (const [key, incoming] of Object.entries(res.local || {})) {
+      const merged = mergeLocalJsonArrays(localStorage.getItem(key) || undefined, incoming as string)
+      if (merged) localStorage.setItem(key, merged)
+    }
+    setBackupMsg(`Imported ${res.summary.verses} verses, ${res.summary.bookmarks} bookmarks, ${res.summary.themes} themes. Restarting the view…`)
+    // Bookmarks, themes and extensions are all read at startup, so the
+    // simplest honest way to show the imported state is a reload.
+    setTimeout(() => window.location.reload(), 1200)
   }
 
   // Encrypted sync (Google Drive)
@@ -885,6 +938,57 @@ export default function SettingsPage() {
       </Section>
 
       {/* Privacy */}
+      <Section icon={<Download size={15} />} title="Backup & move to another computer">
+        <div className="py-3">
+          <div className={LBL}>One file with everything you have made</div>
+          <div className="text-xs text-aihub-muted mb-3">
+            Saved verses, highlights and Bible notes; every bookmark with its category and colour, so the
+            sphere rebuilds exactly as it looks here; sticky notes, remembered sites, watches, custom
+            extensions and themes. API keys, tokens and cookies are deliberately left out — a backup file
+            is something you email to yourself.
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={exportBackup} disabled={!!backupBusy}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm bg-aihub-accent text-white hover:bg-aihub-accent-glow transition-all disabled:opacity-50">
+              {backupBusy === 'export' ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Export everything
+            </button>
+            <button onClick={chooseBackup} disabled={!!backupBusy}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm bg-aihub-card hover:bg-aihub-border/40 text-aihub-text transition-all disabled:opacity-50">
+              {backupBusy === 'import' ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Import from a file
+            </button>
+            {!!backupMsg && <span className="text-xs text-aihub-muted flex-1 min-w-[200px]">{backupMsg}</span>}
+          </div>
+        </div>
+
+        {/* Nothing is written until this is confirmed against real numbers. */}
+        {pendingImport && (
+          <div className="py-3 px-4 mb-3 rounded-xl" style={{ background: 'rgb(var(--ds-accent) / 0.08)', border: '1px solid rgb(var(--ds-accent) / 0.25)' }}>
+            <div className={LBL}>
+              Backup from {pendingImport.device} · {new Date(pendingImport.createdAt).toLocaleDateString()}
+            </div>
+            <div className="text-xs text-aihub-muted mb-2">
+              {pendingImport.summary.verses} saved verses · {pendingImport.summary.highlights} highlights ·{' '}
+              {pendingImport.summary.bibleNotes} Bible notes · {pendingImport.summary.bookmarks} bookmarks ·{' '}
+              {pendingImport.summary.notePages} note pages · {pendingImport.summary.themes} themes
+            </div>
+            <div className="text-xs text-aihub-muted mb-3">
+              These are <span className="text-aihub-text">added to</span> what is already here. Nothing on this
+              computer is deleted, and anything you have on both keeps this machine's version.
+            </div>
+            <div className="flex gap-2">
+              <button onClick={applyBackup} disabled={!!backupBusy}
+                className="px-4 py-2 rounded-xl text-sm bg-aihub-accent text-white hover:bg-aihub-accent-glow transition-all disabled:opacity-50">
+                Import it
+              </button>
+              <button onClick={() => setPendingImport(null)}
+                className="px-4 py-2 rounded-xl text-sm bg-aihub-card hover:bg-aihub-border/40 text-aihub-text transition-all">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </Section>
+
       <Section icon={<RefreshCw size={15} />} title="Sync">
         <div className="py-3">
           <div className={LBL}>Encrypted sync through your own Google Drive</div>

@@ -7,6 +7,21 @@ import { createJsonStore, createManagedJsonStore, flushAllJsonStores } from './j
 let dir: string
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
 
+/**
+ * Wait for the debounced write to land, rather than sleeping a fixed time and
+ * hoping. Under a loaded machine (the full suite in parallel) a fixed sleep
+ * raced the timer and failed spuriously — which is worse than no test, because
+ * it teaches people to ignore red.
+ */
+const waitForFile = async (file: string, timeoutMs = 3000) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (fs.existsSync(file)) return true
+    await wait(10)
+  }
+  return false
+}
+
 beforeEach(() => { dir = fs.mkdtempSync(join(os.tmpdir(), 'aihub-store-')) })
 afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
 
@@ -38,8 +53,9 @@ describe('createJsonStore', () => {
     const file = join(dir, 'debounced.json')
     const store = createJsonStore<string[]>(file, () => [], { debounceMs: 40 })
     store.update(list => { (list as string[]).push('a') })
+    // Nothing on disk yet: the write is deferred, which is the whole point.
     expect(fs.existsSync(file)).toBe(false)
-    await wait(90)
+    expect(await waitForFile(file)).toBe(true)
     expect(JSON.parse(fs.readFileSync(file, 'utf-8'))).toEqual(['a'])
   })
 
@@ -48,7 +64,7 @@ describe('createJsonStore', () => {
     const store = createJsonStore<number[]>(file, () => [], { debounceMs: 30 })
     for (let i = 0; i < 50; i++) store.update(list => { (list as number[]).push(i) })
     expect(fs.existsSync(file)).toBe(false)
-    await wait(80)
+    expect(await waitForFile(file)).toBe(true)
     expect(JSON.parse(fs.readFileSync(file, 'utf-8'))).toHaveLength(50)
   })
 
@@ -73,7 +89,7 @@ describe('createJsonStore', () => {
     const file = join(dir, 'atomic.json')
     const store = createJsonStore<number[]>(file, () => [], { debounceMs: 20 })
     store.set([1])
-    await wait(60)
+    expect(await waitForFile(file)).toBe(true)
     store.set([1, 2])
     store.flush()
     const leftovers = fs.readdirSync(dir).filter(f => f.endsWith('.tmp'))
@@ -86,7 +102,9 @@ describe('createJsonStore', () => {
     fs.writeFileSync(file, JSON.stringify([1, 2, 3, 4, 5]))
     const store = createJsonStore<number[]>(file, () => [], { debounceMs: 10 })
     store.set([1])
-    await wait(50)
+    await waitForFile(file)
+    // The replace test needs the CONTENT to settle, not just the file to exist.
+    for (let i = 0; i < 100 && JSON.parse(fs.readFileSync(file, 'utf-8')).length !== 1; i++) await wait(10)
     expect(JSON.parse(fs.readFileSync(file, 'utf-8'))).toEqual([1])
   })
 

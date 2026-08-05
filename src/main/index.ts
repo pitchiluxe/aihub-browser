@@ -23,6 +23,11 @@ import {
 } from './containers'
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
+import {
+  buildBackup, validateBackup, backupFileName, BACKUP_EXTENSION,
+  mergeBibleMarks, mergeBookmarks as mergeBackupBookmarks, mergeRecords, mergeById,
+  type BackupSections,
+} from './backup'
 import { pushSync, pullSync, clearSync } from './google/apis/sync'
 import {
   decideRequest, hostOf, emptyStats, recordBlock,
@@ -2402,6 +2407,121 @@ ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?
   return true
 })
 
+// ── IPC: Export / import everything to another computer ───────────────────
+// Sync keeps two machines in step continuously; this is the file you carry.
+// Assembled here because most of it lives on disk, with the renderer handing
+// over the few things that live in localStorage (custom themes and window
+// styles). See src/main/backup.ts for what travels and what deliberately does
+// not.
+const BACKUP_LOCAL_KEYS = ['aihub-custom-themes', 'aihub-custom-window-styles', 'aihub-custom-exts']
+
+function collectBackupSections(local: Record<string, string> | undefined): BackupSections {
+  const data = getData()
+  return {
+    bible: readBibleMarksForBackup(),
+    bookmarks: data.bookmarks || [],
+    stickyNotes: readJson(NOTES_FILE, {}),
+    siteMemory: readJson(SITE_MEMORY_FILE, {}),
+    watches: getWatches(),
+    extensions: readJson(EXT_FILE, { customExts: [], states: {} }),
+    settings: data.settings || {},
+    local: local || {},
+  }
+}
+
+ipcMain.handle('backup:export', async (e, local: Record<string, string>) => {
+  try {
+    const backup = buildBackup(collectBackupSections(local), {
+      device: os.hostname(),
+      appVersion: app.getVersion(),
+    })
+    const res = await dialog.showSaveDialog(winFrom(e) || mainWindow!, {
+      title: 'Save your AIHub backup',
+      defaultPath: join(app.getPath('documents'), backupFileName()),
+      filters: [{ name: 'AIHub Backup', extensions: [BACKUP_EXTENSION.replace('.', '')] }],
+    })
+    if (res.canceled || !res.filePath) return { cancelled: true }
+    // Pretty-printed: a backup is something people open, inspect and trust.
+    fs.writeFileSync(res.filePath, JSON.stringify(backup, null, 2), 'utf-8')
+    return { ok: true, path: res.filePath, summary: validateBackup(backup).summary }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Could not write the backup' }
+  }
+})
+
+// Read and CHECK a file, returning what it holds — nothing is written yet, so
+// the user confirms against real numbers before their data changes.
+ipcMain.handle('backup:preview', async (e) => {
+  try {
+    const res = await dialog.showOpenDialog(winFrom(e) || mainWindow!, {
+      title: 'Choose an AIHub backup',
+      properties: ['openFile'],
+      filters: [{ name: 'AIHub Backup', extensions: [BACKUP_EXTENSION.replace('.', ''), 'json'] }],
+    })
+    if (res.canceled || !res.filePaths[0]) return { cancelled: true }
+    const raw = fs.readFileSync(res.filePaths[0], 'utf-8')
+    const check = validateBackup(raw)
+    if (!check.ok) return { ok: false, error: check.error }
+    pendingImport = check.backup!
+    return { ok: true, path: res.filePaths[0], summary: check.summary, device: check.backup!.device, createdAt: check.backup!.createdAt }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Could not read that file' }
+  }
+})
+
+let pendingImport: ReturnType<typeof validateBackup>['backup'] = undefined
+
+ipcMain.handle('backup:apply', (_e) => {
+  if (!pendingImport) return { ok: false, error: 'Choose a backup file first' }
+  const sections = pendingImport.sections || {}
+  try {
+    // Bible first and most carefully — it is the irreplaceable part.
+    if (sections.bible) {
+      const merged = mergeBibleMarks(readBibleMarksForBackup(), sections.bible)
+      writeBibleMarks(merged)
+    }
+
+    const data = getData()
+    if (sections.bookmarks?.length) {
+      data.bookmarks = mergeBackupBookmarks(data.bookmarks || [], sections.bookmarks)
+    }
+    if (sections.settings) {
+      // Imported preferences fill gaps; anything already set here wins.
+      data.settings = { ...sections.settings, ...data.settings }
+    }
+    saveData()
+
+    if (sections.stickyNotes) {
+      writeJson(NOTES_FILE, mergeRecords(readJson(NOTES_FILE, {}), sections.stickyNotes))
+      _stickyNotes = null
+    }
+    if (sections.siteMemory) {
+      writeJson(SITE_MEMORY_FILE, mergeRecords(readJson(SITE_MEMORY_FILE, {}), sections.siteMemory))
+    }
+    if (sections.watches?.length) {
+      const merged = mergeById(getWatches(), sections.watches, 'id')
+      _watches = merged as any
+      saveWatches()
+    }
+    if (sections.extensions) {
+      const current = readJson(EXT_FILE, { customExts: [], states: {} })
+      writeJson(EXT_FILE, {
+        customExts: mergeById(current.customExts || [], sections.extensions.customExts || [], 'id'),
+        states: mergeRecords(current.states || {}, sections.extensions.states || {}),
+      })
+    }
+
+    const summary = validateBackup(pendingImport).summary
+    const local = sections.local || {}
+    pendingImport = undefined
+    safelySend('bookmarks:changed', getData().bookmarks)
+    // The renderer merges the localStorage-only parts itself and reloads.
+    return { ok: true, summary, local, localKeys: BACKUP_LOCAL_KEYS }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Import failed' }
+  }
+})
+
 // ── IPC: Encrypted sync over the user's own Google Drive ──────────────────
 // Bookmarks and preferences are encrypted on this machine with the user's
 // passphrase, then parked in Drive's hidden app-data folder. Google stores a
@@ -2989,6 +3109,31 @@ function marksHaveContent(m: BibleMarks): boolean {
 
 // `status` lets the renderer tell "nothing saved yet" (safe to write) apart
 // from "couldn't read your data" (never write, or we'd erase it).
+
+// Read the marks the way bible:getMarks does, including the backup fallback —
+// an import must never merge onto a "blank" reading of a file that is merely
+// unreadable this second, or it would look like nothing existed here.
+function readBibleMarksForBackup(): BibleMarks {
+  const readFile = (f: string): BibleMarks | null => {
+    try { return normaliseMarks(JSON.parse(fs.readFileSync(f, 'utf-8'))) } catch { return null }
+  }
+  return (fs.existsSync(BIBLE_MARKS_FILE) ? readFile(BIBLE_MARKS_FILE) : null)
+    || (fs.existsSync(BIBLE_MARKS_BAK) ? readFile(BIBLE_MARKS_BAK) : null)
+    || EMPTY_BIBLE_MARKS()
+}
+
+// The same atomic write bible:setMarks uses: previous good copy kept as the
+// backup, temp file renamed into place.
+function writeBibleMarks(next: BibleMarks): void {
+  ensureDir()
+  if (fs.existsSync(BIBLE_MARKS_FILE)) {
+    try { fs.copyFileSync(BIBLE_MARKS_FILE, BIBLE_MARKS_BAK) } catch {}
+  }
+  const tmp = `${BIBLE_MARKS_FILE}.tmp`
+  fs.writeFileSync(tmp, JSON.stringify(next, null, 2))
+  fs.renameSync(tmp, BIBLE_MARKS_FILE)
+}
+
 ipcMain.handle('bible:getMarks', (): BibleMarks & { status: 'ok' | 'empty' | 'unreadable' } => {
   const readFile = (f: string): BibleMarks | null => {
     try { return normaliseMarks(JSON.parse(fs.readFileSync(f, 'utf-8'))) } catch { return null }

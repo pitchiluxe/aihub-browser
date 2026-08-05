@@ -298,6 +298,7 @@
       <a href="#sessions">Sessions &amp; containers</a>
       <a href="#vault">Obsidian &amp; sync</a>
       <div class="rail-grp">Reference</div>
+      <a href="#transfer">Move to a new PC</a>
       <a href="#keys">All shortcuts</a>
       <a href="#menus">Right-click menus</a>
       <a href="#privacy">Privacy</a>
@@ -1317,6 +1318,74 @@
       </section>
 
       <!-- SHORTCUTS -->
+      <section id="transfer">
+        <div class="sec-head"><span class="node" style="background:var(--emerald)"></span><h2>Moving to another computer</h2><span class="sec-line"></span></div>
+        <p>Everything you have made in AIHub goes into one file. Carry it on a USB stick, mail it to
+        yourself, or keep it as a backup — then import it on the new machine and carry on where you left off.</p>
+
+        <figure class="fig">
+          <svg viewBox="0 0 720 200" role="img" aria-label="A backup file carrying verses, bookmarks and notes from one computer to another">
+            <defs>
+              <linearGradient id="gtransfer" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#34D399"/><stop offset="1" stop-color="#38BDF8"/>
+              </linearGradient>
+            </defs>
+            <rect x="24" y="46" width="190" height="120" rx="12" fill="#12141a" stroke="#2a2d36"/>
+            <rect x="24" y="46" width="190" height="22" rx="12" fill="#1b1e26"/>
+            <text x="119" y="61" font-size="11" fill="#9aa0ac" text-anchor="middle" font-family="system-ui">This computer</text>
+            <text x="44" y="94" font-size="11" fill="#e6e7ea" font-family="system-ui">150 saved verses</text>
+            <text x="44" y="114" font-size="11" fill="#e6e7ea" font-family="system-ui">152 highlights</text>
+            <text x="44" y="134" font-size="11" fill="#e6e7ea" font-family="system-ui">244 bookmarks + sphere</text>
+            <text x="44" y="154" font-size="11" fill="#e6e7ea" font-family="system-ui">notes, themes, extensions</text>
+
+            <path d="M232 106 H488" stroke="url(#gtransfer)" stroke-width="2" stroke-dasharray="6 5"/>
+            <polygon points="488,106 478,101 478,111" fill="#38BDF8"/>
+            <rect x="300" y="82" width="120" height="46" rx="9" fill="#0f1720" stroke="#34D399"/>
+            <text x="360" y="101" font-size="11" fill="#34D399" text-anchor="middle" font-family="system-ui">one .aihub file</text>
+            <text x="360" y="118" font-size="10" fill="#6b7280" text-anchor="middle" font-family="system-ui">no keys · no cookies</text>
+
+            <rect x="506" y="46" width="190" height="120" rx="12" fill="#12141a" stroke="#2a2d36"/>
+            <rect x="506" y="46" width="190" height="22" rx="12" fill="#1b1e26"/>
+            <text x="601" y="61" font-size="11" fill="#9aa0ac" text-anchor="middle" font-family="system-ui">The new computer</text>
+            <text x="526" y="100" font-size="11" fill="#e6e7ea" font-family="system-ui">everything, merged in</text>
+            <text x="526" y="120" font-size="11" fill="#9aa0ac" font-family="system-ui">nothing already here</text>
+            <text x="526" y="136" font-size="11" fill="#9aa0ac" font-family="system-ui">is deleted</text>
+          </svg>
+          <figcaption>Export on the old machine, import on the new one. The sphere rebuilds itself from the bookmarks.</figcaption>
+        </figure>
+
+        <h3>How to do it</h3>
+        <ol class="steps">
+          <li><div><strong>On the old computer:</strong> <em>Settings → Backup &amp; move to another computer → Export everything</em>, and save the <code>.aihub</code> file. It is also on the Bible page: open <strong>Saved</strong> and use <strong>Export</strong> there.</div></li>
+          <li><div><strong>Copy the file across</strong> — USB stick, email, cloud drive, whatever suits.</div></li>
+          <li><div><strong>On the new computer:</strong> <em>Settings → Import from a file</em>. You are shown exactly what is inside — verses, highlights, bookmarks, themes — and nothing is written until you confirm.</div></li>
+        </ol>
+
+        <h3>What travels</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Carried</th><th>Left behind, on purpose</th></tr></thead>
+            <tbody>
+              <tr><td>Saved verses, highlights and Bible notes</td><td>API keys and Google tokens</td></tr>
+              <tr><td>Every bookmark with its category and colour — the sphere is drawn from these, so it comes back exactly as it looked</td><td>Cookies and logins</td></tr>
+              <tr><td>Sticky notes and what the assistant remembers per site</td><td>Your Obsidian vault path (it belongs to the other machine)</td></tr>
+              <tr><td>Watches, custom extensions and their settings, custom themes and window styles</td><td>Site containers, which are per-machine cookie jars</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <strong>Import adds, it never replaces.</strong> Importing your old laptop onto a machine you have
+          already been using keeps both sets. Where the same verse or page exists on both, this computer's
+          version wins, and a verse keeps the date you first saved it. Importing the same file twice changes
+          nothing the second time.
+        </div>
+
+        <p class="muted">Prefer it to happen by itself? <em>Settings → Sync</em> keeps bookmarks and preferences
+        in step continuously through your own Google Drive, encrypted before they leave the machine. The
+        backup file is the one you can hold — and the only one that carries your Bible study.</p>
+      </section>
+
       <section id="keys">
         <div class="sec-head"><span class="node" style="background:var(--ink-3)"></span><h2>Every keyboard shortcut</h2><span class="sec-line"></span></div>
         <p class="sec-sub">All of these work even while a web page has keyboard focus.</p>
