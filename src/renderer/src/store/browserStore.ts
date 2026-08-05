@@ -1,7 +1,8 @@
 import { create } from 'zustand'
+import { proposeGroups, groupColorFor, type TabGroup } from '../services/tabGroups'
 
 export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string }
-export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; asleep?: boolean; pageType?: 'browser'|'settings'|'history'|'downloads'|'wifi'|'vpn'|'research'|'agents'|'extensions'|'mail'|'notes'|'manual'|'rewind'|'watch'|'bible' }
+export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; asleep?: boolean; groupId?: string; containerId?: string; pageType?: 'browser'|'settings'|'history'|'downloads'|'wifi'|'vpn'|'research'|'agents'|'extensions'|'mail'|'notes'|'manual'|'rewind'|'watch'|'bible' }
 export interface AIMessage { role: 'user'|'assistant'|'system'; content: string; steps?: { label: string; status: 'pending' | 'done' | 'error' }[] }
 export interface HistoryItem { id: string; url: string; title: string; favicon?: string; timestamp: number }
 export interface DownloadItem { id: string; filename: string; url: string; savePath: string; totalBytes: number; receivedBytes: number; state: string; startedAt: number; completedAt?: number }
@@ -16,7 +17,23 @@ interface BrowserState {
   // Tabs
   tabs: Tab[]
   activeTabId: string | null
-  addTab: (url?: string, pageType?: Tab['pageType']) => string
+  addTab: (url?: string, pageType?: Tab['pageType'], containerId?: string) => string
+  /** Replace every open tab with a saved set (session restore, workspaces). */
+  restoreTabs: (entries: { url: string; title?: string; pageType?: Tab['pageType'] }[], activeIndex: number) => void
+  /** Close duplicate tabs, keeping one of each page. Returns how many closed. */
+  mergeDuplicateTabs: () => number
+  /** Tab shown beside the active one in split view (null = single pane). */
+  splitTabId: string | null
+  setSplitTab: (id: string | null) => void
+
+  // Tab groups — see services/tabGroups.ts for the grouping rules.
+  tabGroups: TabGroup[]
+  createGroup: (name: string, color: string, tabIds: string[]) => string
+  renameGroup: (id: string, name: string) => void
+  toggleGroupCollapsed: (id: string) => void
+  ungroup: (id: string) => void
+  assignTabToGroup: (tabId: string, groupId: string | null) => void
+  autoGroupTabs: () => number
   closeTab: (id: string) => void
   closeOtherTabs: (id: string) => void
   closeTabsToRight: (id: string) => void
@@ -106,17 +123,120 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   tabs: [{ id: 'tab-1', url: 'home', title: 'New Tab', favicon: '', isLoading: false, isHome: true, pageType: 'browser' }],
   activeTabId: 'tab-1',
 
-  addTab: (url = 'home', pageType = 'browser') => {
+  addTab: (url = 'home', pageType = 'browser', containerId?: string) => {
     const id = `tab-${++tabN}`
     const isHome = url === 'home' && pageType === 'browser'
     set(s => ({
-      tabs: [...s.tabs, { id, url, title: isHome ? 'New Tab' : pageType !== 'browser' ? pageType.charAt(0).toUpperCase() + pageType.slice(1) : url, favicon: '', isLoading: false, isHome, pageType }],
+      tabs: [...s.tabs, { id, url, title: isHome ? 'New Tab' : pageType !== 'browser' ? pageType.charAt(0).toUpperCase() + pageType.slice(1) : url, favicon: '', isLoading: false, isHome, pageType, containerId }],
       activeTabId: id,
       canGoBack: false,
       canGoForward: false,
     }))
     return id
   },
+
+  // Session restore and workspaces both land here: build the whole strip in one
+  // set() so the tab bar animates once instead of N times, and so no
+  // intermediate state ever has an activeTabId pointing at a tab that is about
+  // to be replaced.
+  restoreTabs: (entries, activeIndex) => {
+    const usable = (entries || []).filter(e => e && typeof e.url === 'string' && e.url)
+    if (!usable.length) return
+    const tabs: Tab[] = usable.map(e => {
+      const pageType = (e.pageType || 'browser') as Tab['pageType']
+      const isHome = e.url === 'home' && pageType === 'browser'
+      return {
+        id: `tab-${++tabN}`,
+        url: e.url,
+        title: e.title || (isHome ? 'New Tab' : e.url),
+        favicon: '',
+        isLoading: false,
+        isHome,
+        pageType,
+      }
+    })
+    const idx = Math.min(Math.max(activeIndex ?? 0, 0), tabs.length - 1)
+    set({ tabs, activeTabId: tabs[idx].id, tabWcIds: {}, canGoBack: false, canGoForward: false })
+  },
+
+  tabGroups: [],
+  createGroup: (name, color, tabIds) => {
+    const id = `grp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    set(s => ({
+      tabGroups: [...s.tabGroups, { id, name, color }],
+      tabs: s.tabs.map(t => (tabIds.includes(t.id) ? { ...t, groupId: id } : t)),
+    }))
+    return id
+  },
+  renameGroup: (id, name) => set(s => ({
+    tabGroups: s.tabGroups.map(g => (g.id === id ? { ...g, name } : g)),
+  })),
+  toggleGroupCollapsed: (id) => set(s => ({
+    tabGroups: s.tabGroups.map(g => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)),
+  })),
+  // Removing a group must free its tabs, not close them — otherwise "ungroup"
+  // reads as "delete these tabs", which is the one thing it must never do.
+  ungroup: (id) => set(s => ({
+    tabGroups: s.tabGroups.filter(g => g.id !== id),
+    tabs: s.tabs.map(t => (t.groupId === id ? { ...t, groupId: undefined } : t)),
+  })),
+  assignTabToGroup: (tabId, groupId) => set(s => ({
+    tabs: s.tabs.map(t => (t.id === tabId ? { ...t, groupId: groupId ?? undefined } : t)),
+  })),
+  autoGroupTabs: () => {
+    const { tabs, tabGroups } = get()
+    // Only propose groups for tabs that aren't already in one, so running this
+    // twice doesn't shuffle the user's own grouping.
+    const loose = tabs.filter(t => !t.groupId)
+    const proposals = proposeGroups(loose)
+    if (!proposals.length) return 0
+    const created: TabGroup[] = []
+    const assignment = new Map<string, string>()
+    proposals.forEach((p, i) => {
+      const id = `grp-${Date.now()}-${i}`
+      created.push({ id, name: p.name, color: groupColorFor(tabGroups.length + i) })
+      p.tabIds.forEach(tabId => assignment.set(tabId, id))
+    })
+    set(s => ({
+      tabGroups: [...s.tabGroups, ...created],
+      tabs: s.tabs.map(t => (assignment.has(t.id) ? { ...t, groupId: assignment.get(t.id) } : t)),
+    }))
+    return created.length
+  },
+
+  // Duplicate tabs accumulate from middle-clicks and links that open what is
+  // already open. Keep the FIRST copy of each page (it holds the older history
+  // and scroll position) and keep the active tab selected if its own copy is
+  // the one that goes.
+  mergeDuplicateTabs: () => {
+    const { tabs, activeTabId } = get()
+    const seen = new Map<string, string>()
+    const keep: Tab[] = []
+    const dropped: string[] = []
+    let nextActive = activeTabId
+    for (const tab of tabs) {
+      const key = `${tab.pageType || 'browser'}::${tab.isHome ? 'home' : tab.url}`
+      const existing = seen.get(key)
+      if (existing) {
+        dropped.push(tab.id)
+        if (tab.id === activeTabId) nextActive = existing
+        continue
+      }
+      seen.set(key, tab.id)
+      keep.push(tab)
+    }
+    if (!dropped.length) return 0
+    const wcIds = { ...get().tabWcIds }
+    for (const id of dropped) delete wcIds[id]
+    set({ tabs: keep, activeTabId: nextActive, tabWcIds: wcIds })
+    return dropped.length
+  },
+
+  splitTabId: null,
+  setSplitTab: (id) => set(s => ({
+    // Splitting a tab with itself is the same as no split at all.
+    splitTabId: id && id !== s.activeTabId ? id : null,
+  })),
 
   closedTabs: [],
   reopenClosedTab: () => {
@@ -128,9 +248,12 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   },
 
   closeTab: (id) => {
-    const { tabs, activeTabId, tabWcIds, closedTabs } = get()
+    const { tabs, activeTabId, tabWcIds, closedTabs, splitTabId } = get()
     const newWcIds = { ...tabWcIds }
     delete newWcIds[id]
+    // Closing the split partner ends the split; leaving the id set would keep
+    // half the content area reserved for a tab that no longer exists.
+    if (splitTabId === id) set({ splitTabId: null })
     const closing = tabs.find(t => t.id === id)
     if (closing && restorable(closing)) {
       set({ closedTabs: [{ url: closing.url, pageType: closing.pageType }, ...closedTabs].slice(0, 25) })

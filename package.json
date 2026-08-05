@@ -1,6 +1,6 @@
 {
   "name": "aihub-browser",
-  "version": "1.30.0",
+  "version": "1.31.0",
   "description": "AIHub — Next-Generation AI-Powered Browser",
   "main": "./out/main/index.js",
   "homepage": ".",
@@ -19,12 +19,13 @@
     "package": "npm run generate-icon && npm run build && cross-env ELECTRON_RUN_AS_NODE= electron-builder",
     "postinstall": "electron-builder install-app-deps",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
   "dependencies": {
-    "@types/d3": "^7.4.3",
+    "@types/d3-force": "^3.0.10",
     "axios": "^1.7.2",
-    "d3": "^7.9.0",
+    "d3-force": "^3.0.0",
     "electron-updater": "^6.3.9",
     "framer-motion": "^11.2.10",
     "lucide-react": "^0.400.0",

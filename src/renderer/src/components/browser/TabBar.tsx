@@ -9,7 +9,7 @@ import { useBrowserStore, Tab } from '../../store/browserStore'
 // on the left and skips the custom window buttons entirely.
 const IS_MAC = window.electronAPI?.platform === 'darwin'
 
-export default function TabBar() {
+export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compact' } = {}) {
   // Narrow subscription — without a selector every store mutation (AI chat
   // streaming, download progress…) re-rendered the whole tab strip.
   const { tabs, activeTabId, addTab, closeTab, closeOtherTabs, closeTabsToRight, setActiveTab, reorderTabs, sleepTab } = useBrowserStore(
@@ -63,8 +63,12 @@ export default function TabBar() {
     el?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
   }, [activeTabId, tabs.length])
 
-  const handleDragStart = (e: React.DragEvent, tabId: string) => {
+  // Native DragEvent, not React's synthetic one: framer-motion claims
+  // onDragStart/onDrag/onDragEnd as its own gesture props and never forwards
+  // them to the DOM, so this is bound directly to the element (see TabItem).
+  const handleDragStart = (e: DragEvent, tabId: string) => {
     dragTabId.current = tabId
+    if (!e.dataTransfer) return
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', tabId)
   }
@@ -113,7 +117,13 @@ export default function TabBar() {
       {/* Scrollable tab strip — tabs shrink to fit and only scroll once they
           hit their minimum width, so none get pushed off behind the window
           controls (which now live outside this container and stay pinned). */}
-      <div
+      {/* In vertical-strip mode the tab list lives in the left rail, so this bar
+          keeps only its titlebar duties: the drag region and the window
+          controls. Rendering an empty strip container preserves the layout and
+          the drag behaviour without duplicating every tab on screen. */}
+      {variant === 'compact' && <div className="drag-region flex-1 self-stretch" />}
+
+      {variant === 'full' && <div
         ref={stripRef}
         className="flex items-end gap-1 overflow-x-auto no-scrollbar min-w-0 flex-1"
         onDragEnd={handleStripDragEnd}
@@ -144,7 +154,7 @@ export default function TabBar() {
 
         {/* Draggable filler — collapses to 0 once tabs fill the strip */}
         <div style={{ flex: '1 0 12px', minWidth: 12, alignSelf: 'stretch' }} className="drag-region" />
-      </div>
+      </div>}
 
       {/* Window controls — pinned right, always visible regardless of tab
           count. macOS uses its native traffic lights (left inset) instead. */}
@@ -172,21 +182,38 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
   onActivate: () => void
   onClose: () => void
   onContextMenu: (e: React.MouseEvent) => void
-  onDragStart: (e: React.DragEvent) => void
+  onDragStart: (e: DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
 }) {
   const [hovered, setHovered] = useState(false)
+  const itemRef = useRef<HTMLDivElement>(null)
+
+  // framer-motion treats onDragStart as one of ITS gesture props: it strips it
+  // from the props handed to the DOM node, so passing an HTML5 drag handler to
+  // motion.div silently does nothing. That left dragTabId unset, which broke
+  // both tab reordering and drag-a-tab-out-to-a-new-window (the strip's
+  // dragend handler bails when no tab id was recorded). Binding the native
+  // event on the element bypasses the prop filter entirely.
+  const dragStartRef = useRef(onDragStart)
+  dragStartRef.current = onDragStart
+  useEffect(() => {
+    const el = itemRef.current
+    if (!el) return
+    const handler = (e: DragEvent) => dragStartRef.current(e)
+    el.addEventListener('dragstart', handler)
+    return () => el.removeEventListener('dragstart', handler)
+  }, [])
 
   return (
     <motion.div
+      ref={itemRef}
       data-tab-id={tab.id}
       initial={{ maxWidth: 0, minWidth: 0, opacity: 0, y: 4 }}
       animate={{ maxWidth: 176, minWidth: 46, opacity: 1, y: 0 }}
       exit={{ maxWidth: 0, minWidth: 0, opacity: 0, y: 4 }}
       transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
       draggable
-      onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
       onMouseEnter={() => setHovered(true)}

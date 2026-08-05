@@ -1,12 +1,15 @@
 import React, { useRef, useEffect, useCallback, useState, memo } from 'react'
-import * as d3 from 'd3'
+// Only d3's force layout is used here. Importing the `d3` meta-package pulls
+// its whole surface (selection, scales, geo, chord, …) into the startup
+// chunk; the force module alone is a fraction of that.
+import { ForceLink, Simulation, SimulationLinkDatum, SimulationNodeDatum, forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation } from 'd3-force'
 import { Search, X, ZoomIn, ZoomOut, ChevronLeft, Maximize2, Play, Square, Crosshair, RefreshCw } from 'lucide-react'
 import { Bookmark } from '../../store/browserStore'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { isBookmarkProtected } from '../../services/bookmarkService'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface ExtNode extends d3.SimulationNodeDatum {
+interface ExtNode extends SimulationNodeDatum {
   id: string
   bookmark: Bookmark
   size: number
@@ -14,7 +17,7 @@ interface ExtNode extends d3.SimulationNodeDatum {
   connections: number
 }
 
-interface ExtLink extends d3.SimulationLinkDatum<ExtNode> {
+interface ExtLink extends SimulationLinkDatum<ExtNode> {
   source: ExtNode | string
   target: ExtNode | string
   strength: number
@@ -186,7 +189,7 @@ function buildGraphData(bookmarks: Bookmark[]): { nodes: ExtNode[]; links: ExtLi
 function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   const mountRef      = useRef<HTMLDivElement>(null)
   const canvasRef     = useRef<HTMLCanvasElement>(null)
-  const simRef        = useRef<d3.Simulation<ExtNode, ExtLink> | null>(null)
+  const simRef        = useRef<Simulation<ExtNode, ExtLink> | null>(null)
   const nodesRef      = useRef<ExtNode[]>([])
   const linksRef      = useRef<ExtLink[]>([])
   const rafRef        = useRef<number>(0)
@@ -669,24 +672,24 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     const charge   = -Math.max(120, Math.min(560, 120 + n * 11))
     const linkDist = Math.max(90, Math.min(220, 65 + n * 4))
 
-    const sim = d3.forceSimulation<ExtNode>(nodes)
+    const sim = forceSimulation<ExtNode>(nodes)
       .alphaDecay(0.024)
       .velocityDecay(0.46)
-      .force('link', d3.forceLink<ExtNode, ExtLink>(links)
+      .force('link', forceLink<ExtNode, ExtLink>(links)
         .id(d => d.id)
         .distance(linkDist)
         .strength(l => (l as ExtLink).strength))
-      .force('charge', d3.forceManyBody<ExtNode>()
+      .force('charge', forceManyBody<ExtNode>()
         .strength(charge)
         .distanceMax(600))
-      .force('center', d3.forceCenter(W / 2, H / 2).strength(0.038))
-      .force('collision', d3.forceCollide<ExtNode>()
+      .force('center', forceCenter(W / 2, H / 2).strength(0.038))
+      .force('collision', forceCollide<ExtNode>()
         .radius(d => nodeRadius(d.size) + 9)
         .strength(0.88))
 
     simRef.current  = sim
     nodesRef.current = nodes
-    linksRef.current = (sim.force('link') as d3.ForceLink<ExtNode, ExtLink>).links()
+    linksRef.current = (sim.force('link') as ForceLink<ExtNode, ExtLink>).links()
 
     // Pre-tick for initial spread — more ticks = nodes arrive already spread
     const ticks = Math.min(300, Math.max(120, n * 6))

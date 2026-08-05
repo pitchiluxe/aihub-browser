@@ -87,6 +87,47 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAIConfig:   () => ipcRenderer.invoke('settings:getAIConfig'),
     setAIConfig:   (cfg:any) => ipcRenderer.invoke('settings:setAIConfig', cfg),
   },
+  privacy: {
+    getDoh: () => ipcRenderer.invoke('privacy:getDoh'),
+    setDoh: (provider: string) => ipcRenderer.invoke('privacy:setDoh', provider),
+  },
+  sync: {
+    status: () => ipcRenderer.invoke('sync:status'),
+    push:   (passphrase: string) => ipcRenderer.invoke('sync:push', passphrase),
+    pull:   (passphrase: string) => ipcRenderer.invoke('sync:pull', passphrase),
+    clear:  () => ipcRenderer.invoke('sync:clear'),
+  },
+  containers: {
+    list:   () => ipcRenderer.invoke('containers:list'),
+    add:    (name: string, color: string) => ipcRenderer.invoke('containers:add', name, color),
+    remove: (id: string) => ipcRenderer.invoke('containers:remove', id),
+    clear:  (id: string) => ipcRenderer.invoke('containers:clear', id),
+  },
+  obsidian: {
+    status:      () => ipcRenderer.invoke('obsidian:status'),
+    chooseVault: () => ipcRenderer.invoke('obsidian:chooseVault'),
+    clearVault:  () => ipcRenderer.invoke('obsidian:clearVault'),
+    save:        (note: { kind: 'clip' | 'bookmark' | 'answer'; title: string; url?: string; content: string; tags?: string[]; extra?: Record<string, any> }) =>
+      ipcRenderer.invoke('obsidian:save', note),
+  },
+  session: {
+    save:        (tabs: any[], activeIndex: number) => ipcRenderer.invoke('session:save', tabs, activeIndex),
+    getLast:     () => ipcRenderer.invoke('session:getLast'),
+    getPrevious: () => ipcRenderer.invoke('session:getPrevious'),
+  },
+  workspaces: {
+    list:   () => ipcRenderer.invoke('workspace:list'),
+    save:   (name: string, tabs: any[], activeIndex: number) => ipcRenderer.invoke('workspace:save', name, tabs, activeIndex),
+    get:    (id: string) => ipcRenderer.invoke('workspace:get', id),
+    remove: (id: string) => ipcRenderer.invoke('workspace:delete', id),
+  },
+  adblock: {
+    get:         () => ipcRenderer.invoke('adblock:get'),
+    setEnabled:  (on: boolean) => ipcRenderer.invoke('adblock:setEnabled', on),
+    toggleSite:  (url: string) => ipcRenderer.invoke('adblock:toggleSite', url),
+    setCustom:   (domains: string[]) => ipcRenderer.invoke('adblock:setCustom', domains),
+    countForTab: (wcId: number) => ipcRenderer.invoke('adblock:countForTab', wcId),
+  },
   ollama: {
     status: () => ipcRenderer.invoke('ollama:status'),
     pull:   (m:string) => ipcRenderer.invoke('ollama:pull', m),
@@ -124,6 +165,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   rewind: {
     add:    (entry: { url: string; title?: string; favicon?: string; text?: string }) => ipcRenderer.invoke('rewind:add', entry),
     search: (query: string) => ipcRenderer.invoke('rewind:search', query),
+    smartSearch: (query: string) => ipcRenderer.invoke('rewind:smartSearch', query),
+    semanticStats: () => ipcRenderer.invoke('semantic:stats'),
     stats:  () => ipcRenderer.invoke('rewind:stats'),
     remove: (id: string) => ipcRenderer.invoke('rewind:remove', id),
     clear:  () => ipcRenderer.invoke('rewind:clear'),
@@ -223,10 +266,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showContextMenu: (hasText: boolean) => ipcRenderer.invoke('urlbar:showContextMenu', hasText),
   },
   tabView: {
-    create:          (tabId: string, url: string)                                              => ipcRenderer.invoke('tabview:create', tabId, url),
+    create:          (tabId: string, url: string, containerId?: string | null)                    => ipcRenderer.invoke('tabview:create', tabId, url, containerId),
     destroy:         (tabId: string)                                                            => ipcRenderer.invoke('tabview:destroy', tabId),
     setActive:       (tabId: string | null)                                                      => ipcRenderer.invoke('tabview:setActive', tabId),
     setBounds:       (bounds: { x: number; y: number; width: number; height: number })          => ipcRenderer.invoke('tabview:setBounds', bounds),
+    pictureInPicture:(tabId: string)                                                            => ipcRenderer.invoke('tabview:pictureInPicture', tabId),
+    captureFullPage: (tabId: string)                                                            => ipcRenderer.invoke('tabview:captureFullPage', tabId),
+    setSplit:        (tabId: string | null, ratio?: number)                                     => ipcRenderer.invoke('tabview:setSplit', tabId, ratio),
     setOverlayHidden:(hidden: boolean)                                                          => ipcRenderer.invoke('tabview:setOverlayHidden', hidden),
     navigate:        (tabId: string, url: string)                                               => ipcRenderer.invoke('tabview:navigate', tabId, url),
     preconnect:      (url: string)                                                              => ipcRenderer.invoke('tabview:preconnect', url),

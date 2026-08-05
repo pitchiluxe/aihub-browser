@@ -11,6 +11,24 @@ import { recordVisit, generateRecommendations, saveRecommendations, getStoredRec
 import { registerGoogleIpc } from './google'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel } from './modelRouting'
+import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
+import { createSessionManager, type SessionTab } from './sessions'
+import axios from 'axios'
+import { createSemanticIndex, type SearchDoc } from './semantic'
+import { splitPanes } from './layout'
+import { writeNote, describeVault, type NoteKind } from './obsidian'
+import { contentHash, describeChange, containsKeyword } from './watchDiff'
+import {
+  partitionFor, addContainer, removeContainer, DEFAULT_CONTAINERS, type Container,
+} from './containers'
+import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
+import { subfolderFor } from './downloadSorting'
+import { pushSync, pullSync, clearSync } from './google/apis/sync'
+import {
+  decideRequest, hostOf, emptyStats, recordBlock,
+  DEFAULT_ADBLOCK_CONFIG, type AdblockConfig,
+} from './blocking'
+import { BLOCKLIST_SIZE } from './blocking/adblockList'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -112,7 +130,20 @@ function seedPinnedBookmarks(d: any): boolean {
 
 function ensureDir() { if (!fs.existsSync(APP_DIR)) fs.mkdirSync(APP_DIR, { recursive: true }) }
 function readJson(f: string, fb: any): any { try { return JSON.parse(fs.readFileSync(f, 'utf-8')) } catch { return fb } }
-function writeJson(f: string, d: any) { try { ensureDir(); fs.writeFileSync(f, JSON.stringify(d, null, 2)) } catch {} }
+// Write through a temp file and rename over the target: rename is atomic, so a
+// crash or power cut mid-write leaves the previous file intact instead of a
+// truncated one. Plain writeFileSync could destroy the user's bookmarks and
+// settings at the moment it was trying to save them.
+function writeJson(f: string, d: any) {
+  const tmp = `${f}.${process.pid}.tmp`
+  try {
+    ensureDir()
+    fs.writeFileSync(tmp, JSON.stringify(d, null, 2))
+    fs.renameSync(tmp, f)
+  } catch {
+    try { fs.unlinkSync(tmp) } catch {}
+  }
+}
 
 let _data: any = null
 function getData(): any {
@@ -140,6 +171,20 @@ function defaultSettings() {
     openrouterBase:  '',
     openrouterModel: '',
     ollamaUrl:       '',
+    // Ad/tracker blocking — on by default; see src/main/blocking.
+    adblock: { enabled: true, allowlist: [] as string[], custom: [] as string[] },
+    // Reopen the tabs that were open when the app last closed.
+    restoreSession: true,
+    // 'horizontal' (classic top strip) or 'vertical' (left rail).
+    tabLayout: 'horizontal',
+    // Folder of the user's Obsidian vault; empty until they pick one.
+    obsidianVault: '',
+    // Site containers — isolated cookie jars a tab can be opened in.
+    containers: DEFAULT_CONTAINERS,
+    // File downloads into Documents/Images/Video/… folders by type.
+    sortDownloads: true,
+    // 'off' | 'cloudflare' | 'google' | 'quad9'
+    dohProvider: 'off',
   }
 }
 function saveData() { writeJson(DATA_FILE, _data) }
@@ -429,6 +474,10 @@ interface AppWin {
   bounds: { x: number; y: number; width: number; height: number }
   /** True while a host HTML overlay (a modal) must paint above tab content */
   overlayHidden: boolean
+  /** Second tab shown beside the active one in split view, if any. */
+  splitId: string | null
+  /** Share of the content width given to the LEFT (active) pane, 0.2–0.8. */
+  splitRatio: number
 }
 
 // Keyed by the window's own renderer webContents id, which is what arrives on
@@ -667,6 +716,58 @@ ipcMain.handle('urlbar:showContextMenu', (e, hasText: boolean) => {
 // Sphere, page-level AI) are shown only then. Edit/link/image/selection actions
 // are always available. App-feature actions (AI, Research, Agent, Annotation,
 // Sphere) are forwarded to the renderer via the 'page-context-action' channel.
+
+// Clip the current page (or just the selected passage) into the Obsidian vault
+// as a markdown note. Runs in the main process because that is where both the
+// page's text and the vault live — the renderer never needs to see either.
+async function clipToVault(wc: Electron.WebContents, selection?: string) {
+  const vaultPath = getData().settings?.obsidianVault || ''
+  if (!vaultPath) {
+    notifyQuiet('No Obsidian vault yet', 'Pick your vault folder in Settings → Obsidian, then try again.')
+    return
+  }
+  let title = 'Web page'
+  let url = ''
+  try { url = wc.getURL(); title = wc.getTitle() || url } catch {}
+
+  let body = (selection || '').trim()
+  if (!body) {
+    try {
+      // Readable text only: script and style content would land in the note as
+      // noise, and Obsidian would index every line of it.
+      body = await wc.executeJavaScript(`(() => {
+        const root = document.querySelector('article') || document.querySelector('main') || document.body
+        if (!root) return ''
+        const clone = root.cloneNode(true)
+        clone.querySelectorAll('script,style,noscript,svg,iframe').forEach(n => n.remove())
+        return (clone.innerText || '').replace(/
+{3,}/g, '
+
+').trim().slice(0, 20000)
+      })()`)
+    } catch { body = '' }
+  }
+
+  const result = writeNote(vaultPath, {
+    kind: 'clip',
+    title,
+    url,
+    content: body || '_(no readable text on this page)_',
+    tags: selection ? ['highlight'] : [],
+  })
+  if (result.ok) notifyQuiet('Saved to Obsidian', title)
+  else notifyQuiet('Could not save to Obsidian', result.error || 'Unknown error')
+}
+
+// A notification that never steals focus or plays a sound — this is a
+// confirmation, not an alert.
+function notifyQuiet(title: string, body: string) {
+  try {
+    if (!Notification.isSupported()) return
+    new Notification({ title, body, silent: true }).show()
+  } catch {}
+}
+
 function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) {
   wc.on('context-menu', (_e, params) => {
     const tabId = opts?.tabId
@@ -715,6 +816,7 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       const short = sel.length > 24 ? sel.slice(0, 24) + '…' : sel
       menu.append(new MenuItem({ label: `Ask AI about “${short}”`, click: () => sendAction('ai', { selection: sel }) }))
       menu.append(new MenuItem({ label: `Search Google for “${short}”`, click: () => sendTo(menuCtx, 'open-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(sel)}`) }))
+      menu.append(new MenuItem({ label: 'Save Selection to Obsidian', click: () => { void clipToVault(wc, sel) } }))
     }
 
     // ── Link ──
@@ -751,6 +853,7 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       sep()
       menu.append(new MenuItem({ label: 'Create QR Code for this Page', click: () => sendAction('qr') }))
       menu.append(new MenuItem({ label: 'Copy Page URL', click: () => clipboard.writeText(pageUrl) }))
+      menu.append(new MenuItem({ label: 'Save Page to Obsidian', click: () => { void clipToVault(wc) } }))
       menu.append(new MenuItem({ label: 'Translate this Page', click: () => safelySend('open-in-new-tab', `https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(pageUrl)}`) }))
       menu.append(new MenuItem({ label: 'Print…', accelerator: 'Ctrl+P', click: () => { try { wc.print() } catch {} } }))
       menu.append(new MenuItem({ label: 'Save Page As…', accelerator: 'Ctrl+S', click: () => savePageAs(wc) }))
@@ -795,35 +898,54 @@ function sendTabEvent(ctx: AppWin | undefined, tabId: string, type: string, payl
 // the view instead.
 function syncActiveBrowserView(ctx: AppWin | undefined) {
   if (!ctx || ctx.win.isDestroyed()) return
-  const view = (!ctx.overlayHidden && ctx.activeId) ? ctx.views.get(ctx.activeId) : undefined
-  const current = ctx.win.getBrowserView()
-  if (view) {
-    const reattaching = current !== view
-    if (reattaching) ctx.win.setBrowserView(view)
-    // Always set/update bounds to ensure proper rendering
-    const bounds = {
-      x: Math.round(ctx.bounds.x), y: Math.round(ctx.bounds.y),
-      width: Math.max(0, Math.round(ctx.bounds.width)), height: Math.max(0, Math.round(ctx.bounds.height)),
+  const hidden = ctx.overlayHidden
+  const primary = (!hidden && ctx.activeId) ? ctx.views.get(ctx.activeId) : undefined
+  // A split partner only counts while it still exists and is not the active tab
+  // itself (closing the partner must not leave half the window empty).
+  const secondary = (!hidden && ctx.splitId && ctx.splitId !== ctx.activeId)
+    ? ctx.views.get(ctx.splitId)
+    : undefined
+
+  // Detach any view that should no longer be on screen. Electron keeps every
+  // added BrowserView attached until told otherwise, so a stale split partner
+  // would keep painting over the window after the split ended.
+  for (const attached of ctx.win.getBrowserViews()) {
+    if (attached !== primary && attached !== secondary) {
+      try { ctx.win.removeBrowserView(attached) } catch {}
     }
-    view.setBounds(bounds)
+  }
+
+  if (!primary) return
+
+  const nudge = (view: BrowserView) => {
     // A view that was detached is treated as hidden by Chromium; on re-attach
-    // it can show a blank/stale frame until something forces a paint. Nudge it
-    // aggressively so a returned tab shows its live content immediately rather
-    // than looking dead until the user interacts. `invalidate()` marks for repaint
-    // without reloading; multiple calls and delays ensure paint succeeds.
-    if (reattaching) {
-      const wc = view.webContents
-      // Immediate invalidate on reattach
-      try { wc.invalidate() } catch {}
-      // Follow-up invalidates to ensure paint completes across different Chromium codepaths
-      setTimeout(() => { try { if (!wc.isDestroyed()) wc.invalidate() } catch {} }, 4)
-      setTimeout(() => { try { if (!wc.isDestroyed()) wc.invalidate() } catch {} }, 12)
-      setTimeout(() => { try { if (!wc.isDestroyed()) wc.invalidate() } catch {} }, 32)
-      // Final invalidate after reasonable settle time
-      setTimeout(() => { try { if (!wc.isDestroyed()) wc.invalidate() } catch {} }, 80)
+    // it can show a blank or stale frame until something forces a paint.
+    const wc = view.webContents
+    try { wc.invalidate() } catch {}
+    for (const delay of [4, 12, 32, 80]) {
+      setTimeout(() => { try { if (!wc.isDestroyed()) wc.invalidate() } catch {} }, delay)
     }
-  } else if (current) {
-    ctx.win.setBrowserView(null)
+  }
+
+  const alreadyAttached = new Set(ctx.win.getBrowserViews())
+  const place = (view: BrowserView, bounds: { x: number; y: number; width: number; height: number }) => {
+    const reattaching = !alreadyAttached.has(view)
+    if (reattaching) { try { ctx.win.addBrowserView(view) } catch {} }
+    view.setBounds({
+      x: Math.round(bounds.x), y: Math.round(bounds.y),
+      width: Math.max(0, Math.round(bounds.width)), height: Math.max(0, Math.round(bounds.height)),
+    })
+    if (reattaching) nudge(view)
+  }
+
+  if (secondary) {
+    // Split view: the panes share the content area with a hairline gutter, so
+    // the window background reads as a divider between two live pages.
+    const [left, right] = splitPanes(ctx.bounds, ctx.splitRatio)
+    place(primary, left)
+    place(secondary, right)
+  } else {
+    place(primary, ctx.bounds)
   }
 }
 
@@ -865,12 +987,16 @@ function crashPageDataUrl(crashedUrl: string, reason: string): string {
 // own address and title, not the data: URL we swapped in underneath it.
 const isCrashPage = (u: string) => u.startsWith('data:text/html')
 
-function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
+function createTabView(ctx: AppWin | undefined, tabId: string, url: string, containerId?: string | null) {
   if (!ctx || ctx.views.has(tabId)) return
   const tabViews = ctx.views
+  // A tab in a container gets its own cookie jar, configured exactly like the
+  // main one so the only difference is isolation (see configureContentSession).
+  const partition = partitionFor(containerId)
+  configureContentSession(session.fromPartition(partition))
   const view = new BrowserView({
     webPreferences: {
-      partition: 'persist:main',
+      partition,
       contextIsolation: true,
       // Site-facing preload: no IPC, no Node — it only restores the
       // window.chrome members Electron omits, which Google's sign-in gate
@@ -933,7 +1059,9 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
         overrideBrowserWindowOptions: {
           autoHideMenuBar: true,
           webPreferences: {
-            partition: 'persist:main',
+            // Same jar as the tab that opened it — an OAuth popup from a Work
+            // tab must see the Work session, not the default one.
+            partition,
             contextIsolation: true,
             webSecurity: true,
             javascript: true,
@@ -966,7 +1094,7 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
           overrideBrowserWindowOptions: {
             autoHideMenuBar: true,
             webPreferences: {
-              partition: 'persist:main',
+              partition,
               contextIsolation: true,
               webSecurity: true,
               nodeIntegration: false,
@@ -984,9 +1112,19 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
 
   wc.on('did-navigate', (_e, navUrl) => {
     if (isCrashPage(navUrl)) return
+    // The request filter judges subresources against the page that requested
+    // them, so it needs to know this tab's document host before the page's
+    // own assets start loading.
+    notePageHost(wc.id, navUrl)
     sendTabEvent(ctx, tabId, 'did-navigate', { url: navUrl })
   })
-  wc.on('did-navigate-in-page', (_e, navUrl) => sendTabEvent(ctx, tabId, 'did-navigate-in-page', { url: navUrl }))
+  wc.on('did-navigate-in-page', (_e, navUrl) => {
+    notePageHost(wc.id, navUrl)
+    sendTabEvent(ctx, tabId, 'did-navigate-in-page', { url: navUrl })
+  })
+  wc.on('did-start-navigation', (_e, navUrl, _isInPlace, isMainFrame) => {
+    if (isMainFrame && navUrl && !isCrashPage(navUrl)) notePageHost(wc.id, navUrl)
+  })
   wc.on('did-start-loading', () => sendTabEvent(ctx, tabId, 'did-start-loading'))
   wc.on('did-stop-loading', () => {
     let title = ''; let curUrl = ''
@@ -1059,12 +1197,19 @@ function destroyTabView(ctx: AppWin | undefined, tabId: string) {
 // auto-updater. These are global concerns — running them per window would
 // stack duplicate listeners (and duplicate download entries).
 let sharedSetupDone = false
-function setupSharedApp(firstWin: BrowserWindow): void {
-  // Configure the persist:main session used by all <webview partition="persist:main"> tags.
-  const webviewSession = session.fromPartition('persist:main')
+// Every partition that shows web content — the default one and each site
+// container — needs identical treatment: the same browser identity, the same
+// request filter, the same permission rules. A container that quietly behaved
+// differently from the main session would be a fingerprinting tell and a
+// support nightmare, so this is written once and applied to each.
+const configuredSessions = new WeakSet<Electron.Session>()
+
+function configureContentSession(ses: Electron.Session): Electron.Session {
+  if (configuredSessions.has(ses)) return ses
+  configuredSessions.add(ses)
 
   // Spoof Chrome UA so sites serve full content (many degrade or block Electron's default UA).
-  webviewSession.setUserAgent(CHROME_UA)
+  ses.setUserAgent(CHROME_UA)
 
   // Keep the Sec-CH-UA client-hint headers in lockstep with the UA. Both now
   // describe the real engine (see CHROME_UA), so this only guarantees the two
@@ -1075,7 +1220,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   // sec-ch-ua* family — never inventing hints where a browser sends none, and
   // never touching auth tokens or anything else. Matching values in, matching
   // values out: Google sees one consistent, recent Chrome. (See CHROME_MAJOR.)
-  webviewSession.webRequest.onBeforeSendHeaders((details, callback) => {
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
     const headers = details.requestHeaders
     // Find the actual casing Chromium used for the low-entropy brand hint; its
     // presence is our signal that this request carries client hints at all.
@@ -1093,7 +1238,11 @@ function setupSharedApp(firstWin: BrowserWindow): void {
     callback({ requestHeaders: headers })
   })
 
-  webviewSession.setPermissionRequestHandler((_wc, permission, callback) => {
+  // One request filter for the whole session — ad blocking and focus mode both
+  // resolve through it (Electron only allows a single onBeforeRequest).
+  installRequestFilter(ses)
+
+  ses.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(ALLOWED_PERMISSIONS.has(permission))
   })
 
@@ -1105,7 +1254,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   // not be secure". Leaving main-frame headers untouched is what restores
   // Google login (regression: this used to strip every response).
   const STRIP_HEADERS = new Set(['x-frame-options', 'content-security-policy'])
-  webviewSession.webRequest.onHeadersReceived((details, callback) => {
+  ses.webRequest.onHeadersReceived((details, callback) => {
     if (details.resourceType !== 'subFrame') {
       callback({})
       return
@@ -1119,6 +1268,13 @@ function setupSharedApp(firstWin: BrowserWindow): void {
     callback({ responseHeaders: headers })
   })
 
+  return ses
+}
+
+function setupSharedApp(firstWin: BrowserWindow): void {
+  // Configure the persist:main session used by all <webview partition="persist:main"> tags.
+  configureContentSession(session.fromPartition('persist:main'))
+
   // ── Auto-update (GitHub Releases) — checks on startup + periodically and
   // notifies the renderer when a newer version is published. No-op in dev. ──
   initAutoUpdater(() => mainWindow, safelySend)
@@ -1130,21 +1286,38 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   // WeakSet so each unique Session is hooked exactly once.
   let dlSeq = 0
   const handleDownload = (_e: any, item: any) => {
-    const dls = readJson(DL_FILE, [])
+    // File the download by type before the transfer starts — setSavePath is
+    // only honoured while the item is still 'progressing'. Unrecognised types
+    // keep the default location rather than disappearing into an "Other" bin.
+    if (getData().settings?.sortDownloads !== false) {
+      try {
+        const folder = subfolderFor(item.getFilename())
+        if (folder) {
+          const target = join(app.getPath('downloads'), folder)
+          fs.mkdirSync(target, { recursive: true })
+          item.setSavePath(join(target, item.getFilename()))
+        }
+      } catch {
+        // Permission denied or a read-only disk: let Chromium use its default.
+      }
+    }
     const dl: any = {
       id: `dl-${Date.now()}-${++dlSeq}`, filename: item.getFilename(), url: item.getURL(),
       savePath: '', totalBytes: item.getTotalBytes(), receivedBytes: 0,
       state: 'progressing', startedAt: Date.now(), completedAt: null,
     }
     const persist = () => {
-      const i = dls.findIndex((x: any) => x.id === dl.id)
-      if (i !== -1) dls[i] = { ...dl }; else dls.unshift({ ...dl })
-      writeJson(DL_FILE, dls.slice(0, 500))
+      downloadsStore.update(list => {
+        const i = list.findIndex((x: any) => x.id === dl.id)
+        if (i !== -1) list[i] = { ...dl }; else list.unshift({ ...dl })
+        if (list.length > 500) list.length = 500
+      })
       safelySend('download:update', dl)
     }
-    // Progress ticks fire many times per second on fast links — rewriting the
-    // json every tick hammers the disk. Throttle progress persists; state
-    // transitions and completion always write immediately.
+    // Progress ticks fire many times per second on fast links. The store
+    // debounces the disk write, but the renderer broadcast and the array walk
+    // are still per-call, so keep the throttle: state transitions and
+    // completion notify immediately, plain progress at most twice a second.
     let lastProgressWrite = 0
     item.on('updated', (_ev, state) => {
       dl.receivedBytes = item.getReceivedBytes()
@@ -1158,8 +1331,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
       dl.completedAt = Date.now(); dl.receivedBytes = item.getReceivedBytes()
       persist()
     })
-    dls.unshift({ ...dl }); writeJson(DL_FILE, dls.slice(0, 500))
-    safelySend('download:update', dl)
+    persist()
   }
 
   const hookedSessions = new WeakSet<Electron.Session>()
@@ -1232,6 +1404,8 @@ function createAppWindow(initialUrl?: string): AppWin {
     activeId: null,
     bounds: { x: 0, y: 0, width: 0, height: 0 },
     overlayHidden: false,
+    splitId: null,
+    splitRatio: 0.5,
   }
   // Capture the id up front: by the time 'closed' fires the window is already
   // destroyed and touching win.webContents throws "Object has been destroyed".
@@ -1355,6 +1529,9 @@ app.on('second-instance', (_event, commandLine) => {
 })
 
 app.whenReady().then(() => {
+  // Restore the DNS preference before the first navigation, or the session
+  // would resolve its first hostnames in plaintext regardless of the setting.
+  try { applyDoh(getData().settings?.dohProvider || 'off') } catch {}
   getData()
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
   if (isDev) {
@@ -1366,6 +1543,12 @@ app.whenReady().then(() => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
+
+// State lives in memory and reaches the disk on a debounce (see jsonStore), so
+// quitting inside that window would drop the last few navigations or download
+// rows. Flush synchronously here — 'before-quit' still runs on the main thread
+// with the process alive, which an async write would not survive.
+app.on('before-quit', () => { flushAllJsonStores() })
 
 // Network service crashes and restarts automatically — this is non-fatal.
 // Without this handler Electron 28+ may surface it as an unhandled event.
@@ -1595,36 +1778,92 @@ ipcMain.handle('vpn:freeCancel', () => { freeVpnCancelled = true; return { succe
 const FOCUS_BLOCK_PAGE = 'https://landing-sooty-omega-22.vercel.app/blocked.html'
 
 let focusBlocked: string[] | null = null
-function hostRoot(url: string): string {
-  try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase() } catch { return '' }
-}
+
 
 ipcMain.handle('focus:apply', (_e, blocked: string[] | null) => {
   focusBlocked = (Array.isArray(blocked) && blocked.length)
     ? blocked.map(d => String(d).replace(/^www\./, '').toLowerCase()).filter(Boolean)
     : null
-  const ses = session.fromPartition('persist:main')
-  try {
-    if (focusBlocked) {
-      ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, cb) => {
-        try {
-          if (details.resourceType === 'mainFrame' && focusBlocked) {
-            const host = hostRoot(details.url)
-            // Don't re-block the block page itself, or we'd loop.
-            if (host && host !== 'landing-sooty-omega-22.vercel.app' &&
-                focusBlocked.some(b => host === b || host.endsWith('.' + b))) {
-              cb({ redirectURL: `${FOCUS_BLOCK_PAGE}?site=${encodeURIComponent(host)}` }); return
-            }
-          }
-        } catch {}
-        cb({}) // fail-open: never block anything we didn't mean to
-      })
-    } else {
-      ses.webRequest.onBeforeRequest(null)
-    }
-    return { ok: true }
-  } catch (e: any) { return { ok: false, error: e.message } }
+  // The filter itself is installed once for the session (see
+  // installRequestFilter): focus mode only publishes its list. It used to own
+  // the session's single onBeforeRequest slot outright, which meant turning
+  // focus mode off tore down every other blocking rule with it.
+  return { ok: true }
 })
+
+// ── Ad and tracker blocking ────────────────────────────────────────────────
+const adblockStats = emptyStats()
+// Host of each tab's top-level document, so a request can be judged in the
+// context of the page that made it (that is what makes "allow on this site"
+// and the never-block-your-own-domain rule work). Kept as a map rather than
+// resolved per request: onBeforeRequest runs for every subresource on the
+// page, and a webContents lookup per request is real overhead on a heavy site.
+const pageHostByWc = new Map<number, string>()
+
+function notePageHost(webContentsId: number, url: string) {
+  const host = hostOf(url)
+  if (host) pageHostByWc.set(webContentsId, host)
+}
+
+function adblockConfig(): AdblockConfig {
+  const raw = getData().settings?.adblock
+  return { ...DEFAULT_ADBLOCK_CONFIG, ...(raw || {}) }
+}
+
+function saveAdblockConfig(next: Partial<AdblockConfig>) {
+  const data = getData()
+  data.settings = { ...data.settings, adblock: { ...adblockConfig(), ...next } }
+  saveData()
+  return adblockConfig()
+}
+
+function installRequestFilter(ses: Electron.Session) {
+  ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, cb) => {
+    try {
+      const wcId = (details as any).webContentsId as number | undefined
+      let pageHost = wcId !== undefined ? pageHostByWc.get(wcId) : undefined
+      if (pageHost === undefined && wcId !== undefined) {
+        // First request of a fresh document — resolve once, then it is cached
+        // by the did-navigate hook.
+        try { pageHost = hostOf(electronWebContents.fromId(wcId)?.getURL() || '') } catch { pageHost = '' }
+        if (pageHost) pageHostByWc.set(wcId, pageHost)
+      }
+      const decision = decideRequest(
+        { url: details.url, resourceType: details.resourceType, webContentsId: wcId },
+        adblockConfig(), focusBlocked, pageHost || '', FOCUS_BLOCK_PAGE,
+      )
+      if (decision.redirectURL) { cb({ redirectURL: decision.redirectURL }); return }
+      if (decision.cancel) {
+        recordBlock(adblockStats, hostOf(details.url), wcId)
+        cb({ cancel: true })
+        return
+      }
+    } catch {}
+    cb({}) // fail-open: a bug in the filter must never break browsing
+  })
+}
+
+ipcMain.handle('adblock:get', () => ({
+  config: adblockConfig(),
+  stats: { total: adblockStats.total, topDomains: adblockStats.topDomains },
+  listSize: BLOCKLIST_SIZE,
+}))
+ipcMain.handle('adblock:setEnabled', (_e, enabled: boolean) => saveAdblockConfig({ enabled: !!enabled }))
+ipcMain.handle('adblock:countForTab', (_e, wcId: number) => adblockStats.perTab[wcId] || 0)
+ipcMain.handle('adblock:toggleSite', (_e, url: string) => {
+  const host = hostOf(url)
+  if (!host) return adblockConfig()
+  const cfg = adblockConfig()
+  const allowlist = cfg.allowlist.includes(host)
+    ? cfg.allowlist.filter(h => h !== host)
+    : [...cfg.allowlist, host]
+  return saveAdblockConfig({ allowlist })
+})
+ipcMain.handle('adblock:setCustom', (_e, domains: string[]) => saveAdblockConfig({
+  custom: (Array.isArray(domains) ? domains : [])
+    .map(d => String(d).trim().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].toLowerCase())
+    .filter(Boolean),
+}))
 
 // Native country picker for the toolbar VPN button. It has to be a native
 // menu: the nav bar is host HTML, and the active tab's BrowserView paints
@@ -1787,7 +2026,142 @@ ipcMain.handle('window:setOpacity', (e, opacity: number) => {
 registerGoogleIpc(safelySend)
 
 // ── IPC: Tab content views (BrowserView) ────────────────────────────────────
-ipcMain.handle('tabview:create', (e, tabId: string, url: string) => createTabView(ctxFromEvent(e), tabId, url))
+ipcMain.handle('tabview:create', (e, tabId: string, url: string, containerId?: string | null) =>
+  createTabView(ctxFromEvent(e), tabId, url, containerId))
+
+// ── Picture-in-picture ─────────────────────────────────────────────────────
+// Chromium already implements PiP; it just needs a user gesture to start. The
+// script picks the video that is actually playing (or the biggest one) so it
+// works on pages with several players, and toggles rather than always opening.
+ipcMain.handle('tabview:pictureInPicture', async (e, tabId: string) => {
+  const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
+  if (!wc) return { ok: false, error: 'No page' }
+  try {
+    return await wc.executeJavaScript(`(async () => {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture()
+        return { ok: true, active: false }
+      }
+      const videos = [...document.querySelectorAll('video')]
+      if (!videos.length) return { ok: false, error: 'No video on this page' }
+      const playing = videos.filter(v => !v.paused && !v.ended && v.readyState > 2)
+      const pick = (playing.length ? playing : videos)
+        .sort((a, b) => (b.clientWidth * b.clientHeight) - (a.clientWidth * a.clientHeight))[0]
+      if (!pick || pick.disablePictureInPicture) return { ok: false, error: 'This video cannot pop out' }
+      await pick.requestPictureInPicture()
+      return { ok: true, active: true }
+    })()`, true)   // userGesture: PiP is refused without one
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Picture-in-picture failed' }
+  }
+})
+
+// ── Full-page screenshot ───────────────────────────────────────────────────
+// Chromium only paints what is on screen, so a scrolling capture has to walk
+// the page: resize the view to the document height, capture once, restore.
+// That is one image with no seams, unlike stitching viewport tiles.
+ipcMain.handle('tabview:captureFullPage', async (e, tabId: string) => {
+  const ctx = ctxFromEvent(e)
+  const view = ctx?.views.get(tabId)
+  if (!view || !ctx) return { ok: false, error: 'No page' }
+  const wc = view.webContents
+  const original = view.getBounds()
+  try {
+    const size = await wc.executeJavaScript(`({
+      width: Math.max(document.documentElement.scrollWidth, document.body ? document.body.scrollWidth : 0),
+      height: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0),
+    })`)
+    // Cap the height: a lazy-loading feed can report a document taller than any
+    // sane bitmap, and a 60000px capture would exhaust memory.
+    const height = Math.min(Math.max(Math.round(size?.height || original.height), original.height), 16000)
+    view.setBounds({ ...original, height })
+    // Give the page a beat to paint the newly revealed area.
+    await new Promise(r => setTimeout(r, 350))
+    const image = await wc.capturePage()
+    const buffer = image.toPNG()
+    view.setBounds(original)
+
+    const title = (wc.getTitle() || 'page').replace(/[\/:*?"<>|]/g, ' ').trim().slice(0, 60) || 'page'
+    const target = join(app.getPath('pictures'), `${title} — full page.png`)
+    fs.writeFileSync(target, buffer)
+    notifyQuiet('Full-page screenshot saved', target)
+    return { ok: true, path: target, height }
+  } catch (err: any) {
+    try { view.setBounds(original) } catch {}
+    return { ok: false, error: err?.message || 'Capture failed' }
+  }
+})
+
+// ── DNS-over-HTTPS ─────────────────────────────────────────────────────────
+// Plain DNS is the last part of browsing that leaks every hostname you visit to
+// whoever runs the network. Chromium can resolve over HTTPS instead; Electron
+// exposes it as a host-resolver setting that must be applied before requests.
+const DOH_PROVIDERS: Record<string, string> = {
+  cloudflare: 'https://cloudflare-dns.com/dns-query',
+  google: 'https://dns.google/dns-query',
+  quad9: 'https://dns.quad9.net/dns-query',
+}
+
+function applyDoh(provider: string) {
+  try {
+    if (!provider || provider === 'off') {
+      app.configureHostResolver({ secureDnsMode: 'off' })
+      return { ok: true, provider: 'off' }
+    }
+    const server = DOH_PROVIDERS[provider]
+    if (!server) return { ok: false, error: 'Unknown DNS provider' }
+    app.configureHostResolver({ secureDnsMode: 'secure', secureDnsServers: [server] })
+    return { ok: true, provider }
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Could not configure DNS' }
+  }
+}
+
+ipcMain.handle('privacy:getDoh', () => ({
+  provider: getData().settings?.dohProvider || 'off',
+  providers: Object.keys(DOH_PROVIDERS),
+}))
+ipcMain.handle('privacy:setDoh', (_e, provider: string) => {
+  const res = applyDoh(provider)
+  if (res.ok) {
+    const data = getData()
+    data.settings = { ...data.settings, dohProvider: provider }
+    saveData()
+  }
+  return res
+})
+
+// ── IPC: Site containers ───────────────────────────────────────────────────
+ipcMain.handle('containers:list', () => {
+  const stored = getData().settings?.containers
+  return Array.isArray(stored) && stored.length ? stored as Container[] : DEFAULT_CONTAINERS
+})
+ipcMain.handle('containers:add', (_e, name: string, color: string) => {
+  const data = getData()
+  const current: Container[] = Array.isArray(data.settings?.containers) && data.settings.containers.length
+    ? data.settings.containers : DEFAULT_CONTAINERS
+  const next = addContainer(current, name, color || '#6B4EFF')
+  data.settings = { ...data.settings, containers: next }
+  saveData()
+  return next
+})
+ipcMain.handle('containers:remove', (_e, id: string) => {
+  const data = getData()
+  const current: Container[] = Array.isArray(data.settings?.containers) && data.settings.containers.length
+    ? data.settings.containers : DEFAULT_CONTAINERS
+  const next = removeContainer(current, id)
+  data.settings = { ...data.settings, containers: next }
+  saveData()
+  return next
+})
+// Signing out of everything in one container, without touching the others.
+ipcMain.handle('containers:clear', async (_e, id: string) => {
+  try {
+    const ses = session.fromPartition(partitionFor(id))
+    await ses.clearStorageData()
+    return { ok: true }
+  } catch (e: any) { return { ok: false, error: e?.message } }
+})
 ipcMain.handle('tabview:destroy', (e, tabId: string) => destroyTabView(ctxFromEvent(e), tabId))
 ipcMain.handle('tabview:setActive', (e, tabId: string | null) => {
   const ctx = ctxFromEvent(e); if (!ctx) return
@@ -1798,6 +2172,13 @@ ipcMain.handle('tabview:setBounds', (e, bounds: { x: number; y: number; width: n
   const ctx = ctxFromEvent(e); if (!ctx) return
   ctx.bounds = bounds
   syncActiveBrowserView(ctx)
+})
+ipcMain.handle('tabview:setSplit', (e, tabId: string | null, ratio?: number) => {
+  const ctx = ctxFromEvent(e); if (!ctx) return
+  ctx.splitId = tabId && ctx.views.has(tabId) ? tabId : null
+  if (typeof ratio === 'number' && isFinite(ratio)) ctx.splitRatio = Math.min(0.8, Math.max(0.2, ratio))
+  syncActiveBrowserView(ctx)
+  return { split: ctx.splitId, ratio: ctx.splitRatio }
 })
 ipcMain.handle('tabview:setOverlayHidden', (e, hidden: boolean) => {
   const ctx = ctxFromEvent(e); if (!ctx) return
@@ -1886,29 +2267,188 @@ ipcMain.handle('bookmarks:update', (_e, id: string, u: any) => {
 })
 
 // ── IPC: History ───────────────────────────────────────────────────────────
-ipcMain.handle('history:getAll',     () => readJson(HIST_FILE, []))
-ipcMain.handle('history:clear',      () => { writeJson(HIST_FILE, []); return true })
+// history:add runs on EVERY navigation. Re-reading and rewriting the whole
+// 2000-entry file each time cost ~9 ms of blocked main thread per page load
+// (measured at the cap), which the user feels as tab-switch and typing lag
+// because this thread also drives every tab's IPC and view bounds. In memory
+// the same work is ~0.01 ms; the disk sees one debounced write per burst.
+const HISTORY_CAP = 2000
+const historyStore = createManagedJsonStore<any[]>(HIST_FILE, () => [])
+
+ipcMain.handle('history:getAll',     () => historyStore.get())
+ipcMain.handle('history:clear',      () => { historyStore.set([]); return true })
 ipcMain.handle('history:deleteItem', (_e, id: string) => {
-  const h = readJson(HIST_FILE, []); writeJson(HIST_FILE, h.filter((x: any) => x.id !== id)); return true
+  historyStore.update(h => h.filter((x: any) => x.id !== id))
+  return true
 })
 ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?: string }) => {
   if (!entry.url || entry.url === 'home' || entry.url.startsWith('aihub://')) return
-  const h = readJson(HIST_FILE, [])
-  const recent = h.filter((x: any) => !(x.url === entry.url && Date.now() - x.timestamp < 30000))
-  recent.unshift({ ...entry, timestamp: Date.now(), id: `h-${Date.now()}` })
-  writeJson(HIST_FILE, recent.slice(0, 2000))
+  historyStore.update(h => {
+    // Collapse a re-visit of the same page within 30s (reloads, redirects)
+    // into one row. Scanning from the front stops at the first candidate
+    // instead of walking all 2000 entries like the old filter() did.
+    const now = Date.now()
+    for (let i = 0; i < h.length; i++) {
+      const x = h[i]
+      if (now - x.timestamp >= 30000) break
+      if (x.url === entry.url) { h.splice(i, 1); break }
+    }
+    h.unshift({ ...entry, timestamp: now, id: `h-${now}` })
+    if (h.length > HISTORY_CAP) h.length = HISTORY_CAP
+  })
   recordVisit(entry.url, entry.title)
   return true
 })
 
+// ── IPC: Encrypted sync over the user's own Google Drive ──────────────────
+// Bookmarks and preferences are encrypted on this machine with the user's
+// passphrase, then parked in Drive's hidden app-data folder. Google stores a
+// blob it cannot read; another machine with the same account and passphrase
+// merges it back. Everything device-specific (API keys, vault path, cookie
+// jars) is filtered out before encryption — see syncCrypto.
+function localSyncPayload(): SyncPayload {
+  const data = getData()
+  return {
+    bookmarks: (data.bookmarks || []).map((b: any) => ({ ...b })),
+    settings: syncableSettings(data.settings || {}),
+    updatedAt: Number(data.syncUpdatedAt) || Date.now(),
+  }
+}
+
+ipcMain.handle('sync:status', async () => {
+  const data = getData()
+  const status = {
+    lastSyncAt: Number(data.settings?.lastSyncAt) || 0,
+    bookmarks: (data.bookmarks || []).length,
+    remote: null as null | { updatedAt: number; device: string },
+    error: '' as string,
+  }
+  try {
+    const remote = await pullSync()
+    if (remote) status.remote = { updatedAt: remote.updatedAt, device: remote.device }
+  } catch (e: any) {
+    // Not connected to Google, or offline — a status call must not throw at the UI.
+    status.error = e?.message || 'Could not reach Google Drive'
+  }
+  return status
+})
+
+ipcMain.handle('sync:push', async (_e, passphrase: string) => {
+  try {
+    if (!passphrase) return { ok: false, error: 'Enter a passphrase first' }
+    const payload = { ...localSyncPayload(), updatedAt: Date.now() }
+    await pushSync({
+      blob: encryptJson(payload, passphrase),
+      updatedAt: payload.updatedAt,
+      device: os.hostname(),
+    })
+    const data = getData()
+    data.settings = { ...data.settings, lastSyncAt: payload.updatedAt }
+    saveData()
+    return { ok: true, uploaded: payload.bookmarks.length, at: payload.updatedAt }
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Upload failed' }
+  }
+})
+
+ipcMain.handle('sync:pull', async (_e, passphrase: string) => {
+  try {
+    if (!passphrase) return { ok: false, error: 'Enter a passphrase first' }
+    const remote = await pullSync()
+    if (!remote) return { ok: false, error: 'Nothing has been synced from any device yet' }
+
+    let decrypted: SyncPayload
+    try {
+      decrypted = decryptJson<SyncPayload>(remote.blob, passphrase)
+    } catch {
+      // GCM authentication failed: wrong passphrase, or the file was altered.
+      return { ok: false, error: 'That passphrase does not open the synced file' }
+    }
+
+    const merged = mergePayloads(localSyncPayload(), decrypted)
+    const data = getData()
+    data.bookmarks = merged.bookmarks
+    data.settings = { ...data.settings, ...merged.settings, lastSyncAt: Date.now() }
+    data.syncUpdatedAt = merged.updatedAt
+    saveData()
+    safelySend('bookmarks:changed', data.bookmarks)
+    return { ok: true, bookmarks: merged.bookmarks.length, from: remote.device }
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Download failed' }
+  }
+})
+
+ipcMain.handle('sync:clear', async () => {
+  try { await clearSync(); return { ok: true } }
+  catch (e: any) { return { ok: false, error: e?.message } }
+})
+
+// ── IPC: Obsidian vault ────────────────────────────────────────────────────
+// A vault is a folder of markdown files, so "integration" means writing plain
+// notes into it — no plugin to install, and the vault stays readable if this
+// browser disappears tomorrow.
+ipcMain.handle('obsidian:status', () => {
+  const vaultPath = getData().settings?.obsidianVault || ''
+  return { vaultPath, ...describeVault(vaultPath) }
+})
+
+ipcMain.handle('obsidian:chooseVault', async () => {
+  const res = await dialog.showOpenDialog({
+    title: 'Choose your Obsidian vault folder',
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  if (res.canceled || !res.filePaths[0]) return { cancelled: true }
+  const vaultPath = res.filePaths[0]
+  const data = getData()
+  data.settings = { ...data.settings, obsidianVault: vaultPath }
+  saveData()
+  return { vaultPath, ...describeVault(vaultPath) }
+})
+
+ipcMain.handle('obsidian:clearVault', () => {
+  const data = getData()
+  data.settings = { ...data.settings, obsidianVault: '' }
+  saveData()
+  return { vaultPath: '', exists: false, isVault: false }
+})
+
+ipcMain.handle('obsidian:save', (_e, note: {
+  kind: NoteKind; title: string; url?: string; content: string; tags?: string[]
+  extra?: Record<string, string | number | boolean>
+}) => {
+  const vaultPath = getData().settings?.obsidianVault || ''
+  return writeNote(vaultPath, note)
+})
+
+// ── IPC: Sessions and workspaces ───────────────────────────────────────────
+// The renderer owns tab state (a sleeping or crashed view still belongs in the
+// session), so it publishes snapshots and the main process persists them.
+const sessions = createSessionManager(APP_DIR)
+// Freeze the on-disk session as "previous" before this run starts overwriting
+// it — otherwise opening the app immediately destroys what you wanted back.
+sessions.captureLaunchSnapshot()
+
+ipcMain.handle('session:save', (_e, tabs: SessionTab[], activeIndex: number) => sessions.save(tabs, activeIndex))
+ipcMain.handle('session:getLast', () => sessions.getLast())
+ipcMain.handle('session:getPrevious', () => sessions.getPrevious())
+ipcMain.handle('workspace:list', () => sessions.listWorkspaces())
+ipcMain.handle('workspace:save', (_e, name: string, tabs: SessionTab[], activeIndex: number) =>
+  sessions.saveWorkspace(name, tabs, activeIndex))
+ipcMain.handle('workspace:get', (_e, id: string) => sessions.getWorkspace(id))
+ipcMain.handle('workspace:delete', (_e, id: string) => sessions.deleteWorkspace(id))
+
 // ── IPC: Downloads ─────────────────────────────────────────────────────────
+// Progress ticks rewrite this list several times a second during a transfer;
+// same in-memory + debounced-write treatment as history.
+const downloadsStore = createManagedJsonStore<any[]>(DL_FILE, () => [])
+
 ipcMain.handle('downloads:getAll',       () => {
   // A download can only be "progressing" while its BrowserView is alive. If any
   // entry is still marked progressing on read, its download died with a previous
   // app session (crash / quit mid-transfer) and will never emit 'done' — left
   // as-is it shows a spinner that buffers forever on the Downloads page. Settle
   // these stale rows to 'interrupted' once, on load.
-  const raw = readJson(DL_FILE, []) as any[]
+  const raw = downloadsStore.get()
   let changed = false
   for (const dl of raw) {
     if (dl.state === 'progressing') { dl.state = 'interrupted'; changed = true }
@@ -1927,10 +2467,10 @@ ipcMain.handle('downloads:getAll',       () => {
     changed = true
     if (rank(dl) > rank(dup)) dls[dls.indexOf(dup)] = dl
   }
-  if (changed) writeJson(DL_FILE, dls)
+  if (changed) downloadsStore.set(dls)
   return dls
 })
-ipcMain.handle('downloads:clear',        () => { writeJson(DL_FILE, []); return true })
+ipcMain.handle('downloads:clear',        () => { downloadsStore.set([]); return true })
 ipcMain.handle('downloads:openFile',     (_e, p: string) => shell.openPath(p))
 ipcMain.handle('downloads:showInFolder', (_e, p: string) => shell.showItemInFolder(p))
 
@@ -2179,6 +2719,54 @@ function rewindSnippet(text: string, terms: string[]): string {
   return (start > 0 ? '…' : '') + text.slice(start, start + 220).trim() + '…'
 }
 
+// ── Meaning-based search over the Rewind archive ───────────────────────────
+// Embeddings come from the user's own Ollama, so page text never leaves the
+// machine. Two model attempts: the purpose-built embedding model first, then
+// whatever chat model is configured — Ollama exposes /api/embeddings for both,
+// and asking the user to pull a second model before search works would make
+// the feature invisible on most installs.
+const EMBED_MODELS = ['nomic-embed-text', 'all-minilm']
+let embedModel: string | null = null
+
+async function ollamaEmbed(text: string): Promise<number[] | null> {
+  const { olBase } = getAIConfig()
+  const candidates = embedModel ? [embedModel] : [...EMBED_MODELS, getData().settings?.aiModel || 'llama3.2:3b']
+  for (const model of candidates) {
+    try {
+      const res = await axios.post(`${olBase}/api/embeddings`, { model, prompt: text }, { timeout: 20000 })
+      const vector = res.data?.embedding
+      if (Array.isArray(vector) && vector.length) { embedModel = model; return vector }
+    } catch {
+      // Model missing or Ollama not running — try the next candidate.
+    }
+  }
+  return null
+}
+
+const semanticIndex = createSemanticIndex(APP_DIR, ollamaEmbed)
+
+const rewindDocs = (): SearchDoc[] =>
+  getRewind().map(e => ({ id: e.id, title: e.title, url: e.url, text: e.text, ts: e.ts }))
+
+ipcMain.handle('rewind:smartSearch', async (_e, query: string) => {
+  const docs = rewindDocs()
+  const { results, semantic } = await semanticIndex.search(String(query || ''), docs)
+  const byId = new Map(docs.map(d => [d.id, d]))
+  const terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean)
+  const entries = getRewind()
+  return {
+    semantic,
+    results: results.map(r => {
+      const entry = entries.find(e => e.id === r.id)
+      const doc = byId.get(r.id)
+      if (!entry || !doc) return null
+      return { ...rewindListItem(entry, rewindSnippet(entry.text, terms)), via: r.via }
+    }).filter(Boolean),
+  }
+})
+
+ipcMain.handle('semantic:stats', () => ({ ...semanticIndex.stats(), total: getRewind().length }))
+
 ipcMain.handle('rewind:add', (_e, entry: { url: string; title?: string; favicon?: string; text?: string }) => {
   try {
     if (!entry?.url || !/^https?:\/\//i.test(entry.url)) return { ok: false }
@@ -2198,6 +2786,9 @@ ipcMain.handle('rewind:add', (_e, entry: { url: string; title?: string; favicon?
       if (store.length > REWIND_CAP) store.length = REWIND_CAP
     }
     writeJson(REWIND_FILE, store)
+    // Queue the page for background embedding. No-op when Ollama is absent.
+    const saved = store.find(e => e.url === entry.url)
+    if (saved) semanticIndex.index({ id: saved.id, title: saved.title, url: saved.url, text: saved.text, ts: saved.ts })
     return { ok: true }
   } catch (e: any) { return { ok: false, error: e.message } }
 })
@@ -2233,7 +2824,11 @@ ipcMain.handle('rewind:remove', (_e, id: string) => {
   if (i !== -1) { store.splice(i, 1); writeJson(REWIND_FILE, store) }
   return { ok: true }
 })
-ipcMain.handle('rewind:clear', () => { _rewind = []; writeJson(REWIND_FILE, []); return { ok: true } })
+ipcMain.handle('rewind:clear', () => {
+  _rewind = []; writeJson(REWIND_FILE, [])
+  semanticIndex.prune(new Set())
+  return { ok: true }
+})
 
 // ── Bible marks — highlights, saved verses, notes, reading position ────────
 interface BibleMarks {
@@ -2377,17 +2972,16 @@ interface Watch {
   intervalMin: number
   active: boolean
   lastHash?: string; lastChecked?: number; lastChanged?: number
+  /** Text as of the last check, so a change can be described, not just flagged. */
+  lastText?: string
   triggered?: boolean // currently in a fired state (until re-armed by the user)
 }
+// Enough of the page to diff against next time without bloating watches.json.
+const WATCH_TEXT_KEEP = 20000
 const WATCHES_FILE = join(APP_DIR, 'watches.json')
 let _watches: Watch[] | null = null
 function getWatches(): Watch[] { if (!_watches) _watches = (readJson(WATCHES_FILE, []) as Watch[]) || []; return _watches! }
 function saveWatches() { writeJson(WATCHES_FILE, getWatches()); safelySend('watch:changed', null) }
-function hashStr(s: string): string {
-  let h = 0
-  for (let i = 0; i < s.length; i++) { h = (Math.imul(31, h) + s.charCodeAt(i)) | 0 }
-  return String(h >>> 0)
-}
 
 ipcMain.handle('watch:list', () => getWatches())
 ipcMain.handle('watch:add', (_e, w: { url: string; title?: string; mode?: 'change' | 'contains'; keyword?: string; intervalMin?: number }) => {
@@ -2426,25 +3020,37 @@ ipcMain.handle('watch:rearm', (_e, id: string) => {
 })
 ipcMain.handle('watch:checkNow', async (_e, id: string) => {
   const w = getWatches().find(x => x.id === id)
-  if (w) await checkWatch(w, true)
+  if (w) await checkWatch(w)
   return { ok: true }
 })
 
-async function checkWatch(w: Watch, force = false) {
+async function checkWatch(w: Watch) {
   try {
     const { status, body } = await fetchHtml(w.url, 12000)
     if (status >= 400) { w.lastChecked = Date.now(); saveWatches(); return }
     const text = htmlToText(body)
     w.lastChecked = Date.now()
     if (w.mode === 'contains') {
-      const hit = w.keyword ? text.toLowerCase().includes(w.keyword.toLowerCase()) : false
+      const hit = containsKeyword(text, w.keyword || '')
       if (hit && !w.triggered) { w.triggered = true; w.lastChanged = Date.now(); notifyWatch(w, `“${w.keyword}” appeared on the page`) }
     } else {
-      const hash = hashStr(text)
-      if (w.lastHash === undefined || force && w.lastHash === undefined) { w.lastHash = hash }
-      else if (hash !== w.lastHash) {
-        w.lastHash = hash; w.lastChanged = Date.now()
-        if (!w.triggered) { w.triggered = true; notifyWatch(w, 'This page changed since you last looked') }
+      // Compare NORMALISED text: hashing the raw page made every clock tick,
+      // view counter and rotating token look like a change, which is what
+      // turns a page watcher into something you mute. See watchDiff.
+      const hash = contentHash(text)
+      if (w.lastHash === undefined) {
+        w.lastHash = hash
+        w.lastText = text.slice(0, WATCH_TEXT_KEEP)
+      } else if (hash !== w.lastHash) {
+        const previousText = w.lastText || ''
+        w.lastHash = hash
+        w.lastText = text.slice(0, WATCH_TEXT_KEEP)
+        w.lastChanged = Date.now()
+        if (!w.triggered) {
+          w.triggered = true
+          // Say WHAT appeared, not just that something did.
+          notifyWatch(w, describeChange(previousText, text))
+        }
       }
     }
     saveWatches()

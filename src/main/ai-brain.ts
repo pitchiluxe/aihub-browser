@@ -4,9 +4,9 @@
  * and generates personalized site recommendations.
  */
 import os from 'os'
-import fs from 'fs'
 import { join } from 'path'
 import axios from 'axios'
+import { createManagedJsonStore } from './jsonStore'
 
 const APP_DIR = join(os.homedir(), '.aihub-browser')
 
@@ -64,27 +64,17 @@ function categorize(domain: string): string {
 }
 
 // ── Read / Write helpers ───────────────────────────────────────────────────
-function readBrain(): BrowsingEntry[] {
-  try { return JSON.parse(fs.readFileSync(BRAIN_FILE, 'utf-8')) } catch { return [] }
-}
+// recordVisit() runs on every navigation, so these files get the same
+// in-memory + debounced, atomic write treatment as history (see jsonStore):
+// re-reading and rewriting a 1000-entry brain per page load blocked the main
+// thread that every tab's IPC shares.
+const brainStore = createManagedJsonStore<BrowsingEntry[]>(BRAIN_FILE, () => [])
+const profileStore = createManagedJsonStore<UserProfile>(PROFILE_FILE, () => ({
+  topDomains: [], topCategories: [], interests: [], lastAnalyzed: 0, recommendations: [], totalSessions: 0,
+}))
 
-function writeBrain(data: BrowsingEntry[]) {
-  try {
-    if (!fs.existsSync(APP_DIR)) fs.mkdirSync(APP_DIR, { recursive: true })
-    fs.writeFileSync(BRAIN_FILE, JSON.stringify(data, null, 2))
-  } catch {}
-}
-
-function readProfile(): UserProfile {
-  try { return JSON.parse(fs.readFileSync(PROFILE_FILE, 'utf-8')) }
-  catch {
-    return { topDomains: [], topCategories: [], interests: [], lastAnalyzed: 0, recommendations: [], totalSessions: 0 }
-  }
-}
-
-function writeProfile(p: UserProfile) {
-  try { fs.writeFileSync(PROFILE_FILE, JSON.stringify(p, null, 2)) } catch {}
-}
+function readBrain(): BrowsingEntry[] { return brainStore.get() }
+function readProfile(): UserProfile { return profileStore.get() }
 
 // ── Record a page visit ───────────────────────────────────────────────────
 export function recordVisit(url: string, title: string) {
@@ -92,16 +82,17 @@ export function recordVisit(url: string, title: string) {
   const domain = getDomain(url)
   if (!domain) return
   const category = categorize(domain)
-  const brain = readBrain()
-  const existing = brain.find(e => e.domain === domain)
-  if (existing) {
-    existing.visits++
-    existing.timestamp = Date.now()
-    if (title && title !== existing.title) existing.title = title
-  } else {
-    brain.unshift({ url, title, domain, category, timestamp: Date.now(), visits: 1 })
-  }
-  writeBrain(brain.slice(0, 1000))
+  brainStore.update(brain => {
+    const existing = brain.find(e => e.domain === domain)
+    if (existing) {
+      existing.visits++
+      existing.timestamp = Date.now()
+      if (title && title !== existing.title) existing.title = title
+    } else {
+      brain.unshift({ url, title, domain, category, timestamp: Date.now(), visits: 1 })
+    }
+    if (brain.length > 1000) brain.length = 1000
+  })
 }
 
 // ── Build interest profile from browsing brain ────────────────────────────
@@ -175,7 +166,7 @@ export function saveRecommendations(recs: Recommendation[]) {
   const profile = buildProfile()
   profile.recommendations = recs
   profile.lastAnalyzed = Date.now()
-  writeProfile(profile)
+  profileStore.set(profile)
 }
 
 export function getStoredRecommendations(): Recommendation[] {

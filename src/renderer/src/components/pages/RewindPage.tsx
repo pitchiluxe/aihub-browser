@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { History, Search, X, Trash2, ExternalLink, Clock, Loader2, Rewind } from 'lucide-react'
+import { History, Search, X, Trash2, ExternalLink, Clock, Loader2, Rewind, Sparkles } from 'lucide-react'
 
 interface RewindItem { id: string; url: string; title: string; favicon: string; ts: number; snippet: string }
 
@@ -20,22 +20,40 @@ export default function RewindPage({ onNavigate }: { onNavigate: (url: string) =
   const [stats, setStats] = useState<{ count: number; oldest: number }>({ count: 0, oldest: 0 })
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const run = useCallback(async (q: string) => {
+  // Smart search asks the local model what the query MEANS; plain search matches
+  // words. Smart is the default because it still falls back to word matching
+  // when no model is installed — it can only ever find more, never less.
+  const [smart, setSmart] = useState(true)
+  // Whether the last smart search actually reached a model, so the badge tells
+  // the truth instead of implying an embedding ran when Ollama was closed.
+  const [semanticLive, setSemanticLive] = useState(false)
+
+  const run = useCallback(async (q: string, useSmart: boolean) => {
     setLoading(true)
-    try { setItems(await window.electronAPI.rewind.search(q) || []) } catch {}
+    try {
+      if (useSmart && q.trim()) {
+        const res = await window.electronAPI.rewind.smartSearch(q)
+        setItems(res?.results || [])
+        setSemanticLive(!!res?.semantic)
+      } else {
+        setItems(await window.electronAPI.rewind.search(q) || [])
+        setSemanticLive(false)
+      }
+    } catch {}
     setLoading(false)
   }, [])
 
   useEffect(() => {
     window.electronAPI.rewind.stats().then(setStats).catch(() => {})
-    run('')
+    run('', false)
   }, [run])
 
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current)
-    debounce.current = setTimeout(() => run(query), 180)
+    // Smart search runs a model, so give it a longer pause than keyword search.
+    debounce.current = setTimeout(() => run(query, smart), smart && query.trim() ? 420 : 180)
     return () => { if (debounce.current) clearTimeout(debounce.current) }
-  }, [query, run])
+  }, [query, smart, run])
 
   const remove = async (id: string) => {
     await window.electronAPI.rewind.remove(id).catch(() => {})
@@ -96,6 +114,24 @@ export default function RewindPage({ onNavigate }: { onNavigate: (url: string) =
               <X size={14} />
             </button>
           )}
+        </div>
+
+        <div className="flex items-center gap-2 mt-2.5">
+          <button
+            onClick={() => setSmart(v => !v)}
+            aria-pressed={smart}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+              smart ? 'bg-aihub-accent/20 text-aihub-accent' : 'bg-aihub-surface/60 text-aihub-muted hover:text-aihub-text'}`}
+          >
+            <Sparkles size={12} /> Smart search
+          </button>
+          <span className="text-[11px] text-aihub-muted">
+            {smart
+              ? (query.trim()
+                  ? (semanticLive ? 'Matching by meaning, on this machine' : 'Matching by words — start Ollama for meaning-based results')
+                  : 'Finds pages by what they were about, not just their words')
+              : 'Matching exact words'}
+          </span>
         </div>
       </div>
 

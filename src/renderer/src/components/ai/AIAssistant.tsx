@@ -79,8 +79,15 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
     const handler = (e: Event) => {
       const text = (e as CustomEvent).detail as string
       if (!text) return
-      setInput(`About "${text}": `)
-      setTimeout(() => inputRef.current?.focus(), 250)
+      // The sender composes the framing (App quotes the passage and cites its
+      // page); wrapping it again here produced 'About "About this passage: …"'.
+      setInput(text)
+      setTimeout(() => {
+        inputRef.current?.focus()
+        // Cursor at the end, ready for the actual question.
+        const el = inputRef.current
+        if (el) { try { el.setSelectionRange(el.value.length, el.value.length) } catch {} }
+      }, 250)
     }
     document.addEventListener('aihub-ai-prefill', handler)
     return () => document.removeEventListener('aihub-ai-prefill', handler)

@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useRef, useEffect, useLayoutEffect, useCallback,
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore, type Tab } from './store/browserStore'
 import TabBar from './components/browser/TabBar'
+import VerticalTabs from './components/browser/VerticalTabs'
 import NavigationBar from './components/browser/NavigationBar'
 import Sidebar from './components/browser/Sidebar'
 import HomePage from './components/homepage/HomePage'
@@ -23,15 +24,21 @@ const ManualPage     = lazy(() => import('./components/pages/ManualPage'))
 const RewindPage     = lazy(() => import('./components/pages/RewindPage'))
 const WatchPage      = lazy(() => import('./components/pages/WatchPage'))
 const BiblePage      = lazy(() => import('./components/pages/BiblePage'))
+
+// Overlays that are closed at startup. Each already refused to render until
+// its open flag flipped, so gating the MOUNT on the same flag changes nothing
+// the user can see — it only keeps the code (and, for the QR modal, the whole
+// qrcode-generator library) out of the chunk parsed before first paint.
+const QRCodeModal    = lazy(() => import('./components/browser/QRCodeModal'))
+const CommandPalette = lazy(() => import('./components/browser/CommandPalette'))
+const CompareModal   = lazy(() => import('./components/browser/CompareModal'))
 import AddBookmarkModal from './components/homepage/AddBookmarkModal'
-import QRCodeModal from './components/browser/QRCodeModal'
+
 import UpdateNotification from './components/browser/UpdateNotification'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import HostAnnotationCanvas from './components/browser/HostAnnotationCanvas'
 import FindBar from './components/browser/FindBar'
 import AIAssistant from './components/ai/AIAssistant'
-import CommandPalette from './components/browser/CommandPalette'
-import CompareModal from './components/browser/CompareModal'
 import { loadBookmarks } from './services/bookmarkService'
 import { buildPageExtractionScript } from './services/pageExtractor'
 import { loadCustomExts } from './extensions/customExts'
@@ -58,11 +65,13 @@ export default function App() {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
+    splitTabId,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
     isAnnotationMode: s.isAnnotationMode, isAddBookmarkOpen: s.isAddBookmarkOpen, isAIPanelOpen: s.isAIPanelOpen,
     isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen, isCompareOpen: s.isCompareOpen,
+    splitTabId: s.splitTabId,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -332,7 +341,20 @@ export default function App() {
         case 'ai':
           if (!store.isAIPanelOpen) store.toggleAIPanel()
           if (data.selection) {
-            document.dispatchEvent(new CustomEvent('aihub-ai-prefill', { detail: data.selection }))
+            // Anchor the question to the passage: quoting it (with its source)
+            // means the model answers about THAT text rather than guessing from
+            // the whole page, and the user can see exactly what was sent.
+            const quoted = data.selection.trim().replace(/\s+/g, ' ')
+            const source = data.url ? `
+
+— from ${data.url}` : ''
+            document.dispatchEvent(new CustomEvent('aihub-ai-prefill', {
+              detail: `About this passage:
+
+“${quoted}”${source}
+
+`,
+            }))
           }
           break
         case 'annotation':
@@ -458,7 +480,7 @@ export default function App() {
         qualifying.add(t.id)
         if (!known.has(t.id)) {
           known.add(t.id)
-          window.electronAPI.tabView.create(t.id, t.url)
+          window.electronAPI.tabView.create(t.id, t.url, t.containerId ?? null)
         }
       }
     })
@@ -485,6 +507,68 @@ export default function App() {
       setNavState({ canGoBack: false, canGoForward: false })
     }
   }, [activeTabId, activeTab?.isHome, activeTab?.pageType, setNavState])
+
+  // ── Tab strip layout ──────────────────────────────────────────────────
+  // Horizontal by default (what a browser looks like); vertical once a user
+  // has enough tabs open that titles matter more than screen width.
+  const [tabLayout, setTabLayout] = useState<'horizontal' | 'vertical'>('horizontal')
+  useEffect(() => {
+    window.electronAPI.settings.get()
+      .then((cfg: any) => { if (cfg?.tabLayout === 'vertical') setTabLayout('vertical') })
+      .catch(() => {})
+    const onChange = (e: Event) => {
+      const next = (e as CustomEvent).detail
+      if (next === 'vertical' || next === 'horizontal') setTabLayout(next)
+    }
+    document.addEventListener('aihub-tab-layout', onChange)
+    return () => document.removeEventListener('aihub-tab-layout', onChange)
+  }, [])
+
+  // ── Split view ────────────────────────────────────────────────────────
+  // The panes are two native BrowserViews sharing the content bounds, so the
+  // geometry lives in the main process; the renderer only names the partner.
+  // Tab views already exist for every open tab, so no extra creation is needed.
+  useEffect(() => {
+    const partner = splitTabId && splitTabId !== activeTabId && tabs.some(t => t.id === splitTabId)
+      ? splitTabId
+      : null
+    window.electronAPI.tabView.setSplit(partner)
+  }, [splitTabId, activeTabId, tabs])
+
+  // ── Session restore ────────────────────────────────────────────────────
+  // Reopen the tabs that were open when the app last closed, once, before the
+  // user starts working. Runs after the store's default home tab exists, so a
+  // first run (or a disabled preference) simply leaves that home tab alone.
+  const sessionRestored = useRef(false)
+  useEffect(() => {
+    if (sessionRestored.current) return
+    sessionRestored.current = true
+    let cancelled = false
+    ;(async () => {
+      try {
+        const settings = await window.electronAPI.settings.get()
+        if (settings && settings.restoreSession === false) return
+        const last = await window.electronAPI.session.getLast()
+        if (cancelled || !last?.tabs?.length) return
+        useBrowserStore.getState().restoreTabs(last.tabs, last.activeIndex ?? 0)
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // Publish a snapshot whenever the strip settles. Debounced because a single
+  // navigation fires several updates (url, then title, then favicon) and the
+  // main process writes this to disk.
+  useEffect(() => {
+    if (!sessionRestored.current) return
+    const t = setTimeout(() => {
+      const state = useBrowserStore.getState()
+      const snapshot = state.tabs.map(tab => ({ url: tab.url, title: tab.title, pageType: tab.pageType }))
+      const activeIndex = Math.max(0, state.tabs.findIndex(tab => tab.id === state.activeTabId))
+      window.electronAPI.session.save(snapshot, activeIndex)
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [tabs, activeTabId])
 
   // ── Tab sleeping — free the memory of tabs left in the background too long.
   // Sleeping destroys the BrowserView (via needsTabView + the lifecycle effect
@@ -684,7 +768,7 @@ export default function App() {
   return (
     <div className="ds-app-root flex flex-col h-screen w-screen overflow-hidden select-none">
       <div className="drag-region">
-        <TabBar />
+        <TabBar variant={tabLayout === 'vertical' ? 'compact' : 'full'} />
       </div>
 
       <NavigationBar
@@ -701,6 +785,10 @@ export default function App() {
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <Sidebar onNavigate={navigate} onOpenPage={openSpecialPage} />
+        {/* The tab BrowserViews are positioned from the content element's own
+            bounds, so the rail simply makes that element narrower — no extra
+            geometry plumbing needed. */}
+        {tabLayout === 'vertical' && <VerticalTabs />}
 
         <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
           <div ref={contentAreaRef} className="relative flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
@@ -762,20 +850,24 @@ export default function App() {
       </div>
 
       <AddBookmarkModal />
-      <QRCodeModal url={qrUrl} onClose={() => setQrUrl(null)} />
       <UpdateNotification />
 
-      <CommandPalette
-        onNavigate={navigate}
-        onOpenPage={openSpecialPage}
-        onReadAloud={readAloud}
-        onFind={() => setFindOpen(true)}
-        onAddBookmark={addBookmarkFromPalette}
-        onCompare={() => useBrowserStore.getState().setCompareOpen(true)}
-        onSendTabs={sendTabsToDevices}
-        onReceiveTabs={receiveTabsFromDevice}
-      />
-      <CompareModal />
+      <Suspense fallback={null}>
+        {qrUrl && <QRCodeModal url={qrUrl} onClose={() => setQrUrl(null)} />}
+        {isCmdPaletteOpen && (
+          <CommandPalette
+            onNavigate={navigate}
+            onOpenPage={openSpecialPage}
+            onReadAloud={readAloud}
+            onFind={() => setFindOpen(true)}
+            onAddBookmark={addBookmarkFromPalette}
+            onCompare={() => useBrowserStore.getState().setCompareOpen(true)}
+            onSendTabs={sendTabsToDevices}
+            onReceiveTabs={receiveTabsFromDevice}
+          />
+        )}
+        {isCompareOpen && <CompareModal />}
+      </Suspense>
 
       {/* Cross-device handoff toast */}
       {handoffMsg && (

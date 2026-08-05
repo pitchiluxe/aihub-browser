@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Palette, Bot, Shield, Info, CheckCircle2, Loader2, RefreshCw, Download, Wifi, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked } from 'lucide-react'
+import { Palette, Bot, Shield, ShieldBan, Layers, Info, CheckCircle2, Loader2, RefreshCw, Download, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked } from 'lucide-react'
 import ClaudeKitSection from './ClaudeKitSection'
 import { useBibleSettings } from '../../services/bibleSettings'
 import { useBrowserStore } from '../../store/browserStore'
@@ -69,6 +69,109 @@ export default function SettingsPage() {
   const { ollamaStatus, setOllamaStatus } = useBrowserStore()
   const [settings, setSettings] = useState<any>(null)
   const [appVersion, setAppVersion] = useState('')
+  // Startup — reopen last session
+  const [restoreSession, setRestoreSession] = useState(true)
+  useEffect(() => {
+    window.electronAPI.settings.get()
+      .then((cfg: any) => setRestoreSession(cfg?.restoreSession !== false))
+      .catch(() => {})
+  }, [])
+  const toggleRestoreSession = async () => {
+    const next = !restoreSession
+    setRestoreSession(next)
+    await window.electronAPI.settings.set({ restoreSession: next })
+  }
+
+  // DNS-over-HTTPS + download sorting
+  const [doh, setDoh] = useState('off')
+  const [sortDownloads, setSortDownloads] = useState(true)
+  useEffect(() => {
+    window.electronAPI.privacy.getDoh().then((r: any) => setDoh(r?.provider || 'off')).catch(() => {})
+    window.electronAPI.settings.get().then((cfg: any) => setSortDownloads(cfg?.sortDownloads !== false)).catch(() => {})
+  }, [])
+  const chooseDoh = async (provider: string) => {
+    const res = await window.electronAPI.privacy.setDoh(provider)
+    if (res?.ok) setDoh(provider)
+  }
+  const toggleSortDownloads = async () => {
+    const next = !sortDownloads
+    setSortDownloads(next)
+    await window.electronAPI.settings.set({ sortDownloads: next })
+  }
+
+  // Encrypted sync (Google Drive)
+  const [syncStatus, setSyncStatus] = useState<{ lastSyncAt: number; bookmarks: number; remote: { updatedAt: number; device: string } | null; error: string } | null>(null)
+  const [syncPass, setSyncPass] = useState('')
+  const [syncBusy, setSyncBusy] = useState<'' | 'push' | 'pull'>('')
+  const [syncMsg, setSyncMsg] = useState('')
+  const refreshSync = () => window.electronAPI.sync.status().then(setSyncStatus).catch(() => {})
+  useEffect(() => { refreshSync() }, [])
+  const runSync = async (dir: 'push' | 'pull') => {
+    setSyncBusy(dir); setSyncMsg('')
+    const res = dir === 'push'
+      ? await window.electronAPI.sync.push(syncPass)
+      : await window.electronAPI.sync.pull(syncPass)
+    setSyncBusy('')
+    setSyncMsg(res?.ok
+      ? (dir === 'push' ? `Uploaded ${res.uploaded} bookmarks` : `Merged ${res.bookmarks} bookmarks from ${res.from || 'another device'}`)
+      : (res?.error || 'Sync failed'))
+    refreshSync()
+  }
+
+  // Obsidian vault
+  const [vault, setVault] = useState<{ vaultPath: string; exists: boolean; isVault: boolean }>({ vaultPath: '', exists: false, isVault: false })
+  useEffect(() => { window.electronAPI.obsidian.status().then(setVault).catch(() => {}) }, [])
+  const chooseVault = async () => {
+    const res = await window.electronAPI.obsidian.chooseVault()
+    if (res && !res.cancelled) setVault(res)
+  }
+  const clearVault = async () => setVault(await window.electronAPI.obsidian.clearVault())
+
+  // Tab strip layout
+  const [tabLayout, setTabLayout] = useState<'horizontal' | 'vertical'>('horizontal')
+  useEffect(() => {
+    window.electronAPI.settings.get()
+      .then((cfg: any) => setTabLayout(cfg?.tabLayout === 'vertical' ? 'vertical' : 'horizontal'))
+      .catch(() => {})
+  }, [])
+  const chooseTabLayout = async (next: 'horizontal' | 'vertical') => {
+    setTabLayout(next)
+    await window.electronAPI.settings.set({ tabLayout: next })
+    // The strip lives in App, which is not re-mounted by a settings write —
+    // tell it directly so the change is visible without a restart.
+    document.dispatchEvent(new CustomEvent('aihub-tab-layout', { detail: next }))
+  }
+
+  // Ad & tracker blocking
+  const [adblock, setAdblock] = useState<{ enabled: boolean; allowlist: string[]; custom: string[] } | null>(null)
+  const [adblockStats, setAdblockStats] = useState<{ total: number; topDomains: Record<string, number> }>({ total: 0, topDomains: {} })
+  const [adblockListSize, setAdblockListSize] = useState(0)
+  const [customDraft, setCustomDraft] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      const r = await window.electronAPI.adblock.get()
+      if (!alive || !r) return
+      setAdblock(r.config); setAdblockStats(r.stats); setAdblockListSize(r.listSize)
+    }
+    load()
+    // The counter only moves while pages are loading, so a slow poll is plenty
+    // and costs nothing next to a per-request IPC push.
+    const t = setInterval(load, 5000)
+    return () => { alive = false; clearInterval(t) }
+  }, [])
+
+  const toggleAdblock = async () => {
+    const next = await window.electronAPI.adblock.setEnabled(!(adblock?.enabled ?? true))
+    setAdblock(next)
+  }
+  const saveCustomDomains = async (raw: string) => {
+    const next = await window.electronAPI.adblock.setCustom(
+      raw.split(/[\s,]+/).map(d => d.trim()).filter(Boolean))
+    setAdblock(next)
+  }
+
   const [cacheCleared, setCacheCleared] = useState(false)
   const [historyCleared, setHistoryCleared] = useState(false)
   const [pullingModel, setPullingModel] = useState('')
@@ -777,7 +880,193 @@ export default function SettingsPage() {
       </Section>
 
       {/* Privacy */}
+      <Section icon={<RefreshCw size={15} />} title="Sync">
+        <div className="py-3">
+          <div className={LBL}>Encrypted sync through your own Google Drive</div>
+          <div className="text-xs text-aihub-muted mb-3">
+            Bookmarks and preferences are encrypted on this machine before they are uploaded, into a hidden
+            folder only this app can see. Google stores something it cannot read. API keys, your vault path and
+            container cookies never leave the device.
+          </div>
+          <input
+            type="password"
+            value={syncPass}
+            onChange={e => setSyncPass(e.target.value)}
+            placeholder="Sync passphrase — the same one on every device"
+            className="w-full px-3 py-2 rounded-xl text-sm bg-aihub-card border border-aihub-border/30 text-aihub-text outline-none focus:border-aihub-accent/60 mb-2"
+          />
+          <div className="text-[11px] text-amber-400/90 mb-3">
+            Only you hold this passphrase. If you lose it, the synced copy cannot be recovered — by us or by Google.
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => runSync('push')} disabled={!syncPass || !!syncBusy}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm bg-aihub-accent text-white hover:bg-aihub-accent-glow transition-all disabled:opacity-50">
+              {syncBusy === 'push' ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Upload
+            </button>
+            <button onClick={() => runSync('pull')} disabled={!syncPass || !!syncBusy}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm bg-aihub-card hover:bg-aihub-border/40 text-aihub-text transition-all disabled:opacity-50">
+              {syncBusy === 'pull' ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Merge from cloud
+            </button>
+            {!!syncMsg && <span className="text-xs text-aihub-muted">{syncMsg}</span>}
+          </div>
+        </div>
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Status</div>
+            <div className="text-xs text-aihub-muted">
+              {syncStatus?.error
+                ? `${syncStatus.error} — connect your Google account in the Gmail section first`
+                : syncStatus?.remote
+                  ? `Cloud copy from ${syncStatus.remote.device}, ${new Date(syncStatus.remote.updatedAt).toLocaleString()}`
+                  : 'Nothing synced yet'}
+            </div>
+          </div>
+          <span className="text-sm text-aihub-muted">{syncStatus?.bookmarks ?? 0} local</span>
+        </div>
+      </Section>
+
+      <Section icon={<BookMarked size={15} />} title="Obsidian">
+        <div className={ROW}>
+          <div className="min-w-0 pr-4">
+            <div className={LBL}>Vault folder</div>
+            <div className="text-xs text-aihub-muted truncate">
+              {vault.vaultPath
+                ? `${vault.vaultPath}${vault.isVault ? '' : vault.exists ? ' — folder found, but no .obsidian inside' : ' — folder is missing'}`
+                : 'Pages, highlights and AI answers you save land here as plain markdown notes'}
+            </div>
+          </div>
+          <div className="flex gap-1.5 shrink-0">
+            <button onClick={chooseVault}
+              className="px-4 py-2 rounded-xl text-sm bg-aihub-card hover:bg-aihub-border/40 text-aihub-text transition-all">
+              {vault.vaultPath ? 'Change' : 'Choose folder'}
+            </button>
+            {!!vault.vaultPath && (
+              <button onClick={clearVault}
+                className="px-3 py-2 rounded-xl text-sm bg-aihub-card hover:bg-aihub-border/40 text-aihub-muted transition-all">
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>How to save</div>
+            <div className="text-xs text-aihub-muted">
+              Right-click a page → <span className="text-aihub-text">Save Page to Obsidian</span>, or select text first to save just that passage
+            </div>
+          </div>
+          {vault.isVault && <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium"><CheckCircle2 size={13} /> Vault ready</span>}
+        </div>
+      </Section>
+
+      <Section icon={<Layers size={15} />} title="Startup">
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Tab strip</div>
+            <div className="text-xs text-aihub-muted">A left rail keeps titles readable with many tabs open, and can group them by site</div>
+          </div>
+          <div className="flex gap-1.5">
+            {(['horizontal', 'vertical'] as const).map(opt => (
+              <button key={opt} onClick={() => chooseTabLayout(opt)}
+                className={`px-3 py-2 rounded-xl text-sm transition-all ${
+                  tabLayout === opt ? 'bg-aihub-accent text-white' : 'bg-aihub-card hover:bg-aihub-border/40 text-aihub-text'}`}>
+                {opt === 'horizontal' ? 'Top' : 'Left'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Reopen my tabs</div>
+            <div className="text-xs text-aihub-muted">Start where you left off instead of a blank home tab</div>
+          </div>
+          <BibleToggle on={restoreSession} onClick={toggleRestoreSession} />
+        </div>
+      </Section>
+
+      <Section icon={<ShieldBan size={15} />} title="Ad & Tracker Blocking">
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Block ads and trackers</div>
+            <div className="text-xs text-aihub-muted">
+              {adblockListSize} known ad, analytics and session-replay domains, blocked before the request leaves your machine
+            </div>
+          </div>
+          <BibleToggle on={adblock?.enabled ?? true} onClick={toggleAdblock} />
+        </div>
+
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Blocked this session</div>
+            <div className="text-xs text-aihub-muted">
+              {Object.entries(adblockStats.topDomains)
+                .sort((a, b) => b[1] - a[1]).slice(0, 3)
+                .map(([d, n]) => `${d} (${n})`).join(' · ') || 'Nothing yet'}
+            </div>
+          </div>
+          <span className="text-sm font-semibold text-aihub-accent">{adblockStats.total.toLocaleString()}</span>
+        </div>
+
+        {!!adblock?.allowlist.length && (
+          <div className={ROW}>
+            <div>
+              <div className={LBL}>Allowed sites</div>
+              <div className="text-xs text-aihub-muted">Blocking is off on these — click one to re-enable it</div>
+            </div>
+            <div className="flex flex-wrap gap-1.5 justify-end max-w-[60%]">
+              {adblock.allowlist.map(host => (
+                <button key={host}
+                  onClick={async () => setAdblock(await window.electronAPI.adblock.toggleSite('https://' + host))}
+                  className="px-2.5 py-1 rounded-lg text-xs bg-aihub-card hover:bg-aihub-border/40 text-aihub-text">
+                  {host} ✕
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="py-3">
+          <div className={LBL}>Also block these domains</div>
+          <div className="text-xs text-aihub-muted mb-2">One per line or comma separated — subdomains are covered automatically</div>
+          <textarea
+            value={customDraft || (adblock?.custom || []).join('\n')}
+            onChange={e => setCustomDraft(e.target.value)}
+            onBlur={e => { saveCustomDomains(e.target.value); setCustomDraft('') }}
+            rows={3}
+            placeholder="ads.example.com"
+            className="w-full px-3 py-2 rounded-xl text-sm bg-aihub-card border border-aihub-border/30 text-aihub-text outline-none focus:border-aihub-accent/60"
+          />
+        </div>
+      </Section>
+
       <Section icon={<Shield size={15} />} title="Privacy & Data">
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Encrypted DNS</div>
+            <div className="text-xs text-aihub-muted">
+              Plain DNS shows every site name to whoever runs the network. Resolving over HTTPS hides it.
+            </div>
+          </div>
+          <div className="flex gap-1.5">
+            {(['off', 'cloudflare', 'google', 'quad9'] as const).map(opt => (
+              <button key={opt} onClick={() => chooseDoh(opt)}
+                className={`px-3 py-2 rounded-xl text-xs capitalize transition-all ${
+                  doh === opt ? 'bg-aihub-accent text-white' : 'bg-aihub-card hover:bg-aihub-border/40 text-aihub-text'}`}>
+                {opt}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Sort downloads into folders</div>
+            <div className="text-xs text-aihub-muted">Documents, Images, Video, Audio, Archives, Installers, Code — anything else stays put</div>
+          </div>
+          <BibleToggle on={sortDownloads} onClick={toggleSortDownloads} />
+        </div>
+
         <div className={ROW}>
           <div><div className={LBL}>Clear Cache</div><div className="text-xs text-aihub-muted">Remove cached pages and media</div></div>
           <button onClick={clearCache} className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm transition-all ${cacheCleared ? 'bg-green-500/20 text-green-400' : 'bg-aihub-card hover:bg-aihub-border/40 text-aihub-text'}`}>

@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import * as d3 from 'd3'
+// Only d3's force layout is used here. Importing the `d3` meta-package pulls
+// its whole surface (selection, scales, geo, chord, …) into the startup
+// chunk; the force module alone is a fraction of that.
+import { ForceLink, Simulation, SimulationLinkDatum, SimulationNodeDatum, forceCollide, forceLink, forceManyBody, forceSimulation } from 'd3-force'
 import { ChevronLeft, Play, Pause, RotateCcw, ZoomIn, ZoomOut, Crosshair, BookOpen } from 'lucide-react'
 import { getBookMeta, getChapter, parseRef, formatRef } from '../../services/bibleService'
 
@@ -15,7 +18,7 @@ interface Props {
 // ── Graph model ──────────────────────────────────────────────────────────────
 const CENTER_ID = '__bible__'
 
-interface GNode extends d3.SimulationNodeDatum {
+interface GNode extends SimulationNodeDatum {
   id: string
   ref: string | null       // null → Bible node or a book-hub with no verse of its own
   bookId: string | null
@@ -26,7 +29,7 @@ interface GNode extends d3.SimulationNodeDatum {
   ts: number
   kind: 'bible' | 'hub' | 'verse'
 }
-interface GLink extends d3.SimulationLinkDatum<GNode> {
+interface GLink extends SimulationLinkDatum<GNode> {
   source: GNode | string
   target: GNode | string
   strength: number
@@ -114,7 +117,7 @@ function buildGraph(saved: Saved[]): { nodes: GNode[]; links: GLink[] } {
 export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const simRef = useRef<d3.Simulation<GNode, GLink> | null>(null)
+  const simRef = useRef<Simulation<GNode, GLink> | null>(null)
   const nodesRef = useRef<GNode[]>([])
   const linksRef = useRef<GLink[]>([])
   const rafRef = useRef(0)
@@ -497,19 +500,19 @@ export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: P
     const bible = nodes.find(nd => nd.id === CENTER_ID)!
     bible.fx = W / 2; bible.fy = H / 2
 
-    const sim = d3.forceSimulation<GNode>(nodes)
+    const sim = forceSimulation<GNode>(nodes)
       .alphaDecay(0.022)
       .velocityDecay(0.45)
-      .force('link', d3.forceLink<GNode, GLink>(links).id(d => d.id).distance(l => {
+      .force('link', forceLink<GNode, GLink>(links).id(d => d.id).distance(l => {
         const t = l.target as GNode
         return t.kind === 'hub' ? linkDist * 1.4 : linkDist
       }).strength(l => (l as GLink).strength))
-      .force('charge', d3.forceManyBody<GNode>().strength(charge).distanceMax(700))
-      .force('collision', d3.forceCollide<GNode>().radius(d => nodeRadius(d.size) + 10).strength(0.9))
+      .force('charge', forceManyBody<GNode>().strength(charge).distanceMax(700))
+      .force('collision', forceCollide<GNode>().radius(d => nodeRadius(d.size) + 10).strength(0.9))
 
     simRef.current = sim
     nodesRef.current = nodes
-    linksRef.current = (sim.force('link') as d3.ForceLink<GNode, GLink>).links()
+    linksRef.current = (sim.force('link') as ForceLink<GNode, GLink>).links()
 
     const ticks = Math.min(320, Math.max(140, n * 6))
     for (let i = 0; i < ticks; i++) sim.tick()

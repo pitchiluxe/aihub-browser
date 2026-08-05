@@ -4,7 +4,7 @@ import {
   Search, Plus, RotateCcw, Bot, PanelLeft, Pencil, BookmarkPlus, Volume2,
   Home, FlaskConical, Sparkles, StickyNote, History, Download, Puzzle, Wifi,
   Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft, GitCompare, BellRing,
-  Smartphone, Laptop, BookMarked,
+  Smartphone, Laptop, BookMarked, Layers, Columns2, PictureInPicture2, Camera, CopyMinus,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
@@ -14,7 +14,7 @@ interface Cmd {
   id: string
   label: string
   hint?: string
-  group: 'Actions' | 'Go to' | 'Tabs' | 'Bookmarks' | 'Search'
+  group: 'Actions' | 'Go to' | 'Tabs' | 'Workspaces' | 'Bookmarks' | 'Search'
   icon: React.ReactNode
   keywords?: string
   run: () => void
@@ -54,6 +54,39 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     }
   }, [isCmdPaletteOpen])
 
+  // Saved workspaces, loaded when the palette opens so the list is always the
+  // one on disk (another window may have saved one since this render).
+  const [workspaces, setWorkspaces] = useState<{ id: string; name: string; tabs: any[] }[]>([])
+  const [containers, setContainers] = useState<{ id: string; name: string; color: string }[]>([])
+  useEffect(() => {
+    if (!isCmdPaletteOpen) return
+    window.electronAPI.workspaces.list().then((ws: any[]) => setWorkspaces(ws || [])).catch(() => {})
+    window.electronAPI.containers.list().then((cs: any[]) => setContainers(cs || [])).catch(() => {})
+  }, [isCmdPaletteOpen])
+
+  const tabSnapshot = () => {
+    const state = useBrowserStore.getState()
+    return {
+      tabs: state.tabs.map(t => ({ url: t.url, title: t.title, pageType: t.pageType })),
+      activeIndex: Math.max(0, state.tabs.findIndex(t => t.id === state.activeTabId)),
+    }
+  }
+
+  // Name a workspace after what is actually in it — "tradingview + 3 more" —
+  // so saving never needs a modal or a second keystroke.
+  const suggestWorkspaceName = () => {
+    const real = useBrowserStore.getState().tabs.filter(t => !t.isHome && /^https?:/i.test(t.url))
+    if (!real.length) return 'Workspace'
+    let host = real[0].url
+    try { host = new URL(real[0].url).hostname.replace(/^www\./, '') } catch {}
+    return real.length > 1 ? `${host} + ${real.length - 1} more` : host
+  }
+
+  const restoreSaved = (saved: { tabs: any[]; activeIndex?: number } | null) => {
+    if (!saved?.tabs?.length) return
+    useBrowserStore.getState().restoreTabs(saved.tabs, saved.activeIndex ?? 0)
+  }
+
   const pageIcon: Record<string, React.ReactNode> = {
     research: <FlaskConical size={15} />, agents: <Bot size={15} />, notes: <StickyNote size={15} />,
     rewind: <History size={15} />, watch: <BellRing size={15} />, history: <History size={15} />, downloads: <Download size={15} />, extensions: <Puzzle size={15} />,
@@ -78,6 +111,40 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     act('compare', 'Compare two pages', <GitCompare size={15} />, () => onCompare(), 'versus vs comparison table diff')
     act('handoff-send', 'Send my tabs to another device', <Smartphone size={15} />, () => onSendTabs(), 'handoff continue phone laptop sync move transfer')
     act('handoff-recv', 'Open tabs from another device', <Laptop size={15} />, () => onReceiveTabs(), 'handoff continue receive pull phone laptop sync')
+    act('pip', 'Pop the video out (picture-in-picture)', <PictureInPicture2 size={15} />, async () => {
+      const state = useBrowserStore.getState()
+      if (state.activeTabId) await window.electronAPI.tabView.pictureInPicture(state.activeTabId)
+    }, 'pip float video mini player overlay watch while working')
+
+    act('fullshot', 'Screenshot the whole page', <Camera size={15} />, async () => {
+      const state = useBrowserStore.getState()
+      if (state.activeTabId) await window.electronAPI.tabView.captureFullPage(state.activeTabId)
+    }, 'capture scrolling screenshot save image long page')
+
+    act('merge-dupes', 'Merge duplicate tabs', <CopyMinus size={15} />, () => {
+      useBrowserStore.getState().mergeDuplicateTabs()
+    }, 'close duplicates tidy clean up same page twice')
+
+    act('split', 'Split view — show two tabs side by side', <Columns2 size={15} />, () => {
+      const state = useBrowserStore.getState()
+      if (state.splitTabId) { state.setSplitTab(null); return }
+      // Pair with the next real browsing tab after the active one; wrapping
+      // round means a split still works from the last tab in the strip.
+      const order = state.tabs
+      const at = order.findIndex(t => t.id === state.activeTabId)
+      const partner = [...order.slice(at + 1), ...order.slice(0, Math.max(at, 0))]
+        .find(t => t.id !== state.activeTabId)
+      if (partner) state.setSplitTab(partner.id)
+    }, 'split screen side by side two panes compare dual')
+
+    act('session-previous', 'Reopen my previous session', <RotateCcw size={15} />,
+      async () => restoreSaved(await window.electronAPI.session.getPrevious()),
+      'restore tabs last time yesterday reopen session')
+    act('workspace-save', `Save these tabs as a workspace`, <Layers size={15} />,
+      async () => {
+        const { tabs: snap, activeIndex } = tabSnapshot()
+        await window.electronAPI.workspaces.save(suggestWorkspaceName(), snap, activeIndex)
+      }, 'workspace save group set of tabs project')
 
     const pages: [PageType, string][] = [
       ['research', 'Research Mode'], ['agents', 'Agent Mode'], ['notes', 'Sticky Notes'],
@@ -100,6 +167,27 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       })
     }
 
+    for (const c of containers) {
+      out.push({
+        id: `container-${c.id}`,
+        label: `New tab in ${c.name}`,
+        group: 'Actions',
+        icon: <span style={{ width: 10, height: 10, borderRadius: 999, background: c.color, display: 'inline-block' }} />,
+        hint: 'Separate cookies and logins',
+        keywords: `container profile isolate ${c.name} account separate session`,
+        run: () => { addTab('home', 'browser', c.id); close() },
+      })
+    }
+
+    for (const w of workspaces) {
+      out.push({
+        id: `ws-${w.id}`, label: w.name, group: 'Workspaces', icon: <Layers size={15} />,
+        hint: `${w.tabs.length} tab${w.tabs.length === 1 ? '' : 's'}`,
+        keywords: 'workspace open restore set of tabs',
+        run: () => { restoreSaved(w as any); close() },
+      })
+    }
+
     for (const b of bookmarks) {
       out.push({
         id: `bm-${b.id}`, label: b.title, group: 'Bookmarks',
@@ -110,7 +198,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, bookmarks])
+  }, [tabs, bookmarks, workspaces, containers])
 
   const filtered = useMemo(() => {
     const raw = query.trim()
