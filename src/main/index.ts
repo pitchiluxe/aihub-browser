@@ -818,6 +818,44 @@ function syncActiveBrowserView(ctx: AppWin | undefined) {
   }
 }
 
+// Self-contained "this page crashed" document, shown only when a page crashes
+// twice in a row (see the render-process-gone handler). It carries no preload
+// and no IPC — the Reload button is a plain location.replace() back to the site,
+// which is all a fresh attempt needs and keeps the page safe to render in a
+// crashed tab's respawned renderer.
+function crashPageDataUrl(crashedUrl: string, reason: string): string {
+  const safeUrl = crashedUrl.replace(/"/g, '&quot;').replace(/</g, '&lt;')
+  const host = (() => { try { return new URL(crashedUrl).hostname } catch { return crashedUrl } })()
+  const html = `<!doctype html><meta charset="utf-8"><title>Page crashed</title>
+<style>
+  :root{color-scheme:light}
+  body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
+       font:15px/1.6 -apple-system,"Segoe UI",system-ui,sans-serif;color:#1c1d2b;background:#f7f8fc}
+  .card{max-width:460px;padding:40px;text-align:center}
+  .glyph{width:56px;height:56px;margin:0 auto 22px;border-radius:16px;background:#eceefb;
+         display:flex;align-items:center;justify-content:center;font-size:26px}
+  h1{margin:0 0 10px;font-size:20px;font-weight:650;letter-spacing:-.01em}
+  p{margin:0 0 8px;color:#5b5d78}
+  .host{font-weight:600;color:#1c1d2b}
+  .why{margin-top:18px;font-size:13px;color:#8a8ca6}
+  button{margin-top:26px;padding:11px 26px;border:0;border-radius:10px;cursor:pointer;
+         font:inherit;font-weight:600;color:#fff;background:#4f46e5}
+  button:hover{background:#4338ca}
+</style>
+<div class="card">
+  <div class="glyph">⚠️</div>
+  <h1>This page stopped responding</h1>
+  <p><span class="host">${host}</span> crashed while loading, twice in a row.</p>
+  <p class="why">Reason reported by the browser engine: ${reason}</p>
+  <button onclick="location.replace('${safeUrl}')">Reload page</button>
+</div>`
+  return 'data:text/html;charset=utf-8,' + encodeURIComponent(html)
+}
+
+// The crash page is an internal document — the tab must keep showing the site's
+// own address and title, not the data: URL we swapped in underneath it.
+const isCrashPage = (u: string) => u.startsWith('data:text/html')
+
 function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
   if (!ctx || ctx.views.has(tabId)) return
   const tabViews = ctx.views
@@ -914,14 +952,52 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string) {
     })
   })
 
-  wc.on('did-navigate', (_e, navUrl) => sendTabEvent(ctx, tabId, 'did-navigate', { url: navUrl }))
+  wc.on('did-navigate', (_e, navUrl) => {
+    if (isCrashPage(navUrl)) return
+    sendTabEvent(ctx, tabId, 'did-navigate', { url: navUrl })
+  })
   wc.on('did-navigate-in-page', (_e, navUrl) => sendTabEvent(ctx, tabId, 'did-navigate-in-page', { url: navUrl }))
   wc.on('did-start-loading', () => sendTabEvent(ctx, tabId, 'did-start-loading'))
   wc.on('did-stop-loading', () => {
     let title = ''; let curUrl = ''
     try { title = wc.getTitle() } catch {}
     try { curUrl = wc.getURL() } catch {}
+    if (isCrashPage(curUrl)) { curUrl = ''; title = '' }
     sendTabEvent(ctx, tabId, 'did-stop-loading', { title, url: curUrl })
+  })
+
+  // ── Renderer crash recovery ───────────────────────────────────────────────
+  // A tab's renderer process can die outright — segfault, out-of-memory, GPU
+  // fault. Nothing at page level reports it: the navigation already succeeded,
+  // so 'did-fail-load' never fires and the title and favicon stay put. The view
+  // just stops painting, which is exactly what a "site loads, then goes blank
+  // forever" tab is. 'render-process-gone' is the only event that sees it.
+  //
+  // Most crashes are one-off, so the first one silently reloads — the user sees
+  // a flicker instead of a dead tab. The retry MUST be bounded: a page that
+  // crashes deterministically would otherwise respawn a renderer that dies on
+  // the same code path, forever. A second crash inside the window therefore
+  // stops retrying and shows the crash page, which offers a manual reload.
+  const CRASH_RETRY_WINDOW_MS = 30_000
+  let lastCrashAt = 0
+  wc.on('render-process-gone', (_e, details) => {
+    // A tab being closed or navigated away tears its renderer down normally.
+    if (details.reason === 'clean-exit') return
+    let crashedUrl = url
+    try { const u = wc.getURL(); if (u && !isCrashPage(u)) crashedUrl = u } catch {}
+
+    const now = Date.now()
+    const isRepeat = now - lastCrashAt < CRASH_RETRY_WINDOW_MS
+    lastCrashAt = now
+    sendTabEvent(ctx, tabId, 'render-process-gone', { reason: details.reason, willRetry: !isRepeat })
+
+    if (!isRepeat) {
+      // Small delay: reloading in the same tick as the crash can race the
+      // browser process finishing its teardown of the dead renderer.
+      setTimeout(() => { try { if (!wc.isDestroyed()) wc.reload() } catch {} }, 300)
+      return
+    }
+    try { if (!wc.isDestroyed()) wc.loadURL(crashPageDataUrl(crashedUrl, details.reason)) } catch {}
   })
   wc.on('did-fail-load', (_e, errorCode) => { if (errorCode !== -3) sendTabEvent(ctx, tabId, 'did-fail-load', { errorCode }) })
   wc.on('page-title-updated', (_e, title) => sendTabEvent(ctx, tabId, 'page-title-updated', { title }))

@@ -569,6 +569,15 @@ export default function App() {
           break
         }
 
+        // The tab's renderer process died (segfault/OOM). Main handles the
+        // recovery — one silent reload, then a crash page — but the spinner is
+        // ours to clear: the load that was in flight will never report back,
+        // and a tab that recovers shouldn't be left looking stuck.
+        case 'render-process-gone': {
+          finishLoading(tabId)
+          break
+        }
+
         case 'did-navigate': {
           const t = loadTimers.current.get(tabId)
           if (t) { clearTimeout(t); loadTimers.current.delete(tabId) }
