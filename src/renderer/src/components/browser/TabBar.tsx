@@ -12,11 +12,15 @@ const IS_MAC = window.electronAPI?.platform === 'darwin'
 export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compact' } = {}) {
   // Narrow subscription — without a selector every store mutation (AI chat
   // streaming, download progress…) re-rendered the whole tab strip.
-  const { tabs, activeTabId, addTab, closeTab, closeOtherTabs, closeTabsToRight, setActiveTab, reorderTabs, sleepTab } = useBrowserStore(
+  const {
+    tabs, activeTabId, addTab, closeTab, closeOtherTabs, closeTabsToRight,
+    setActiveTab, reorderTabs, sleepTab, splitTabId, setSplitTab,
+  } = useBrowserStore(
     useShallow(s => ({
       tabs: s.tabs, activeTabId: s.activeTabId, addTab: s.addTab, closeTab: s.closeTab,
       closeOtherTabs: s.closeOtherTabs, closeTabsToRight: s.closeTabsToRight,
       setActiveTab: s.setActiveTab, reorderTabs: s.reorderTabs, sleepTab: s.sleepTab,
+      splitTabId: s.splitTabId, setSplitTab: s.setSplitTab,
     })))
 
   // Native context menu — an HTML dropdown would be clipped by the 40px bar
@@ -32,6 +36,10 @@ export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compa
       count: tabs.length,
       // Can sleep a background browser tab that isn't already asleep.
       canSleep: isBrowser && tab.id !== activeTabId && !tab.asleep,
+      // Split view pairs THIS tab with the active one, so it is meaningless on
+      // the active tab itself.
+      isActive: tab.id === activeTabId,
+      isSplit: tab.id === splitTabId,
     })
     switch (action) {
       case 'new-tab':      addTab(); break
@@ -43,6 +51,7 @@ export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compa
       case 'close-others': closeOtherTabs(tab.id); break
       case 'close-right':  closeTabsToRight(tab.id); break
       case 'merge-all':    window.electronAPI.window.mergeAllInto(); break
+      case 'split':        setSplitTab(tab.id === splitTabId ? null : tab.id); break
       default:
         // "Move Tab to Window ▸ <name>" comes back as move:<windowId>.
         if (action.startsWith('move:')) moveTabToWindow(tab, Number(action.slice(5)))

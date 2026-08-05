@@ -287,6 +287,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setBounds:       (bounds: { x: number; y: number; width: number; height: number })          => ipcRenderer.invoke('tabview:setBounds', bounds),
     pictureInPicture:(tabId: string)                                                            => ipcRenderer.invoke('tabview:pictureInPicture', tabId),
     captureFullPage: (tabId: string)                                                            => ipcRenderer.invoke('tabview:captureFullPage', tabId),
+    getLayout:       ()                                                                         => ipcRenderer.invoke('tabview:getLayout'),
     setSplit:        (tabId: string | null, ratio?: number)                                     => ipcRenderer.invoke('tabview:setSplit', tabId, ratio),
     setOverlayHidden:(hidden: boolean)                                                          => ipcRenderer.invoke('tabview:setOverlayHidden', hidden),
     navigate:        (tabId: string, url: string)                                               => ipcRenderer.invoke('tabview:navigate', tabId, url),

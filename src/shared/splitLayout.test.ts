@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitPanes, type Rect } from './layout'
+import { splitPanes, type Rect } from './splitLayout'
 
 const content: Rect = { x: 0, y: 96, width: 1000, height: 800 }
 

@@ -15,7 +15,7 @@ import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
 import { createSessionManager, type SessionTab } from './sessions'
 import axios from 'axios'
 import { createSemanticIndex, type SearchDoc } from './semantic'
-import { splitPanes } from './layout'
+import { splitPanes } from '../shared/splitLayout'
 import { writeNote, describeVault, type NoteKind } from './obsidian'
 import { contentHash, describeChange, containsKeyword } from './watchDiff'
 import {
@@ -931,11 +931,20 @@ function syncActiveBrowserView(ctx: AppWin | undefined) {
   const place = (view: BrowserView, bounds: { x: number; y: number; width: number; height: number }) => {
     const reattaching = !alreadyAttached.has(view)
     if (reattaching) { try { ctx.win.addBrowserView(view) } catch {} }
-    view.setBounds({
+    const next = {
       x: Math.round(bounds.x), y: Math.round(bounds.y),
       width: Math.max(0, Math.round(bounds.width)), height: Math.max(0, Math.round(bounds.height)),
-    })
-    if (reattaching) nudge(view)
+    }
+    let previous: Electron.Rectangle | null = null
+    try { previous = view.getBounds() } catch {}
+    const resized = !previous || previous.width !== next.width || previous.height !== next.height
+    view.setBounds(next)
+    // Nudge on RESIZE, not only on re-attach. setBounds moves the view, but an
+    // already-attached view's renderer can keep its old viewport: entering
+    // split view left the page laid out at full width inside a half-width
+    // pane, so the site was silently clipped down the middle. Measured: main
+    // reported 597px while the page still reported innerWidth 1200.
+    if (reattaching || resized) nudge(view)
   }
 
   if (secondary) {
@@ -2036,7 +2045,7 @@ ipcMain.handle('window:detachTab', (_e, url: string, title?: string) => {
 // Native menu — an HTML menu in the tab strip would be clipped by the 40px
 // bar and painted over by the active tab's BrowserView. Resolves with the
 // chosen action id, or '' if dismissed.
-ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number; canSleep?: boolean }) => {
+ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number; canSleep?: boolean; isActive?: boolean; isSplit?: boolean }) => {
   return new Promise<string>((resolve) => {
     let resolved = false
     const done = (action: string) => { if (!resolved) { resolved = true; resolve(action) } }
@@ -2047,6 +2056,8 @@ ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: bo
     const menu = Menu.buildFromTemplate([
       { label: 'New Tab',                 click: () => done('new-tab') },
       { label: 'Duplicate Tab',           click: () => done('duplicate') },
+      { label: info.isSplit ? 'Leave Split View' : 'Split View with This Tab',
+        enabled: info.isBrowser && !info.isActive, click: () => done('split') },
       { label: 'Move Tab to New Window',  enabled: info.isBrowser, click: () => done('detach') },
       // The way back. Only shown when there is somewhere to move it to, so the
       // menu doesn't carry a permanently empty submenu.
@@ -2242,6 +2253,28 @@ ipcMain.handle('tabview:setBounds', (e, bounds: { x: number; y: number; width: n
   ctx.bounds = bounds
   syncActiveBrowserView(ctx)
 })
+// What the window actually shows right now: which views are attached and the
+// exact pixels each one occupies. Used to verify split view rather than trust
+// that a setBounds call landed.
+ipcMain.handle('tabview:getLayout', (e) => {
+  const ctx = ctxFromEvent(e)
+  if (!ctx) return null
+  const boundsOf = (id: string | null) => {
+    if (!id) return null
+    const view = ctx.views.get(id)
+    try { return view ? view.getBounds() : null } catch { return null }
+  }
+  return {
+    activeId: ctx.activeId,
+    splitId: ctx.splitId,
+    ratio: ctx.splitRatio,
+    content: ctx.bounds,
+    attached: ctx.win.getBrowserViews().length,
+    primary: boundsOf(ctx.activeId),
+    secondary: boundsOf(ctx.splitId),
+  }
+})
+
 ipcMain.handle('tabview:setSplit', (e, tabId: string | null, ratio?: number) => {
   const ctx = ctxFromEvent(e); if (!ctx) return
   ctx.splitId = tabId && ctx.views.has(tabId) ? tabId : null

@@ -45,6 +45,8 @@ import { loadCustomExts } from './extensions/customExts'
 import { shouldRunOn } from './extensions/siteRules'
 import { withPanelRuntime } from './extensions/panelRuntime'
 import { applyThemeToDom } from './services/themeService'
+// Pure geometry, shared with the main process so both agree to the pixel.
+import { splitPanes } from '../../shared/splitLayout'
 
 declare global {
   interface Window {
@@ -54,6 +56,12 @@ declare global {
 
 // A tab needs a native tab content view when it has left the home screen and
 // isn't one of the special aihub:// pages.
+// The divider is drawn in the gutter between the two panes, positioned with
+// the SAME function the main process uses to place them (src/main/layout.ts) —
+// a second copy of that arithmetic here would drift by a pixel and leave the
+// handle sitting on top of a page instead of between two.
+const SPLIT_GUTTER = 6
+
 function needsTabView(tab: Tab | undefined): boolean {
   // A sleeping tab has no native view (its memory was freed) until woken.
   return !!tab && !tab.isHome && tab.pageType === 'browser' && !tab.asleep
@@ -458,10 +466,17 @@ export default function App() {
       if (!contentAreaRef.current) return
       const r = contentAreaRef.current.getBoundingClientRect()
       if (r.width > 0 && r.height > 0) {
-        window.electronAPI.tabView.setBounds({
+        const bounds = {
           x: r.left, y: r.top + topReserve,
           width: Math.max(0, r.width - rightReserve), height: Math.max(0, r.height - topReserve),
-        })
+        }
+        window.electronAPI.tabView.setBounds(bounds)
+        // The split divider is host HTML drawn in the 6px gutter the two views
+        // leave between them — the one strip of the content area where no
+        // BrowserView paints, and therefore the only place a handle can live.
+        setViewBounds(prev =>
+          (prev && prev.x === bounds.x && prev.y === bounds.y &&
+           prev.width === bounds.width && prev.height === bounds.height) ? prev : bounds)
       }
     }
     sync()
@@ -546,12 +561,35 @@ export default function App() {
   // The panes are two native BrowserViews sharing the content bounds, so the
   // geometry lives in the main process; the renderer only names the partner.
   // Tab views already exist for every open tab, so no extra creation is needed.
+  const [viewBounds, setViewBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const [splitRatio, setSplitRatio] = useState(0.5)
+  const draggingSplit = useRef(false)
+
   useEffect(() => {
     const partner = splitTabId && splitTabId !== activeTabId && tabs.some(t => t.id === splitTabId)
       ? splitTabId
       : null
-    window.electronAPI.tabView.setSplit(partner)
-  }, [splitTabId, activeTabId, tabs])
+    window.electronAPI.tabView.setSplit(partner, splitRatio)
+  }, [splitTabId, activeTabId, tabs, splitRatio])
+
+  // Drag the gutter to rebalance the panes. The ratio is pushed straight to the
+  // main process on every move: the views resize live, which is the whole point
+  // of a drag handle — a preview that only commits on release would feel dead.
+  useEffect(() => {
+    if (!splitTabId || !viewBounds) return
+    const onMove = (e: PointerEvent) => {
+      if (!draggingSplit.current) return
+      const ratio = (e.clientX - viewBounds.x) / Math.max(1, viewBounds.width)
+      setSplitRatio(Math.min(0.8, Math.max(0.2, ratio)))
+    }
+    const onUp = () => { draggingSplit.current = false; document.body.style.cursor = '' }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp) }
+  }, [splitTabId, viewBounds])
+
+  const splitDividerVisible = !!splitTabId && !!viewBounds && needsTabView(activeTab) &&
+    tabs.some(t => t.id === splitTabId)
 
   // ── Session restore ────────────────────────────────────────────────────
   // Reopen the tabs that were open when the app last closed, once, before the
@@ -871,6 +909,29 @@ export default function App() {
           <AIAssistant currentUrl={currentUrl} currentTitle={currentTitle} getPageContent={getPageContent} />
         </div>
       </div>
+
+      {/* Split-view divider — sits in the gutter between the two native views. */}
+      {splitDividerVisible && viewBounds && (
+        <div
+          onPointerDown={e => {
+            e.preventDefault()
+            draggingSplit.current = true
+            document.body.style.cursor = 'col-resize'
+          }}
+          onDoubleClick={() => setSplitRatio(0.5)}
+          title="Drag to resize · double-click to even them up"
+          style={{
+            position: 'fixed',
+            left: splitPanes(viewBounds, splitRatio, SPLIT_GUTTER)[0].x + splitPanes(viewBounds, splitRatio, SPLIT_GUTTER)[0].width,
+            top: viewBounds.y,
+            width: SPLIT_GUTTER,
+            height: viewBounds.height,
+            cursor: 'col-resize',
+            zIndex: 40,
+            background: 'rgb(var(--ds-accent) / 0.35)',
+          }}
+        />
+      )}
 
       <AddBookmarkModal />
       <UpdateNotification />
