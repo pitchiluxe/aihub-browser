@@ -33,7 +33,14 @@ function e(key: string, fallback = ''): string {
 
 // These are baked into the compiled main-process bundle at build time.
 // The installed app therefore always has credentials even without .env.local.
+// The app's own version, baked in at build time. app.getVersion() reports the
+// ELECTRON binary's version when the app runs unpackaged, so Settings, the
+// manual footer and the assistant all claimed "34.5.8" in development — a
+// version number that belongs to a different piece of software entirely.
+const pkgVersion = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf-8')).version
+
 const mainDefine: Record<string, string> = {
+  'process.env.AIHUB_VERSION': JSON.stringify(pkgVersion),
   'process.env.ANTHROPIC_AUTH_TOKEN':           JSON.stringify(e('ANTHROPIC_AUTH_TOKEN')),
   'process.env.ANTHROPIC_BASE_URL':             JSON.stringify(e('ANTHROPIC_BASE_URL', 'https://openrouter.ai/api')),
   'process.env.ANTHROPIC_MODEL':                JSON.stringify(e('ANTHROPIC_MODEL', 'qwen/qwen3-coder:free')),

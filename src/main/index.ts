@@ -4254,8 +4254,13 @@ ipcMain.handle('agentfs:exec', async (_e, { command, cwd, timeoutMs }: { command
 })
 
 // ── IPC: App info — lets the AI assistant know exactly what it's running in ─
+// app.getVersion() returns the Electron binary's version when running
+// unpackaged, so the baked-in package version is the honest answer in dev and
+// the packaged value is used when there is one.
+const APP_VERSION = app.isPackaged ? app.getVersion() : (process.env.AIHUB_VERSION || app.getVersion())
+
 ipcMain.handle('app:info', () => ({
-  version: app.getVersion(),
+  version: APP_VERSION,
   platform: process.platform,
   electron: process.versions.electron,
   chrome: process.versions.chrome,

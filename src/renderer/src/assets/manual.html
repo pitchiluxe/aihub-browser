@@ -265,8 +265,10 @@
       <a href="#start">First 5 minutes</a>
       <div class="rail-grp">Browsing</div>
       <a href="#tabs">Tabs &amp; windows</a>
+      <a href="#layout">Split view &amp; layout</a>
       <a href="#address">Address bar</a>
       <a href="#home">Smart homepage</a>
+      <a href="#bookmarksmenu">Bookmarks menu</a>
       <a href="#pagetools">Page tools</a>
       <div class="rail-grp">Intelligence</div>
       <a href="#ai">AI assistant</a>
@@ -292,6 +294,9 @@
       <a href="#hist">History &amp; downloads</a>
       <a href="#ext">Extensions</a>
       <a href="#themes">Themes</a>
+      <a href="#blocking">Ad &amp; tracker blocking</a>
+      <a href="#sessions">Sessions &amp; containers</a>
+      <a href="#vault">Obsidian &amp; sync</a>
       <div class="rail-grp">Reference</div>
       <a href="#keys">All shortcuts</a>
       <a href="#menus">Right-click menus</a>
@@ -437,6 +442,9 @@
                 <tr><td>Next / previous tab</td><td><kbd>Ctrl</kbd>+<kbd>Tab</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd></td></tr>
                 <tr><td>Reorder</td><td>Drag a tab left or right</td></tr>
                 <tr><td><strong>Detach to new window</strong></td><td>Right-click the tab → <em>Move Tab to New Window</em>. Perfect for a second monitor.</td></tr>
+                <tr><td><strong>Move it back</strong></td><td>Right-click &rarr; <em>Move Tab to Window &#9656;</em> and pick the window it should return to. See <a href="#layout">Split view &amp; windows</a>.</td></tr>
+                <tr><td><strong>Reunite every window</strong></td><td>Right-click &rarr; <em>Bring All Tabs Here</em> &mdash; the other windows hand over their pages and close.</td></tr>
+                <tr><td>Merge duplicates</td><td><kbd>Ctrl</kbd>+<kbd>K</kbd> &rarr; <em>Merge duplicate tabs</em>. Keeps the first copy of each page.</td></tr>
                 <tr><td>Duplicate</td><td>Right-click → <em>Duplicate Tab</em></td></tr>
                 <tr><td>Mute a noisy tab</td><td>Right-click → <em>Mute Tab</em></td></tr>
                 <tr><td>Close others / to the right</td><td>Right-click → <em>Close Other Tabs</em> / <em>Close Tabs to the Right</em></td></tr>
@@ -445,6 +453,73 @@
             </table>
           </div>
           <div class="note"><strong>Second-monitor tip:</strong> detached windows are real, independent browser windows. Drag one to another display and it keeps its own history and navigation. You can also send a link straight out: right-click a link → <em>Open Link in New Window</em>.</div>
+        </div>
+      </section>
+
+
+      <!-- LAYOUT: SPLIT VIEW, VERTICAL TABS, MOVING TABS BETWEEN WINDOWS -->
+      <section id="layout">
+        <div class="sec-head"><span class="node"></span><h2>Split view, vertical tabs &amp; moving tabs home</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Two pages at once, a tab strip that survives forty tabs, and a way back from a detached window.</p>
+
+        <figure>
+          <svg viewBox="0 0 760 300" role="img" aria-label="Split view with two pages side by side, a vertical tab rail on the left, and a tab returning from a second window">
+            <rect x="20" y="20" width="470" height="230" rx="12" fill="var(--surface)" stroke="var(--line-2)"/>
+            <rect x="20" y="20" width="470" height="26" rx="12" fill="var(--surface-2)"/>
+            <rect x="20" y="38" width="470" height="8" fill="var(--surface-2)"/>
+            <rect x="20" y="46" width="96" height="204" fill="var(--surface-2)"/>
+            <line x1="116" y1="46" x2="116" y2="250" stroke="var(--line)"/>
+            <rect x="30" y="56" width="76" height="14" rx="6" fill="var(--violet)" opacity=".18"/>
+            <text x="36" y="66" font-size="8" fill="var(--violet)" font-weight="700">GITHUB &#183; 3</text>
+            <rect x="36" y="76" width="70" height="12" rx="5" fill="var(--surface)" stroke="var(--line)"/>
+            <rect x="36" y="92" width="70" height="12" rx="5" fill="var(--surface)" stroke="var(--line)"/>
+            <rect x="30" y="112" width="76" height="14" rx="6" fill="var(--sky)" opacity=".18"/>
+            <text x="36" y="122" font-size="8" fill="var(--sky)" font-weight="700">DOCS &#183; 2</text>
+            <rect x="36" y="132" width="70" height="12" rx="5" fill="var(--surface)" stroke="var(--line)"/>
+            <rect x="126" y="56" width="172" height="184" rx="8" fill="var(--sunk)" stroke="var(--line)"/>
+            <rect x="308" y="56" width="172" height="184" rx="8" fill="var(--sunk)" stroke="var(--line)"/>
+            <rect x="140" y="70" width="120" height="6" rx="3" fill="var(--ink-4)" opacity=".5"/>
+            <rect x="140" y="84" width="144" height="4" rx="2" fill="var(--ink-4)" opacity=".3"/>
+            <rect x="322" y="70" width="120" height="6" rx="3" fill="var(--ink-4)" opacity=".5"/>
+            <rect x="322" y="84" width="144" height="4" rx="2" fill="var(--ink-4)" opacity=".3"/>
+            <text x="212" y="232" font-size="9" fill="var(--ink-3)" text-anchor="middle">left pane</text>
+            <text x="394" y="232" font-size="9" fill="var(--ink-3)" text-anchor="middle">right pane</text>
+            <line x1="303" y1="60" x2="303" y2="236" stroke="var(--violet)" stroke-width="2" stroke-dasharray="3 3" opacity=".7"/>
+            <rect x="560" y="70" width="180" height="130" rx="12" fill="var(--surface)" stroke="var(--line-2)"/>
+            <rect x="560" y="70" width="180" height="22" rx="12" fill="var(--surface-2)"/>
+            <rect x="560" y="84" width="180" height="8" fill="var(--surface-2)"/>
+            <rect x="572" y="76" width="70" height="12" rx="5" fill="var(--surface)" stroke="var(--emerald)" stroke-opacity=".6"/>
+            <rect x="574" y="106" width="152" height="80" rx="8" fill="var(--sunk)" stroke="var(--line)"/>
+            <text x="650" y="216" font-size="9" fill="var(--ink-3)" text-anchor="middle">detached window</text>
+            <path d="M556 110 C 520 96, 512 78, 496 66" fill="none" stroke="var(--emerald)" stroke-width="2" stroke-dasharray="4 3"/>
+            <path d="M496 66 l 10 2 l -6 6 z" fill="var(--emerald)"/>
+            <text x="524" y="58" font-size="9" fill="var(--emerald)" text-anchor="middle" font-weight="700">Move Tab to Window</text>
+          </svg>
+          <figcaption>Left: the vertical rail with two groups, and the active tab split across two live panes. Right: a detached window handing its page back.</figcaption>
+        </figure>
+
+        <div class="body-col">
+          <h3>Split view &mdash; two pages, one window</h3>
+          <p>Open the command palette with <kbd>Ctrl</kbd>+<kbd>K</kbd> and run <em>Split view</em>. The active tab takes the left pane and the next tab takes the right. Both are live: scroll, click and type in either. Run it again to go back to one pane.</p>
+          <p>In the vertical rail, the <strong>&#8863; button</strong> on any tab row puts that specific tab beside the current one &mdash; handy for keeping docs next to the thing you are building.</p>
+
+          <h3>Vertical tabs &amp; groups</h3>
+          <p>Past roughly a dozen tabs, a horizontal strip turns titles into a memory test. Switch to the left rail in <strong>Settings &rarr; Startup &rarr; Tab strip &rarr; Left</strong>, and every tab keeps a readable title however many are open.</p>
+          <p>The <strong>layers button</strong> at the top of the rail groups the open tabs by site in one click. Group headers fold away, so ten GitHub tabs collapse to a single line until you need them. Groups only form for sites with at least two tabs &mdash; a group of one hides nothing and only makes the list longer.</p>
+
+          <h3>Bringing tabs back together</h3>
+          <p>Detaching a tab used to be a one-way trip. The tab right-click menu now offers two ways home:</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Action</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Move Tab to Window &#9656;</strong></td><td>Lists your other windows by what they are showing (&ldquo;Gmail&rdquo;, &ldquo;TradingView&rdquo;) with their tab counts. Pick one and the page moves there.</td></tr>
+                <tr><td><strong>Bring All Tabs Here</strong></td><td>Every other window hands over its pages and closes itself, leaving one window holding everything.</td></tr>
+                <tr><td>Move Tab to New Window</td><td>The other direction, unchanged &mdash; good for a second monitor.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note"><strong>What happens to the page:</strong> it reloads when it arrives. A page cannot be picked up and carried between windows without restarting it, so finish anything half-typed in a form before moving that tab.</div>
         </div>
       </section>
 
@@ -486,6 +561,68 @@
       </section>
 
       <!-- PAGE TOOLS -->
+
+      <!-- BOOKMARKS MENU -->
+      <section id="bookmarksmenu">
+        <div class="sec-head"><span class="node"></span><h2>The bookmarks menu</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">The sphere is for exploring. This is for opening the one you already have in mind.</p>
+
+        <figure>
+          <svg viewBox="0 0 760 250" role="img" aria-label="The toolbar bookmarks button open, showing a searchable list of bookmarks grouped by category">
+            <rect x="40" y="18" width="680" height="46" rx="10" fill="var(--surface)" stroke="var(--line-2)"/>
+            <rect x="56" y="30" width="300" height="22" rx="11" fill="var(--sunk)" stroke="var(--line-2)"/>
+            <g fill="none" stroke="var(--ink-3)" stroke-width="1.6" stroke-linecap="round">
+              <path d="M470 34l0 13 5-4 5 4 0-13z"/>
+              <path d="M508 36h14M508 41h14M508 46h10"/>
+              <circle cx="556" cy="41" r="6"/><path d="M553 41h6M556 38v6"/>
+            </g>
+            <rect x="494" y="26" width="34" height="30" rx="9" fill="var(--violet)" opacity=".16" stroke="var(--violet)" stroke-opacity=".45"/>
+            <text x="511" y="70" font-size="8.5" fill="var(--violet)" text-anchor="middle" font-weight="700">bookmarks</text>
+            <text x="556" y="70" font-size="8.5" fill="var(--ink-3)" text-anchor="middle">camera</text>
+
+            <rect x="430" y="78" width="290" height="156" rx="12" fill="var(--surface)" stroke="var(--line-2)"/>
+            <rect x="444" y="90" width="262" height="22" rx="9" fill="var(--sunk)" stroke="var(--line)"/>
+            <circle cx="458" cy="101" r="4.5" fill="none" stroke="var(--ink-4)" stroke-width="1.4"/>
+            <path d="M461 104l4 4" stroke="var(--ink-4)" stroke-width="1.4" stroke-linecap="round"/>
+            <text x="470" y="104.5" font-size="8.5" fill="var(--ink-4)">Search 42 bookmarks&#8230;</text>
+
+            <text x="446" y="128" font-size="8" fill="var(--ink-4)" font-weight="700" letter-spacing="0.6">DEVELOPMENT</text>
+            <rect x="444" y="134" width="262" height="16" rx="6" fill="var(--violet)" opacity=".13"/>
+            <circle cx="454" cy="142" r="4" fill="var(--violet)" opacity=".7"/>
+            <text x="464" y="145" font-size="9" fill="var(--ink-2)">Awesome Lists</text>
+            <circle cx="454" cy="160" r="4" fill="var(--ink-4)" opacity=".6"/>
+            <text x="464" y="163" font-size="9" fill="var(--ink-2)">GitHub</text>
+            <circle cx="454" cy="176" r="4" fill="var(--ink-4)" opacity=".6"/>
+            <text x="464" y="179" font-size="9" fill="var(--ink-2)">MDN Web Docs</text>
+            <text x="446" y="200" font-size="8" fill="var(--ink-4)" font-weight="700" letter-spacing="0.6">FINANCE</text>
+            <circle cx="454" cy="214" r="4" fill="var(--ink-4)" opacity=".6"/>
+            <text x="464" y="217" font-size="9" fill="var(--ink-2)">TradingView</text>
+            <text x="700" y="145" font-size="9" fill="var(--ink-4)" text-anchor="end">&#8599;</text>
+
+            <text x="230" y="150" font-size="10" fill="var(--ink-3)" text-anchor="middle">Alphabetical, always &#8212; A&#8211;Z overall,</text>
+            <text x="230" y="166" font-size="10" fill="var(--ink-3)" text-anchor="middle">A&#8211;Z inside every category.</text>
+          </svg>
+          <figcaption>The bookmarks button sits next to the screenshot camera. Everything is alphabetical, so a bookmark is always in the same place.</figcaption>
+        </figure>
+
+        <div class="body-col">
+          <p>Click the <strong>library icon</strong> in the toolbar, just left of the camera, and every bookmark you have saved drops down in one list.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Action</th><th>How</th></tr></thead>
+              <tbody>
+                <tr><td>Open in this tab</td><td>Click the bookmark</td></tr>
+                <tr><td>Open in a new tab</td><td><kbd>Ctrl</kbd>+click, <kbd>Shift</kbd>+click, middle-click, or the &#8599; button on the row</td></tr>
+                <tr><td>Find one fast</td><td>Just start typing &mdash; the search box is already focused</td></tr>
+                <tr><td>Keyboard</td><td><kbd>&darr;</kbd> / <kbd>&uarr;</kbd> to move, <kbd>Enter</kbd> to open, <kbd>Esc</kbd> to close</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><strong>Ordering.</strong> With no search, bookmarks are listed A&ndash;Z inside each category, and the categories themselves are A&ndash;Z. When you search, the closest matches lead &mdash; titles that <em>start</em> with what you typed, then titles that contain it, then addresses, then categories &mdash; and entries that tie are again alphabetical. Typing <code>git</code> puts your Git bookmarks first, not the ninth page that merely links to one.</p>
+        </div>
+      </section>
+
+      <!-- PAGE TOOLS -->
       <section id="pagetools">
         <div class="sec-head"><span class="node"></span><h2>Working with a page</h2><span class="sec-line"></span></div>
         <div class="body-col">
@@ -511,6 +648,10 @@
       <!-- ══ AI ASSISTANT ══ -->
       <section id="ai">
         <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>The AI assistant</h2><span class="sec-line"></span></div>
+        <div class="body-col">
+          <div class="note good"><strong>It remembers now.</strong> The conversation is kept between launches, so yesterday&rsquo;s answers are still there when you reopen the panel. <em>Clear chat</em> wipes it from disk as well as the screen. In a long conversation the oldest turns are condensed to a line each rather than dropped &mdash; without that, the assistant&rsquo;s own instructions are the first thing a local model forgets.</div>
+          <div class="note"><strong>It can search what you have read.</strong> Ask &ldquo;what was that article about renderer crashes?&rdquo; or &ldquo;the page I read yesterday about pricing&rdquo; and it searches your own Rewind archive by meaning &mdash; on this machine, with your local model &mdash; then answers with a link to the page. The web cannot answer that question; only your browser knows what you read.</div>
+        </div>
         <p class="sec-sub">This is the part that makes AIHub different from every other browser. It is not a chatbot bolted onto a sidebar — it can act.</p>
 
         <div class="body-col">
@@ -1025,6 +1166,9 @@
       <section id="ext">
         <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Extensions</h2><span class="sec-line"></span></div>
         <div class="body-col">
+          <div class="note"><strong>Choose where each extension runs.</strong> Open an extension&rsquo;s card and use <em>Runs on</em>: <strong>All sites</strong>, <strong>Only these</strong>, or <strong>Everywhere except these</strong>. Type a site (<code>github.com</code> covers its subdomains) and press Add. A reading tweak has no business touching your bank, and a dark-mode filter can now be switched off for the one site it fights without losing it everywhere.</div>
+        </div>
+        <div class="body-col">
           <p>Fourteen built-in page enhancers, each a toggle. No store, no permissions dialogs, no tracking.</p>
           <div class="tbl-scroll">
             <table>
@@ -1054,6 +1198,9 @@
       <section id="themes">
         <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Themes &amp; appearance</h2><span class="sec-line"></span></div>
         <div class="body-col">
+          <div class="note good"><strong>Every theme is graded for readability.</strong> Each swatch shows its measured contrast &mdash; <code>AAA</code>, <code>AA</code>, <code>AA large only</code> or <code>Low contrast</code> &mdash; using the same WCAG ratio accessibility standards use. Generated themes are repaired before you ever see them: the designer&rsquo;s colour survives, and the lightness moves until body text is genuinely readable on it.</div>
+        </div>
+        <div class="body-col">
           <p><em>Settings → Appearance</em>. Twenty-five built-in themes — Midnight, Ocean, Forest, Sunset, Crimson, Cyber, Royal, Rose, Graphite, Nordic, Espresso, Aurora, Lavender, Mint, Sand, Sky, Blossom, Paper, Clear and more — spanning dark and light.</p>
           <ul>
             <li><strong>AI-generated themes</strong> — describe a mood and get a full custom palette.</li>
@@ -1065,6 +1212,111 @@
       </section>
 
       <!-- KEYS -->
+
+      <!-- BLOCKING & NETWORK PRIVACY -->
+      <section id="blocking">
+        <div class="sec-head"><span class="node" style="background:var(--emerald)"></span><h2>Ad &amp; tracker blocking</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Requests that never leave your machine, and a page that loads faster because of it.</p>
+
+        <figure>
+          <svg viewBox="0 0 760 220" role="img" aria-label="A page requesting resources, with ad and tracker requests stopped at a shield while normal content passes through">
+            <rect x="30" y="50" width="150" height="120" rx="10" fill="var(--surface)" stroke="var(--line-2)"/>
+            <rect x="44" y="66" width="90" height="6" rx="3" fill="var(--ink-4)" opacity=".55"/>
+            <rect x="44" y="80" width="120" height="4" rx="2" fill="var(--ink-4)" opacity=".3"/>
+            <rect x="44" y="92" width="120" height="4" rx="2" fill="var(--ink-4)" opacity=".3"/>
+            <text x="105" y="188" font-size="9.5" fill="var(--ink-3)" text-anchor="middle">the page you opened</text>
+
+            <path d="M330 60 v100" stroke="var(--emerald)" stroke-width="2.5" stroke-dasharray="5 4" opacity=".8"/>
+            <path d="M330 74 l14 6 v22 c0 14 -14 20 -14 20 s-14 -6 -14 -20 v-22 z" fill="var(--emerald)" opacity=".18" stroke="var(--emerald)" stroke-width="1.6"/>
+            <text x="330" y="48" font-size="9.5" fill="var(--emerald)" text-anchor="middle" font-weight="700">AIHub</text>
+
+            <g stroke-width="2" fill="none">
+              <path d="M182 82 H316" stroke="var(--rose)" stroke-dasharray="4 3"/>
+              <path d="M182 110 H316" stroke="var(--rose)" stroke-dasharray="4 3"/>
+              <path d="M182 138 H620" stroke="var(--emerald)"/>
+            </g>
+            <g stroke="var(--rose)" stroke-width="2" stroke-linecap="round">
+              <path d="M306 76l12 12M318 76l-12 12"/>
+              <path d="M306 104l12 12M318 104l-12 12"/>
+            </g>
+            <text x="248" y="76" font-size="9" fill="var(--rose)" text-anchor="middle">doubleclick.net</text>
+            <text x="248" y="104" font-size="9" fill="var(--rose)" text-anchor="middle">google-analytics.com</text>
+            <text x="430" y="132" font-size="9" fill="var(--emerald)" text-anchor="middle">the article, images, styles</text>
+
+            <rect x="620" y="104" width="110" height="68" rx="10" fill="var(--surface)" stroke="var(--line-2)"/>
+            <rect x="634" y="118" width="82" height="6" rx="3" fill="var(--ink-4)" opacity=".55"/>
+            <rect x="634" y="132" width="60" height="4" rx="2" fill="var(--ink-4)" opacity=".3"/>
+            <text x="675" y="188" font-size="9.5" fill="var(--ink-3)" text-anchor="middle">what actually loads</text>
+          </svg>
+          <figcaption>Ad, analytics and session-replay requests are cancelled before they leave your machine. Everything the page actually needs passes straight through.</figcaption>
+        </figure>
+
+        <div class="body-col">
+          <p>Blocking is <strong>on by default</strong> and covers a curated list of ad exchanges, analytics, session-replay and attribution domains. Consent banners, captchas, payment providers and CDNs are deliberately <em>not</em> blocked &mdash; removing those leaves sites stuck behind a dialog that never resolves.</p>
+          <p>Everything lives in <strong>Settings &rarr; Ad &amp; Tracker Blocking</strong>:</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Control</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td>Block ads and trackers</td><td>The master switch, and a live count of what has been stopped this session</td></tr>
+                <tr><td>Allowed sites</td><td>Sites where you turned blocking off. Click one to switch it back on.</td></tr>
+                <tr><td>Also block these domains</td><td>Your own additions, one per line. Subdomains are covered automatically.</td></tr>
+                <tr><td><strong>Encrypted DNS</strong></td><td>Under <em>Privacy &amp; Data</em>: resolve site names over HTTPS (Cloudflare, Google or Quad9) so the network cannot read every address you visit</td></tr>
+                <tr><td><strong>Sort downloads</strong></td><td>Files land in Documents, Images, Video, Audio, Archives, Installers or Code. Anything unrecognised stays where it was.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note"><strong>A page looks broken?</strong> Turn blocking off for that one site rather than everywhere: Settings &rarr; Ad &amp; Tracker Blocking, and the site appears under <em>Allowed sites</em> once you do.</div>
+        </div>
+      </section>
+
+      <!-- SESSIONS & WORKSPACES -->
+      <section id="sessions">
+        <div class="sec-head"><span class="node" style="background:var(--violet)"></span><h2>Sessions, workspaces &amp; containers</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Pick up where you left off, keep sets of tabs by name, and sign in twice to the same site.</p>
+
+        <div class="body-col">
+          <h3>Your tabs come back</h3>
+          <p>Close the browser with fifteen tabs open and it reopens with fifteen tabs. Turn it off in <strong>Settings &rarr; Startup &rarr; Reopen my tabs</strong>.</p>
+          <p>The session that existed when you launched is also kept separately, so <kbd>Ctrl</kbd>+<kbd>K</kbd> &rarr; <em>Reopen my previous session</em> still works after the new window has moved on.</p>
+
+          <h3>Workspaces</h3>
+          <p>A workspace is a named set of tabs. Press <kbd>Ctrl</kbd>+<kbd>K</kbd> and run <em>Save these tabs as a workspace</em> &mdash; it names itself after what is in it (&ldquo;tradingview + 3 more&rdquo;). Open one later from the same palette, under <strong>Workspaces</strong>. Saving under a name you already used replaces it rather than piling up copies.</p>
+
+          <h3>Site containers &mdash; two accounts, one browser</h3>
+          <p>Containers are separate cookie jars with names. A tab opened in <strong>Work</strong> and a tab opened in <strong>Personal</strong> can be signed into the same site as different people, and a tracker inside one knows nothing about the other.</p>
+          <p>Press <kbd>Ctrl</kbd>+<kbd>K</kbd> and run <em>New tab in Work</em> (or Personal, or Shopping). In the vertical tab rail, a small coloured dot on a tab shows which container it belongs to.</p>
+          <div class="note"><strong>Containers are per-device on purpose.</strong> They are never synced &mdash; a cookie jar means nothing on another machine, and shipping one across the network would be a liability rather than a convenience.</div>
+        </div>
+      </section>
+
+      <!-- OBSIDIAN & SYNC -->
+      <section id="vault">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Obsidian vault &amp; encrypted sync</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Your reading becomes notes you own, and your bookmarks travel without anyone else reading them.</p>
+
+        <div class="body-col">
+          <h3>Save pages into Obsidian</h3>
+          <p>Point AIHub at your vault folder in <strong>Settings &rarr; Obsidian</strong>. Then:</p>
+          <ul class="steps">
+            <li><div><strong>Right-click a page &rarr; Save Page to Obsidian.</strong> The readable text lands in <code>AIHub/Clippings</code> as markdown with frontmatter.</div></li>
+            <li><div><strong>Select text first</strong> and choose <em>Save Selection to Obsidian</em> to keep just that passage, tagged <code>highlight</code>.</div></li>
+          </ul>
+          <p>Notes are plain markdown with a <code>source</code> link, a date and tags &mdash; no plugin to install, and they stay readable if this browser disappears tomorrow. An existing note is never overwritten; a second save becomes &ldquo;Note 2&rdquo;.</p>
+
+          <h3>Encrypted sync through your own Drive</h3>
+          <p><strong>Settings &rarr; Sync</strong> encrypts your bookmarks and preferences on this machine with a passphrase you choose, then parks the result in a hidden folder of your own Google Drive. Google stores something it cannot read.</p>
+          <ul class="steps">
+            <li><div>Connect your Google account (Settings &rarr; Gmail) if you have not already.</div></li>
+            <li><div>Enter the same passphrase on each device.</div></li>
+            <li><div><strong>Upload</strong> from the machine that is up to date, then <strong>Merge from cloud</strong> on the other one.</div></li>
+          </ul>
+          <div class="note warn"><strong>Only you hold the passphrase.</strong> There is no reset. If you lose it, the synced copy cannot be recovered &mdash; not by us, not by Google. That is the price of the browser genuinely not being able to read your bookmarks.</div>
+          <p>API keys, your vault path and container cookies are filtered out before encryption &mdash; they belong to the machine, not the account.</p>
+        </div>
+      </section>
+
+      <!-- SHORTCUTS -->
       <section id="keys">
         <div class="sec-head"><span class="node" style="background:var(--ink-3)"></span><h2>Every keyboard shortcut</h2><span class="sec-line"></span></div>
         <p class="sec-sub">All of these work even while a web page has keyboard focus.</p>
@@ -1092,6 +1344,25 @@
                 <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>Toggle AI assistant</td></tr>
                 <tr><td><kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>In AI chat: send / new line</td></tr>
                 <tr><td><kbd>Esc</kbd></td><td>Close find bar, menu, or overlay</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>From the command palette</h3>
+          <p>These have no key of their own &mdash; press <kbd>Ctrl</kbd>+<kbd>K</kbd> and type a few letters of the name.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Type this</th><th>What happens</th></tr></thead>
+              <tbody>
+                <tr><td><code>split</code></td><td>Split view &mdash; show two tabs side by side</td></tr>
+                <tr><td><code>merge</code></td><td>Merge duplicate tabs, keeping the first copy of each page</td></tr>
+                <tr><td><code>previous session</code></td><td>Reopen the tabs you had before this launch</td></tr>
+                <tr><td><code>workspace</code></td><td>Save these tabs as a workspace, or open a saved one</td></tr>
+                <tr><td><code>work</code> / <code>personal</code></td><td>New tab in a container &mdash; separate cookies and logins</td></tr>
+                <tr><td><code>pop</code></td><td>Picture-in-picture &mdash; float the video that is playing</td></tr>
+                <tr><td><code>screenshot</code></td><td>Capture the <em>whole</em> page, not just what is on screen, into Pictures</td></tr>
+                <tr><td><code>read aloud</code></td><td>Narrate the current page</td></tr>
+                <tr><td><code>compare</code></td><td>Compare two pages side by side with the assistant</td></tr>
               </tbody>
             </table>
           </div>
