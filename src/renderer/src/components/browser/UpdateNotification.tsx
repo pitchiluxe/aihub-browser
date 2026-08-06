@@ -11,10 +11,18 @@ interface State {
   message?: string
 }
 
-// Small, dismissible toast in the bottom-right that reacts to auto-update
-// events from the main process (electron-updater against GitHub Releases).
-// "Download" → progress bar → "Restart to update". Nothing installs without
-// the user clicking. Fully silent when there is no update.
+// Dismissible update bar, driven by auto-update events from the main process
+// (electron-updater against GitHub Releases). "Download" → progress →
+// "Restart to update". Nothing installs without the user clicking, and it is
+// completely silent when there is no update.
+//
+// It renders as a strip in the browser CHROME rather than a floating toast.
+// It used to be positioned fixed in the bottom-right, which meant it was only
+// ever visible on the app's own pages (Bible, Settings): a browsing tab is a
+// native BrowserView painted over the entire content area, so host HTML in
+// that region sits behind it. In the chrome column it is visible on every
+// page — and because it occupies real layout space, the content area (and
+// therefore the BrowserView's bounds) shrinks to fit rather than overlapping.
 export default function UpdateNotification() {
   const [state, setState] = useState<State | null>(null)
   const [dismissed, setDismissed] = useState(false)
@@ -51,96 +59,72 @@ export default function UpdateNotification() {
   }
   const install = () => window.electronAPI.updater.install()
 
+  const headline =
+    state.phase === 'available' ? 'Update available'
+    : state.phase === 'downloading' ? 'Downloading update…'
+    : state.phase === 'downloaded' ? 'Update ready'
+    : 'Update failed'
+
+  const detail =
+    state.phase === 'available' ? `Version ${state.version} is ready to download.`
+    : state.phase === 'downloading' ? `${state.percent ?? 0}% — you can keep browsing.`
+    : state.phase === 'downloaded' ? `Version ${state.version} will be applied on restart.`
+    : state.message || ''
+
   return (
     <AnimatePresence>
       <motion.div
-        key="update-toast"
-        initial={{ opacity: 0, y: 16, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 8, scale: 0.96 }}
-        transition={{ type: 'spring', damping: 22, stiffness: 320 }}
-        className="fixed bottom-5 right-5 z-[70] w-[320px] rounded-2xl glass border border-aihub-accent/30 shadow-2xl no-drag overflow-hidden"
+        key="update-bar"
+        initial={{ height: 0, opacity: 0 }}
+        animate={{ height: 'auto', opacity: 1 }}
+        exit={{ height: 0, opacity: 0 }}
+        transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+        className="no-drag shrink-0 overflow-hidden border-b border-aihub-accent/25"
+        style={{ background: 'linear-gradient(90deg, rgb(var(--ds-accent) / 0.16) 0%, rgb(var(--ds-accent) / 0.04) 60%, transparent 100%)' }}
       >
-        <div className="p-4">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-aihub-accent/20 flex items-center justify-center shrink-0">
-              <ArrowUpCircle size={18} className="text-aihub-accent" />
-            </div>
-            <div className="flex-1 min-w-0">
-              {state.phase === 'available' && (
-                <>
-                  <div className="text-sm font-semibold text-aihub-text">Update available</div>
-                  <div className="text-xs text-aihub-muted mt-0.5">Version {state.version} is ready to download.</div>
-                </>
-              )}
-              {state.phase === 'downloading' && (
-                <>
-                  <div className="text-sm font-semibold text-aihub-text">Downloading update…</div>
-                  <div className="text-xs text-aihub-muted mt-0.5">{state.percent ?? 0}%</div>
-                </>
-              )}
-              {state.phase === 'downloaded' && (
-                <>
-                  <div className="text-sm font-semibold text-aihub-text">Update ready</div>
-                  <div className="text-xs text-aihub-muted mt-0.5">Version {state.version} will be applied on restart.</div>
-                </>
-              )}
-              {state.phase === 'error' && (
-                <>
-                  <div className="text-sm font-semibold text-aihub-text">Update failed</div>
-                  <div className="text-xs text-aihub-muted mt-0.5 break-words">{state.message}</div>
-                </>
-              )}
-            </div>
-            <button
-              onClick={() => setDismissed(true)}
-              className="w-6 h-6 rounded-lg hover:bg-aihub-surface flex items-center justify-center shrink-0"
-              title="Dismiss"
-            >
-              <X size={13} className="text-aihub-muted" />
-            </button>
+        <div className="flex items-center gap-3 px-4 py-2">
+          <div className="w-7 h-7 rounded-lg bg-aihub-accent/20 flex items-center justify-center shrink-0">
+            {state.phase === 'downloading'
+              ? <Loader2 size={14} className="text-aihub-accent animate-spin" />
+              : <ArrowUpCircle size={15} className="text-aihub-accent" />}
+          </div>
+
+          <div className="flex items-baseline gap-2 min-w-0 flex-1">
+            <span className="text-[13px] font-semibold text-aihub-text shrink-0">{headline}</span>
+            <span className="text-xs text-aihub-muted truncate">{detail}</span>
           </div>
 
           {state.phase === 'downloading' && (
-            <div className="mt-3 h-1.5 rounded-full bg-aihub-surface overflow-hidden">
+            <div className="h-1.5 w-40 shrink-0 rounded-full bg-aihub-surface overflow-hidden">
               <div className="h-full bg-aihub-accent transition-all duration-200" style={{ width: `${state.percent ?? 0}%` }} />
             </div>
           )}
 
-          {(state.phase === 'available' || state.phase === 'downloaded' || state.phase === 'error') && (
-            <div className="mt-3 flex items-center gap-2">
-              {state.phase === 'available' && (
-                <button
-                  onClick={download}
-                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-aihub-accent/20 hover:bg-aihub-accent/30 text-aihub-text text-xs font-medium transition-colors"
-                >
-                  <Download size={14} /> Download update
-                </button>
-              )}
-              {state.phase === 'downloaded' && (
-                <button
-                  onClick={install}
-                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-aihub-accent/20 hover:bg-aihub-accent/30 text-aihub-text text-xs font-medium transition-colors"
-                >
-                  <RefreshCw size={14} /> Restart to update
-                </button>
-              )}
-              {state.phase === 'error' && (
-                <button
-                  onClick={() => setDismissed(true)}
-                  className="flex-1 py-2 rounded-xl bg-aihub-surface hover:bg-aihub-card text-aihub-text text-xs font-medium transition-colors"
-                >
-                  Dismiss
-                </button>
-              )}
-            </div>
+          {state.phase === 'available' && (
+            <button
+              onClick={download}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-aihub-accent/20 hover:bg-aihub-accent/30 text-aihub-text text-xs font-medium transition-colors"
+            >
+              <Download size={13} /> Download
+            </button>
           )}
+          {state.phase === 'downloaded' && (
+            <button
+              onClick={install}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-aihub-accent/20 hover:bg-aihub-accent/30 text-aihub-text text-xs font-medium transition-colors"
+            >
+              <RefreshCw size={13} /> Restart to update
+            </button>
+          )}
+
+          <button
+            onClick={() => setDismissed(true)}
+            className="w-6 h-6 shrink-0 rounded-lg hover:bg-aihub-surface flex items-center justify-center"
+            title="Dismiss"
+          >
+            <X size={13} className="text-aihub-muted" />
+          </button>
         </div>
-        {state.phase === 'downloading' && (
-          <div className="px-4 pb-3 -mt-1 flex items-center gap-1.5 text-[10px] text-aihub-muted">
-            <Loader2 size={10} className="animate-spin" /> Downloading in the background — you can keep browsing.
-          </div>
-        )}
       </motion.div>
     </AnimatePresence>
   )

@@ -15,6 +15,28 @@ export function getBooks(): BookMeta[] {
   return BOOKS
 }
 
+/** Sentinel for the "Cover" entry that leads the book list. Not a book id. */
+export const COVER_OPTION = '__cover__'
+
+export interface BookOption { value: string; label: string; isCover: boolean }
+
+/**
+ * The book list as the reader's dropdown shows it: the cover first, then
+ * Genesis onward.
+ *
+ * The cover leads because it is the front of the book — and because once the
+ * reader has opened it there is otherwise no way back to it short of
+ * reloading the page. Kept here rather than inline in the JSX so the ordering
+ * is testable; "cover before Genesis" is exactly the sort of thing a later
+ * refactor reorders by accident.
+ */
+export function bookListOptions(): BookOption[] {
+  return [
+    { value: COVER_OPTION, label: '📕 Cover', isCover: true },
+    ...getBooks().map(b => ({ value: b.id, label: b.name, isCover: false })),
+  ]
+}
+
 export function getBookMeta(id: string): BookMeta | undefined {
   return byId.get(id)
 }

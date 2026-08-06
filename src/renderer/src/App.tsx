@@ -847,6 +847,11 @@ export default function App() {
         canGoForward={canGoForward}
       />
 
+      {/* Update bar sits in the chrome, never over the page: tab content is a
+          native BrowserView that paints above all host HTML in the content
+          area, so a floating toast there is invisible on every real site. */}
+      <UpdateNotification />
+
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <Sidebar onNavigate={navigate} onOpenPage={openSpecialPage} />
         {/* The tab BrowserViews are positioned from the content element's own
@@ -937,7 +942,6 @@ export default function App() {
       )}
 
       <AddBookmarkModal />
-      <UpdateNotification />
 
       <Suspense fallback={null}>
         {qrUrl && <QRCodeModal url={qrUrl} onClose={() => setQrUrl(null)} />}

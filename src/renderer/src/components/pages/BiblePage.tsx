@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Bookmark, Sparkles, Search, Share2 } from 'lucide-react'
-import { getBookMeta, getBooks, getChapter, parseRef, refKey, type Verse } from '../../services/bibleService'
+import { getBookMeta, getBooks, getChapter, parseRef, refKey, bookListOptions, COVER_OPTION, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
 import PageLeaf from '../bible/PageLeaf'
@@ -53,6 +53,11 @@ export default function BiblePage() {
   // The book starts closed. Opening it is the one bit of ceremony in the app,
   // and it also hides the first-load chapter fetch behind something to look at.
   const [coverOpen, setCoverOpen] = useState(false)
+  // Set when the reader picks "Cover" from the book list. Without it, choosing
+  // the cover would do nothing for anyone who has turned the show-on-open
+  // preference off — the preference decides whether the cover greets you, not
+  // whether you may go back to it.
+  const [coverRequested, setCoverRequested] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [graphOpen, setGraphOpen] = useState(false)
   const [bibleSettings] = useBibleSettings()
@@ -527,11 +532,11 @@ export default function BiblePage() {
   const spreadLeft = turning === 'prev' ? spreadBase - 2 : spreadBase
   const spreadRight = turning === 'next' ? spreadBase + 3 : spreadBase + 1
 
-  if (!coverOpen && bibleSettings.showCover) {
+  if (!coverOpen && (bibleSettings.showCover || coverRequested)) {
     return (
       <div ref={rootRef} className="relative h-full bg-aihub-bg text-aihub-text">
         <BookCover
-          onOpen={() => setCoverOpen(true)}
+          onOpen={() => { setCoverOpen(true); setCoverRequested(false) }}
           // Only offer to "continue" once the saved position has actually been
           // restored — before that, `chapter` is still the default and the
           // cover would promise a page the reader never left off on.
@@ -549,6 +554,13 @@ export default function BiblePage() {
         <select
           value={bookId}
           onChange={e => {
+            // The cover is not a book, so it never becomes the selected id —
+            // it just closes the reader back to the front board.
+            if (e.target.value === COVER_OPTION) {
+              setCoverRequested(true); setCoverOpen(false)
+              setSelectedRef(null); setNoteOpen(false); setShareOpen(false)
+              return
+            }
             setBookId(e.target.value); setChapter(1)
             setSelectedRef(null); setNoteOpen(false); setShareOpen(false)
           }}
@@ -557,7 +569,7 @@ export default function BiblePage() {
           disabled={!!turning}
           className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm disabled:opacity-40"
         >
-          {getBooks().map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          {bookListOptions().map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <select
           value={chapter}
