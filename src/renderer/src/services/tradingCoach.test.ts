@@ -112,7 +112,20 @@ describe('TRADING_COACH_PROMPT', () => {
   })
 
   it('documents the trade-plan card the app renders', () => {
-    expect(TRADING_COACH_PROMPT).toContain('```trade-plan')
+    expect(TRADING_COACH_PROMPT).toContain('trade-plan')
     expect(TRADING_COACH_PROMPT).toMatch(/"targets"/)
+  })
+
+  it('no longer ships an example note claiming there is no history', () => {
+    // The model copied this verbatim into real answers, where it was false.
+    expect(TRADING_COACH_PROMPT).not.toMatch(/no history in view/i)
+  })
+
+  it('tells the model to emit one block per bracket side', () => {
+    expect(TRADING_COACH_PROMPT).toMatch(/ONE block per side/i)
+  })
+
+  it('forbids inventing or altering the numbers read_chart returned', () => {
+    expect(TRADING_COACH_PROMPT).toMatch(/do not add a target it did not give you/i)
   })
 })

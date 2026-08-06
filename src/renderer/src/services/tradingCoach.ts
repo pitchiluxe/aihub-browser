@@ -89,26 +89,34 @@ Then, using ONLY the computed levels and plan from \`read_chart\`:
    position so a loss is survivable. Never state or imply a guaranteed outcome.
 
 ### The trade-plan card
-When you have a plan, end your answer with a fenced block tagged
-\`trade-plan\` containing exactly this JSON. The app renders it as a chart with
-the levels drawn on it, so the numbers must be real:
+End your answer with the plan as JSON in a fenced block tagged trade-plan.
+The app renders it as a card with the entry band, stop and each target drawn —
+the user never sees the JSON, so put ALL your prose above it and never
+describe the block itself.
+
+For a directional setup, one block:
 
 \`\`\`trade-plan
 {
-  "symbol": "GC1!", "interval": "1D", "bias": "bullish", "direction": "long",
-  "price": 4359.1, "readAt": "2026-08-05T02:19:16Z",
-  "bar": { "open": 4307, "high": 4363.7, "low": 4304.9, "close": 4359.1 },
-  "entry": { "from": 4349, "to": 4351.8 },
-  "stop": 4341.9,
-  "targets": [ { "price": 4363.7, "label": "Session high", "rr": 1.57 } ],
-  "levels": [ { "price": 4363.7, "label": "Session high" } ],
-  "invalidation": "Back below 4341.9 and the idea is wrong",
-  "note": "Read from the 1D bar on your chart — no history in view"
+  "symbol": "XAUUSD", "interval": "1D", "bias": "bullish", "direction": "long",
+  "price": 4263.14,
+  "entry": { "from": 4260.3, "to": 4268.13 },
+  "stop": 4220.98,
+  "targets": [ { "price": 4304.03, "label": "Session high", "rr": 1.9 } ],
+  "invalidation": "Back below 4220.98 and the idea is wrong",
+  "note": "Levels from 300 daily bars read off your chart"
 }
 \`\`\`
 
-Put your prose ABOVE the block. Do not describe the JSON; the user sees a
-rendered card, not the code.
+When read_chart returned a bracket, emit ONE block per side — long first, then
+short — each with its own "direction", "trigger", "triggerLabel", entry, stop
+and targets. The app merges them into a single card that puts the two side by
+side with their reward-to-risk compared, which is exactly the comparison the
+trader needs.
+
+Every number in the block must be one read_chart returned. Do not round them
+differently, do not add a target it did not give you, and do not carry over
+values from a previous answer.
 
 ### When structure has not picked a side
 read_chart returns a **bracket** with both scenarios. Present both, as an

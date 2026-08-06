@@ -3,196 +3,168 @@ import React from 'react'
 /**
  * The trade plan, drawn.
  *
- * A wall of prose telling a trader "resistance at 4363.7, entry 4349–4351.8,
- * stop 4341.9" is work to read and easy to misread. The same numbers drawn to
- * scale — the bar, the entry band, the stop below it, the targets above — can
- * be checked at a glance against the chart they came from.
+ * Prose telling a trader "resistance at 4304.03, entry 4260.3–4268.13, stop
+ * 4220.98, targets 4203.08 / 4165.97 / 4120" is work to read and easy to
+ * misread. The same numbers laid out to scale — the entry band, the stop
+ * below it, each target with what it pays — can be checked against the chart
+ * at a glance.
  *
- * Everything here is rendered from numbers the assistant READ, never from
- * anything it composed: if a field is missing the row is simply absent.
+ * Everything rendered here comes from numbers the assistant READ. A missing
+ * field simply does not draw; nothing is inferred to fill a gap.
  */
 
-export interface TradePlanData {
+export interface TradeTarget { price: number; label?: string; rr?: number }
+
+export interface TradeScenario {
+  direction?: 'long' | 'short'
+  trigger?: number
+  triggerLabel?: string
+  entry?: { from: number; to: number } | null
+  stop?: number | null
+  targets?: TradeTarget[]
+  bestRr?: number
+  invalidation?: string
+}
+
+export interface TradePlanData extends TradeScenario {
   symbol?: string
   interval?: string
   bias?: 'bullish' | 'bearish' | 'range'
-  direction?: 'long' | 'short' | 'none'
   price?: number
   readAt?: string
   bar?: { open: number; high: number; low: number; close: number }
-  entry?: { from: number; to: number } | null
-  stop?: number | null
-  targets?: { price: number; label?: string; rr?: number }[]
   levels?: { price: number; label?: string }[]
-  invalidation?: string
   note?: string
+  /** Both sides of an undecided chart. */
+  scenarios?: TradeScenario[]
 }
 
-const TONE = {
-  bullish: { fg: '#34d399', bg: 'rgba(52,211,153,0.12)', label: 'Bullish' },
-  bearish: { fg: '#f87171', bg: 'rgba(248,113,113,0.12)', label: 'Bearish' },
-  range:   { fg: '#fbbf24', bg: 'rgba(251,191,36,0.12)', label: 'No trade — ranging' },
+const GREEN = '#34d399'
+const RED = '#f87171'
+const AMBER = '#fbbf24'
+
+const toneFor = (bias?: string, direction?: string) => {
+  if (direction === 'long') return GREEN
+  if (direction === 'short') return RED
+  if (bias === 'bullish') return GREEN
+  if (bias === 'bearish') return RED
+  return AMBER
 }
 
-/** Try to read a trade-plan block; returns null for anything malformed. */
 export function parseTradePlan(raw: string): TradePlanData | null {
   try {
     const data = JSON.parse(raw)
     if (!data || typeof data !== 'object') return null
-    // A card with no prices is worse than no card — it implies analysis that
-    // did not happen.
-    const hasNumbers = typeof data.price === 'number' || data.bar || (Array.isArray(data.targets) && data.targets.length)
+    const hasNumbers = data.entry || data.stop !== undefined || data.scenarios ||
+      (Array.isArray(data.targets) && data.targets.length) || typeof data.price === 'number'
     return hasNumbers ? data as TradePlanData : null
   } catch {
     return null
   }
 }
 
+const fmt = (value?: number | null) =>
+  value === undefined || value === null || !isFinite(value)
+    ? '—'
+    : value.toLocaleString(undefined, { maximumFractionDigits: 5 })
+
 export default function TradePlanCard({ plan }: { plan: TradePlanData }) {
-  const tone = TONE[plan.bias || 'range'] || TONE.range
-  const fmt = (value: number | undefined) =>
-    value === undefined || value === null ? '—' : value.toLocaleString(undefined, { maximumFractionDigits: 5 })
+  const scenarios: TradeScenario[] = plan.scenarios?.length
+    ? plan.scenarios
+    : [{ direction: plan.direction, entry: plan.entry, stop: plan.stop, targets: plan.targets, trigger: plan.trigger, triggerLabel: plan.triggerLabel, invalidation: plan.invalidation }]
 
-  // Everything that needs a position on the scale.
-  const points: number[] = []
-  if (plan.bar) points.push(plan.bar.high, plan.bar.low)
-  if (typeof plan.price === 'number') points.push(plan.price)
-  if (plan.entry) points.push(plan.entry.from, plan.entry.to)
-  if (typeof plan.stop === 'number') points.push(plan.stop)
-  for (const target of plan.targets || []) points.push(target.price)
-  for (const level of plan.levels || []) points.push(level.price)
+  const isBracket = scenarios.length > 1
+  const headerTone = toneFor(plan.bias, isBracket ? undefined : scenarios[0]?.direction)
 
-  const usable = points.filter(p => typeof p === 'number' && isFinite(p))
-  const min = Math.min(...usable)
-  const max = Math.max(...usable)
-  const span = max - min || 1
-  const pad = span * 0.08
-  const top = max + pad
-  const bottom = min - pad
-  const H = 260
-  const W = 520
-  const y = (price: number) => H - ((price - bottom) / (top - bottom)) * H
-
-  const hasChart = usable.length >= 2
+  // Which side actually pays: the single most useful comparison on the card.
+  const best = scenarios.reduce<{ side?: TradeScenario; rr: number }>((acc, s) => {
+    const rr = s.bestRr ?? Math.max(0, ...(s.targets || []).map(t => Number(t.rr) || 0))
+    return rr > acc.rr ? { side: s, rr } : acc
+  }, { rr: 0 })
 
   return (
     <div
       style={{
-        margin: '10px 0', borderRadius: 16, overflow: 'hidden',
-        border: '1px solid var(--ds-border-sm)', background: 'var(--ds-glass-sm)',
+        margin: '12px 0', borderRadius: 18, overflow: 'hidden',
+        border: '1px solid var(--ds-border-sm)',
+        background: 'linear-gradient(180deg, rgb(var(--ds-bg-2)) 0%, rgb(var(--ds-bg-3)) 100%)',
+        boxShadow: '0 10px 32px rgba(0,0,0,0.28)',
       }}
     >
-      {/* Header: what was read, and the call */}
+      {/* Header — what was read, and the call */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-        padding: '10px 14px', borderBottom: '1px solid var(--ds-border-sm)', background: tone.bg,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        padding: '12px 16px',
+        background: `linear-gradient(90deg, ${headerTone}22 0%, transparent 70%)`,
+        borderBottom: '1px solid var(--ds-border-sm)',
       }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--ds-text-1))' }}>
-            {plan.symbol || 'Chart'} {plan.interval ? <span style={{ opacity: 0.6, fontWeight: 500 }}>· {plan.interval}</span> : null}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: 0.2, color: 'rgb(var(--ds-text-1))' }}>
+              {plan.symbol || 'Chart'}
+            </span>
+            {!!plan.interval && (
+              <span style={{
+                fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 999,
+                background: 'rgb(var(--ds-text-1) / 0.08)', color: 'rgb(var(--ds-text-3))',
+              }}>{plan.interval}</span>
+            )}
+            {typeof plan.price === 'number' && (
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: 'rgb(var(--ds-text-2))' }}>{fmt(plan.price)}</span>
+            )}
           </div>
-          {!!plan.readAt && (
-            <div style={{ fontSize: 10.5, color: 'rgb(var(--ds-text-4))' }}>
-              read from your chart · {new Date(plan.readAt).toLocaleString()}
-            </div>
-          )}
+          <div style={{ fontSize: 10.5, color: 'rgb(var(--ds-text-4))', marginTop: 2 }}>
+            read from your chart{plan.readAt ? ` · ${new Date(plan.readAt).toLocaleString()}` : ''}
+          </div>
         </div>
+
         <div style={{
-          padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
-          color: tone.fg, border: `1px solid ${tone.fg}55`, whiteSpace: 'nowrap',
+          padding: '5px 12px', borderRadius: 999, fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap',
+          color: headerTone, border: `1px solid ${headerTone}66`, background: `${headerTone}14`,
         }}>
-          {plan.direction && plan.direction !== 'none' ? plan.direction.toUpperCase() : tone.label}
+          {isBracket ? 'BOTH SIDES' : (scenarios[0]?.direction || plan.bias || 'range').toUpperCase()}
         </div>
       </div>
 
-      {hasChart && (
-        <div style={{ padding: '12px 14px 4px' }}>
-          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
-            {/* Targets — drawn first so labels sit above the bands */}
-            {(plan.targets || []).map((target, i) => (
-              <g key={`t${i}`}>
-                <line x1={70} x2={W - 8} y1={y(target.price)} y2={y(target.price)}
-                  stroke="#34d399" strokeWidth={1} strokeDasharray="5 4" opacity={0.75} />
-                <text x={74} y={y(target.price) - 4} fontSize={10} fill="#34d399">
-                  {target.label || `T${i + 1}`} {typeof target.rr === 'number' ? `· ${target.rr}R` : ''}
-                </text>
-                <text x={0} y={y(target.price) + 3} fontSize={10} fill="#34d399">{fmt(target.price)}</text>
-              </g>
-            ))}
-
-            {/* Entry band */}
-            {plan.entry && (
-              <g>
-                <rect x={70} y={Math.min(y(plan.entry.from), y(plan.entry.to))} width={W - 78}
-                  height={Math.max(2, Math.abs(y(plan.entry.from) - y(plan.entry.to)))}
-                  fill="rgb(var(--ds-accent) / 0.25)" stroke="rgb(var(--ds-accent))" strokeWidth={1} />
-                <text x={74} y={Math.min(y(plan.entry.from), y(plan.entry.to)) - 4}
-                  fontSize={10} fill="rgb(var(--ds-accent-soft))" fontWeight={700}>
-                  ENTRY ZONE
-                </text>
-                <text x={0} y={y(plan.entry.to) + 3} fontSize={10} fill="rgb(var(--ds-accent-soft))">{fmt(plan.entry.to)}</text>
-                <text x={0} y={y(plan.entry.from) + 12} fontSize={10} fill="rgb(var(--ds-accent-soft))">{fmt(plan.entry.from)}</text>
-              </g>
-            )}
-
-            {/* Stop */}
-            {typeof plan.stop === 'number' && (
-              <g>
-                <line x1={70} x2={W - 8} y1={y(plan.stop)} y2={y(plan.stop)} stroke="#f87171" strokeWidth={1.5} />
-                <text x={74} y={y(plan.stop) + 12} fontSize={10} fill="#f87171" fontWeight={700}>STOP</text>
-                <text x={0} y={y(plan.stop) + 3} fontSize={10} fill="#f87171">{fmt(plan.stop)}</text>
-              </g>
-            )}
-
-            {/* The bar that was actually read */}
-            {plan.bar && (
-              <g>
-                <line x1={40} x2={40} y1={y(plan.bar.high)} y2={y(plan.bar.low)}
-                  stroke="rgb(var(--ds-text-3))" strokeWidth={1.5} />
-                <rect
-                  x={30} width={20}
-                  y={Math.min(y(plan.bar.open), y(plan.bar.close))}
-                  height={Math.max(2, Math.abs(y(plan.bar.open) - y(plan.bar.close)))}
-                  fill={plan.bar.close >= plan.bar.open ? '#34d399' : '#f87171'}
-                  opacity={0.85}
-                />
-                <text x={30} y={y(plan.bar.high) - 5} fontSize={9} fill="rgb(var(--ds-text-4))">H {fmt(plan.bar.high)}</text>
-                <text x={30} y={y(plan.bar.low) + 12} fontSize={9} fill="rgb(var(--ds-text-4))">L {fmt(plan.bar.low)}</text>
-              </g>
-            )}
-
-            {/* Last price */}
-            {typeof plan.price === 'number' && (
-              <g>
-                <line x1={20} x2={W - 8} y1={y(plan.price)} y2={y(plan.price)}
-                  stroke="rgb(var(--ds-text-2))" strokeWidth={1} opacity={0.5} strokeDasharray="2 3" />
-                <rect x={W - 66} y={y(plan.price) - 9} width={62} height={17} rx={4} fill="rgb(var(--ds-text-2) / 0.9)" />
-                <text x={W - 60} y={y(plan.price) + 3} fontSize={10} fill="rgb(var(--ds-bg))" fontWeight={700}>
-                  {fmt(plan.price)}
-                </text>
-              </g>
-            )}
-          </svg>
-        </div>
-      )}
-
-      {/* The numbers, for placing the order */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 1, background: 'var(--ds-border-sm)' }}>
-        {plan.entry && (
-          <Cell label="Entry zone" value={`${fmt(plan.entry.from)} – ${fmt(plan.entry.to)}`} color="rgb(var(--ds-accent-soft))" />
-        )}
-        {typeof plan.stop === 'number' && <Cell label="Stop" value={fmt(plan.stop)} color="#f87171" />}
-        {(plan.targets || []).slice(0, 3).map((t, i) => (
-          <Cell key={i} label={t.label || `Target ${i + 1}`} value={`${fmt(t.price)}${typeof t.rr === 'number' ? ` · ${t.rr}R` : ''}`} color="#34d399" />
+      {/* One column per scenario */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isBracket ? 'repeat(auto-fit, minmax(230px, 1fr))' : '1fr',
+        gap: 1, background: 'var(--ds-border-sm)',
+      }}>
+        {scenarios.map((scenario, i) => (
+          <ScenarioPane
+            key={i}
+            scenario={scenario}
+            price={plan.price}
+            isBest={isBracket && scenario === best.side && best.rr >= 1}
+          />
         ))}
       </div>
 
-      {(plan.invalidation || plan.note) && (
-        <div style={{ padding: '10px 14px', fontSize: 11.5, color: 'rgb(var(--ds-text-3))', lineHeight: 1.5 }}>
-          {plan.invalidation && <div><strong style={{ color: '#f87171' }}>Wrong if:</strong> {plan.invalidation}</div>}
-          {plan.note && <div style={{ marginTop: 4, color: 'rgb(var(--ds-text-4))' }}>{plan.note}</div>}
-          <div style={{ marginTop: 6, fontSize: 10.5, color: 'rgb(var(--ds-text-4))' }}>
-            Read from your open chart. Not financial advice — size any position so a loss is survivable.
+      {/* Which side is worth taking — the sentence a coach must not omit */}
+      {isBracket && best.rr > 0 && (
+        <div style={{
+          padding: '9px 16px', fontSize: 11.5, lineHeight: 1.5,
+          borderTop: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))',
+        }}>
+          {best.rr >= 1
+            ? <>The <strong style={{ color: toneFor(undefined, best.side?.direction) }}>{best.side?.direction}</strong> side
+              pays up to <strong>{best.rr}R</strong> — the other side does not pay enough for the risk.</>
+            : <>Neither side pays 1R from here. Nothing on this chart is worth the risk yet.</>}
+        </div>
+      )}
+
+      {(plan.note || scenarios.some(s => s.invalidation)) && (
+        <div style={{ padding: '10px 16px', fontSize: 11, color: 'rgb(var(--ds-text-4))', lineHeight: 1.55, borderTop: '1px solid var(--ds-border-sm)' }}>
+          {!isBracket && scenarios[0]?.invalidation && (
+            <div style={{ color: 'rgb(var(--ds-text-3))' }}>
+              <strong style={{ color: RED }}>Wrong if:</strong> {scenarios[0].invalidation}
+            </div>
+          )}
+          {!!plan.note && <div style={{ marginTop: 3 }}>{plan.note}</div>}
+          <div style={{ marginTop: 5 }}>
+            Levels computed from your chart's own candles. Not financial advice — size the position so a loss is survivable.
           </div>
         </div>
       )}
@@ -200,11 +172,77 @@ export default function TradePlanCard({ plan }: { plan: TradePlanData }) {
   )
 }
 
-function Cell({ label, value, color }: { label: string; value: string; color: string }) {
+function ScenarioPane({ scenario, price, isBest }: { scenario: TradeScenario; price?: number; isBest: boolean }) {
+  const tone = toneFor(undefined, scenario.direction)
+  const targets = scenario.targets || []
+  const maxRr = Math.max(1, ...targets.map(t => Number(t.rr) || 0))
+
   return (
-    <div style={{ background: 'var(--ds-glass-sm)', padding: '8px 12px' }}>
-      <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.4, color: 'rgb(var(--ds-text-4))' }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
+    <div style={{ background: 'rgb(var(--ds-bg-2))', padding: '12px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 9 }}>
+        <span style={{ width: 7, height: 7, borderRadius: 999, background: tone }} />
+        <span style={{ fontSize: 11.5, fontWeight: 800, color: tone, letterSpacing: 0.3 }}>
+          {(scenario.direction || 'plan').toUpperCase()}
+        </span>
+        {typeof scenario.trigger === 'number' && (
+          <span style={{ fontSize: 10.5, color: 'rgb(var(--ds-text-4))' }}>
+            {scenario.direction === 'short' ? 'below' : 'above'} {fmt(scenario.trigger)}
+            {scenario.triggerLabel ? ` · ${scenario.triggerLabel}` : ''}
+          </span>
+        )}
+        {isBest && (
+          <span style={{
+            marginLeft: 'auto', fontSize: 9.5, fontWeight: 800, padding: '2px 7px', borderRadius: 999,
+            background: `${tone}1f`, color: tone, border: `1px solid ${tone}55`,
+          }}>BETTER R:R</span>
+        )}
+      </div>
+
+      <Row label="Entry" value={scenario.entry ? `${fmt(scenario.entry.from)} – ${fmt(scenario.entry.to)}` : '—'} color="rgb(var(--ds-accent-soft))" />
+      <Row label="Stop" value={fmt(scenario.stop ?? undefined)} color={RED} />
+      {typeof price === 'number' && scenario.stop != null && scenario.entry && (
+        <Row
+          label="Risk / unit"
+          value={fmt(Math.abs((scenario.entry.from + scenario.entry.to) / 2 - scenario.stop))}
+          color="rgb(var(--ds-text-3))"
+        />
+      )}
+
+      {/* Targets as bars, so the reward on each is visible, not just stated */}
+      {targets.length > 0 && (
+        <div style={{ marginTop: 9 }}>
+          {targets.map((target, i) => {
+            const rr = Number(target.rr) || 0
+            return (
+              <div key={i} style={{ marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
+                  <span style={{ color: 'rgb(var(--ds-text-3))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {target.label || `Target ${i + 1}`}
+                  </span>
+                  <span style={{ color: GREEN, fontWeight: 700, marginLeft: 8, whiteSpace: 'nowrap' }}>
+                    {fmt(target.price)}{rr ? ` · ${rr}R` : ''}
+                  </span>
+                </div>
+                <div style={{ height: 4, borderRadius: 999, background: 'rgb(var(--ds-text-1) / 0.07)', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${Math.min(100, (rr / maxRr) * 100)}%`, height: '100%', borderRadius: 999,
+                    background: rr >= 1 ? GREEN : AMBER,
+                  }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Row({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '3px 0' }}>
+      <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4, color: 'rgb(var(--ds-text-4))' }}>{label}</span>
+      <span style={{ fontSize: 12.5, fontWeight: 700, color }}>{value}</span>
     </div>
   )
 }

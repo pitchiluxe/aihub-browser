@@ -1,4 +1,6 @@
-import React, { Suspense, lazy } from 'react'
+import React, { Suspense, lazy, useMemo } from 'react'
+import TradePlanCard from './TradePlanCard'
+import { extractTradePlans, mergeBracket } from '../../services/tradePlanBlocks'
 
 // The markdown stack (react-markdown + remark-gfm and their micromark/mdast
 // dependency tree) is ~350 KB of source — the second-largest thing in the
@@ -17,15 +19,30 @@ interface Props {
 }
 
 export default function Markdown({ content, onNavigate }: Props) {
+  // Trade plans are pulled out BEFORE markdown runs. The model does not
+  // reliably use the fenced form the prompt asks for — a local model emitted
+  // "[trade-plan] { … }", which markdown rendered as a wall of raw JSON in the
+  // middle of the answer. Extracting first means any wrapper renders as a
+  // card, and a long/short pair becomes one bracket the user can compare.
+  const { text, plans } = useMemo(() => {
+    const extracted = extractTradePlans(content)
+    return { text: extracted.text, plans: mergeBracket(extracted.plans) }
+  }, [content])
+
   return (
-    <Suspense
-      fallback={
-        <div className="aihub-md" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-          {content}
-        </div>
-      }
-    >
-      <MarkdownRenderer content={content} onNavigate={onNavigate} />
-    </Suspense>
+    <>
+      {!!text && (
+        <Suspense
+          fallback={
+            <div className="aihub-md" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {text}
+            </div>
+          }
+        >
+          <MarkdownRenderer content={text} onNavigate={onNavigate} />
+        </Suspense>
+      )}
+      {plans.map((plan, i) => <TradePlanCard key={i} plan={plan as any} />)}
+    </>
   )
 }
