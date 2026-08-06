@@ -7,6 +7,7 @@ import {
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
 import { planContext, summarizeCondensed, looksLikeRecall, buildRecallBlock } from '../../services/aiContext'
+import { nowBlock, sessionBlock, isTradingQuestion, TRADING_COACH_PROMPT } from '../../services/tradingCoach'
 import { resolveNavTarget } from '../../services/navIntent'
 import { PAGE_REFERENCE, REFUSAL, wantedTools, selectBookmarksForPrompt, CHAT_ONLY_NOTE } from '../../services/assistantIntent'
 import Markdown from './Markdown'
@@ -418,8 +419,16 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
         // Turn 1 is a tool turn when the request points at a page, a file or an
         // action; every later turn is by definition mid-tool-loop. This also
         // decides how big the prompt gets — see buildSystemPrompt.
-        const needsTools = turn > 1 || !!wantedTools(msg)
-        let systemPrompt = buildSystemPrompt(needsTools) + earlierDigest + recallContext + pageContext
+        // A market question always needs tools: the answer must come from
+        // read_chart, never from the model's memory of prices.
+        const needsTools = turn > 1 || !!wantedTools(msg) || isTradingQuestion(msg)
+        // The model has no clock: without this it answers August questions
+        // with March dates. Cheap, and it goes on every single turn.
+        const clockContext = nowBlock() + sessionBlock()
+        // The coach rules are long, so they ride along only for market
+        // questions — a local model pays for every token of prompt.
+        const tradingContext = isTradingQuestion(msg) ? TRADING_COACH_PROMPT : ''
+        let systemPrompt = buildSystemPrompt(needsTools) + clockContext + tradingContext + earlierDigest + recallContext + pageContext
 
         if (AI_NEWS_INTENT.test(msg) && turn === 1) {
           setFetchingNews(true)

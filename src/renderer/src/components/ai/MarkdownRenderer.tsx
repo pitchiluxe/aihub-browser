@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import TradePlanCard, { parseTradePlan } from './TradePlanCard'
 import remarkGfm from 'remark-gfm'
 import { Copy, Check, ExternalLink } from 'lucide-react'
 
@@ -76,7 +77,15 @@ export default function Markdown({ content, onNavigate }: Props) {
                 }}>{text}</code>
               )
             }
-            return <CodeBlock text={text} lang={(className || '').replace('language-', '')} />
+            const lang = (className || '').replace('language-', '')
+            // A ```trade-plan block is data, not code: render the plan as a
+            // chart with its levels drawn, so the numbers can be checked
+            // against the chart they were read from.
+            if (lang === 'trade-plan') {
+              const plan = parseTradePlan(text)
+              if (plan) return <TradePlanCard plan={plan} />
+            }
+            return <CodeBlock text={text} lang={lang} />
           },
           pre: ({ children }) => <>{children}</>,
 

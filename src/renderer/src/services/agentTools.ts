@@ -216,6 +216,7 @@ export function describeAction(a: ToolAction): string {
     case 'read_page':       return 'Reading page content'
     case 'web_search':      return `Searching the web: "${String(a.query || '').slice(0, 50)}"`
     case 'recall_pages':    return `Searching pages you've read: "${String(a.query || '').slice(0, 50)}"`
+    case 'read_chart':      return 'Reading the live chart on screen'
     case 'remember':        return 'Saving to this site’s memory'
     case 'fetch_url':       return `Fetching ${String(a.url || '').slice(0, 60)}`
     case 'read_tab':        return 'Reading tab content'
@@ -465,6 +466,39 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
         return sanitizeResult(res)
       }
 
+      case 'read_chart': {
+        // Reads the REAL chart in the active tab: symbol, timeframe, the bar's
+        // actual OHLC, the quote, the watchlist — plus computed levels and a
+        // plan. This is what makes chart answers factual instead of invented.
+        const store = useBrowserStore.getState()
+        const tabId = action.tabId || store.activeTabId
+        if (!tabId) return { error: 'no active tab' }
+        const res = await window.electronAPI.trading.readChart(String(tabId))
+        if (!res?.ok) return { error: res?.error || 'could not read the chart' }
+        return sanitizeResult({
+          summary: res.summary,
+          symbol: res.reading.symbol,
+          name: res.reading.name,
+          exchange: res.reading.exchange,
+          interval: res.reading.interval,
+          bar: res.reading.ohlc,
+          price: res.reading.price,
+          change: res.reading.change,
+          changePercent: res.reading.changePercent,
+          sessionTime: res.reading.sessionTime,
+          watchlist: res.reading.watchlist,
+          analysis: res.analysis && {
+            bias: res.analysis.bias,
+            reasoning: res.analysis.reasoning,
+            rangePosition: res.analysis.rangePosition,
+            range: res.analysis.range,
+            levels: res.analysis.levels,
+            plan: res.analysis.plan,
+            limits: res.analysis.limits,
+          },
+        })
+      }
+
       case 'recall_pages': {
         if (!action.query) return { error: 'query is required' }
         // Meaning-based search over the pages this user has actually read
@@ -639,6 +673,7 @@ Available tools:
 
 Research tools (fast — no tab needed; prefer these for questions about current events, prices, comparisons, or anything you're not sure about):
 - web_search({query}) — live web search. Returns up to 8 results with title, url, and snippet. NEVER guess or say "I can't browse the internet" — search instead.
+- read_chart() — reads the LIVE chart open in the active tab: its symbol, exchange, timeframe, the real open/high/low/close of the bar on screen, the current quote, the session clock, and the index watchlist. It also returns COMPUTED levels (session high/low/open, range midpoint and quarters, round numbers) and a full plan (bias, entry zone, stop, targets with reward-to-risk, invalidation). ALWAYS call this before answering ANY question about a chart, a symbol, a trend or a trade. Every number you state must come from what it returns.
 - recall_pages({query}) — searches the pages THIS USER has actually read (their own Rewind archive), by meaning rather than keywords. Use it FIRST whenever the question refers to something they saw before: "that article about X", "the page I read yesterday", "where did I read about Y". It answers questions the web cannot, because only this machine knows what they read. Returns title, url, date and a snippet — cite the page you used.
 - fetch_url({url}) — downloads a page's readable text (plus its title) WITHOUT opening a visible tab. Use it to read search results, articles, and docs during research. Only open_tab when the user should actually SEE the page.
 

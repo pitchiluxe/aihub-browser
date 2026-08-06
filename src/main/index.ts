@@ -23,6 +23,8 @@ import {
 } from './containers'
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
+import { parseTradingViewText, describeReading, isChartUrl } from './trading/chartReader'
+import { analyseReading } from './trading/barAnalysis'
 import {
   buildBackup, validateBackup, backupFileName, BACKUP_EXTENSION,
   mergeBibleMarks, mergeBookmarks as mergeBackupBookmarks, mergeRecords, mergeById,
@@ -2405,6 +2407,68 @@ ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?
   })
   recordVisit(entry.url, entry.title)
   return true
+})
+
+// ── IPC: Read the chart the user is actually looking at ───────────────────
+// The assistant used to answer chart questions from imagination — inventing a
+// table of candles dated five months in the past. Now it reads the live page:
+// symbol, timeframe, the real OHLC of the bar on screen, the quote and the
+// watchlist, all of which TradingView prints as text. Levels and the plan are
+// COMPUTED from those numbers (see trading/barAnalysis), never guessed.
+ipcMain.handle('trading:readChart', async (e, tabId: string) => {
+  const ctx = ctxFromEvent(e)
+  const wc = tabId ? ctx?.views.get(tabId)?.webContents : undefined
+  if (!wc) return { ok: false, error: 'No page is open in that tab' }
+
+  let url = ''
+  let title = ''
+  try { url = wc.getURL(); title = wc.getTitle() } catch {}
+
+  // Read, and give a still-rendering chart one more chance: TradingView paints
+  // its legend after the data arrives, so the first look can land early.
+  const readText = async () => {
+    try {
+      return await wc.executeJavaScript(`(() => (document.body ? document.body.innerText : '').slice(0, 20000))()`)
+    } catch { return '' }
+  }
+  let text = await readText()
+  let reading = parseTradingViewText(text, title)
+  if (!reading.ohlc) {
+    await new Promise(r => setTimeout(r, 1200))
+    const second = await readText()
+    const retry = parseTradingViewText(second, title)
+    // Keep whichever read saw more — never overwrite a good bar with a blank one.
+    if (retry.ohlc || (!reading.usable && retry.usable)) { text = second; reading = retry }
+  }
+  if (!reading.usable) {
+    return {
+      ok: false,
+      isChart: isChartUrl(url),
+      error: isChartUrl(url)
+        ? 'The chart is still loading — give it a moment and ask again.'
+        : 'The active tab is not a chart. Open the chart you want analysed, then ask again.',
+    }
+  }
+
+  const analysis = analyseReading(reading)
+
+  // A picture of exactly what was read, so the numbers can be checked against
+  // the chart rather than taken on trust.
+  let screenshot: string | undefined
+  try {
+    const image = await wc.capturePage()
+    screenshot = image.resize({ width: 900 }).toDataURL()
+  } catch {}
+
+  return {
+    ok: true,
+    url,
+    reading,
+    summary: describeReading(reading),
+    analysis,
+    screenshot,
+    readAt: Date.now(),
+  }
 })
 
 // ── IPC: Export / import everything to another computer ───────────────────

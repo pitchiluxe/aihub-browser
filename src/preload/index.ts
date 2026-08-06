@@ -101,6 +101,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getDoh: () => ipcRenderer.invoke('privacy:getDoh'),
     setDoh: (provider: string) => ipcRenderer.invoke('privacy:setDoh', provider),
   },
+  trading: {
+    readChart: (tabId: string) => ipcRenderer.invoke('trading:readChart', tabId),
+  },
   backup: {
     // Export hands over the localStorage-only pieces (themes, window styles);
     // everything else the main process reads from disk itself.
