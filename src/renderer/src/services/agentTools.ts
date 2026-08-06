@@ -487,6 +487,9 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
           changePercent: res.reading.changePercent,
           sessionTime: res.reading.sessionTime,
           watchlist: res.reading.watchlist,
+          barsRead: res.analysis && res.analysis.barsRead,
+          trend: res.analysis && res.analysis.trend,
+          bracket: res.analysis && res.analysis.bracket,
           analysis: res.analysis && {
             bias: res.analysis.bias,
             reasoning: res.analysis.reasoning,
@@ -673,7 +676,7 @@ Available tools:
 
 Research tools (fast — no tab needed; prefer these for questions about current events, prices, comparisons, or anything you're not sure about):
 - web_search({query}) — live web search. Returns up to 8 results with title, url, and snippet. NEVER guess or say "I can't browse the internet" — search instead.
-- read_chart() — reads the LIVE chart open in the active tab: its symbol, exchange, timeframe, the real open/high/low/close of the bar on screen, the current quote, the session clock, and the index watchlist. It also returns COMPUTED levels (session high/low/open, range midpoint and quarters, round numbers) and a full plan (bias, entry zone, stop, targets with reward-to-risk, invalidation). ALWAYS call this before answering ANY question about a chart, a symbol, a trend or a trade. Every number you state must come from what it returns.
+- read_chart() — reads the LIVE chart open in the active tab, INCLUDING its real candle history taken straight from TradingView's own chart runtime (hundreds of bars — literally the data the chart is drawing). Returns: symbol, exchange, timeframe, the current bar, ATR, market-structure bias, EMA trend context, real institutional levels (prior-day high/low/close, swing highs and lows, session extremes, round numbers), a full trade plan (entry zone, stop, targets with reward-to-risk, invalidation), and — when structure has NOT confirmed a direction — a bracket holding BOTH scenarios: the level that triggers a long and the level that triggers a short, each with its own stop and targets. When a bracket comes back, present both sides as an if/then with the prices; never answer only "wait and see". ALWAYS call this before answering ANY question about a chart, symbol, trend or trade, and take every number you state from what it returned.
 - recall_pages({query}) — searches the pages THIS USER has actually read (their own Rewind archive), by meaning rather than keywords. Use it FIRST whenever the question refers to something they saw before: "that article about X", "the page I read yesterday", "where did I read about Y". It answers questions the web cannot, because only this machine knows what they read. Returns title, url, date and a snippet — cite the page you used.
 - fetch_url({url}) — downloads a page's readable text (plus its title) WITHOUT opening a visible tab. Use it to read search results, articles, and docs during research. Only open_tab when the user should actually SEE the page.
 

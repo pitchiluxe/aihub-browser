@@ -83,6 +83,11 @@ describe('TRADING_COACH_PROMPT', () => {
     expect(TRADING_COACH_PROMPT).toMatch(/no prices, no\s*\n?\s*candles/i)
   })
 
+  it('does not claim the assistant is blind to history — read_chart now returns it', () => {
+    expect(TRADING_COACH_PROMPT).not.toMatch(/You cannot\s+see history/i)
+    expect(TRADING_COACH_PROMPT).toMatch(/real history/i)
+  })
+
   it('requires read_chart before any market answer', () => {
     expect(TRADING_COACH_PROMPT).toMatch(/read_chart` FIRST/i)
   })
@@ -95,6 +100,15 @@ describe('TRADING_COACH_PROMPT', () => {
 
   it('forbids chasing by requiring a pullback zone', () => {
     expect(TRADING_COACH_PROMPT).toMatch(/never "buy now"/i)
+  })
+
+  it('requires both sides of a bracket instead of "wait and see"', () => {
+    expect(TRADING_COACH_PROMPT).toMatch(/never answer only "wait and see"/i)
+    expect(TRADING_COACH_PROMPT).toMatch(/if\/then/i)
+  })
+
+  it('requires calling out a setup that does not pay for its risk', () => {
+    expect(TRADING_COACH_PROMPT).toMatch(/less than 1R is not worth the risk/i)
   })
 
   it('documents the trade-plan card the app renders', () => {

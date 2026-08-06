@@ -26,6 +26,11 @@ import { subfolderFor } from './downloadSorting'
 import { parseTradingViewText, describeReading, isChartUrl } from './trading/chartReader'
 import { analyseReading } from './trading/barAnalysis'
 import {
+  READ_BARS_SCRIPT, normalizeRuntimeBars, describeResolution, splitSymbol,
+  toDailyCandles, isDailyOrHigher,
+} from './trading/chartRuntime'
+import { buildLevels, buildTradePlan, trendContext, buildBracketPlan } from './trading/levels'
+import {
   buildBackup, validateBackup, backupFileName, BACKUP_EXTENSION,
   mergeBibleMarks, mergeBookmarks as mergeBackupBookmarks, mergeRecords, mergeById,
   type BackupSections,
@@ -2440,6 +2445,68 @@ ipcMain.handle('trading:readChart', async (e, tabId: string) => {
     // Keep whichever read saw more — never overwrite a good bar with a blank one.
     if (retry.ohlc || (!reading.usable && retry.usable)) { text = second; reading = retry }
   }
+
+  // ── The real series, from TradingView's own chart runtime ──
+  // Page text is useless on a serious layout: the candles, fair-value gaps and
+  // order blocks are painted on canvases, so innerText sees ~190 characters
+  // while the screen is covered in structure. The runtime holds the same bars
+  // the chart is drawing — the user's own data, their symbol, their timeframe,
+  // no third-party quote.
+  try {
+    const runtime = normalizeRuntimeBars(await wc.executeJavaScript(READ_BARS_SCRIPT))
+    if (runtime.candles.length >= 20) {
+      const { exchange, ticker } = splitSymbol(runtime.symbol)
+      const interval = describeResolution(runtime.resolution)
+      const last = runtime.candles[runtime.candles.length - 1]
+      reading = {
+        ...reading,
+        symbol: ticker || reading.symbol,
+        exchange: exchange || reading.exchange,
+        interval: interval || reading.interval,
+        ohlc: { open: last.o, high: last.h, low: last.l, close: last.c },
+        price: reading.price ?? last.c,
+        usable: true,
+      }
+
+      // With real history, prior-day levels and swing structure are computable
+      // — the analysis one bar could never support.
+      const daily = isDailyOrHigher(runtime.resolution) ? runtime.candles : toDailyCandles(runtime.candles)
+      const levelSet = buildLevels(runtime.candles, daily)
+      const plan = buildTradePlan(levelSet)
+      const trend = trendContext(runtime.candles)
+      // "No trend, wait" is true and useless on its own. When structure has not
+      // confirmed a direction, give BOTH sides: which level triggers each, where
+      // the stop goes, and what it pays.
+      const bracket = plan.direction === 'none' ? buildBracketPlan(levelSet) : []
+
+      let shot: string | undefined
+      try { shot = (await wc.capturePage()).resize({ width: 900 }).toDataURL() } catch {}
+
+      return {
+        ok: true,
+        url,
+        source: 'chart-runtime',
+        reading,
+        summary: describeReading(reading),
+        analysis: {
+          bias: levelSet.bias,
+          levels: levelSet.levels,
+          plan,
+          atr: levelSet.atr,
+          digits: levelSet.digits,
+          barsRead: runtime.candles.length,
+          trend,
+          bracket,
+          reasoning: `Market structure across ${runtime.candles.length} ${reading.interval || ''} bars read from your chart. ${trend.note}`,
+          limits: [],
+        },
+        candles: runtime.candles.slice(-60),
+        screenshot: shot,
+        readAt: Date.now(),
+      }
+    }
+  } catch { /* fall through to the text-based reading below */ }
+
   if (!reading.usable) {
     return {
       ok: false,

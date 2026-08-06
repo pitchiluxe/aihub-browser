@@ -370,3 +370,102 @@ export function positionSize(accountBalance: number, riskPercent: number, riskPe
   if (!(accountBalance > 0) || !(riskPercent > 0) || !(riskPerUnit > 0)) return 0
   return Math.floor((accountBalance * (riskPercent / 100)) / riskPerUnit * 100) / 100
 }
+
+// ── When there is no trend: the if/then ────────────────────────────────────
+
+export interface TrendContext {
+  ema20: number
+  ema50: number
+  aboveEma20: boolean
+  aboveEma50: boolean
+  /** Percent change over the last `lookback` bars. */
+  momentumPct: number
+  note: string
+}
+
+/**
+ * Context a structure read alone misses. A V-shaped recovery has no higher
+ * high yet and is honestly "range" by structure — but price sitting well above
+ * both moving averages after a hard rally is information a coach would give,
+ * so it is computed rather than left out.
+ */
+export function trendContext(candles: Candle[], lookback = 10): TrendContext {
+  const closes = candles.map(c => c.c)
+  const ema20 = ema(closes, 20).slice(-1)[0] ?? closes[closes.length - 1] ?? 0
+  const ema50 = ema(closes, 50).slice(-1)[0] ?? ema20
+  const price = closes[closes.length - 1] ?? 0
+  const past = closes[Math.max(0, closes.length - 1 - lookback)] ?? price
+  const momentumPct = past ? ((price - past) / past) * 100 : 0
+  const digits = digitsFor(price)
+
+  const aboveEma20 = price > ema20
+  const aboveEma50 = price > ema50
+  const note = aboveEma20 && aboveEma50
+    ? `Price is above both the 20 and 50 EMA and ${momentumPct >= 0 ? 'up' : 'down'} ${Math.abs(momentumPct).toFixed(1)}% over the last ${lookback} bars — momentum is with the buyers even though structure has not confirmed a higher high yet.`
+    : !aboveEma20 && !aboveEma50
+      ? `Price is below both the 20 and 50 EMA and ${momentumPct >= 0 ? 'up' : 'down'} ${Math.abs(momentumPct).toFixed(1)}% over the last ${lookback} bars — momentum is with the sellers.`
+      : `Price is between the 20 EMA (${roundTo(ema20, digits)}) and the 50 EMA (${roundTo(ema50, digits)}) — the averages disagree, which is what indecision looks like.`
+
+  return { ema20: roundTo(ema20, digits), ema50: roundTo(ema50, digits), aboveEma20, aboveEma50, momentumPct: roundTo(momentumPct, 2), note }
+}
+
+export interface BracketScenario {
+  direction: 'long' | 'short'
+  trigger: number
+  triggerLabel: string
+  entry: { from: number; to: number }
+  stop: number
+  targets: { price: number; label: string; rr: number }[]
+}
+
+/**
+ * Both sides of a range, so an undecided chart still produces something to
+ * act on. "Wait for a clean break" is true but useless on its own; a trader
+ * needs to know WHICH level, in WHICH direction, and what it pays.
+ */
+export function buildBracketPlan(levelSet: LevelSet): BracketScenario[] {
+  const { levels, price, atr: atrValue, digits } = levelSet
+  if (!levels.length || !atrValue) return []
+
+  const above = levels.filter(l => l.price > price).sort((a, b) => a.price - b.price)
+  const below = levels.filter(l => l.price < price).sort((a, b) => b.price - a.price)
+  const buffer = Math.max(atrValue * 0.3, price * 0.0004)
+  const scenarios: BracketScenario[] = []
+
+  const build = (
+    direction: 'long' | 'short',
+    trigger: { price: number; label: string } | undefined,
+    beyond: Level[],
+    protectAt: Level | undefined,
+  ) => {
+    if (!trigger || !protectAt) return
+    const long = direction === 'long'
+    // Enter on the retest of the broken level, not on the break itself.
+    const entryFrom = roundTo(long ? trigger.price - buffer * 0.3 : trigger.price, digits)
+    const entryTo = roundTo(long ? trigger.price : trigger.price + buffer * 0.3, digits)
+    const entryMid = (entryFrom + entryTo) / 2
+    const stop = roundTo(long ? protectAt.price - buffer : protectAt.price + buffer, digits)
+    const risk = Math.abs(entryMid - stop)
+    if (!(risk > 0)) return
+
+    const targets = beyond.slice(0, 3).map((level, i) => ({
+      price: level.price,
+      label: `T${i + 1} · ${level.label}`,
+      rr: roundTo(Math.abs(level.price - entryMid) / risk, 2),
+    })).filter(t => t.rr > 0.4)
+    if (!targets.length) return
+
+    scenarios.push({
+      direction,
+      trigger: roundTo(trigger.price, digits),
+      triggerLabel: trigger.label,
+      entry: { from: Math.min(entryFrom, entryTo), to: Math.max(entryFrom, entryTo) },
+      stop,
+      targets,
+    })
+  }
+
+  build('long', above[0], above.slice(1), below[0])
+  build('short', below[0], below.slice(1), above[0])
+  return scenarios
+}
