@@ -782,7 +782,10 @@ export default function App() {
             EXTENSION_DEFS.forEach(ext => {
               const state = extensionStates[ext.id]
               if (state?.enabled && allowedHere(ext.id)) {
-                const script = ext.inject(state.settings || {})
+                // Panel-based built-ins need the shared window runtime, the
+                // same way generated extensions do.
+                const raw = ext.inject(state.settings || {})
+                const script = ext.needsPanel ? withPanelRuntime(raw) : raw
                 window.electronAPI?.webview?.execScript?.(wcId, script)?.catch?.(() => {})
               }
             })

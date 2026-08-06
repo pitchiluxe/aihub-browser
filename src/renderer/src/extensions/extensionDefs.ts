@@ -1,3 +1,4 @@
+import { EXTENSION_PACK } from './extensionPack'
 export interface ExtensionSetting {
   key: string
   label: string
@@ -19,14 +20,20 @@ export interface ExtensionDef {
   howTo: string
   icon: string
   color: string
-  category: 'Media' | 'Privacy' | 'Productivity' | 'Accessibility' | 'Developer' | 'Reading'
+  category: 'Media' | 'Privacy' | 'Productivity' | 'Accessibility' | 'Developer' | 'Design' | 'Reading'
   version: string
   settings: ExtensionSetting[]
+  /**
+   * True when the injected code uses AIHubPanel (the shared draggable,
+   * minimisable window). The host prepends the panel runtime for these, the
+   * same way it does for generated extensions.
+   */
+  needsPanel?: boolean
   inject: (s: Record<string, any>) => string
   remove: string
 }
 
-export const EXTENSION_DEFS: ExtensionDef[] = [
+const CORE_EXTENSION_DEFS: ExtensionDef[] = [
   {
     id: 'dime',
     name: 'Dime',
@@ -643,3 +650,8 @@ export const EXTENSION_DEFS: ExtensionDef[] = [
     remove: `window.__ext_sepia&&window.__ext_sepia.remove()`,
   },
 ]
+
+
+// The built-in pack lives in its own file to keep both readable; the library
+// is the two concatenated.
+export const EXTENSION_DEFS: ExtensionDef[] = [...CORE_EXTENSION_DEFS, ...EXTENSION_PACK]

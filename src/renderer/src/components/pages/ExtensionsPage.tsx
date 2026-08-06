@@ -11,7 +11,7 @@ import { buildGenerationPrompt, parseGeneratedExtensions } from '../../services/
 import { verifyExtensions } from '../../services/extensionVerifier'
 import { useBrowserStore } from '../../store/browserStore'
 
-const CATEGORIES = ['All', 'Media', 'Privacy', 'Productivity', 'Accessibility', 'Developer', 'Reading'] as const
+const CATEGORIES = ['All', 'Developer', 'Design', 'Productivity', 'Reading', 'Accessibility', 'Privacy', 'Media'] as const
 
 function execInAllTabs(script: string) {
   const { tabWcIds } = useBrowserStore.getState()
@@ -57,7 +57,7 @@ export default function ExtensionsPage() {
       const settings = extensionStates[ext.id]?.settings || {}
       const script = 'isCustom' in ext
         ? withPanelRuntime(ext.injectCode)
-        : ext.inject(settings)
+        : (ext.needsPanel ? withPanelRuntime(ext.inject(settings)) : ext.inject(settings))
       execInAllTabs(script)
     } else {
       const removeScript = 'isCustom' in ext ? ext.removeCode : ext.remove
@@ -72,7 +72,7 @@ export default function ExtensionsPage() {
     setExtensionSettings(extId, newSettings)
     if (extensionStates[extId]?.enabled) {
       execInAllTabs(ext.remove)
-      setTimeout(() => execInAllTabs(ext.inject(newSettings)), 60)
+      setTimeout(() => execInAllTabs(ext.needsPanel ? withPanelRuntime(ext.inject(newSettings)) : ext.inject(newSettings)), 60)
     }
   }, [extensionStates, setExtensionSettings])
 
