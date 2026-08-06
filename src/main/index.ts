@@ -10,7 +10,7 @@ import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
 import { initAutoUpdater } from './updater'
-import { pickAgentModel } from './modelRouting'
+import { pickAgentModel, orderFreeModels } from './modelRouting'
 import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
 import { createSessionManager, type SessionTab } from './sessions'
 import axios from 'axios'
@@ -213,7 +213,9 @@ function toAscii(s: string) { return s.replace(/[^\x00-\x7F]/g, '') }
 // Confirmed-working free models on OpenRouter (verified live 2026-07-03).
 // OpenRouter retired most old :free variants ("unavailable for free" 404s),
 // so this list must be models that exist on the CURRENT free tier.
-const OR_DEFAULT_MODEL = 'qwen/qwen3-coder:free'
+// The old default (qwen/qwen3-coder:free) was retired from the free tier, so
+// every request began with a guaranteed 404 before falling through.
+const OR_DEFAULT_MODEL = 'google/gemma-4-31b-it:free'
 
 function getAIConfig() {
   const s = getData().settings
@@ -3617,14 +3619,19 @@ ipcMain.handle('ai:categorizeBookmark', async (_e, url: string, title: string) =
 // 4909/8192 on the extension-generation prompt), truncating the visible
 // answer mid-JSON. Non-reasoning instruct models go first.
 const OR_FREE_FALLBACKS = [
-  'qwen/qwen3-coder:free',
-  'openai/gpt-oss-120b:free',
-  'qwen/qwen3-next-80b-a3b-instruct:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
+  // Verified against the live catalog 2026-08-06. Five of the previous eight
+  // had been retired — including the default — which is how requests fell
+  // through to the unsorted tail and picked a hidden-reasoning model that
+  // truncated its own JSON. Instruct/code models first.
   'google/gemma-4-31b-it:free',
+  'cohere/north-mini-code:free',
   'openai/gpt-oss-20b:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
   'nvidia/nemotron-3-super-120b-a12b:free',
-  'openrouter/free',
+  'inclusionai/ling-3.0-flash:free',
+  'poolside/laguna-s-2.1:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'nvidia/nemotron-3-nano-30b-a3b:free',
 ]
 
 // ── Live OpenRouter model catalog ───────────────────────────────────────────
@@ -3663,16 +3670,12 @@ async function getLiveFreeModelIds(orBase: string): Promise<string[]> {
 // any other live free models as a last resort. If the catalog fetch failed
 // entirely (empty, no cache), fall back to the old static behavior rather
 // than refusing to try anything.
-async function buildOrCandidates(orBase: string, orMdl: string): Promise<string[]> {
+async function buildOrCandidates(orBase: string, orMdl: string, structured = false): Promise<string[]> {
   const live = await getLiveFreeModelIds(orBase)
-  if (!live.length) return [...new Set([orMdl, ...OR_FREE_FALLBACKS])]
-  const liveSet = new Set(live)
-  const ordered = [
-    ...(liveSet.has(orMdl) ? [orMdl] : []),
-    ...OR_FREE_FALLBACKS.filter(m => liveSet.has(m)),
-    ...live.filter(m => m !== orMdl),
-  ]
-  return [...new Set(ordered)]
+  // Ordering lives in modelRouting so it can be tested: the tail used to be
+  // the raw live list, which is how a hidden-reasoning model got picked for
+  // JSON generation and truncated its own answer mid-object.
+  return orderFreeModels(live, orMdl, OR_FREE_FALLBACKS, { structured })
 }
 
 // Strip reasoning tags and chat-template control tokens before returning
@@ -3821,8 +3824,11 @@ ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, o
   orSkip.rateLimited = false
   const tryCloud = async (): Promise<{ content: string; model: string; provider: string } | null> => {
     if (!orKey) return null
-    // Candidate list: configured model first, then live-verified free fallbacks
-    const candidates = await buildOrCandidates(orBase, orMdl)
+    // Candidate list: configured model first, then live-verified free
+    // fallbacks. preferCloud is set by the structured-output callers
+    // (extension/theme generation), which are exactly the ones a hidden-
+    // reasoning model breaks — so those never get one until nothing else is left.
+    const candidates = await buildOrCandidates(orBase, orMdl, !!opts?.preferCloud)
     for (const model of candidates) {
       try {
         // 8192 tokens: long structured replies (extension generation emits

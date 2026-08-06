@@ -71,3 +71,73 @@ export function isTooSmallForAgentWork(models: ModelInfo[], configured?: string)
   if (!m) return false
   return !m.tools || m.params < MIN_AGENT_PARAMS
 }
+
+// ── Free-tier cloud model ordering ─────────────────────────────────────────
+
+/**
+ * Models that spend their completion budget "thinking" before answering.
+ *
+ * They are fine for chat and actively harmful for structured output: on the
+ * extension-generation prompt one was observed burning 4909 of 8192 tokens on
+ * reasoning, truncating the JSON mid-object. The user then sees "the AI
+ * response couldn't be parsed" — which is what happened with
+ * nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free.
+ */
+export const REASONING_MODEL_RE = /(reasoning|thinking|-r1\b|\bqwq\b|deepseek-r)/i
+
+export function isReasoningModel(id: string): boolean {
+  return REASONING_MODEL_RE.test(String(id || ''))
+}
+
+/**
+ * Models that are not chat models at all and must never enter the chain.
+ *
+ * The live free tier includes a content-safety classifier
+ * (nvidia/nemotron-3.5-content-safety) and a vision-language model
+ * (nemotron-nano-12b-v2-vl). Sending them a JSON-generation prompt wastes a
+ * full round-trip and returns something that can never parse.
+ */
+export const UNSUITABLE_MODEL_RE = /(content-safety|moderation|guard|shield|embed|rerank|whisper|tts|vision|(?:^|[-/])vl(?:[-.:]|$))/i
+
+export function isUnsuitableModel(id: string): boolean {
+  return UNSUITABLE_MODEL_RE.test(String(id || ''))
+}
+
+/**
+ * Order the free-tier chain for a request.
+ *
+ * The curated list leads (hand-checked for structured output), then any other
+ * live free model. Reasoning models are pushed to the very back rather than
+ * dropped: when nothing else is available, a model that might truncate still
+ * beats no answer at all. For `structured` requests they go last without
+ * exception — that is the case they actively break.
+ */
+export function orderFreeModels(
+  live: string[],
+  configured: string | undefined,
+  curated: string[],
+  opts?: { structured?: boolean },
+): string[] {
+  const liveSet = new Set(live || [])
+  // No catalog (offline, or the fetch failed): try what we know rather than
+  // refusing to try anything.
+  if (!liveSet.size) {
+    const raw = ([configured, ...curated].filter(Boolean) as string[]).filter(m => !isUnsuitableModel(m))
+    return [...new Set(opts?.structured ? stableSortReasoningLast(raw) : raw)]
+  }
+
+  const head = [
+    ...(configured && liveSet.has(configured) && !(opts?.structured && isReasoningModel(configured)) ? [configured] : []),
+    ...curated.filter(m => liveSet.has(m)),
+  ]
+  // Anything that cannot hold a chat is dropped outright rather than ordered.
+  const tail = live.filter(m => !head.includes(m) && !isUnsuitableModel(m))
+  return [...new Set([...head, ...stableSortReasoningLast(tail)])]
+}
+
+/** Keep order, but move every reasoning model behind the rest. */
+function stableSortReasoningLast(ids: string[]): string[] {
+  const plain = ids.filter(id => !isReasoningModel(id))
+  const reasoning = ids.filter(isReasoningModel)
+  return [...plain, ...reasoning]
+}

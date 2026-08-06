@@ -606,12 +606,16 @@ function GenerateExtModal({ existing, onClose, onGenerated }: {
       let lastError = ''
       for (let i = 1; i <= MAX_ATTEMPTS; i++) {
         setAttempt(i)
-        // preferCloud: strict-JSON output — small local models fumble it, so
-        // route to the cloud chain first and use Ollama only as fallback.
+        // Cloud free models first (they hold strict JSON best), but the LAST
+        // attempt goes local. A cloud model that answers with unparseable text
+        // is a "success" as far as the transport is concerned, so preferCloud
+        // alone never reached Ollama — which is exactly how three attempts in
+        // a row could fail on a machine with a working local model.
+        const useLocalThisTime = i === MAX_ATTEMPTS
         const result = await window.electronAPI.ai.chat(
           [{ role: 'user', content: buildGenerationPrompt(topic, existing) }],
           undefined,
-          { preferCloud: true },
+          { preferCloud: !useLocalThisTime },
         )
         if (!result || result.provider === 'error' || result.provider === 'none') {
           lastError = result?.content || 'AI is unavailable.'
@@ -619,7 +623,11 @@ function GenerateExtModal({ existing, onClose, onGenerated }: {
         }
         const { extensions, discarded } = parseGeneratedExtensions(result.content || '', existing)
         if (extensions.length === 0) {
-          lastError = `The AI response couldn't be parsed (model: ${result.model}).`
+          // Name the model AND what happens next, so a failure reads as a step
+          // in a process rather than a dead end.
+          lastError = i < MAX_ATTEMPTS
+            ? `${result.model} replied with something that wasn't valid JSON — trying another model…`
+            : `The AI response couldn't be parsed (last model: ${result.model}).`
           continue
         }
         // Actually run each one in a sandbox and keep only the extensions that
@@ -641,7 +649,15 @@ function GenerateExtModal({ existing, onClose, onGenerated }: {
         setTimeout(onClose, 2000)
         return
       }
-      setError(`${lastError}\n\nTried ${MAX_ATTEMPTS} times — the free AI models are having a moment. Wait a minute and try again, or set a stronger model in Settings → AI Configuration.`)
+      // Say what was actually tried, and what the user can do. The old message
+      // blamed "the free models" even when a local model was available and
+      // never asked.
+      setError(
+        `${lastError}\n\nTried ${MAX_ATTEMPTS} times — free cloud models first, then your local Ollama. `
+        + `If Ollama is running, check that a capable model is pulled: llama3.1:8b or larger holds strict JSON, `
+        + `3B models usually cannot. Otherwise give the free tier a minute, or set a model in `
+        + `Settings → AI Configuration.`,
+      )
     } catch (e: any) {
       setError(String(e?.message || e))
     } finally {
