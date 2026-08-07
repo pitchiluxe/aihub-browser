@@ -5,6 +5,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { ForceLink, Simulation, SimulationLinkDatum, SimulationNodeDatum, forceCollide, forceLink, forceManyBody, forceSimulation } from 'd3-force'
 import { ChevronLeft, Play, Pause, RotateCcw, ZoomIn, ZoomOut, Crosshair, BookOpen } from 'lucide-react'
 import { getBookMeta, getChapter, parseRef, formatRef } from '../../services/bibleService'
+// The node look lives with the bookmark sphere's, so the two graphs cannot
+// drift apart again.
+import {
+  drawGraphNode, drawSpawnRipple, hexToRgba, HUB_THRESHOLD, LABEL_INK, LABEL_ZOOM, NODE_STYLE,
+} from '../graph/nodeStyle'
 
 interface Saved { ref: string; ts: number }
 interface Props {
@@ -47,17 +52,10 @@ function bookColor(bookId: string): string {
 }
 
 const BG          = '#070912'
-const LABEL_INK   = 'rgba(226,232,240,0.9)'
 const MIN_ZOOM    = 0.1
 const MAX_ZOOM    = 6
-const LABEL_ZOOM  = 0.62
-const HUB_THRESHOLD = 2
 
 function nodeRadius(size: number) { return Math.max(4, Math.round(size * 0.42)) }
-function hexToRgba(hex: string, a: number): string {
-  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r},${g},${b},${a})`
-}
 function easeBackOut(t: number, s = 1.7): number {
   const c = s + 1
   return 1 + c * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2)
@@ -286,44 +284,20 @@ export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: P
       const isHov = hoveredRef.current?.id === node.id
       ctx.globalAlpha = isConn ? 1 : 0.08
 
-      // Pulsing colored aura
-      if (!eActive && isConn) {
-        const pulse = 0.5 + Math.sin(now * 0.0013 + ni * 0.4) * 0.5
-        const auraR = finalR * (1.5 + pulse * 0.35)
-        const g = ctx.createRadialGradient(nx, ny, finalR * 0.8, nx, ny, auraR)
-        g.addColorStop(0, hexToRgba(col, (isHub ? 0.22 : 0.12) * pulse))
-        g.addColorStop(1, hexToRgba(col, 0))
-        ctx.fillStyle = g
-        ctx.beginPath(); ctx.arc(nx, ny, auraR, 0, Math.PI * 2); ctx.fill()
-      }
-
-      // Glow halo
-      if ((isSel || isHov || isHub) && isConn) {
-        ctx.save()
-        ctx.shadowColor = col
-        ctx.shadowBlur = isSel ? 34 : isHov ? 22 : 14
-        ctx.beginPath()
-        ctx.arc(nx, ny, isSel ? finalR * 1.55 : isHov ? finalR * 1.3 : finalR * 1.15, 0, Math.PI * 2)
-        ctx.fillStyle = hexToRgba(col, isSel ? 0.3 : isHov ? 0.2 : 0.1)
-        ctx.fill()
-        ctx.restore()
-      }
-
-      // Core + ring
-      ctx.beginPath(); ctx.arc(nx, ny, isSel ? finalR * 1.2 : finalR, 0, Math.PI * 2)
-      ctx.fillStyle = hexToRgba(col, isConn ? 1 : 0.14); ctx.fill()
-      ctx.beginPath(); ctx.arc(nx, ny, isSel ? finalR * 1.2 : finalR, 0, Math.PI * 2)
-      ctx.strokeStyle = hexToRgba(node.kind === 'bible' ? '#fff7e0' : col, isSel ? 1 : 0.85)
-      ctx.lineWidth = (isSel ? 2.6 : 1.5) / k; ctx.stroke()
+      drawGraphNode(ctx, {
+        x: nx, y: ny, radius: finalR, color: col, zoom: k,
+        selected: isSel,
+        hovered:  isHov,
+        hub:      isHub && isConn,
+        pulse:    !eActive && isConn ? 0.5 + Math.sin(now * 0.0013 + ni * 0.4) * 0.5 : null,
+        dimmed:   !isConn,
+        // The Bible itself anchors the graph — a warm ring says so.
+        ringColor: node.kind === 'bible' ? '#fff7e0' : undefined,
+      })
 
       // Spawn ripple
       if (eInfo) {
-        const rp = (elapsed - eInfo.delay) / (eInfo.dur * 1.7)
-        if (rp > 0 && rp < 1) {
-          ctx.beginPath(); ctx.arc(nx, ny, r * (1 + rp * 2.8), 0, Math.PI * 2)
-          ctx.strokeStyle = hexToRgba(col, (1 - rp) * 0.55)
-          ctx.lineWidth = ((1 - rp) * 1.6 + 0.4) / k; ctx.stroke()
-        }
+        drawSpawnRipple(ctx, nx, ny, r, col, k, (elapsed - eInfo.delay) / (eInfo.dur * 1.7))
       }
       ctx.globalAlpha = 1
     }
@@ -340,10 +314,12 @@ export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: P
         const fs = node.kind === 'bible' ? Math.max(9, Math.min(15, 12 / k)) : Math.max(8, Math.min(13, 10.5 / k))
         ctx.font = `${node.kind === 'bible' ? '700 ' : ''}${fs}px Inter, system-ui, sans-serif`
         ctx.textAlign = 'center'
-        ctx.globalAlpha = node.id === selId ? 1 : isConn ? 0.82 : 0.12
+        ctx.globalAlpha = node.id === selId
+          ? NODE_STYLE.labelAlpha.selected
+          : isConn ? NODE_STYLE.labelAlpha.connected : NODE_STYLE.labelAlpha.dim
         const r = nodeRadius(node.size)
         ctx.save()
-        ctx.shadowColor = BG; ctx.shadowBlur = 6
+        ctx.shadowColor = BG; ctx.shadowBlur = NODE_STYLE.labelBlur
         ctx.fillStyle = node.kind === 'bible' ? '#e6c86e' : node.id === selId ? node.color : LABEL_INK
         ctx.fillText(node.label, nx0(node), (node.y ?? 0) + r + 13 / k)
         ctx.restore()

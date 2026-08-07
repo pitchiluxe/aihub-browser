@@ -7,6 +7,11 @@ import { Search, X, ZoomIn, ZoomOut, ChevronLeft, Maximize2, Play, Square, Cross
 import { Bookmark } from '../../store/browserStore'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { isBookmarkProtected } from '../../services/bookmarkService'
+// The node look is shared with the Bible verse graph so the two read as one
+// product; only the motion below belongs to this graph.
+import {
+  drawGraphNode, drawSpawnRipple, hexToRgba, HUB_THRESHOLD, LABEL_ZOOM, NODE_STYLE,
+} from '../graph/nodeStyle'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ExtNode extends SimulationNodeDatum {
@@ -73,18 +78,9 @@ function resolveColor(bm: { color?: string; category?: string }): string {
 const GRAPH_BG     = '#060A13'   // fallback when CSS vars are unavailable
 const MIN_ZOOM     = 0.04
 const MAX_ZOOM     = 10
-const LABEL_ZOOM   = 0.60
-const HUB_THRESHOLD = 3
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function nodeRadius(size: number) { return Math.max(4, Math.round(size * 0.42)) }
-
-function hexToRgba(hex: string, a: number): string {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r},${g},${b},${a})`
-}
 
 // ── Theme bridge ─────────────────────────────────────────────────────────────
 // The canvas can't use CSS vars directly, so the active theme (themeService
@@ -400,7 +396,9 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       const isMatch = !matchSet || matchSet.has(node.id)
       const isHub   = node.connections >= HUB_THRESHOLD
 
-      const ga = !isConn ? 0.07 : !isMatch ? 0.04 : 1
+      // 0.08 for "not connected to the selection" matches the verse graph; the
+      // deeper 0.04 is this graph's own state — a node the search excluded.
+      const ga = !isConn ? 0.08 : !isMatch ? 0.04 : 1
       ctx.globalAlpha = ga
 
       // Entrance scale animation
@@ -431,55 +429,23 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
 
       const isHov = hoveredRef.current?.id === node.id
 
-      // Per-node colored aura ring (small arc, NOT fullscreen fillRect)
-      if (!eActive && isConn && isMatch && ga > 0.3) {
-        const pulse    = 0.5 + Math.sin(now * 0.0013 + ni * 0.4) * 0.5
-        const auraR    = finalR * (1.5 + pulse * 0.35)
-        const auraGrd  = ctx.createRadialGradient(nx, ny, finalR * 0.8, nx, ny, auraR)
-        auraGrd.addColorStop(0, hexToRgba(col, (isHub ? 0.22 : 0.12) * pulse))
-        auraGrd.addColorStop(1, hexToRgba(col, 0))
-        ctx.fillStyle = auraGrd
-        ctx.beginPath()
-        ctx.arc(nx, ny, auraR, 0, Math.PI * 2)
-        ctx.fill()
-      }
-
-      // Outer glow halo
-      if ((isSel || isHov || (isHub && ga > 0.5)) && ga > 0.1) {
-        ctx.save()
-        ctx.shadowColor = col
-        ctx.shadowBlur  = isSel ? 32 : isHov ? 20 : 12
-        ctx.beginPath()
-        ctx.arc(nx, ny, isSel ? finalR * 1.55 : isHov ? finalR * 1.3 : finalR * 1.15, 0, Math.PI * 2)
-        ctx.fillStyle = hexToRgba(col, isSel ? 0.30 : isHov ? 0.20 : 0.10)
-        ctx.fill()
-        ctx.restore()
-      }
-
-      // Core filled circle — fully saturated at rest so category colors read
-      // solid like Obsidian's nodes; only genuinely dimmed nodes fade.
-      ctx.beginPath()
-      ctx.arc(nx, ny, isSel ? finalR * 1.22 : finalR, 0, Math.PI * 2)
-      ctx.fillStyle = hexToRgba(col, isSel ? 1 : (isConn && isMatch) ? 1 : 0.12)
-      ctx.fill()
-
-      // Ring stroke
-      ctx.beginPath()
-      ctx.arc(nx, ny, isSel ? finalR * 1.22 : finalR, 0, Math.PI * 2)
-      ctx.strokeStyle = hexToRgba(col, isSel ? 1 : 0.85)
-      ctx.lineWidth   = (isSel ? 2.5 : 1.5) / k
-      ctx.stroke()
+      // Everything below the motion is the shared graph node look.
+      drawGraphNode(ctx, {
+        x: nx, y: ny, radius: finalR, color: col, zoom: k,
+        selected: isSel,
+        hovered:  isHov,
+        // A hub only earns its halo while it is actually legible.
+        hub:      isHub && ga > 0.5,
+        // No aura mid-entrance, or on a node the current focus has faded out.
+        pulse:    !eActive && isConn && isMatch && ga > 0.3
+          ? 0.5 + Math.sin(now * 0.0013 + ni * 0.4) * 0.5
+          : null,
+        dimmed:   !isSel && !(isConn && isMatch),
+      })
 
       // Spawn ripple — expanding ring emitted as the node pops in
       if (eInfo) {
-        const rp = (elapsed - eInfo.delay) / (eInfo.dur * 1.7)
-        if (rp > 0 && rp < 1) {
-          ctx.beginPath()
-          ctx.arc(nx, ny, r * (1 + rp * 2.8), 0, Math.PI * 2)
-          ctx.strokeStyle = hexToRgba(col, (1 - rp) * 0.55)
-          ctx.lineWidth   = ((1 - rp) * 1.6 + 0.4) / k
-          ctx.stroke()
-        }
+        drawSpawnRipple(ctx, nx, ny, r, col, k, (elapsed - eInfo.delay) / (eInfo.dur * 1.7))
       }
 
       ctx.globalAlpha = 1
@@ -499,8 +465,9 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
         const isMatch = matchSet ? matchSet.has(node.id) : true
         if ((selId && !isConn) || (matchSet && !isMatch)) continue
 
-        const la = node.id === selId ? 1 : (isConn && isMatch) ? 0.78 : 0.12
-        ctx.globalAlpha = la
+        ctx.globalAlpha = node.id === selId
+          ? NODE_STYLE.labelAlpha.selected
+          : (isConn && isMatch) ? NODE_STYLE.labelAlpha.connected : NODE_STYLE.labelAlpha.dim
 
         const label = node.bookmark.title.length > 22
           ? node.bookmark.title.slice(0, 22) + '…'
@@ -509,7 +476,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
 
         ctx.save()
         ctx.shadowColor = theme.bg || GRAPH_BG
-        ctx.shadowBlur  = 5
+        ctx.shadowBlur  = NODE_STYLE.labelBlur
         ctx.fillStyle   = node.id === selId ? node.color : theme.label
         ctx.fillText(label, node.x ?? 0, (node.y ?? 0) + r + 13 / k)
         ctx.restore()
