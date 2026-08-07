@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseActionsBlock } from './agentTools'
+import { parseActionsBlock, cleanNarration } from './agentTools'
 
 // The chat must never show the machine protocol. Models — especially small
 // local ones — wrap tool calls in whatever they were fine-tuned on: the
@@ -201,6 +201,21 @@ describe('parseActionsBlock — hash-wrapped tool names', () => {
     ]) {
       expect(parseActionsBlock(raw).actions, raw).toBeNull()
       expect(parseActionsBlock(raw).narration, raw).toContain(raw.split('\n')[0].slice(4, 12))
+    }
+  })
+
+  // Chat history is persisted, so anything an older build failed to strip is
+  // on disk and replayed on every launch. The restore path re-cleans each
+  // assistant turn and drops the ones that were nothing but protocol — which
+  // only works if these clean to empty rather than to whitespace.
+  it('reduces a protocol-only reply to nothing, so restore can drop it', () => {
+    for (const raw of [
+      '###SCAN_PAGE###',
+      '###FILL_FIELD### customer_name Test User\n###FILL_FIELD### telephone 555-0142\n'
+        + '###FILL_FIELD### email test@example.com\n###FILL_FIELD### pizza_size large\n'
+        + '###FILL_FIELD### delivery_instructions Leave at front desk',
+    ]) {
+      expect(cleanNarration(raw), raw).toBe('')
     }
   })
 

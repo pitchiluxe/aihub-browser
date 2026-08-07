@@ -65,7 +65,19 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
     window.electronAPI.chat.load()
       .then((saved: any[]) => {
         if (Array.isArray(saved) && saved.length && !useBrowserStore.getState().aiMessages.length) {
-          setAIMessages(saved as any)
+          // Scrub the restored history, don't just replay it. Anything a
+          // previous build failed to strip — "###FILL_FIELD### telephone
+          // 555-0142", a stray <tool_call> — was written to disk as the
+          // assistant's message and would come back on every launch forever.
+          // Cleaning on load makes every fix to cleanNarration retroactive.
+          // The user's own turns are left exactly as typed: they are allowed
+          // to write "###FILL_FIELD###" if that's what they meant to ask.
+          const clean = saved
+            .map((m: any) => m?.role === 'assistant'
+              ? { ...m, content: cleanNarration(String(m.content ?? '')) }
+              : m)
+            .filter((m: any) => String(m?.content ?? '').trim())
+          if (clean.length) setAIMessages(clean as any)
         }
       })
       .catch(() => {})
