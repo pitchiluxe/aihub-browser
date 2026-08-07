@@ -36,6 +36,30 @@ const TAG_STRAY    = new RegExp(`<\\/?(?:${PROTOCOL_TAGS})\\b[^>]*>`, 'gi')
 // [TOOL_CALLS], [INST], <s>, <end_of_turn> …
 const CONTROL_TOKENS = /<\|[^|>]*\|>|\[\/?(?:TOOL_CALLS?|INST|OUT|AVAILABLE_TOOLS)\]|<\/?s>|<\/?(?:end|start)_of_turn>|<\/?(?:eos|bos|pad)>/gi
 
+// Every tool executeAction can run. Keep in sync with its switch. Calls that
+// name the tool under an aliased key are only accepted when the name is in
+// here, so ordinary JSON in a reply — {"name":"Erick","action":"renew"} — is
+// never mistaken for a tool call.
+const KNOWN_TOOLS = new Set([
+  'list_tabs', 'open_tab', 'close_tab', 'navigate_tab', 'switch_tab',
+  'list_bookmarks', 'add_bookmark', 'remove_bookmark',
+  'read_page', 'web_search', 'read_chart', 'recall_pages', 'fetch_url', 'remember',
+  'read_tab', 'scan_page', 'fill_field', 'click_element', 'wait',
+  'list_dir', 'read_file', 'write_file', 'find_files', 'move_file',
+  'save_file', 'save_zip', 'pick_directory', 'exec_command',
+])
+
+// Only "tool" is documented, but a model reaches for whatever key its
+// fine-tune used — "action", OpenAI's "name"/"arguments", a nested
+// "function". An unrecognised key used to mean the call was neither run nor
+// stripped, so the user saw raw JSON and nothing happened.
+const NAME_KEYS = ['tool', 'action', 'name', 'tool_name', 'function', 'function_name', 'recipient_name']
+const ARG_KEYS  = ['arguments', 'parameters', 'params', 'args', 'input', 'tool_input', 'action_input']
+const LIST_KEYS = ['actions', 'tool_calls', 'toolcalls', 'tools', 'calls', 'steps']
+// Cheap prefilter — "name" is common enough in ordinary JSON that the
+// KNOWN_TOOLS check downstream, not this regex, is what prevents false hits.
+const ACTION_KEY_RE = new RegExp(`"(?:${[...NAME_KEYS, ...LIST_KEYS].join('|')})"\\s*:`, 'i')
+
 // Placeholder-protect fenced blocks and inline code so a user's own HTML,
 // template tags or JSON survive the strippers below untouched.
 const protectCode = (text: string): { text: string; blocks: string[] } => {
@@ -61,8 +85,8 @@ export function cleanNarration(text: string): string {
   let out = marker ? text.slice(0, text.indexOf(marker[0])) : text
 
   // A fenced block that carries an action call is protocol, not an example.
-  out = out.replace(/```(?:json)?\s*[\s\S]*?```/gi, block =>
-    /"(?:actions|tool)"\s*:/.test(block) ? '' : block)
+  out = out.replace(/```(?:json)?\s*([\s\S]*?)```/gi, (block, body) =>
+    toActions(tryParseLoose(stripFences(body))) ? '' : block)
 
   const { text: masked, blocks } = protectCode(out)
   out = masked
@@ -75,9 +99,10 @@ export function cleanNarration(text: string): string {
   out = out.replace(TAG_STRAY, '')
 
   // Bare action JSON the model emitted with no marker and no tags.
-  out = out.replace(/\{\s*"actions"\s*:\s*\[[\s\S]*?\]\s*\}/g, '')
-  out = out.replace(/\[\s*\{\s*"tool"[\s\S]*?\}\s*\]/g, '')
-  out = out.replace(/\{\s*"tool"\s*:\s*"[\s\S]*?(?:\}|$)/g, '')
+  out = stripActionJson(out)
+  // A call the model cut off mid-object never balances, so stripActionJson
+  // can't find its end — drop from the opening brace onward.
+  out = out.replace(/\{\s*"tool"\s*:\s*"[^"]*"[^{}]*$/, '')
 
   out = restoreCode(out, blocks)
   out = out.replace(/(?<=\S) {2,}/g, ' ').replace(/\n{3,}/g, '\n\n')
@@ -117,16 +142,95 @@ function tryParseLoose(src: string): any {
   return null
 }
 
+// Normalize one call object into {tool, ...args}, whatever key the model used
+// for the tool name and wherever it put the arguments:
+//   {"tool":"scan_page","tabId":"t1"}                       ← documented
+//   {"action":"scan_page","tabId":"t1"}                     ← alias key
+//   {"name":"scan_page","arguments":{"tabId":"t1"}}         ← OpenAI shape
+//   {"function":{"name":"scan_page","arguments":"{…}"}}     ← nested, args as a string
+// Returns null when it isn't a tool call at all.
+function normalizeCall(raw: any, depth = 0): ToolAction | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || depth > 2) return null
+
+  const lower: Record<string, any> = {}
+  for (const [k, v] of Object.entries(raw)) lower[k.toLowerCase()] = v
+
+  // A call nested under one of the name keys — unwrap it and use that.
+  for (const k of NAME_KEYS) {
+    const nested = lower[k] && typeof lower[k] === 'object' ? normalizeCall(lower[k], depth + 1) : null
+    if (nested) return nested
+  }
+
+  let tool: string | null = null
+  let aliased = false
+  for (const k of NAME_KEYS) {
+    if (typeof lower[k] === 'string' && lower[k].trim()) {
+      tool = lower[k].trim()
+      aliased = k !== 'tool'
+      break
+    }
+  }
+  if (!tool) return null
+  // "tool" is the documented key, so an unknown name there is a typo worth
+  // reporting back to the model. An aliased key naming something we can't run
+  // is far more likely to be ordinary JSON — leave it as prose.
+  if (aliased && !KNOWN_TOOLS.has(tool)) return null
+
+  // Arguments sit inline on the object, or nested under an arg key as an
+  // object or as a JSON string.
+  const args: Record<string, any> = {}
+  for (const [k, v] of Object.entries(raw)) {
+    const key = k.toLowerCase()
+    if (NAME_KEYS.includes(key) || ARG_KEYS.includes(key)) continue
+    args[k] = v
+  }
+  for (const k of ARG_KEYS) {
+    let v = lower[k]
+    if (typeof v === 'string') { try { v = JSON.parse(v) } catch { continue } }
+    if (v && typeof v === 'object' && !Array.isArray(v)) Object.assign(args, v)
+  }
+  return { ...args, tool }
+}
+
 // Normalize any of the shapes models actually produce into an actions array:
-//   {"actions":[{...}]}   ← the documented shape
-//   [{"tool":...}]        ← a bare array of calls
-//   {"tool":...}          ← a single bare call
+// a wrapper object holding a list ({"actions":[…]}, {"tool_calls":[…]}), a
+// bare array of calls, or a single bare call.
 function toActions(parsed: any): ToolAction[] | null {
   if (!parsed) return null
-  if (Array.isArray(parsed?.actions)) return parsed.actions
-  if (Array.isArray(parsed) && parsed.every(x => x && typeof x.tool === 'string')) return parsed
-  if (parsed && typeof parsed.tool === 'string') return [parsed]
-  return null
+  if (Array.isArray(parsed)) {
+    const calls = parsed.map(x => normalizeCall(x))
+    // All-or-nothing: a partial match means this array is probably data.
+    return calls.length && calls.every(Boolean) ? calls as ToolAction[] : null
+  }
+  if (typeof parsed !== 'object') return null
+  for (const k of Object.keys(parsed)) {
+    if (!LIST_KEYS.includes(k.toLowerCase()) || !Array.isArray(parsed[k])) continue
+    const calls = toActions(parsed[k])
+    if (calls) return calls
+  }
+  const single = normalizeCall(parsed)
+  return single ? [single] : null
+}
+
+// Remove every balanced JSON value in `text` that is a tool call, leaving the
+// prose around it. This is what keeps `{"action":"scan_page"}` out of the
+// chat — matching on parse rather than on a key-name regex means any shape
+// toActions can run is also a shape cleanNarration can strip.
+function stripActionJson(text: string): string {
+  if (!ACTION_KEY_RE.test(text)) return text
+  let out = '', i = 0, tried = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if ((ch === '{' || ch === '[') && tried < MAX_JSON_CANDIDATES) {
+      tried++
+      const slice = balancedSlice(text, i)
+      const actions = toActions(tryParseLoose(slice))
+      if (actions && actions.length) { i += slice.length; continue }
+    }
+    out += ch
+    i++
+  }
+  return out
 }
 
 // Extracts the action block from a raw model response. Anything before the
@@ -191,7 +295,7 @@ function balancedSlice(text: string, from: number): string {
 // this into a quadratic scan.
 const MAX_JSON_CANDIDATES = 20
 function findActionJson(text: string): ToolAction[] | null {
-  if (!/"(?:tool|actions)"\s*:/.test(text)) return null
+  if (!ACTION_KEY_RE.test(text)) return null
   let tried = 0
   for (let i = 0; i < text.length && tried < MAX_JSON_CANDIDATES; i++) {
     const ch = text[i]
@@ -368,6 +472,12 @@ async function execInTab(tabId: string, script: string): Promise<ToolResult> {
   return { value: out ?? null }
 }
 
+// The tab a page action targets. "Scan this page" carries no tab id — the
+// model would have to call list_tabs first to learn one, and when it doesn't,
+// every page tool used to fail outright. The active tab IS "this page".
+const targetTab = (action: ToolAction): string | undefined =>
+  action.tabId || useBrowserStore.getState().activeTabId || undefined
+
 // Executes one parsed action against the existing store/IPC surface. Never
 // throws — failures come back as {error} so the model can see and react to
 // them on the next loop turn.
@@ -539,26 +649,32 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
       }
 
       case 'read_tab': {
-        if (!action.tabId) return { error: 'tabId is required' }
-        return await execInTab(action.tabId, READ_TAB_SCRIPT)
+        const tabId = targetTab(action)
+        if (!tabId) return { error: 'no tab is open' }
+        return await execInTab(tabId, READ_TAB_SCRIPT)
       }
 
       case 'scan_page': {
-        if (!action.tabId) return { error: 'tabId is required' }
-        return await execInTab(action.tabId, SCAN_PAGE_SCRIPT)
+        const tabId = targetTab(action)
+        if (!tabId) return { error: 'no tab is open' }
+        return await execInTab(tabId, SCAN_PAGE_SCRIPT)
       }
 
       case 'fill_field': {
+        const tabId = targetTab(action)
         const id = parseInt(action.elementId, 10)
-        if (!action.tabId || !Number.isFinite(id)) return { error: 'tabId and elementId are required' }
+        if (!tabId) return { error: 'no tab is open' }
+        if (!Number.isFinite(id)) return { error: 'elementId is required — run scan_page to get one' }
         if (action.value === undefined || action.value === null) return { error: 'value is required' }
-        return await execInTab(action.tabId, fillFieldScript(id, String(action.value)))
+        return await execInTab(tabId, fillFieldScript(id, String(action.value)))
       }
 
       case 'click_element': {
+        const tabId = targetTab(action)
         const id = parseInt(action.elementId, 10)
-        if (!action.tabId || !Number.isFinite(id)) return { error: 'tabId and elementId are required' }
-        return await execInTab(action.tabId, clickElementScript(id))
+        if (!tabId) return { error: 'no tab is open' }
+        if (!Number.isFinite(id)) return { error: 'elementId is required — run scan_page to get one' }
+        return await execInTab(tabId, clickElementScript(id))
       }
 
       case 'wait': {
@@ -657,6 +773,7 @@ Rules:
 - Everything BEFORE the ###ACTIONS### marker is shown to the user as your message — briefly say what you're about to do.
 - Everything AFTER the marker must be ONLY the JSON object, nothing else.
 - You can include multiple actions in one block — they run in order.
+- The key naming the tool is "tool". Not "action", not "name", not "function".
 - Only include the block when you actually need to act. Plain questions get a plain answer, no block.
 - After actions run, you'll be told the results and can respond again — either take more actions or give a final answer (no block = done).
 - NEVER use XML-style tags for this. No <ACTION>, <action>, <tool_call>, <function_call>, <invoke>, <think>, <reasoning> or any other tag wrapper — the marker above is the only accepted format, and tags are shown to the user as broken text.
@@ -685,7 +802,7 @@ Research workflow for "research X / compare X / what's the latest on X":
 2. fetch_url the 2-4 most promising results to read the actual content.
 3. Synthesize into a well-structured answer: sections, a comparison table when comparing anything, and a "Sources" list of markdown links at the end. Never present a source you didn't actually fetch or see in search results.
 
-Web page interaction (works on ANY open tab — use these to research, fill forms, and apply to things on the user's behalf):
+Web page interaction (works on ANY open tab — use these to research, fill forms, and apply to things on the user's behalf). tabId is OPTIONAL on all four: leave it out and the tool acts on the tab the user is looking at, which is what "this page" / "this form" means. Only pass a tabId when you're targeting some OTHER tab you got from list_tabs or open_tab:
 - read_tab({tabId}) — returns the URL, title, and visible text of a specific tab. After open_tab or navigate_tab, call wait then read_tab to see the loaded page. If it returns loading:true or looks empty, wait again and re-read.
 - scan_page({tabId}) — lists the interactive elements on that tab's page: form fields (with label, type, current value, required flag, dropdown options), buttons, and links — each with a numeric element id.
 - fill_field({tabId, elementId, value}) — fills one field. Works on text inputs, textareas, dropdowns (pass the option text), checkboxes/radios (pass "true"/"false"), and rich-text editors.
@@ -737,7 +854,13 @@ Reading your resume now, then I'll find matching openings.
 ]}
 Turn 2: present 3-5 real openings as markdown links with a one-line fit reason each, and ask which to apply to. Turn 3+: open_tab the chosen posting, wait, scan_page, fill_field every field from the resume, re-scan, then show the field → value list and stop for confirmation.
 
-Example — "answer these questions using my resume" while an application is open: the page text is already attached to your prompt. read_file the resume, scan_page for the fields, fill_field each answer from real resume content, and tell the user what you wrote. Never ask them to paste the questions.
+Example — "answer these questions using my resume" while an application is open: the page text is already attached to your prompt, and the open page is the default target, so no tabId is needed.
+###ACTIONS###
+{"actions":[
+  {"tool":"read_file","path":"C:\\\\Users\\\\me\\\\Downloads\\\\My_Resume.pdf"},
+  {"tool":"scan_page"}
+]}
+Next turn: fill_field each answer from real resume content, re-scan to verify, then tell the user in prose what you wrote in each field. Never ask them to paste the questions, and never stop at just scanning.
 
 Example — "find my resume" / "organise my downloads":
 ###ACTIONS###

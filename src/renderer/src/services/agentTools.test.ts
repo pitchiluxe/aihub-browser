@@ -5,9 +5,9 @@ import { parseActionsBlock } from './agentTools'
 // local ones — wrap tool calls in whatever they were fine-tuned on: the
 // documented ###ACTIONS### marker, XML-ish <ACTION> tags, Mistral's
 // [TOOL_CALLS], Harmony's <|channel|> tokens, or a bare JSON blob.
-describe('parseActionsBlock — narration is always clean prose', () => {
-  const leaks = /<\/?\s*(?:action|actions|tool_call|tool_calls|function_call|invoke|think|thinking|reasoning|scratchpad)\b|<\|[^|]*\|>|###\s*ACTIONS?|\[\/?(?:TOOL_CALLS|INST)\]|"tool"\s*:/i
+const leaks = /<\/?\s*(?:action|actions|tool_call|tool_calls|function_call|invoke|think|thinking|reasoning|scratchpad)\b|<\|[^|]*\|>|###\s*ACTIONS?|\[\/?(?:TOOL_CALLS|INST)\]|"(?:tool|action|tool_name|arguments)"\s*:/i
 
+describe('parseActionsBlock — narration is always clean prose', () => {
   it('strips XML-style action tags and still executes the call', () => {
     const raw = 'Opening YouTube ↗\n<ACTION>{"actions":[{"tool":"open_tab","url":"https://www.youtube.com"}]}</ACTION>'
     const { narration, actions } = parseActionsBlock(raw)
@@ -97,5 +97,55 @@ describe('parseActionsBlock — narration is always clean prose', () => {
     const raw = 'The Bible reader lives in AIHub. Say "open the bible" and it opens right here.'
     expect(parseActionsBlock(raw).narration).toBe(raw)
     expect(parseActionsBlock(raw).actions).toBeNull()
+  })
+})
+
+// Only `"tool"` is documented, but models routinely name the key whatever
+// their fine-tune used — `"action"`, OpenAI's `"name"`/`"arguments"`, a
+// nested `"function"`. When the key isn't recognised the call is neither run
+// nor stripped, so the user sees raw JSON and nothing happens.
+describe('parseActionsBlock — tool-name key aliases', () => {
+  it('runs a call keyed "action" instead of "tool"', () => {
+    const raw = 'Let me look at the form.\n{"action": "scan_page", "tabId": "tab-3"}'
+    const { narration, actions } = parseActionsBlock(raw)
+    expect(actions).toEqual([{ tool: 'scan_page', tabId: 'tab-3' }])
+    expect(narration).toBe('Let me look at the form.')
+  })
+
+  it('runs the OpenAI name/arguments shape', () => {
+    const raw = 'Scanning.\n{"name":"scan_page","arguments":{"tabId":"tab-3"}}'
+    expect(parseActionsBlock(raw).actions).toEqual([{ tool: 'scan_page', tabId: 'tab-3' }])
+    expect(parseActionsBlock(raw).narration).toBe('Scanning.')
+  })
+
+  it('runs a nested function call whose arguments are a JSON string', () => {
+    const raw = 'Filling it in.\n{"function":{"name":"fill_field","arguments":"{\\"tabId\\":\\"tab-3\\",\\"elementId\\":4,\\"value\\":\\"Erick\\"}"}}'
+    expect(parseActionsBlock(raw).actions)
+      .toEqual([{ tool: 'fill_field', tabId: 'tab-3', elementId: 4, value: 'Erick' }])
+  })
+
+  it('accepts alias list keys around the calls', () => {
+    expect(parseActionsBlock('Ok.\n{"tool_calls":[{"action":"read_page"}]}').actions)
+      .toEqual([{ tool: 'read_page' }])
+    expect(parseActionsBlock('Ok.\n###ACTIONS###\n{"actions":[{"tool_name":"scan_page","tabId":"t1"}]}').actions)
+      .toEqual([{ tool: 'scan_page', tabId: 't1' }])
+  })
+
+  it('never leaks alias-keyed protocol into the chat', () => {
+    for (const raw of [
+      'Hi\n{"action":"scan_page","tabId":"t1"}',
+      'Hi\n```json\n{"action":"scan_page"}\n```',
+      'Hi\n{"name":"read_page","arguments":{}}',
+      'Hi<ACTION>{"tool_calls":[{"action":"read_page"}]}</ACTION>',
+    ]) {
+      expect(parseActionsBlock(raw).narration, raw).not.toMatch(leaks)
+    }
+  })
+
+  it('does not mistake ordinary JSON for a tool call', () => {
+    const raw = 'Here is the record:\n\n```json\n{"name":"Erick","action":"renew"}\n```'
+    const { narration, actions } = parseActionsBlock(raw)
+    expect(actions).toBeNull()
+    expect(narration).toContain('"name":"Erick"')
   })
 })
