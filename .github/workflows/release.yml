@@ -1,0 +1,105 @@
+name: Release
+
+# Cuts a full release from a pushed v* tag: verifies the code, builds all three
+# platforms, and publishes the GitHub Release — no manual step, so an installed
+# app starts offering the update as soon as this workflow goes green.
+#
+# Push a tag to release:
+#   npm version minor --no-git-tag-version && git commit -am "chore: vX.Y.Z - …"
+#   git tag -a vX.Y.Z -m "vX.Y.Z" && git push --follow-tags
+#
+# WHY ONE WORKFLOW INSTEAD OF THREE
+# The three platform builds all upload into the SAME release, and they finish
+# minutes apart (Linux ~1m, macOS ~2m, Windows ~3m). If a platform published
+# the release itself, the first one home would make it live while the others
+# were still uploading — clients would fetch a latest.yml whose installer does
+# not exist yet. So every build targets a DRAFT, and a single publish job runs
+# after all of them. `needs` means GitHub skips it unless every leg succeeded,
+# so a failed build leaves a draft to inspect rather than shipping half a
+# release.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # Nothing reviews the release by hand any more, so the test suite is the
+  # gate. A red suite must cost a release, not reach users.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  build:
+    needs: verify
+    strategy:
+      # One platform failing shouldn't hide the others' results — the publish
+      # job is what enforces all-or-nothing.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux AppImage
+            target: --linux
+          - os: macos-latest
+            name: macOS universal DMG + ZIP
+            target: --mac
+          - os: windows-latest
+            name: Windows NSIS + ZIP
+            target: --win
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate icons
+        run: npm run generate-icon
+
+      - name: Build renderer and main
+        run: npm run build
+
+      # Uploads the installers plus the electron-updater metadata
+      # (latest.yml / latest-mac.yml / latest-linux.yml) to the draft release
+      # electron-builder creates for this tag.
+      - name: Package ${{ matrix.name }}
+        run: npx electron-builder ${{ matrix.target }} --publish always
+        env:
+          # No Apple Developer certificate — skip identity discovery so the mac
+          # build stays unsigned instead of failing. Unsigned means mac users
+          # update manually; latest-mac.yml still ships, so signing later
+          # enables auto-update with no further changes.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: build
+    # Only a tag is a release. A manual run from a branch builds and leaves the
+    # draft alone rather than promoting whatever happens to be on that branch.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
