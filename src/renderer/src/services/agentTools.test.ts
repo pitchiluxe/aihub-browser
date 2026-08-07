@@ -149,3 +149,69 @@ describe('parseActionsBlock — tool-name key aliases', () => {
     expect(narration).toContain('"name":"Erick"')
   })
 })
+
+// Small local models generalise the documented ###ACTIONS### marker into
+// "###TOOL_NAME### args" and emit that instead of JSON. Left unhandled the
+// call neither runs nor gets stripped, so the user reads "###FILL_FIELD###
+// telephone 555-0142" where the form should have been filled in.
+describe('parseActionsBlock — hash-wrapped tool names', () => {
+  it('runs a bare ###SCAN_PAGE### and shows nothing', () => {
+    const { narration, actions } = parseActionsBlock('###SCAN_PAGE###')
+    expect(actions).toEqual([{ tool: 'scan_page' }])
+    expect(narration).toBe('')
+  })
+
+  it('reads positional arguments off the same line', () => {
+    const raw = [
+      '###FILL_FIELD### customer_name Test User',
+      '###FILL_FIELD### telephone 555-0142',
+      '###FILL_FIELD### delivery_instructions Leave at front desk',
+    ].join('\n')
+    const { narration, actions } = parseActionsBlock(raw)
+    expect(actions).toEqual([
+      { tool: 'fill_field', elementId: 'customer_name',         value: 'Test User' },
+      { tool: 'fill_field', elementId: 'telephone',             value: '555-0142' },
+      { tool: 'fill_field', elementId: 'delivery_instructions', value: 'Leave at front desk' },
+    ])
+    expect(narration).toBe('')
+  })
+
+  it('accepts JSON or key=value arguments after the tag', () => {
+    expect(parseActionsBlock('###OPEN_TAB### {"url":"https://example.com"}').actions)
+      .toEqual([{ tool: 'open_tab', url: 'https://example.com' }])
+    expect(parseActionsBlock('###FILL_FIELD### elementId=4 value="Test User"').actions)
+      .toEqual([{ tool: 'fill_field', elementId: '4', value: 'Test User' }])
+  })
+
+  it('keeps the prose around the call', () => {
+    const raw = 'Filling that in for you.\n###FILL_FIELD### 4 Test User\nAll set.'
+    const { narration, actions } = parseActionsBlock(raw)
+    expect(actions).toEqual([{ tool: 'fill_field', elementId: '4', value: 'Test User' }])
+    expect(narration).toBe('Filling that in for you.\nAll set.')
+  })
+
+  it('leaves markdown headings and unknown tags alone', () => {
+    for (const raw of [
+      '### Overview\nThis is a heading, not a tool call.',
+      '### fill_field is the tool that fills a form field.',
+      '###DEPLOY_ROCKET### now',
+      // Closed-ATX headings that happen to name a single-word tool.
+      '## Remember ##\nYour seat is 14C.',
+      '## Wait ##\nGive the page a moment.',
+    ]) {
+      expect(parseActionsBlock(raw).actions, raw).toBeNull()
+      expect(parseActionsBlock(raw).narration, raw).toContain(raw.split('\n')[0].slice(4, 12))
+    }
+  })
+
+  it('never leaks a hash-wrapped call into the chat', () => {
+    for (const raw of [
+      '###SCAN_PAGE###',
+      'On it.\n###READ_PAGE###',
+      '###FILL_FIELD### customer_name Test User\n###FILL_FIELD### email test@example.com',
+      '###WEB_SEARCH### best laptops under $1000',
+    ]) {
+      expect(parseActionsBlock(raw).narration, raw).not.toMatch(/###\s*[A-Z_]+\s*###/i)
+    }
+  })
+})

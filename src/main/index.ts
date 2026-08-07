@@ -339,8 +339,16 @@ function ollamaChatStream(
     // the next message in a conversation pays the full multi-second reload.
     // Holding it resident for 30m makes follow-up replies start almost
     // instantly, which is most of the perceived "AI is slow" problem.
+    // num_ctx sized to the prompt actually being sent. Too small and Ollama
+    // truncates from the FRONT — which eats the system prompt and invalidates
+    // the cached prefix, so every turn re-processes the whole thing. Agent
+    // turns (tool manual + history + page text) routinely pass 8k; plain chat
+    // stays at the cheap default rather than allocating a window it won't use.
+    const promptChars = messages.reduce((n, m) => n + String(m?.content || '').length, 0)
+    const needed = Math.ceil(promptChars / 3.5) + 1536 // + room for the reply
+    const numCtx = needed <= 8192 ? 8192 : needed <= 12288 ? 12288 : 16384
     const body = JSON.stringify({
-      model, messages, stream: true, keep_alive: '30m', options: { num_ctx: 8192 },
+      model, messages, stream: true, keep_alive: '30m', options: { num_ctx: numCtx },
     })
     const req = http.request({
       hostname: parsed.hostname,

@@ -53,6 +53,35 @@ const KNOWN_TOOLS = new Set([
 // fine-tune used — "action", OpenAI's "name"/"arguments", a nested
 // "function". An unrecognised key used to mean the call was neither run nor
 // stripped, so the user saw raw JSON and nothing happened.
+// Models generalise the documented ###ACTIONS### marker into a per-tool
+// marker of their own — "###SCAN_PAGE###", "###FILL_FIELD### telephone
+// 555-0142" — and emit that instead of JSON. Only names in KNOWN_TOOLS count
+// and the closing hashes are required, so a markdown heading ("### Overview",
+// "### fill_field explained") is never mistaken for a call. Group 2 is the
+// argument tail, which always ends at the line break.
+const HASH_CALL_RE = new RegExp(
+  `^[ \\t]*#{2,}[ \\t]*(${[...KNOWN_TOOLS].join('|')})[ \\t]*#{2,}[ \\t]*(.*?)[ \\t]*(?:\\r?\\n|$)`,
+  'gim',
+)
+
+// Single-word tools ("remember", "wait") collide with closed-ATX markdown
+// headings — "## Remember ##" is prose, "###REMEMBER###" is a call. A machine
+// marker is written the way the doc writes it: all caps, or snake_case.
+const isHashCall = (name: string): boolean =>
+  name.includes('_') || name === name.toUpperCase()
+
+// Where a hash call's unnamed arguments go, in the order models write them.
+// The last entry absorbs the rest of the line, so a value with spaces
+// ("Leave at front desk") survives intact.
+const POSITIONAL_ARGS: Record<string, string[]> = {
+  open_tab: ['url'], close_tab: ['tabId'], switch_tab: ['tabId'], navigate_tab: ['tabId', 'url'],
+  add_bookmark: ['url', 'title'], remove_bookmark: ['id'],
+  web_search: ['query'], recall_pages: ['query'], find_files: ['query'], fetch_url: ['url'],
+  remember: ['text'], wait: ['ms'],
+  fill_field: ['elementId', 'value'], click_element: ['elementId'],
+  list_dir: ['path'], read_file: ['path'],
+}
+
 const NAME_KEYS = ['tool', 'action', 'name', 'tool_name', 'function', 'function_name', 'recipient_name']
 const ARG_KEYS  = ['arguments', 'parameters', 'params', 'args', 'input', 'tool_input', 'action_input']
 const LIST_KEYS = ['actions', 'tool_calls', 'toolcalls', 'tools', 'calls', 'steps']
@@ -97,6 +126,8 @@ export function cleanNarration(text: string): string {
   out = out.replace(TAG_PAIR, '')
   out = out.replace(TAG_UNCLOSED, '')
   out = out.replace(TAG_STRAY, '')
+  // "###FILL_FIELD### telephone 555-0142" — the whole line is protocol.
+  out = out.replace(HASH_CALL_RE, (line, name) => isHashCall(name) ? '' : line)
 
   // Bare action JSON the model emitted with no marker and no tags.
   out = stripActionJson(out)
@@ -233,6 +264,56 @@ function stripActionJson(text: string): string {
   return out
 }
 
+// A tail of `key=value` pairs and nothing else — "elementId=4 value="Test"".
+const KV_TAIL_RE   = /^(?:[a-zA-Z_][\w-]*\s*=\s*(?:"[^"]*"|'[^']*'|\S+)\s*)+$/
+const KV_PAIR_RE   = /([a-zA-Z_][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g
+
+// Turn the text after a hash tag into arguments. Three shapes, because models
+// pick whichever one they feel like: a JSON object, `key=value` pairs, or bare
+// positional values in the order POSITIONAL_ARGS lists them.
+function parseHashArgs(tool: string, tail: string): Record<string, any> {
+  const rest = tail.trim()
+  if (!rest) return {}
+
+  if (rest.startsWith('{')) {
+    const parsed = tryParseLoose(balancedSlice(rest, 0))
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+  }
+
+  if (KV_TAIL_RE.test(rest)) {
+    const args: Record<string, any> = {}
+    for (const m of rest.matchAll(KV_PAIR_RE)) args[m[1]] = m[2] ?? m[3] ?? m[4]
+    return args
+  }
+
+  const slots = POSITIONAL_ARGS[tool]
+  if (!slots || !slots.length) return {}
+  const args: Record<string, any> = {}
+  let remaining = rest
+  for (let i = 0; i < slots.length; i++) {
+    if (!remaining) break
+    // The last slot takes everything left, so a value with spaces stays whole.
+    if (i === slots.length - 1) { args[slots[i]] = remaining; break }
+    const sp = remaining.search(/\s/)
+    if (sp === -1) { args[slots[i]] = remaining; remaining = ''; break }
+    args[slots[i]] = remaining.slice(0, sp)
+    remaining = remaining.slice(sp + 1).trim()
+  }
+  return args
+}
+
+// Every hash-wrapped call in the response, in order. Null when there are none,
+// so callers can fall through to the other protocol shapes.
+function parseHashCalls(raw: string): ToolAction[] | null {
+  const actions: ToolAction[] = []
+  for (const m of raw.matchAll(HASH_CALL_RE)) {
+    if (!isHashCall(m[1])) continue
+    const tool = m[1].toLowerCase()
+    actions.push({ ...parseHashArgs(tool, m[2] || ''), tool })
+  }
+  return actions.length ? actions : null
+}
+
 // Extracts the action block from a raw model response. Anything before the
 // marker is the user-facing narration; the block is parsed and stripped. This
 // is deliberately forgiving — it recognizes the marker OR a bare JSON action
@@ -249,7 +330,7 @@ export function parseActionsBlock(raw: string): ParsedResponse {
     const jsonPart = stripFences(raw.slice(start))
     const actions = findActionJson(jsonPart)
     if (actions) return { narration, actions }
-    return { narration, actions: null }
+    return { narration, actions: parseHashCalls(raw) }
   }
 
   // 2) The call came wrapped in a tag (<ACTION>…</ACTION>, <tool_call>…) —
@@ -265,7 +346,9 @@ export function parseActionsBlock(raw: string): ParsedResponse {
   const actions = findActionJson(raw)
   if (actions) return { narration, actions }
 
-  return { narration, actions: null }
+  // 4) The model invented its own per-tool marker ("###SCAN_PAGE###"). It is
+  //    still unambiguously a call — run it rather than print it.
+  return { narration, actions: parseHashCalls(raw) }
 }
 
 const stripFences = (s: string): string =>
@@ -325,8 +408,8 @@ export function describeAction(a: ToolAction): string {
     case 'fetch_url':       return `Fetching ${String(a.url || '').slice(0, 60)}`
     case 'read_tab':        return 'Reading tab content'
     case 'scan_page':       return 'Scanning page elements'
-    case 'fill_field':      return `Filling field #${a.elementId}`
-    case 'click_element':   return `Clicking element #${a.elementId}`
+    case 'fill_field':      return `Filling field ${elementRef(a) || '?'}`
+    case 'click_element':   return `Clicking element ${elementRef(a) || '?'}`
     case 'wait':            return `Waiting ${a.ms || 1000}ms`
     case 'list_dir':        return `Listing folder ${a.path}`
     case 'find_files':      return `Searching your files for "${String(a.query || '').slice(0, 40)}"`
@@ -380,7 +463,7 @@ const READ_TAB_SCRIPT = `(() => {
   }
 })()`
 
-const SCAN_PAGE_SCRIPT = `(() => {
+export const SCAN_PAGE_SCRIPT = `(() => {
   let n = 0
   const items = []
   const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
@@ -418,10 +501,41 @@ const SCAN_PAGE_SCRIPT = `(() => {
   return { url: location.href, title: document.title, elements: items }
 })()`
 
-function fillFieldScript(elementId: number, value: string): string {
-  return `(() => {
-  const el = document.querySelector('[data-agent-id="${elementId}"]')
-  if (!el) return { error: 'element not found — run scan_page again (ids reset when the page changes)' }
+// Resolves whatever the model called the element: a scan_page id, or — when it
+// skipped scan_page and named the field the way the page does — a label, name,
+// id, placeholder or aria-label. Shared by fill_field and click_element.
+const RESOLVE_EL_FN = `
+  const norm = (s) => String(s || '').toLowerCase().replace(/[_\\s-]+/g, ' ').trim()
+  const seen = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
+  // A control's own text IS its name ("Place order"); a data-entry field's
+  // value is live user content and must never be treated as one — a select
+  // holding "l" would otherwise answer to any request containing an l.
+  const isControl = (el) => el.tagName === 'BUTTON' || el.tagName === 'A'
+    || el.getAttribute('role') === 'button' || el.type === 'submit' || el.type === 'button'
+  const namesOf = (el) => [
+    el.getAttribute('data-agent-id'), el.name, el.id, el.placeholder, el.getAttribute('aria-label'),
+    el.labels && el.labels[0] && el.labels[0].innerText,
+    el.closest('label') && el.closest('label').innerText,
+  ].concat(isControl(el) ? [el.innerText, el.value] : []).filter(Boolean).map(norm)
+  const resolveEl = (ref, selector) => {
+    const byId = document.querySelector('[data-agent-id="' + String(ref).replace(/"/g, '') + '"]')
+    if (byId) return byId
+    const want = norm(ref)
+    if (!want) return null
+    const els = Array.from(document.querySelectorAll(selector)).filter(el => seen(el) && el.type !== 'hidden')
+    const exact = els.find(el => namesOf(el).some(n => n === want))
+    if (exact) return exact
+    // Substring matching needs a length floor on BOTH sides: a two-character
+    // name is a substring of half the page and would match by accident.
+    if (want.length < 3) return null
+    return els.find(el => namesOf(el).some(n => n.length >= 3 && (n.includes(want) || want.includes(n)))) || null
+  }`
+
+export function fillFieldScript(ref: string, value: string): string {
+  return `(() => {${RESOLVE_EL_FN}
+  const ref = ${JSON.stringify(ref)}
+  const el = resolveEl(ref, 'input, textarea, select, [contenteditable="true"]')
+  if (!el) return { error: 'no field matches ' + JSON.stringify(ref) + ' — run scan_page and use the numeric id it returns' }
   el.scrollIntoView({ block: 'center' })
   el.focus()
   const val = ${JSON.stringify(value)}
@@ -448,10 +562,11 @@ function fillFieldScript(elementId: number, value: string): string {
 })()`
 }
 
-function clickElementScript(elementId: number): string {
-  return `(() => {
-  const el = document.querySelector('[data-agent-id="${elementId}"]')
-  if (!el) return { error: 'element not found — run scan_page again (ids reset when the page changes)' }
+export function clickElementScript(ref: string): string {
+  return `(() => {${RESOLVE_EL_FN}
+  const ref = ${JSON.stringify(ref)}
+  const el = resolveEl(ref, 'button, [role="button"], input[type="submit"], input[type="button"], a[href], [data-agent-id]')
+  if (!el) return { error: 'nothing matches ' + JSON.stringify(ref) + ' — run scan_page and use the numeric id it returns' }
   el.scrollIntoView({ block: 'center' })
   el.click()
   return { ok: true, clicked: (el.innerText || el.value || '').trim().replace(/\\s+/g, ' ').slice(0, 60) }
@@ -477,6 +592,11 @@ async function execInTab(tabId: string, script: string): Promise<ToolResult> {
 // every page tool used to fail outright. The active tab IS "this page".
 const targetTab = (action: ToolAction): string | undefined =>
   action.tabId || useBrowserStore.getState().activeTabId || undefined
+
+// How the model referred to an element — a scan_page id, or the field's own
+// label/name when it never scanned. The page resolves either (see RESOLVE_EL_FN).
+const elementRef = (action: ToolAction): string =>
+  String(action.elementId ?? action.label ?? action.field ?? action.selector ?? '').trim()
 
 // Executes one parsed action against the existing store/IPC surface. Never
 // throws — failures come back as {error} so the model can see and react to
@@ -662,19 +782,22 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
 
       case 'fill_field': {
         const tabId = targetTab(action)
-        const id = parseInt(action.elementId, 10)
         if (!tabId) return { error: 'no tab is open' }
-        if (!Number.isFinite(id)) return { error: 'elementId is required — run scan_page to get one' }
+        // A model that skipped scan_page names the field the way the page does
+        // ("customer_name", "Telephone") instead of by id. The page can resolve
+        // that itself, so accept it rather than failing the whole form.
+        const ref = elementRef(action)
+        if (!ref) return { error: 'elementId is required — run scan_page to get one' }
         if (action.value === undefined || action.value === null) return { error: 'value is required' }
-        return await execInTab(tabId, fillFieldScript(id, String(action.value)))
+        return await execInTab(tabId, fillFieldScript(ref, String(action.value)))
       }
 
       case 'click_element': {
         const tabId = targetTab(action)
-        const id = parseInt(action.elementId, 10)
         if (!tabId) return { error: 'no tab is open' }
-        if (!Number.isFinite(id)) return { error: 'elementId is required — run scan_page to get one' }
-        return await execInTab(tabId, clickElementScript(id))
+        const ref = elementRef(action)
+        if (!ref) return { error: 'elementId is required — run scan_page to get one' }
+        return await execInTab(tabId, clickElementScript(ref))
       }
 
       case 'wait': {
@@ -777,6 +900,7 @@ Rules:
 - Only include the block when you actually need to act. Plain questions get a plain answer, no block.
 - After actions run, you'll be told the results and can respond again — either take more actions or give a final answer (no block = done).
 - NEVER use XML-style tags for this. No <ACTION>, <action>, <tool_call>, <function_call>, <invoke>, <think>, <reasoning> or any other tag wrapper — the marker above is the only accepted format, and tags are shown to the user as broken text.
+- NEVER invent a marker per tool. \`###SCAN_PAGE###\`, \`###FILL_FIELD### telephone 555-0142\` and anything shaped like them are wrong: there is exactly ONE marker, \`###ACTIONS###\`, and JSON follows it.
 - The part the user reads must be plain prose and markdown only: no tags, no control tokens, no JSON, no mention of tools or of this protocol. Code the user asked for belongs in a fenced code block.
 
 Available tools:
@@ -805,8 +929,8 @@ Research workflow for "research X / compare X / what's the latest on X":
 Web page interaction (works on ANY open tab — use these to research, fill forms, and apply to things on the user's behalf). tabId is OPTIONAL on all four: leave it out and the tool acts on the tab the user is looking at, which is what "this page" / "this form" means. Only pass a tabId when you're targeting some OTHER tab you got from list_tabs or open_tab:
 - read_tab({tabId}) — returns the URL, title, and visible text of a specific tab. After open_tab or navigate_tab, call wait then read_tab to see the loaded page. If it returns loading:true or looks empty, wait again and re-read.
 - scan_page({tabId}) — lists the interactive elements on that tab's page: form fields (with label, type, current value, required flag, dropdown options), buttons, and links — each with a numeric element id.
-- fill_field({tabId, elementId, value}) — fills one field. Works on text inputs, textareas, dropdowns (pass the option text), checkboxes/radios (pass "true"/"false"), and rich-text editors.
-- click_element({tabId, elementId}) — clicks a button or link on the page.
+- fill_field({tabId, elementId, value}) — fills one field. Works on text inputs, textareas, dropdowns (pass the option text), checkboxes/radios (pass "true"/"false"), and rich-text editors. elementId is the number scan_page gave you; if you truly don't have one, the field's own label or name ("Telephone") also resolves.
+- click_element({tabId, elementId}) — clicks a button or link on the page. Same rule for elementId: the scan_page number, or the button's visible text.
 - wait({ms}) — pauses up to 8000 ms. Use after navigation, clicks, or form submissions so the page can settle.
 IMPORTANT: element ids come from the LAST scan_page and die whenever the page changes — re-scan after every navigation or click that changes the page before filling anything else.
 

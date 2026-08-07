@@ -29,6 +29,22 @@ const SUGGESTIONS = [
 
 const AI_NEWS_INTENT  = /latest\s+ai|ai\s+news|ai\s+articles?|ai\s+updates?|what.?s\s+new\s+in\s+ai|recent\s+ai|top\s+ai/i
 
+// Answers "can the browser do X?" without tools. Hoisted out of the prompt
+// builder so it stays byte-identical between turns — see buildSystemPrompt on
+// why constant text is worth real seconds.
+const FEATURE_MAP = `## AIHub Browser — full feature map (answer any "can the browser do X?" from this)
+- **Tabs**: multi-tab strip with drag-reorder, context menu (duplicate / close others / close right), Ctrl+T new tab.
+- **Bookmark Sphere / Knowledge Graph**: force-directed graph of bookmarks clustered by category, with search, zoom, and per-node actions. Follows the active theme.
+- **Smart Homepage**: universal search, quick-access apps, AI site recommendations learned from browsing patterns.
+- **AI Assistant** (you): local Ollama or cloud OpenRouter, switchable in Settings → AI. Agent tools let you drive tabs, fill forms, read/write files, run approved commands, and build projects.
+- **Research Mode**: multi-tab analysis, cross-reference, generate reports.
+- **Extensions**: built-in page-enhancement extensions plus AI-generated custom extensions (Extensions page → Generate).
+- **Mail**: Gmail integration via Google OAuth (Settings → Google; Drive and Calendar too).
+- **Themes**: 19 built-in themes (12 dark, 7 light) plus AI-generated custom themes — Settings → Appearance. Applies everywhere, including the sphere.
+- **History**: searchable history with AI recommendations; **Downloads** manager; **Free WiFi** finder; **VPN/Proxy** page.
+- **Privacy/Security**: OAuth tokens encrypted at rest, API keys stored locally, PKCE for Google sign-in.
+- **Auto-update**: checks GitHub Releases on startup and periodically; notifies in-app when a new version ships.`
+
 
 export default function AIAssistant({ currentUrl, currentTitle, getPageContent }: Props) {
   const {
@@ -234,6 +250,14 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
   // reach the first token against ~30s for 500 tokens. So the prompt is built
   // to fit the turn — the tool manual only ships when tools are in play, and a
   // 230-bookmark list is filtered to what the message could plausibly need.
+  //
+  // ORDER MATTERS AS MUCH AS SIZE. Ollama keeps a KV cache of the prompt and
+  // reuses it only up to the first token that differs from last time, so
+  // anything volatile placed early throws away the cached work for everything
+  // after it. The volatile blocks (page, bookmarks, memory, history — and the
+  // clock/digest the caller appends) therefore come LAST, leaving the static
+  // rules and the tool manual as a stable prefix that is prompt-evaluated once
+  // and reused for every later turn of the conversation.
   const buildSystemPrompt = useCallback((needsTools: boolean) => {
     const pageCtx = currentUrl && currentUrl !== 'home'
       ? `\n\n### Current page\n"${currentTitle || currentUrl}" — ${currentUrl}`
@@ -277,19 +301,6 @@ You are deeply aware of the user's browser context: their bookmarks, recent hist
 • Answer questions about AIHub Browser features
 • Surface latest AI news from Hacker News
 
-${needsTools ? '' : `## AIHub Browser — full feature map (answer any "can the browser do X?" from this)
-- **Tabs**: multi-tab strip with drag-reorder, context menu (duplicate / close others / close right), Ctrl+T new tab.
-- **Bookmark Sphere / Knowledge Graph**: force-directed graph of bookmarks clustered by category, with search, zoom, and per-node actions. Follows the active theme.
-- **Smart Homepage**: universal search, quick-access apps, AI site recommendations learned from browsing patterns.
-- **AI Assistant** (you): local Ollama or cloud OpenRouter, switchable in Settings → AI. Agent tools let you drive tabs, fill forms, read/write files, run approved commands, and build projects.
-- **Research Mode**: multi-tab analysis, cross-reference, generate reports.
-- **Extensions**: built-in page-enhancement extensions plus AI-generated custom extensions (Extensions page → Generate).
-- **Mail**: Gmail integration via Google OAuth (Settings → Google; Drive and Calendar too).
-- **Themes**: 19 built-in themes (12 dark, 7 light) plus AI-generated custom themes — Settings → Appearance. Applies everywhere, including the sphere.
-- **History**: searchable history with AI recommendations; **Downloads** manager; **Free WiFi** finder; **VPN/Proxy** page.
-- **Privacy/Security**: OAuth tokens encrypted at rest, API keys stored locally, PKCE for Google sign-in.
-- **Auto-update**: checks GitHub Releases on startup and periodically; notifies in-app when a new version ships.${appCtx}`}
-
 ## What you ARE — read this before anything else
 You are not a chat window. You are wired into this computer and this browser, and you have real tools listed at the end of this prompt. You can read the page the user is looking at, read their files, search the web, fill in forms, click buttons, run approved commands and write files.
 
@@ -326,7 +337,7 @@ Your chat renders full GitHub-flavored markdown: tables, fenced code, headings, 
 - **Research answers** end with a "Sources" section of markdown links to what you actually consulted.
 - Never say you can't browse the internet — you have web_search and fetch_url. Use them.
 
-Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${historyCtx}${needsTools ? AGENT_TOOLS_DOC : CHAT_ONLY_NOTE}`
+Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT_ONLY_NOTE}\n\n${FEATURE_MAP}${appCtx}`}${pageCtx}${memoryCtx}${bookmarkCtx}${historyCtx}`
   }, [currentUrl, currentTitle, bookmarks, browseHistory, appInfo, siteMemory])
 
   // ── Send message — agent loop: the model can request tool actions via a
@@ -428,7 +439,9 @@ Be concise, warm, and genuinely helpful.${pageCtx}${memoryCtx}${bookmarkCtx}${hi
         // The coach rules are long, so they ride along only for market
         // questions — a local model pays for every token of prompt.
         const tradingContext = isTradingQuestion(msg) ? TRADING_COACH_PROMPT : ''
-        let systemPrompt = buildSystemPrompt(needsTools) + clockContext + tradingContext + earlierDigest + recallContext + pageContext
+        // Least volatile first, most volatile last — the clock changes every
+        // minute, so anything placed after it would be re-evaluated with it.
+        let systemPrompt = buildSystemPrompt(needsTools) + tradingContext + earlierDigest + recallContext + pageContext + clockContext
 
         if (AI_NEWS_INTENT.test(msg) && turn === 1) {
           setFetchingNews(true)
