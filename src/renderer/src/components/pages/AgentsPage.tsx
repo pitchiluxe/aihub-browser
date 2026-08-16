@@ -7,6 +7,8 @@ import {
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, describeAction, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
+import { withFallbackNotice } from '../../services/routeNotice'
+import { streamChat } from '../../services/streamingChat'
 
 interface Agent {
   id: string
@@ -134,6 +136,10 @@ export default function AgentsPage() {
   const [chatInput,    setChatInput]    = useState('')
   const [chatHistory,  setChatHistory]  = useState<ChatMessage[]>([])
   const [loading,      setLoading]      = useState(false)
+  // The reply as it is being written. Component state, never chatHistory —
+  // conversations are archived to disk on change and a partial sentence must
+  // not be saved as the agent's answer.
+  const [streamText,   setStreamText]   = useState('')
   const [showCustom,   setShowCustom]   = useState(false)
   const [customAgents, setCustomAgents] = useState<Agent[]>([])
   const [conversations, setConversations] = useState<ArchivedConvo[]>([])
@@ -178,11 +184,15 @@ export default function AgentsPage() {
     createdAtRef.current = Date.now()
     setLoading(true)
     try {
-      const result = await window.electronAPI.ai.chat([
+      const result = await streamChat([
         { role: 'system', content: agentSystemPrompt(agent) },
         { role: 'user', content: `Start the ${agent.name} agent. Introduce yourself briefly and ask me the first question you need to get started.` },
-      ])
-      const msg = cleanNarration(result.content || '') || 'Agent ready. How can I help?'
+      ], undefined, setStreamText)
+      setStreamText('')
+      const msg = withFallbackNotice(
+        cleanNarration(result.content || '') || 'Agent ready. How can I help?',
+        result,
+      )
       const history: ChatMessage[] = [{ role: 'assistant', content: msg }]
       setChatHistory(history)
       persistConvo(agent, history)
@@ -190,6 +200,7 @@ export default function AgentsPage() {
       setChatHistory([{ role: 'assistant', content: 'Failed to start agent. Check your AI configuration in Settings.' }])
     } finally {
       setLoading(false)
+      setStreamText('')
     }
   }
 
@@ -232,17 +243,18 @@ export default function AgentsPage() {
 
     try {
       for (let turn = 1; turn <= MAX_TURNS; turn++) {
-        const result = await window.electronAPI.ai.chat([
+        const result = await streamChat([
           { role: 'system', content: agentSystemPrompt(agent) },
           ...loopHistory,
-        ])
+        ], undefined, setStreamText)
+        setStreamText('')
         const raw = result.content || 'No response.'
         const { narration, actions } = parseActionsBlock(raw)
 
         if (!actions || actions.length === 0) {
           // Never fall back to `raw` — that is exactly how an action block or a
           // <think> tag reaches the user's screen.
-          pushVisible({ role: 'assistant', content: narration || 'Done.' })
+          pushVisible({ role: 'assistant', content: withFallbackNotice(narration || 'Done.', result) })
           break
         }
         if (actionsUsed + actions.length > MAX_ACTIONS) {
@@ -278,6 +290,7 @@ export default function AgentsPage() {
       pushVisible({ role: 'assistant', content: 'Error communicating with AI.' })
     } finally {
       setLoading(false)
+      setStreamText('')
       persistConvo(agent, visible)
     }
   }
@@ -475,15 +488,28 @@ export default function AgentsPage() {
                       style={{ background: `${selected.color}18`, border: `1px solid ${selected.color}25`, color: selected.color }}>
                       <Bot size={12} />
                     </div>
-                    <div className="px-3 py-2 rounded-xl flex gap-1 items-center"
-                      style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)' }}>
-                      {[0, 1, 2].map(n => (
-                        <span key={n} style={{
-                          width: 5, height: 5, borderRadius: '50%', background: selected.color, display: 'inline-block',
-                          animation: `aiDotBounce 1.3s ease-in-out ${n * 0.18}s infinite`,
-                        }} />
-                      ))}
-                    </div>
+                    {streamText ? (
+                      // Plain text while streaming: a half-received reply has
+                      // unbalanced markdown, and re-parsing it every token
+                      // costs more than the streaming buys.
+                      <div className="px-3 py-2 rounded-xl text-[13px] leading-relaxed max-w-[85%]"
+                        style={{
+                          background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
+                          color: 'rgb(var(--ds-text-2))', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        }}>
+                        {streamText}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-2 rounded-xl flex gap-1 items-center"
+                        style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)' }}>
+                        {[0, 1, 2].map(n => (
+                          <span key={n} style={{
+                            width: 5, height: 5, borderRadius: '50%', background: selected.color, display: 'inline-block',
+                            animation: `aiDotBounce 1.3s ease-in-out ${n * 0.18}s infinite`,
+                          }} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

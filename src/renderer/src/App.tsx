@@ -524,6 +524,23 @@ export default function App() {
     }
   }, [activeTabId, activeTab?.isHome, activeTab?.pageType, setNavState])
 
+  // ── Coming back to a tab that broke while you were away ───────────────────
+  // Two different things leave a background tab dead: a load that failed (the
+  // network went away mid-flight) and a renderer that crashed too often for
+  // main's own retry. Both leave an error page that never resolves itself, so
+  // switching to the tab is the moment to try again.
+  //
+  // Keyed on activeTabId ALONE, deliberately. Reading loadFailed as a
+  // dependency would re-run the effect when the retry itself fails and spin
+  // the tab in a reload loop; this way each activation gets exactly one retry.
+  useEffect(() => {
+    if (!activeTabId) return
+    const tab = useBrowserStore.getState().tabs.find(t => t.id === activeTabId)
+    if (!tab?.loadFailed || !needsTabView(tab)) return
+    useBrowserStore.getState().updateTab(activeTabId, { loadFailed: false, isLoading: true })
+    window.electronAPI.tabView.reload(activeTabId)
+  }, [activeTabId])
+
   // ── Tab strip layout ──────────────────────────────────────────────────
   // Horizontal by default (what a browser looks like); vertical once a user
   // has enough tabs open that titles matter more than screen width.
@@ -696,6 +713,12 @@ export default function App() {
           const existing = loadTimers.current.get(tabId)
           if (existing) clearTimeout(existing)
           if (!loadStartedAt.current.has(tabId)) loadStartedAt.current.set(tabId, Date.now())
+          // Cleared here rather than on did-stop-loading: Chromium fires
+          // did-fail-load BEFORE did-stop-loading, so clearing at the end of a
+          // load would immediately erase the failure we just recorded.
+          if (store.tabs.find(t => t.id === tabId)?.loadFailed) {
+            store.updateTab(tabId, { loadFailed: false })
+          }
           // Short debounce so a genuine load shows the spinner promptly (the
           // old 200ms was long enough that quick reloads finished invisibly).
           loadTimers.current.set(tabId, setTimeout(() => {
@@ -706,6 +729,10 @@ export default function App() {
 
         case 'did-fail-load': {
           finishLoading(tabId)
+          // Remember it. A tab that lost the network in the background (wifi
+          // drop, VPN toggle, laptop resume) sits on Chromium's error page
+          // until someone reloads it by hand — so returning to the tab retries.
+          store.updateTab(tabId, { loadFailed: true })
           break
         }
 
@@ -715,6 +742,9 @@ export default function App() {
         // and a tab that recovers shouldn't be left looking stuck.
         case 'render-process-gone': {
           finishLoading(tabId)
+          // Only when main has given up retrying: otherwise its own reload is
+          // already on the way and would just race this one.
+          if (payload.willRetry === false) store.updateTab(tabId, { loadFailed: true })
           break
         }
 

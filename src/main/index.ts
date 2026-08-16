@@ -11,6 +11,11 @@ import { recordVisit, generateRecommendations, saveRecommendations, getStoredRec
 import { registerGoogleIpc } from './google'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels } from './modelRouting'
+import {
+  normalizeModels, filterModels, modelExists as catalogHasModel,
+  OPENROUTER_FREE_AUTO, type CatalogModel, type ModelFilter,
+} from './openRouterCatalog'
+import { routeGenerate, type RoutingSettings, type OpenRouterFailure } from './aiRouting'
 import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
 import { createSessionManager, type SessionTab } from './sessions'
 import axios from 'axios'
@@ -183,6 +188,13 @@ function defaultSettings() {
     openrouterBase:  '',
     openrouterModel: '',
     ollamaUrl:       '',
+    // Provider routing. Local first: Ollama is private, free and already on
+    // the machine, so it answers unless it genuinely can't. OpenRouter is the
+    // safety net, defaulted to its free meta-router so a user with no credits
+    // still gets an answer instead of an HTTP 402.
+    primaryProvider:  'ollama',
+    fallbackEnabled:  true,
+    fallbackProvider: 'openrouter',
     // Ad/tracker blocking — on by default; see src/main/blocking.
     adblock: { enabled: true, allowlist: [] as string[], custom: [] as string[] },
     // Reopen the tabs that were open when the app last closed.
@@ -210,12 +222,11 @@ function validHttpUrl(url: string): boolean {
 // Strip non-ASCII — HTTP headers only allow bytes 0-255
 function toAscii(s: string) { return s.replace(/[^\x00-\x7F]/g, '') }
 
-// Confirmed-working free models on OpenRouter (verified live 2026-07-03).
-// OpenRouter retired most old :free variants ("unavailable for free" 404s),
-// so this list must be models that exist on the CURRENT free tier.
-// The old default (qwen/qwen3-coder:free) was retired from the free tier, so
-// every request began with a guaranteed 404 before falling through.
-const OR_DEFAULT_MODEL = 'google/gemma-4-31b-it:free'
+// OpenRouter's free meta-router. Any hardcoded slug goes stale — the free tier
+// is re-cut without notice, and a retired default means every request opens
+// with a guaranteed 404 before falling through. `openrouter/free` picks from
+// whatever is actually live at request time, so it never rots.
+const OR_DEFAULT_MODEL = OPENROUTER_FREE_AUTO
 
 function getAIConfig() {
   const s = getData().settings
@@ -229,6 +240,21 @@ function getAIConfig() {
   const olBase  = ((rawOl && validHttpUrl(rawOl)) ? rawOl : 'http://127.0.0.1:11434')
     .replace('://localhost', '://127.0.0.1')
   return { orKey, orBase, orMdl, olBase }
+}
+
+/** The provider-routing half of the AI settings, defaulted for old profiles
+ *  saved before these keys existed. */
+function getRoutingSettings(preferredOllamaModel?: string): RoutingSettings {
+  const s = getData().settings
+  const { orMdl } = getAIConfig()
+  return {
+    primaryProvider:  s.primaryProvider === 'openrouter' ? 'openrouter' : 'ollama',
+    ollamaModel:      preferredOllamaModel || s.aiModel || '',
+    fallbackEnabled:  s.fallbackEnabled !== false,
+    fallbackProvider: s.fallbackProvider === 'none' ? 'none'
+      : s.fallbackProvider === 'ollama' ? 'ollama' : 'openrouter',
+    openRouterModel:  orMdl,
+  }
 }
 
 // ── DNS fallback lookup ────────────────────────────────────────────────────
@@ -328,9 +354,17 @@ function httpPost(url: string, data: object, headers: Record<string, string> = {
 // first token can legitimately be minutes away. Once tokens start, a 2-minute
 // gap really does mean it stalled. One 120s socket timeout for both was killing
 // healthy generations before they ever produced a byte.
+//
+// The first-token budget is 120s, not the 420s it used to be. Seven minutes
+// was chosen to let a cold 7B model finish loading, but it turned "this model
+// is too heavy for this machine" into seven minutes of a spinner followed by
+// an OpenRouter error the user could do nothing about. A model that cannot
+// start answering in two minutes here is not going to be usable for chat, so
+// hand the turn to the fallback while the user is still watching.
 function ollamaChatStream(
   base: string, model: string, messages: any[],
-  idleTimeoutMs = 120000, firstTokenTimeoutMs = 420000
+  idleTimeoutMs = 120000, firstTokenTimeoutMs = 120000,
+  onDelta?: (text: string, reset?: boolean) => void,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     let streamStarted = false
@@ -378,7 +412,14 @@ function ollamaChatStream(
           if (!line) continue
           try {
             const j = JSON.parse(line)
-            if (j.message?.content) content += j.message.content
+            if (j.message?.content) {
+              content += j.message.content
+              // Hand the token straight on. Tokens were already arriving one
+              // at a time here; they were just accumulated in silence until
+              // the whole generation finished, so a 30-second answer looked
+              // like 30 seconds of nothing.
+              if (onDelta) { try { onDelta(j.message.content) } catch {} }
+            }
             if (j.error) return reject(new Error(String(j.error)))
           } catch { /* partial line — wait for more */ }
         }
@@ -719,13 +760,18 @@ function attachAppShortcuts(wc: Electron.WebContents) {
 // as pressing Enter.
 ipcMain.handle('urlbar:showContextMenu', (e, hasText: boolean) => {
   const clip = clipboard.readText().trim()
+  // Scoped to the window whose address bar was right-clicked. This used to
+  // broadcast: pasting a link in a detached window navigated the tab it was
+  // detached FROM as well, because every window received the same event and
+  // renderer tab ids restart at tab-1 in each one.
+  const ctx = ctxFromEvent(e)
   const menu = Menu.buildFromTemplate([
     { label: 'Cut',  role: 'cut',  enabled: hasText },
     { label: 'Copy', role: 'copy', enabled: hasText },
     { label: 'Paste', role: 'paste', enabled: !!clip },
     {
       label: 'Paste and Go', enabled: !!clip,
-      click: () => safelySend('urlbar-paste-and-go', clip),
+      click: () => sendTo(ctx, 'urlbar-paste-and-go', clip),
     },
     { type: 'separator' },
     { label: 'Select All', role: 'selectAll' },
@@ -876,10 +922,10 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       menu.append(new MenuItem({ label: 'Create QR Code for this Page', click: () => sendAction('qr') }))
       menu.append(new MenuItem({ label: 'Copy Page URL', click: () => clipboard.writeText(pageUrl) }))
       menu.append(new MenuItem({ label: 'Save Page to Obsidian', click: () => { void clipToVault(wc) } }))
-      menu.append(new MenuItem({ label: 'Translate this Page', click: () => safelySend('open-in-new-tab', `https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(pageUrl)}`) }))
+      menu.append(new MenuItem({ label: 'Translate this Page', click: () => sendTo(menuCtx, 'open-in-new-tab', `https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(pageUrl)}`) }))
       menu.append(new MenuItem({ label: 'Print…', accelerator: 'Ctrl+P', click: () => { try { wc.print() } catch {} } }))
       menu.append(new MenuItem({ label: 'Save Page As…', accelerator: 'Ctrl+S', click: () => savePageAs(wc) }))
-      menu.append(new MenuItem({ label: 'View Page Source', click: () => safelySend('open-in-new-tab', `view-source:${pageUrl}`) }))
+      menu.append(new MenuItem({ label: 'View Page Source', click: () => sendTo(menuCtx, 'open-in-new-tab', `view-source:${pageUrl}`) }))
     }
 
     // ── Inspect (always last) ──
@@ -1549,14 +1595,18 @@ function createWindow(): void {
 // clicked URL on the command line, we just never read it, so the window pops
 // up on whatever tab was already open.
 app.on('second-instance', (_event, commandLine) => {
-  const wins = BrowserWindow.getAllWindows()
-  if (wins.length > 0) {
-    const win = wins[0]
-    if (win.isMinimized()) win.restore()
-    win.focus()
+  // The link opens in ONE window — the one we just brought forward. Broadcasting
+  // it opened the same page in every open window at once.
+  const target = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  if (target) {
+    if (target.isMinimized()) target.restore()
+    target.focus()
   }
   const url = extractLaunchUrl(commandLine)
-  if (url) safelySend('open-in-new-tab', url)
+  if (!url) return
+  const ctx = target ? appWins.get(target.webContents.id) : undefined
+  if (ctx) sendTo(ctx, 'open-in-new-tab', url)
+  else safelySend('open-in-new-tab', url) // no window yet — first one to load takes it
 })
 
 app.whenReady().then(() => {
@@ -2888,27 +2938,84 @@ ipcMain.handle('extstore:save', (_e, patch: { customExts?: any[]; states?: any }
 ipcMain.handle('settings:get', () => getData().settings)
 ipcMain.handle('settings:set', (_e, u: any) => { const d = getData(); d.settings = { ...d.settings, ...u }; saveData() })
 
-// Expose the resolved AI config so Settings page can show current values
+// Expose the resolved AI config so Settings page can show current values.
+//
+// The API key is NEVER returned in full. The main process is this app's
+// backend — it is the only place that should hold the secret — and handing the
+// raw key to the renderer put it one XSS or one devtools session away from a
+// page's reach for no benefit: Settings only ever needs to show that a key is
+// present, and a new one is always typed in fresh.
 ipcMain.handle('settings:getAIConfig', () => {
   const cfg = getAIConfig()
   const s   = getData().settings
   return {
-    openrouterKey:   s.openrouterKey   || '',
+    hasKey:          !!cfg.orKey,
     openrouterBase:  s.openrouterBase  || '',
     openrouterModel: s.openrouterModel || '',
     ollamaUrl:       s.ollamaUrl       || '',
+    // Provider routing
+    primaryProvider:  s.primaryProvider  === 'openrouter' ? 'openrouter' : 'ollama',
+    fallbackEnabled:  s.fallbackEnabled !== false,
+    fallbackProvider: s.fallbackProvider === 'none' ? 'none' : s.fallbackProvider === 'ollama' ? 'ollama' : 'openrouter',
     // Resolved values (from env or settings) — shown as placeholders
-    resolvedKey:     cfg.orKey  ? cfg.orKey.slice(0, 12) + '…' : '',
+    // Enough to tell WHICH key is loaded, not enough to be one. A leading
+    // slice showed the first 12 characters, which is more of the secret than
+    // any UI needs — the last four identify it just as well.
+    resolvedKey:     cfg.orKey  ? '••••••••' + cfg.orKey.slice(-4) : '',
     resolvedModel:   cfg.orMdl,
     resolvedOllama:  cfg.olBase,
   }
 })
-ipcMain.handle('settings:setAIConfig', (_e, cfg: { openrouterKey?: string; openrouterBase?: string; openrouterModel?: string; ollamaUrl?: string }) => {
+ipcMain.handle('settings:setAIConfig', (_e, cfg: {
+  openrouterKey?: string; openrouterBase?: string; openrouterModel?: string; ollamaUrl?: string
+  primaryProvider?: string; fallbackEnabled?: boolean; fallbackProvider?: string
+}) => {
   const d = getData()
-  d.settings = { ...d.settings, ...cfg }
+  // An empty key means "leave it alone", not "erase it" — Settings never
+  // receives the current key, so it cannot send it back unchanged.
+  const patch: any = { ...cfg }
+  if (!cfg.openrouterKey) delete patch.openrouterKey
+  d.settings = { ...d.settings, ...patch }
   saveData()
   _data = null // flush cache so getAIConfig() picks up new values immediately
   getData()
+})
+
+// ── IPC: OpenRouter model catalog ──────────────────────────────────────────
+// Dynamic, never hardcoded (§44): the free tier is re-cut without notice, so
+// the app asks OpenRouter what exists rather than shipping a list that rots.
+// `refresh` is the Settings button; everything else reads the 15-minute cache.
+ipcMain.handle('ai:models', async (_e, opts?: { filter?: ModelFilter; refresh?: boolean }) => {
+  const { orBase, orMdl } = getAIConfig()
+  const all = await getOpenRouterCatalog(orBase, !!opts?.refresh)
+  const models = filterModels(all, opts?.filter || 'all')
+  return {
+    models,
+    total: all.length,
+    freeCount: all.filter(m => m.free).length,
+    // A failed fetch must not destroy the user's configuration (§33) — the
+    // UI shows a "couldn't refresh" note and keeps the saved selection.
+    stale: all.length === 0,
+    selected: orMdl,
+    // §32: a selection that has since been retired is flagged, not silently
+    // swapped — the user decides what replaces it.
+    selectedDeprecated: all.some(m => m.id === orMdl && m.deprecated),
+    selectedMissing: !catalogHasModel(all, orMdl),
+    freeAutoId: OPENROUTER_FREE_AUTO,
+  }
+})
+
+// What the Settings page shows as the live routing summary (§23).
+ipcMain.handle('ai:routing', async () => {
+  const { orKey } = getAIConfig()
+  const s = getRoutingSettings()
+  const ol = await checkOllamaRunning()
+  return {
+    ...s,
+    ollamaAvailable: ol.running,
+    ollamaModels: ol.models,
+    openRouterConfigured: !!orKey,
+  }
 })
 
 // ── IPC: AI Brain ──────────────────────────────────────────────────────────
@@ -3602,8 +3709,11 @@ ipcMain.handle('ai:categorizeBookmark', async (_e, url: string, title: string) =
     }
   } catch {}
 
-  // Try OpenRouter
-  if (orKey) {
+  // Try OpenRouter — but only if the user actually wants a cloud fallback.
+  // This is a one-word classification with a URL heuristic behind it, so
+  // "fallback off" has to mean off here too, not just in chat.
+  const routing = getRoutingSettings()
+  if (orKey && routing.fallbackEnabled && routing.fallbackProvider === 'openrouter') {
     try {
       const { body } = await httpPost(`${orBase}/chat/completions`,
         { model: orMdl, messages: [{ role: 'user', content: prompt }], max_tokens: 20, temperature: 0, include_reasoning: false },
@@ -3649,27 +3759,42 @@ const OR_FREE_FALLBACKS = [
 // a full round-trip per dead model before falling through. Pull the live
 // catalog (GET /models, no auth needed) and use it to drop retired slugs
 // before we ever request them, and to pick up new free models automatically.
-// Cached for 6h — the catalog doesn't churn hourly, and this keeps it off the
-// hot path of every chat request. A failed/slow fetch degrades to the last
-// good cache, or to the raw hardcoded list if we've never fetched successfully
-// — offline shouldn't mean "no AI", it means "can't verify, so just try".
-let orModelsCache: { ids: string[]; ts: number } | null = null
-const OR_MODELS_TTL = 6 * 60 * 60_000
+// Cached for 15 minutes — long enough to stay off the hot path of every chat
+// request, short enough that a model added today is selectable today; Settings
+// has an explicit Refresh for when that isn't soon enough. A failed/slow fetch
+// degrades to the last good cache, then to the curated list — offline
+// shouldn't mean "no AI", it means "can't verify, so just try" (§33).
+let orModelsCache: { models: CatalogModel[]; ts: number } | null = null
+const OR_MODELS_TTL = 15 * 60_000
 
-async function getLiveFreeModelIds(orBase: string): Promise<string[]> {
-  if (orModelsCache && Date.now() - orModelsCache.ts < OR_MODELS_TTL) return orModelsCache.ids
+/** Whatever is cached right now, without ever touching the network. */
+function cachedOpenRouterCatalog(): CatalogModel[] {
+  return orModelsCache?.models ?? []
+}
+
+/** Refresh the cache in the background if it's stale. Never awaited by a chat. */
+function warmOpenRouterCatalog(orBase: string): void {
+  if (orModelsCache && Date.now() - orModelsCache.ts < OR_MODELS_TTL) return
+  void getOpenRouterCatalog(orBase).catch(() => {})
+}
+
+async function getOpenRouterCatalog(orBase: string, force = false): Promise<CatalogModel[]> {
+  if (!force && orModelsCache && Date.now() - orModelsCache.ts < OR_MODELS_TTL) return orModelsCache.models
   try {
     const { status, body } = await httpGet(`${orBase}/models`, 6000)
-    if (status !== 200) return orModelsCache?.ids ?? []
-    const data = JSON.parse(body)?.data || []
-    const ids: string[] = data
-      .filter((m: any) => m.id?.endsWith(':free') || (m.pricing?.prompt === '0' && m.pricing?.completion === '0'))
-      .map((m: any) => m.id)
-    if (ids.length) orModelsCache = { ids, ts: Date.now() }
-    return ids.length ? ids : (orModelsCache?.ids ?? [])
+    if (status !== 200) return orModelsCache?.models ?? []
+    const models = normalizeModels(JSON.parse(body))
+    if (models.length) orModelsCache = { models, ts: Date.now() }
+    return models.length ? models : (orModelsCache?.models ?? [])
   } catch {
-    return orModelsCache?.ids ?? []
+    return orModelsCache?.models ?? []
   }
+}
+
+async function getLiveFreeModelIds(orBase: string): Promise<string[]> {
+  return (await getOpenRouterCatalog(orBase))
+    .filter(m => m.free && !m.deprecated)
+    .map(m => m.id)
 }
 
 // Build the ordered candidate chain for a chat request: the user's configured
@@ -3703,7 +3828,24 @@ function stripThinkTags(s: string): string {
 // Why the last candidate chain gave up, so a total failure can be explained
 // precisely ("account has no credits") instead of "all models unavailable".
 // Reset by ai:chat before each run.
-const orSkip = { credits: false, rateLimited: false }
+// Counted, not flagged. A chain of ten free models can come back as a mix —
+// measured on a real account: eight 429s, one 404, one 402 — and with plain
+// booleans a single 402 anywhere made the whole run report "your account has
+// no credits" when what actually blocked it was the daily free-model quota.
+// Those need opposite actions from the user, so the majority cause wins.
+// The details are kept PER KIND. A single shared slot took whichever refusal
+// happened to come back first, so a run headlined "rate-limited" could quote a
+// 402's "this account never purchased credits" — a quote that contradicts its
+// own headline is worse than no quote at all.
+const orSkip = { credits: 0, rateLimited: 0, creditsDetail: '', rateDetail: '' }
+
+/** Pull `error.message` out of an OpenRouter error body, if it has one. */
+function orErrorDetail(body: string): string {
+  try {
+    const m = JSON.parse(body)?.error?.message
+    return typeof m === 'string' ? m.slice(0, 240) : ''
+  } catch { return '' }
+}
 
 async function openRouterChat(
   orBase: string, orKey: string, model: string,
@@ -3733,8 +3875,8 @@ async function openRouterChat(
     // 402 = this model needs credits the account doesn't have — all three are
     // per-model problems, so try the next candidate (a free model may work)
     // instead of failing the whole request.
-    if (status === 402) { orSkip.credits = true; return null }
-    if (status === 429) { orSkip.rateLimited = true; return null }
+    if (status === 402) { orSkip.credits++;     orSkip.creditsDetail ||= orErrorDetail(body); return null }
+    if (status === 429) { orSkip.rateLimited++; orSkip.rateDetail    ||= orErrorDetail(body); return null }
     if (status === 404) return null
     // 401 = bad key, 5xx = server error — stop chain immediately
     throw new Error(`HTTP ${status}: ${body.slice(0, 200)}`)
@@ -3745,206 +3887,232 @@ async function openRouterChat(
 }
 
 // ── IPC: AI chat ──────────────────────────────────────────────────────────
-// Default order: Ollama first (private & free), OpenRouter as fallback.
-// opts.preferCloud flips that — structured-output features (extension
-// generation) need models that reliably emit strict JSON, which small local
-// models fumble; cloud goes first and Ollama becomes the fallback.
+// The single entry point every agent and AI feature goes through (§37) —
+// nothing else in the app talks to a provider directly. WHICH provider serves
+// a turn is decided in ./aiRouting against the user's settings; everything
+// below is the adapter that gives that decision real sockets.
+//
 // Models that have already failed to produce a first token in time on this
-// machine. Measured, not guessed: a 7B model that needs >7 minutes to start
-// answering here must never be auto-selected again this session.
+// machine. Measured, not guessed: a model that cannot start answering here
+// must never be auto-selected again this session.
 const slowModels = new Set<string>()
 
-ipcMain.handle('ai:chat', async (_e, messages: any[], preferredModel?: string, opts?: { preferCloud?: boolean; needsTools?: boolean }) => {
-  const { olBase, orKey, orBase, orMdl } = getAIConfig()
+async function runAiRequest(
+  messages: any[],
+  preferredModel?: string,
+  opts?: { preferCloud?: boolean; needsTools?: boolean; maxTokens?: number; onDelta?: (text: string, reset?: boolean) => void },
+) {
+  const { olBase, orKey, orBase } = getAIConfig()
+  const settings = getRoutingSettings(preferredModel)
 
-  let ollamaDiag = ''
-  const tryOllama = async (): Promise<{ content: string; model: string; provider: string } | null> => {
-    try {
-      const ol = await checkOllamaRunning()
-      if (ol.running) {
-        const configured = preferredModel || getData().settings.aiModel || ''
+  // preferCloud is a capability requirement from the caller, not a user
+  // preference (§19): extension/theme generation needs strict JSON, which
+  // small local models fumble. It flips the primary for this one request and
+  // leaves the local model as the fallback, so a user with no key still gets
+  // an answer rather than an error.
+  if (opts?.preferCloud && orKey) {
+    settings.primaryProvider  = 'openrouter'
+    settings.fallbackProvider = 'ollama'
+  }
+
+  // Cache-only. Awaiting the catalog here put a network round-trip — up to 6s
+  // on a cold cache — in front of every single chat message, including the
+  // ones Ollama was about to answer locally in under a second. The refresh
+  // runs alongside the request instead; a cold cache just means the retired-
+  // model check has nothing to say yet, which costs at most one wasted
+  // OpenRouter attempt and only on the fallback path.
+  if (orKey) warmOpenRouterCatalog(orBase)
+  const catalog = orKey ? cachedOpenRouterCatalog() : []
+
+  let probe: { running: boolean; models: string[]; info?: OllamaModelInfo[] } = { running: false, models: [] }
+
+  const result = await routeGenerate(settings, {
+    log: line => console.log(`[aihub] ${line}`),
+
+    ollama: {
+      async health() {
+        try {
+          probe = await checkOllamaRunning()
+          return { available: probe.running, models: probe.models }
+        } catch (e: any) {
+          return { available: false, models: [], error: e?.message || String(e) }
+        }
+      },
+      async generate(model: string) {
+        const configured = settings.ollamaModel
         // A turn that has to drive tools gets routed to a model that actually
         // can. Plain chat keeps whatever the user chose — no reason to make
         // "what's 2+2" wait on a 14B model.
-        let preferred = configured
-        if (opts?.needsTools && ol.info && ol.info.length) {
+        let chosen = model
+        if (opts?.needsTools && probe.info?.length) {
           // Models this machine has already proven it cannot serve in time are
           // out of the running — on a CPU-only box a 7B upgrade turns a slow
           // answer into no answer at all.
-          const usable = ol.info.filter(m => !slowModels.has(m.name))
+          const usable = probe.info.filter(m => !slowModels.has(m.name))
           const agent = pickAgentModel(usable, configured)
-          if (agent && agent !== configured) {
-            console.log(`[aihub] agent turn: routing ${configured || '(unset)'} → ${agent}`)
-            preferred = agent
+          if (agent && agent !== chosen) {
+            console.log(`[aihub] agent turn: routing ${chosen || '(unset)'} → ${agent}`)
+            chosen = agent
           }
         }
-        // An empty list means "couldn't read the models", not "none installed"
-        // — go with what the user configured and let Ollama be the judge.
-        const model = (!ol.models.length || (preferred && ol.models.includes(preferred)))
-          ? preferred
-          : ol.models[0]
-        if (!model) {
-          ollamaDiag = 'Ollama is running but has no chat model installed — run: ollama pull llama3.2'
-          console.warn('[aihub] ai:chat Ollama fallback:', ollamaDiag)
-          return null
-        }
-        // Streamed so slow hardware / cold model loads can't trip the idle
-        // timeout mid-generation; num_ctx 8192 so long replies aren't
-        // truncated (Ollama's 4096 default cut extension JSON mid-output).
-        //
         // The routed model gets one chance: if this machine can't produce a
         // first token for it in time, remember that, drop back to the model
         // the user actually configured, and answer with that instead of
         // failing the turn.
-        const attempts = model === configured || !configured ? [model] : [model, configured]
+        const attempts = chosen === model ? [chosen] : [chosen, model]
+        let lastError = ''
         for (const attempt of attempts) {
-          // An upgrade the user did not ask for gets a short leash: if this
-          // machine cannot start answering with it quickly, fall back to the
-          // configured model while there is still patience left, rather than
-          // burning the full budget twice.
-          const isRoutedUpgrade = attempts.length > 1 && attempt !== configured
+          // An upgrade the user did not ask for gets a shorter leash still:
+          // fall back to the configured model while there is patience left,
+          // rather than burning the full budget twice.
+          const isRoutedUpgrade = attempts.length > 1 && attempt !== model
           try {
-            const raw = await ollamaChatStream(olBase, attempt, messages, 120000, isRoutedUpgrade ? 90000 : 420000)
+            // Wipe anything the previous attempt streamed before this one
+            // starts, or a timed-out model's half-answer would sit spliced in
+            // front of the real one.
+            opts?.onDelta?.('', true)
+            const raw = await ollamaChatStream(
+              olBase, attempt, messages, 120000, isRoutedUpgrade ? 60000 : 120000, opts?.onDelta,
+            )
             const content = stripThinkTags(raw)
-            if (content) return { content, model: attempt, provider: 'ollama' }
-            ollamaDiag = `Ollama returned an empty response (model: ${attempt})`
+            if (content) return { ok: true as const, value: content }
+            lastError = `Ollama returned an empty response (model: ${attempt})`
           } catch (e: any) {
             const msg = e?.message || String(e)
-            ollamaDiag = `Ollama request failed: ${msg} (model: ${attempt})`
-            if (/timeout/i.test(msg) && attempt !== configured) {
+            lastError = `${msg} (model: ${attempt})`
+            if (/timeout/i.test(msg) && attempt !== model) {
               slowModels.add(attempt)
-              console.warn(`[aihub] ${attempt} timed out on this machine — falling back to ${configured} and not routing to it again`)
+              console.warn(`[aihub] ${attempt} timed out on this machine — falling back to ${model} and not routing to it again`)
               continue
             }
           }
           break
         }
-      }
-    } catch (e: any) {
-      ollamaDiag = `Ollama check failed: ${e?.message || e}`
-    }
-    if (ollamaDiag) console.warn('[aihub] ai:chat Ollama fallback:', ollamaDiag)
-    return null
-  }
+        return { ok: false as const, error: lastError || 'Ollama produced no answer' }
+      },
+    },
 
-  let cloudError = ''
-  orSkip.credits = false
-  orSkip.rateLimited = false
-  const tryCloud = async (): Promise<{ content: string; model: string; provider: string } | null> => {
-    if (!orKey) return null
-    // Candidate list: configured model first, then live-verified free
-    // fallbacks. preferCloud is set by the structured-output callers
-    // (extension/theme generation), which are exactly the ones a hidden-
-    // reasoning model breaks — so those never get one until nothing else is left.
-    const candidates = await buildOrCandidates(orBase, orMdl, !!opts?.preferCloud)
-    for (const model of candidates) {
-      try {
-        // 8192 tokens: long structured replies (extension generation emits
-        // 5-10 objects with code) blow through the old 2048 default and get
-        // truncated mid-JSON — same failure the Ollama path fixed via num_ctx.
-        const content = await openRouterChat(orBase, orKey, model, messages, 8192)
-        if (content) return { content, model, provider: 'openrouter' }
-        // null = 404/429 on this model, try next
-      } catch (e: any) {
-        cloudError = e.message
-        break // non-retryable error — stop trying
-      }
-    }
-    return null
-  }
+    openRouter: {
+      isConfigured: () => !!orKey,
+      modelExists: (id: string) => catalogHasModel(catalog, id),
+      async generate(model: string) {
+        orSkip.credits = 0
+        orSkip.rateLimited = 0
+        orSkip.creditsDetail = ''
+        orSkip.rateDetail = ''
+        // The chosen model leads, then the live-verified free chain behind it.
+        // A single 429 on a shared free model shouldn't end the request when
+        // another free model would answer (§32).
+        const candidates = [model, ...(await buildOrCandidates(orBase, model, !!opts?.preferCloud))]
+        let hardError = ''
+        for (const candidate of [...new Set(candidates)]) {
+          try {
+            // 8192 tokens: long structured replies (extension generation emits
+            // 5-10 objects with code) blow through the old 2048 default and get
+            // truncated mid-JSON — same failure the Ollama path fixed via num_ctx.
+            const content = await openRouterChat(orBase, orKey, candidate, messages, opts?.maxTokens ?? 8192)
+            if (content) return { ok: true as const, content, model: candidate }
+            // null = 402/404/429 on this model — try the next candidate.
+          } catch (e: any) {
+            hardError = e?.message || String(e) // 401/5xx — stop the chain
+            break
+          }
+        }
+        // Whichever refusal blocked the most candidates is the one the user
+        // has to act on. Ties go to rate limiting: it is the transient cause,
+        // and telling someone to buy credits they may already have is worse
+        // than telling them to wait.
+        const failure: OpenRouterFailure =
+          hardError ? { kind: 'error', message: hardError }
+          : (orSkip.credits || orSkip.rateLimited)
+            ? (orSkip.rateLimited >= orSkip.credits
+                ? { kind: 'rate_limited', message: orSkip.rateDetail || undefined }
+                : { kind: 'credits',      message: orSkip.creditsDetail || undefined })
+            : { kind: 'unavailable' }
+        return { ok: false as const, failure }
+      },
+    },
+  })
 
-  const order = opts?.preferCloud ? [tryCloud, tryOllama] : [tryOllama, tryCloud]
-  for (const attempt of order) {
-    const result = await attempt()
-    if (result) return result
-  }
-
-  if (orKey) {
-    if (cloudError) {
-      const isNetIssue = /ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|ECONNRESET|timeout/i.test(cloudError)
-      const tips = isNetIssue
-        ? `Try:\n• Check your internet connection — the DNS lookup / connection to the AI server failed\n• If you're on a VPN or proxy, try disabling it\n• Wait 1–2 minutes and retry`
-        : `Try:\n• Wait 1–2 minutes and retry\n• Install Ollama (ollama.com) for private local AI\n• Check your OpenRouter API key in Settings → AI Configuration`
-      return {
-        content: `Cloud AI error: ${cloudError}${ollamaDiag ? `\n\n(Local Ollama also failed: ${ollamaDiag})` : ''}\n\n${tips}`,
-        model: 'error', provider: 'error',
-      }
-    }
-    // Every candidate was refused for a per-model reason. Name it — "out of
-    // credits" and "rate-limited" need completely different actions from the user.
-    const headline = orSkip.credits
-      ? 'Your OpenRouter account has no credits, so every model it tried was refused (HTTP 402).'
-      : orSkip.rateLimited
-        ? 'OpenRouter rate-limited every model it tried (HTTP 429).'
-        : 'All cloud models are currently unavailable.'
-    const steps = orSkip.credits
-      ? '• Add credits at openrouter.ai/settings/credits\n• Or use local AI: Ollama is free — Settings → AI Configuration → pick an installed model'
-      : '• Wait 1–2 minutes and retry\n• Install Ollama at ollama.com and run: ollama pull llama3.2\n• Check your OpenRouter API key in Settings → AI Configuration'
+  // The renderer sees the same shape it always did, plus honest routing
+  // metadata (§24) — a fallback answer is never passed off as the primary's.
+  if (result.ok) {
     return {
-      content: `${headline}${ollamaDiag ? `\n\n(Local Ollama also failed: ${ollamaDiag})` : ''}\n\n${steps}`,
-      model: 'none', provider: 'none',
+      content: result.content,
+      model: result.model,
+      provider: result.provider,
+      fallbackUsed: result.fallbackUsed,
+      ...(result.fallbackReason ? { fallbackReason: result.fallbackReason } : {}),
+      ...(result.notice ? { notice: result.notice } : {}),
     }
   }
-
   return {
-    content: ollamaDiag
-      ? `Ollama is set up but the request failed: ${ollamaDiag}\n\nTry:\n• Wait 1–2 minutes and retry\n• Restart Ollama\n• OR go to Settings → AI Configuration and paste an OpenRouter API key as a cloud fallback\n\nGet a free key at openrouter.ai`
-      : 'No AI configured.\n\n• Install Ollama at ollama.com, then run: ollama pull llama3.1\n• OR go to Settings → AI Configuration and paste your OpenRouter API key\n\nGet a free key at openrouter.ai',
-    model: 'none', provider: 'none',
+    content: result.content,
+    model: 'none',
+    provider: 'none',
+    fallbackUsed: result.fallbackUsed,
+    ...(result.fallbackReason ? { fallbackReason: result.fallbackReason } : {}),
+  }
+}
+
+// Tokens are batched before they cross the IPC boundary. A local model emits
+// them faster than the renderer can usefully re-render, and one message per
+// token turns a fluent stream into thousands of round-trips that make the UI
+// slower, not faster. ~60ms is below the threshold where text stops looking
+// live and well above per-token cost.
+const STREAM_FLUSH_MS = 60
+
+ipcMain.handle('ai:chat', async (
+  e, messages: any[], preferredModel?: string,
+  opts?: { preferCloud?: boolean; needsTools?: boolean; streamId?: string },
+) => {
+  const streamId = opts?.streamId
+  if (!streamId) return runAiRequest(messages, preferredModel, opts)
+
+  const sender = e.sender
+  let pending = ''
+  let timer: NodeJS.Timeout | null = null
+  const flush = () => {
+    timer = null
+    if (!pending) return
+    const delta = pending
+    pending = ''
+    try { if (!sender.isDestroyed()) sender.send('ai:chunk', { streamId, delta }) } catch {}
+  }
+  const onDelta = (text: string, reset?: boolean) => {
+    if (reset) {
+      pending = ''
+      if (timer) { clearTimeout(timer); timer = null }
+      try { if (!sender.isDestroyed()) sender.send('ai:chunk', { streamId, reset: true }) } catch {}
+      return
+    }
+    pending += text
+    if (!timer) timer = setTimeout(flush, STREAM_FLUSH_MS)
+  }
+
+  try {
+    return await runAiRequest(messages, preferredModel, { ...opts, onDelta })
+  } finally {
+    if (timer) clearTimeout(timer)
+    flush()
+    try { if (!sender.isDestroyed()) sender.send('ai:chunk', { streamId, done: true }) } catch {}
   }
 })
 
 // ── IPC: AI summarize ─────────────────────────────────────────────────────
 ipcMain.handle('ai:summarizePage', async (_e, pageText: string, url: string) => {
-  const { olBase, orKey, orBase, orMdl } = getAIConfig()
-
   // Build prompt — use real extracted page text if available, else URL-based summary
   const userContent = pageText && pageText.length > 100
     ? `Summarize the following web page content in 3-5 concise bullet points. Focus on key takeaways, what the page is about, and who it's for.\n\nURL: ${url}\n\nPAGE CONTENT:\n${pageText.slice(0, 6000)}`
     : `Summarize the website at ${url} in 3-5 concise bullet points. Focus on what it does and who it's for.`
 
-  const msgs = [{ role: 'user', content: userContent }]
-
-  let ollamaDiag = ''
-  try {
-    const ol = await checkOllamaRunning()
-    if (ol.running && ol.models.length > 0) {
-      const pref  = getData().settings.aiModel || ''
-      const model = (pref && ol.models.includes(pref)) ? pref : ol.models[0]
-      try {
-        const { status, body } = await httpPost(`${olBase}/api/chat`, { model, messages: msgs, stream: false }, {}, 45000)
-        if (status >= 200 && status < 400) {
-          const raw = JSON.parse(body)?.message?.content || ''
-          const summary = stripThinkTags(raw)
-          if (summary) return { summary }
-          ollamaDiag = `Ollama returned an empty response (model: ${model})`
-        } else {
-          ollamaDiag = `Ollama request failed (HTTP ${status}, model: ${model})`
-        }
-      } catch (e: any) {
-        ollamaDiag = `Ollama request failed: ${e?.message || e} (model: ${model})`
-      }
-    }
-  } catch (e: any) {
-    ollamaDiag = `Ollama check failed: ${e?.message || e}`
-  }
-  if (ollamaDiag) console.warn('[aihub] ai:summarizePage Ollama fallback:', ollamaDiag)
-
-  if (orKey) {
-    const candidates = await buildOrCandidates(orBase, orMdl)
-    for (const model of candidates) {
-      try {
-        const summary = await openRouterChat(orBase, orKey, model, msgs, 800)
-        if (summary) return { summary }
-      } catch { break }
-    }
-  }
-
-  return {
-    summary: ollamaDiag
-      ? `Unable to summarize — local Ollama failed: ${ollamaDiag}${orKey ? ' (cloud fallback also failed)' : ' and no cloud API key configured'}.`
-      : 'Unable to summarize — Ollama offline and no cloud API key configured.',
-  }
+  // Same router as every other AI feature (§37) — summarizing used to carry
+  // its own copy of the Ollama-then-cloud logic, which meant turning fallback
+  // off in Settings silently didn't apply here.
+  const r = await runAiRequest([{ role: 'user', content: userContent }], undefined, { maxTokens: 800 })
+  return r.provider === 'none'
+    ? { summary: `Unable to summarize.\n\n${r.content}` }
+    : { summary: r.content, provider: r.provider, model: r.model, fallbackUsed: r.fallbackUsed }
 })
 
 // ── IPC: Save summary as Markdown ─────────────────────────────────────────

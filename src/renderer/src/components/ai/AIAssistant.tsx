@@ -9,6 +9,8 @@ import { parseActionsBlock, executeAction, cleanNarration, AGENT_TOOLS_DOC } fro
 import { planContext, summarizeCondensed, looksLikeRecall, buildRecallBlock } from '../../services/aiContext'
 import { nowBlock, sessionBlock, isTradingQuestion, TRADING_COACH_PROMPT } from '../../services/tradingCoach'
 import { resolveNavTarget } from '../../services/navIntent'
+import { withFallbackNotice } from '../../services/routeNotice'
+import { streamChat } from '../../services/streamingChat'
 import { PAGE_REFERENCE, REFUSAL, wantedTools, selectBookmarksForPrompt, CHAT_ONLY_NOTE } from '../../services/assistantIntent'
 import Markdown from './Markdown'
 
@@ -54,6 +56,12 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
     ollamaStatus, setOllamaStatus,
     bookmarks, addTab,
   } = useBrowserStore()
+
+  // The reply as it is being written. Deliberately local component state and
+  // never part of aiMessages: the message list is persisted to disk on every
+  // change, and a half-finished sentence has no business being saved as an
+  // answer. It is replaced by the real message the moment the turn resolves.
+  const [streamText, setStreamText] = useState('')
 
   // Restore the previous conversation once, then keep the disk copy in step.
   // Answers the assistant gave yesterday are worth as much as the ones it gave
@@ -469,11 +477,12 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
           setFetchingNews(false)
         }
 
-        const result = await window.electronAPI.ai.chat(
+        const result = await streamChat(
           [{ role: 'system', content: systemPrompt }, ...loopHistory],
-          undefined,
           { needsTools },
+          setStreamText,
         )
+        setStreamText('')
         const raw = result.content || ''
         if (result.provider === 'ollama' && !ollamaStatus?.running) {
           setOllamaStatus({ running: true, models: ollamaStatus?.models || [] })
@@ -498,7 +507,7 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
               })
               continue
             }
-            addAIMessage({ role: 'assistant', content: narration })
+            addAIMessage({ role: 'assistant', content: withFallbackNotice(narration, result) })
             return
           }
           // Empty reply, not a deliberate stop: nudge the model once to just
@@ -556,6 +565,9 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
     } finally {
       setAILoading(false)
       setFetchingNews(false)
+      // The in-flight bubble is gone either way — the real message has taken
+      // its place, or the turn failed and there is nothing to show.
+      setStreamText('')
     }
   }
 
@@ -867,25 +879,47 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                 ))}
               </div>
 
+              {/* While a turn is in flight: the answer as far as it has been
+                  written, or the bouncing dots until the first words arrive. */}
               {isAILoading && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: streamText ? 'flex-start' : 'center', gap: 8, marginTop: 12 }}>
                   <div style={{
                     width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                     background: 'rgb(var(--ds-accent) / 0.15)', border: '1px solid rgb(var(--ds-accent) / 0.2)',
                   }}>
                     <Zap size={11} style={{ color: 'rgb(var(--ds-accent-soft))' }} />
                   </div>
-                  <div style={{
-                    display: 'flex', gap: 4, padding: '9px 14px', borderRadius: 14, borderTopLeftRadius: 4,
-                    background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
-                  }}>
-                    {[0, 1, 2].map(n => (
-                      <span key={n} style={{
-                        width: 6, height: 6, borderRadius: '50%', background: 'rgb(var(--ds-accent-soft))', display: 'inline-block',
-                        animation: `aiDotBounce 1.3s ease-in-out ${n * 0.18}s infinite`,
+                  {streamText ? (
+                    <div style={{
+                      maxWidth: '85%', padding: '9px 12px', borderRadius: 14, borderTopLeftRadius: 4,
+                      fontSize: 12, lineHeight: 1.55,
+                      background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
+                      color: 'rgb(var(--ds-text-2))', userSelect: 'text', WebkitUserSelect: 'text',
+                      overflow: 'hidden', wordBreak: 'break-word', overflowWrap: 'break-word',
+                    }}>
+                      {/* Plain text, not Markdown: a half-received document has
+                          unbalanced fences and list markers, and re-parsing it
+                          on every token both flickers and costs more than the
+                          streaming saves. The finished message renders fully. */}
+                      <span style={{ whiteSpace: 'pre-wrap' }}>{streamText}</span>
+                      <span style={{
+                        display: 'inline-block', width: 6, height: 12, marginLeft: 2, verticalAlign: 'text-bottom',
+                        background: 'rgb(var(--ds-accent-soft))', animation: 'aiDotBounce 1.1s ease-in-out infinite',
                       }} />
-                    ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: 'flex', gap: 4, padding: '9px 14px', borderRadius: 14, borderTopLeftRadius: 4,
+                      background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
+                    }}>
+                      {[0, 1, 2].map(n => (
+                        <span key={n} style={{
+                          width: 6, height: 6, borderRadius: '50%', background: 'rgb(var(--ds-accent-soft))', display: 'inline-block',
+                          animation: `aiDotBounce 1.3s ease-in-out ${n * 0.18}s infinite`,
+                        }} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

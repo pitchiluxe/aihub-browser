@@ -246,7 +246,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ai: {
     checkDuplicate:     (url:string, e:string[]) => ipcRenderer.invoke('ai:checkDuplicate', url, e),
     categorizeBookmark: (url:string, t:string)   => ipcRenderer.invoke('ai:categorizeBookmark', url, t),
-    chat:               (msgs:any[], m?:string, opts?:{preferCloud?:boolean; needsTools?:boolean}) => ipcRenderer.invoke('ai:chat', msgs, m, opts),
+    chat:               (msgs:any[], m?:string, opts?:{preferCloud?:boolean; needsTools?:boolean; streamId?:string}) => ipcRenderer.invoke('ai:chat', msgs, m, opts),
+    // Partial tokens for the request that passed a matching streamId. The
+    // promise from chat() still resolves with the complete text — this is
+    // purely so the answer can be shown while it is still being written.
+    onChunk: (cb: (c: { streamId: string; delta?: string; reset?: boolean; done?: boolean }) => void) => {
+      const handler = (_e: any, c: any) => cb(c)
+      ipcRenderer.on('ai:chunk', handler)
+      return () => ipcRenderer.removeListener('ai:chunk', handler)
+    },
+    // Live OpenRouter catalog for the Settings model picker — never a baked-in list.
+    models:             (opts?:{filter?:string; refresh?:boolean}) => ipcRenderer.invoke('ai:models', opts),
+    routing:            ()                       => ipcRenderer.invoke('ai:routing'),
     summarizePage:      (t:string, url:string)   => ipcRenderer.invoke('ai:summarizePage', t, url),
     getLatestNews:      ()                       => ipcRenderer.invoke('ai:getLatestNews'),
     webSearch:          (query:string)           => ipcRenderer.invoke('ai:webSearch', query),

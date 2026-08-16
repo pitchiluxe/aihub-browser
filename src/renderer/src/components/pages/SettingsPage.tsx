@@ -16,6 +16,111 @@ import { mergeLocalJsonArrays } from '../../services/backupLocal'
 
 const PAGE_SIZE = 40
 
+// OpenRouter's free meta-router: it selects among the free models available at
+// request time, so it is the one "model" that can never go stale.
+const OR_FREE_AUTO = 'openrouter/free'
+
+const OR_FILTERS = [
+  { value: 'all',         label: 'All Models' },
+  { value: 'free',        label: 'Free Models' },
+  { value: 'paid',        label: 'Paid Models' },
+  { value: 'vision',      label: 'Vision' },
+  { value: 'tools',       label: 'Tool Calling' },
+  { value: 'reasoning',   label: 'Reasoning' },
+  { value: 'coding',      label: 'Coding' },
+  { value: 'longContext', label: 'Long Context' },
+]
+
+function matchesFilter(m: any, filter: string): boolean {
+  switch (filter) {
+    case 'free':        return !!m.free
+    case 'paid':        return !m.free
+    case 'vision':      return !!m.capabilities?.vision
+    case 'tools':       return !!m.capabilities?.tools
+    case 'reasoning':   return !!m.capabilities?.reasoning
+    case 'coding':      return !!m.capabilities?.coding
+    case 'longContext': return (m.contextLength || 0) >= 100_000
+    default:            return true
+  }
+}
+
+function fmtContext(tokens: number): string {
+  if (!tokens) return '—'
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 ? 1 : 0)}M`
+  if (tokens >= 1000) return `${Math.round(tokens / 1000)}K`
+  return String(tokens)
+}
+
+/** Per-token price → the per-million figure OpenRouter quotes in its own UI. */
+function fmtPrice(perToken: number): string {
+  if (!perToken) return '$0'
+  const perM = perToken * 1_000_000
+  return `$${perM.toFixed(perM < 0.01 ? 4 : perM < 1 ? 3 : 2)}`
+}
+
+function orLabel(id: string): string {
+  return id === OR_FREE_AUTO ? 'Free Auto (openrouter/free)' : (id || '—')
+}
+
+/**
+ * OpenRouter model selector.
+ *
+ * A bare slug ("mistralai/mistral-7b") tells the user nothing about what they
+ * are choosing, so each row carries whether it's free, how much context it
+ * has, what it can do, and — for paid models — what it costs. The free
+ * meta-router is pinned to the top because it is the recommended fallback and
+ * never appears in the catalog itself.
+ */
+function ModelPicker({ value, models, all, onChange }: { value: string; models: any[]; all: any[]; onChange: (id: string) => void }) {
+  // Looked up in the WHOLE catalog, not the filtered view. Switching the
+  // filter to "Paid Models" while a free model is selected does not make that
+  // model unknown — reading it out of the filtered list is what produced
+  // "Saved selection — catalog unavailable" for a model sitting right there
+  // in the catalog.
+  const selected = all.find(m => m.id === value) || models.find(m => m.id === value)
+  const known = !!selected || !all.length
+  return (
+    <div className="max-w-[62%] text-right">
+      <select
+        value={value || OR_FREE_AUTO}
+        onChange={e => onChange(e.target.value)}
+        className="w-full bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none">
+        <option value={OR_FREE_AUTO}>OpenRouter Free Auto</option>
+        {/* The selected model always needs an option to sit in, even when the
+            current filter excludes it — otherwise the <select> would silently
+            show something the user did not choose. */}
+        {value && value !== OR_FREE_AUTO && !models.some(m => m.id === value) && (
+          <option value={value}>
+            {selected ? `${selected.name} (hidden by filter)` : `${value}${all.length ? ' (saved — not in catalog)' : ' (saved)'}`}
+          </option>
+        )}
+        {models.map(m => (
+          <option key={m.id} value={m.id}>
+            {m.name}{m.free ? ' — FREE' : ''}{m.deprecated ? ' (deprecated)' : ''}
+          </option>
+        ))}
+      </select>
+      <div className="mt-1 text-[11px] text-aihub-muted">
+        {value === OR_FREE_AUTO || !value
+          ? 'Picks whichever free model is available at request time'
+          : selected
+            ? [
+                selected.free ? 'FREE' : 'PAID',
+                `Context: ${fmtContext(selected.contextLength)}`,
+                selected.capabilities?.tools ? 'Tools' : '',
+                selected.capabilities?.vision ? 'Vision' : '',
+                selected.capabilities?.reasoning ? 'Reasoning' : '',
+                selected.free ? '' : `${fmtPrice(selected.pricing?.prompt)}/1M in`,
+                selected.free ? '' : `${fmtPrice(selected.pricing?.completion)}/1M out`,
+              ].filter(Boolean).join(' · ')
+            : known
+              ? 'Saved selection'
+              : 'Saved selection — not in the current OpenRouter catalog'}
+      </div>
+    </div>
+  )
+}
+
 const S = 'px-8 py-6 border-b border-aihub-border/20'
 const LBL = 'text-sm font-semibold text-aihub-text mb-0.5'
 const DESC = 'text-xs text-aihub-muted mb-3'
@@ -242,6 +347,12 @@ export default function SettingsPage() {
   const [aiOllamaUrl, setAiOllamaUrl] = useState('')
   const [savingAI, setSavingAI] = useState(false)
   const [aiSaved, setAiSaved] = useState(false)
+  // OpenRouter catalog — fetched live, never a baked-in list, because the free
+  // tier is re-cut without notice and a stale slug is a guaranteed dead request.
+  const [orModels, setOrModels] = useState<any[]>([])
+  const [orMeta, setOrMeta] = useState<any>(null)
+  const [orFilter, setOrFilter] = useState('all')
+  const [orLoading, setOrLoading] = useState(false)
   // Custom themes
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => loadCustomThemes())
   const [genBusy, setGenBusy] = useState(false)
@@ -272,10 +383,12 @@ export default function SettingsPage() {
     window.electronAPI.app?.isDefaultBrowser?.().then((v: boolean) => setIsDefault(!!v))
     window.electronAPI.settings.getAIConfig().then((cfg: any) => {
       setAiCfg(cfg)
-      setAiKeyInput(cfg?.openrouterKey || '')
+      // The key is deliberately never sent to the renderer — the field stays
+      // empty and shows a masked placeholder instead.
       setAiModelInput(cfg?.openrouterModel || '')
       setAiOllamaUrl(cfg?.ollamaUrl || '')
     })
+    loadOrModels()
     mailStatus().then(s => { setGmailConnected(s.connected); setGmailEmail(s.email) })
   }, [])
 
@@ -403,20 +516,50 @@ export default function SettingsPage() {
   const saveAIConfig = async () => {
     setSavingAI(true)
     await window.electronAPI.settings.setAIConfig({
+      // Empty means "keep the stored key" — Settings never receives it, so it
+      // cannot echo it back, and blanking the field must not wipe it.
       openrouterKey:   aiKeyInput.trim(),
       openrouterModel: aiModelInput.trim(),
       ollamaUrl:       aiOllamaUrl.trim(),
     })
+    setAiKeyInput('')
+    setAiCfg(await window.electronAPI.settings.getAIConfig())
     setAiSaved(true)
     setTimeout(() => setAiSaved(false), 2500)
     setSavingAI(false)
     checkAI()
   }
 
+  // Routing controls save on change — a half-applied provider configuration
+  // that only takes effect after a separate Save press is a trap.
+  const updateAI = async (patch: any) => {
+    setAiCfg((prev: any) => ({ ...prev, ...patch }))
+    await window.electronAPI.settings.setAIConfig(patch)
+  }
+
+  const loadOrModels = async (refresh = false) => {
+    setOrLoading(true)
+    try {
+      const res = await window.electronAPI.ai.models({ refresh })
+      setOrModels(res?.models || [])
+      setOrMeta(res)
+    } catch {
+      // A catalog fetch that fails leaves the previous list and the saved
+      // selection exactly as they were (§33).
+    } finally {
+      setOrLoading(false)
+    }
+  }
+
   if (!settings) return <div className="flex items-center justify-center h-full"><Loader2 size={20} className="animate-spin text-aihub-muted" /></div>
 
   const aiModels = ollamaStatus?.models || []
-  const hasCloud = !!(aiCfg?.resolvedKey)
+  const hasCloud = !!(aiCfg?.hasKey ?? aiCfg?.resolvedKey)
+  const primary    = aiCfg?.primaryProvider || 'ollama'
+  const fallbackOn = aiCfg?.fallbackEnabled !== false
+  // Filtering is client-side: the whole catalog is already here, and a
+  // round-trip per dropdown change would be a needless stall.
+  const filteredOr = orModels.filter(m => matchesFilter(m, orFilter))
 
   return (
     <div className="flex flex-col h-full bg-aihub-bg text-aihub-text overflow-y-auto">
@@ -675,49 +818,11 @@ export default function SettingsPage() {
       </Section>
 
       {/* AI */}
-      <Section icon={<Bot size={15} />} title="AI Assistant">
-        <div className={ROW}>
-          <div>
-            <div className={LBL}>Ollama (Local AI)</div>
-            <div className="text-xs text-aihub-muted">Private AI running on your device — ollama.com</div>
-          </div>
-          <div className="flex items-center gap-2">
-            {checkingAI
-              ? <Loader2 size={13} className="animate-spin text-aihub-muted" />
-              : ollamaStatus?.running
-                ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 size={12} /> Running</span>
-                : <span className="flex items-center gap-1 text-xs text-aihub-muted">Offline</span>}
-            <button
-              onClick={checkAI}
-              disabled={checkingAI}
-              title="Re-check Ollama status"
-              className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-aihub-card transition-all"
-              style={{ color: checkingAI ? '#60a5fa' : undefined }}
-            >
-              <RefreshCw size={11} className={checkingAI ? 'animate-spin' : ''} />
-            </button>
-          </div>
-        </div>
-        <div className={ROW}>
-          <div>
-            <div className={LBL}>OpenRouter (Cloud AI)</div>
-            <div className="text-xs text-aihub-muted">Fallback when Ollama is offline — openrouter.ai</div>
-          </div>
-          {hasCloud
-            ? <span className="flex items-center gap-1 text-xs text-blue-400"><CheckCircle2 size={12} /> Key loaded</span>
-            : <span className="text-xs text-aihub-muted">No key</span>}
-        </div>
-
-        {ollamaStatus?.running && aiModels.length > 0 && (
-          <div className={ROW}>
-            <div><div className={LBL}>AI Model</div><div className="text-xs text-aihub-muted">Active model for conversations</div></div>
-            <select value={settings.aiModel||'llama3'} onChange={e => update('aiModel', e.target.value)}
-              className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none">
-              {aiModels.map((m: string) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-        )}
-
+      <Section icon={<Bot size={15} />} title="Ollama Models">
+        <p className="text-xs text-aihub-muted mb-3">
+          Local models live on your device — private, free, and used first.
+          Routing between local and cloud is configured in AI Configuration below.
+        </p>
         <div className="py-3">
           <div className={LBL}>Install AI Model</div>
           <div className={DESC}>Add new AI models (e.g. llama3, mistral, phi3, gemma)</div>
@@ -738,9 +843,137 @@ export default function SettingsPage() {
       {/* AI API Config */}
       <Section icon={<Bot size={15} />} title="AI Configuration">
         <p className="text-xs text-aihub-muted mb-4">
-          Configure your AI credentials. OpenRouter is used when Ollama is offline.
-          Get a free key at <span className="text-aihub-accent">openrouter.ai</span>.
+          Local Ollama answers first. OpenRouter takes over only when Ollama is
+          unavailable — or never, if you turn automatic fallback off.
         </p>
+
+        {/* ── Primary ─────────────────────────────────────────────── */}
+        <div className="text-[11px] font-semibold tracking-wider text-aihub-muted uppercase mb-2">Primary AI</div>
+        <div className={ROW}>
+          <div><div className={LBL}>Provider</div></div>
+          <select
+            value={primary}
+            onChange={e => updateAI({ primaryProvider: e.target.value })}
+            className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none">
+            <option value="ollama">Local Ollama</option>
+            <option value="openrouter">OpenRouter</option>
+          </select>
+        </div>
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Model</div>
+            {primary === 'ollama' && !aiModels.length && (
+              <div className="text-xs text-aihub-muted">No installed models detected</div>
+            )}
+          </div>
+          {primary === 'ollama'
+            ? <select value={settings.aiModel || ''} onChange={e => update('aiModel', e.target.value)}
+                className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none max-w-[60%]">
+                <option value="">First available</option>
+                {aiModels.map((m: string) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            : <ModelPicker value={aiModelInput} models={filteredOr} all={orModels} onChange={id => { setAiModelInput(id); updateAI({ openrouterModel: id }) }} />}
+        </div>
+        <div className={ROW}>
+          <div><div className={LBL}>Status</div></div>
+          <div className="flex items-center gap-2">
+            {primary === 'ollama'
+              ? (checkingAI
+                  ? <Loader2 size={13} className="animate-spin text-aihub-muted" />
+                  : ollamaStatus?.running
+                    ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 size={12} /> Connected</span>
+                    : <span className="text-xs text-amber-400">Not detected</span>)
+              : (hasCloud
+                  ? <span className="flex items-center gap-1 text-xs text-blue-400"><CheckCircle2 size={12} /> Configured</span>
+                  : <span className="text-xs text-amber-400">No API key</span>)}
+            <button onClick={checkAI} disabled={checkingAI} title="Re-check Ollama status"
+              className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-aihub-card transition-all">
+              <RefreshCw size={11} className={checkingAI ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Fallback ────────────────────────────────────────────── */}
+        <div className="text-[11px] font-semibold tracking-wider text-aihub-muted uppercase mt-6 mb-2">Fallback AI</div>
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Automatic fallback</div>
+            <div className="text-xs text-aihub-muted">Switch providers when the primary genuinely fails</div>
+          </div>
+          <BibleToggle on={fallbackOn} onClick={() => updateAI({ fallbackEnabled: !fallbackOn })} />
+        </div>
+        {fallbackOn && (
+          <>
+            <div className={ROW}>
+              <div><div className={LBL}>Provider</div></div>
+              <select
+                value={aiCfg?.fallbackProvider || 'openrouter'}
+                onChange={e => updateAI({ fallbackProvider: e.target.value })}
+                className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none">
+                <option value="openrouter">OpenRouter</option>
+                <option value="ollama">Local Ollama</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+            {aiCfg?.fallbackProvider !== 'ollama' && aiCfg?.fallbackProvider !== 'none' && (
+              <div className={ROW}>
+                <div><div className={LBL}>Model</div></div>
+                <ModelPicker value={aiModelInput} models={filteredOr} all={orModels}
+                  onChange={id => { setAiModelInput(id); updateAI({ openrouterModel: id }) }} />
+              </div>
+            )}
+            <div className={ROW}>
+              <div><div className={LBL}>Status</div></div>
+              {aiCfg?.fallbackProvider === 'ollama'
+                ? (ollamaStatus?.running
+                    ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 size={12} /> Connected</span>
+                    : <span className="text-xs text-amber-400">Not detected</span>)
+                : hasCloud
+                  ? <span className="flex items-center gap-1 text-xs text-blue-400"><CheckCircle2 size={12} /> Configured</span>
+                  : <span className="text-xs text-amber-400">No API key</span>}
+            </div>
+          </>
+        )}
+
+        {/* ── OpenRouter catalog ──────────────────────────────────── */}
+        <div className="text-[11px] font-semibold tracking-wider text-aihub-muted uppercase mt-6 mb-2">OpenRouter Models</div>
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Model filter</div>
+            <div className="text-xs text-aihub-muted">
+              {orMeta?.stale
+                ? 'Unable to refresh OpenRouter models — your saved selection is unchanged.'
+                : `${orMeta?.total || 0} models · ${orMeta?.freeCount || 0} free`}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <select value={orFilter} onChange={e => setOrFilter(e.target.value)}
+              className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none">
+              {OR_FILTERS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+            <button onClick={() => loadOrModels(true)} disabled={orLoading}
+              title="Refresh OpenRouter models"
+              className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-aihub-card transition-all">
+              <RefreshCw size={11} className={orLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
+        {orMeta?.selectedDeprecated && (
+          <div className="mt-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+            "{orMeta.selected}" is marked deprecated by OpenRouter. Please select another model.
+          </div>
+        )}
+        {orMeta?.selectedMissing && !orMeta?.stale && (
+          <div className="mt-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+            "{orMeta.selected}" is no longer in the OpenRouter catalog. Requests will use OpenRouter Free Auto until you pick a replacement.
+          </div>
+        )}
+        <div className="mt-2 text-[11px] text-aihub-muted">
+          Free models are subject to OpenRouter's current rate limits and availability.
+        </div>
+
+        {/* ── Credentials ─────────────────────────────────────────── */}
+        <div className="text-[11px] font-semibold tracking-wider text-aihub-muted uppercase mt-6 mb-2">Credentials</div>
         {aiCfg?.resolvedKey && (
           <div className="mb-3 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-400 flex items-center gap-2">
             <CheckCircle2 size={12} /> OpenRouter key is active (from .env.local or settings)
@@ -753,21 +986,13 @@ export default function SettingsPage() {
               type="password"
               value={aiKeyInput}
               onChange={e => setAiKeyInput(e.target.value)}
-              placeholder={aiCfg?.resolvedKey ? `Current: ${aiCfg.resolvedKey}` : 'sk-or-v1-…'}
+              placeholder={aiCfg?.resolvedKey ? `Current: ${aiCfg.resolvedKey} — type a new key to replace` : 'sk-or-v1-…'}
               className="w-full bg-aihub-card border border-aihub-border/40 rounded-xl px-3 py-2 text-sm text-aihub-text placeholder:text-aihub-muted/40 outline-none mt-1"
               style={{ userSelect: 'text' }}
             />
-          </div>
-          <div>
-            <div className={LBL}>Cloud Model</div>
-            <input
-              type="text"
-              value={aiModelInput}
-              onChange={e => setAiModelInput(e.target.value)}
-              placeholder={aiCfg?.resolvedModel || 'meta-llama/llama-3.3-70b-instruct:free'}
-              className="w-full bg-aihub-card border border-aihub-border/40 rounded-xl px-3 py-2 text-sm text-aihub-text placeholder:text-aihub-muted/40 outline-none mt-1"
-              style={{ userSelect: 'text' }}
-            />
+            <div className="text-[11px] text-aihub-muted mt-1">
+              Stored by the app's background process and never sent to any page. Get a free key at openrouter.ai.
+            </div>
           </div>
           <div>
             <div className={LBL}>Ollama URL</div>
@@ -788,6 +1013,22 @@ export default function SettingsPage() {
             {savingAI ? <Loader2 size={13} className="animate-spin" /> : aiSaved ? <CheckCircle2 size={13} /> : null}
             {aiSaved ? 'Saved!' : 'Save AI Config'}
           </button>
+        </div>
+
+        {/* ── Live routing summary (§23) ──────────────────────────── */}
+        <div className="mt-6 rounded-xl border border-aihub-border/30 bg-aihub-card/40 px-4 py-3 text-xs space-y-1.5">
+          <div className="font-semibold text-aihub-text">AI Routing</div>
+          <div className="flex items-center gap-2">
+            <span className={ollamaStatus?.running ? 'text-green-400' : 'text-aihub-muted'}>●</span>
+            <span className="text-aihub-muted">{primary === 'ollama' ? 'Primary' : 'Fallback'}:</span>
+            <span className="text-aihub-text">Local Ollama — {settings.aiModel || 'first available'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={hasCloud ? 'text-blue-400' : 'text-aihub-muted'}>●</span>
+            <span className="text-aihub-muted">{primary === 'ollama' ? 'Fallback' : 'Primary'}:</span>
+            <span className="text-aihub-text">OpenRouter — {orLabel(aiCfg?.resolvedModel || aiModelInput)}</span>
+          </div>
+          <div className="text-aihub-muted">Automatic fallback: {fallbackOn ? '✓ Enabled' : '✕ Disabled'}</div>
         </div>
       </Section>
 
