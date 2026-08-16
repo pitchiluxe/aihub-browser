@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Search, Globe, BookOpen, Sparkles } from 'lucide-react'
+import { Search, Globe } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBrowserStore } from '../../store/browserStore'
 

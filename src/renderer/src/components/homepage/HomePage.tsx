@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Sparkles, LayoutGrid, Network, RefreshCw, Zap, Clock, X,
   ChevronLeft, ChevronRight, Download, Upload, Eye, EyeOff,
-  FlaskConical, Bot, Newspaper, BookOpen, Search,
+  FlaskConical, Bot, Newspaper, Search,
 } from 'lucide-react'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { useBrowserStore } from '../../store/browserStore'
@@ -281,7 +281,7 @@ export default function HomePage({ onNavigate }: Props) {
                   <ViewBtn isLight={isLight} active={view === 'grid'} onClick={() => setView('grid')} label="Grid">
                     <LayoutGrid size={12} />
                   </ViewBtn>
-                  <ViewBtn isLight={isLight} active={view === 'sphere'} onClick={() => setView('sphere')} label="Sphere">
+                  <ViewBtn isLight={isLight} active={false} /* sphere view early-returns above, so this button is never the active one */ onClick={() => setView('sphere')} label="Sphere">
                     <Network size={12} />
                   </ViewBtn>
                 </div>

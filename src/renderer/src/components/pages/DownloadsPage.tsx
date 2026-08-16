@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Download, FolderOpen, FileText, Trash2, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { DownloadItem, useBrowserStore } from '../../store/browserStore'

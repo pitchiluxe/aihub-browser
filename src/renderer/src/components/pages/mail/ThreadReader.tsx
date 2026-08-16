@@ -3,7 +3,7 @@ import { Loader2, Paperclip, Reply, Download } from 'lucide-react'
 import { mailGetThread, mailGetAttachment, ParsedMessage } from '../../../services/mailService'
 import EmailFrame from './EmailFrame'
 
-export default function ThreadReader({ threadId, accountEmail, onReply }: { threadId: string; accountEmail: string; onReply?: (m: ParsedMessage) => void }) {
+export default function ThreadReader({ threadId, onReply }: { threadId: string; accountEmail: string; onReply?: (m: ParsedMessage) => void }) {
   const [messages, setMessages] = useState<ParsedMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

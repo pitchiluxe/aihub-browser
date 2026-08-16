@@ -286,7 +286,7 @@ function SourceRow({ url, title, onNavigate }: { url: string; title: string; onN
   )
 }
 
-function ReportRenderer({ content, onNavigate }: { content: string; onNavigate?: (u: string) => void }) {
+function ReportRenderer({ content }: { content: string; onNavigate?: (u: string) => void }) {
   const lines = content.split('\n')
   return (
     <div style={{ fontFamily: 'inherit' }}>
