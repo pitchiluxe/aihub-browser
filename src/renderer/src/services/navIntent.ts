@@ -23,7 +23,7 @@ export interface NavTarget {
 // nothing at all.
 const IN_APP_PAGES = [
   'settings', 'history', 'downloads', 'wifi', 'vpn', 'research', 'agents',
-  'extensions', 'mail', 'notes', 'manual', 'rewind', 'watch', 'bible',
+  'extensions', 'mail', 'notes', 'manual', 'rewind', 'watch', 'bible', 'study',
 ] as const
 
 export function pageTypeForUrl(url: string | undefined): PageType {
@@ -35,6 +35,7 @@ export function pageTypeForUrl(url: string | undefined): PageType {
 // Spoken names for the built-in pages. Matched on the whole (normalised) query
 // only, so "open bible" opens the reader while "open biblegateway" does not.
 const BUILT_IN_APPS: { pageType: PageType; title: string; aliases: string[] }[] = [
+  { pageType: 'study',      title: 'Bible Study', aliases: ['bible study', 'study', 'study bible', 'daily verse', 'verse of the day', 'memorise verses', 'memorize verses', 'scripture memory', 'bible lessons', 'bible course', 'bible courses'] },
   { pageType: 'bible',      title: 'Bible',      aliases: ['bible', 'holy bible', 'bible reader', 'scripture', 'scriptures', 'kjv'] },
   { pageType: 'mail',       title: 'Mail',       aliases: ['mail', 'email', 'e-mail', 'inbox', 'gmail'] },
   { pageType: 'notes',      title: 'Notes',      aliases: ['notes', 'note', 'notepad', 'my notes'] },

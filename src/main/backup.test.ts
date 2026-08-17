@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildBackup, validateBackup, summarize, portableSettings,
-  mergeBibleMarks, mergeBookmarks, mergeRecords, mergeById,
+  mergeBibleMarks, mergeBibleStudy, EMPTY_BIBLE_STUDY, mergeBookmarks, mergeRecords, mergeById,
   bookmarkKey, backupFileName, BACKUP_APP, BACKUP_VERSION,
   type BibleMarksData,
 } from './backup'
@@ -192,6 +192,57 @@ describe('backupFileName', () => {
   })
 })
 
+describe('mergeBibleStudy — progress only ever goes up', () => {
+  const study = (over: any = {}) => ({
+    verses: {}, lessons: {}, streak: { days: [], best: 0 }, badges: [], plans: {}, ...over,
+  })
+
+  it('keeps the higher box for a verse both machines know', () => {
+    const merged = mergeBibleStudy(
+      study({ verses: { 'JHN.3.16': { box: 4, dueAt: 400 } } }),
+      study({ verses: { 'JHN.3.16': { box: 2, dueAt: 900 } } }),
+    )
+    expect(merged.verses['JHN.3.16'].box).toBe(4)
+  })
+
+  it('carries over verses only the other machine had', () => {
+    const merged = mergeBibleStudy(
+      study({ verses: { a: { box: 1, dueAt: 1 } } }),
+      study({ verses: { b: { box: 3, dueAt: 2 } } }),
+    )
+    expect(Object.keys(merged.verses).sort()).toEqual(['a', 'b'])
+  })
+
+  it('unions the streak days and keeps the better best', () => {
+    const merged = mergeBibleStudy(
+      study({ streak: { days: ['2026-08-15', '2026-08-16'], best: 2 } }),
+      study({ streak: { days: ['2026-08-16', '2026-08-14'], best: 9 } }),
+    )
+    expect(merged.streak.days).toEqual(['2026-08-14', '2026-08-15', '2026-08-16'])
+    expect(merged.streak.best).toBe(9)
+  })
+
+  it('never drops a badge either side had earned', () => {
+    const merged = mergeBibleStudy(study({ badges: ['streak-7'] }), study({ badges: ['verses-10'] }))
+    expect(merged.badges.sort()).toEqual(['streak-7', 'verses-10'])
+  })
+
+  it('keeps the better lesson score and the further plan day', () => {
+    const merged = mergeBibleStudy(
+      study({ lessons: { 'a/01': { completedAt: 1, score: 1, total: 3 } }, plans: { p: { day: 2, startedAt: 1 } } }),
+      study({ lessons: { 'a/01': { completedAt: 2, score: 3, total: 3 } }, plans: { p: { day: 7, startedAt: 1 } } }),
+    )
+    expect(merged.lessons['a/01'].score).toBe(3)
+    expect(merged.plans.p.day).toBe(7)
+  })
+
+  it('returns the local copy untouched when there is nothing to merge', () => {
+    const local = study({ badges: ['first-verse'] })
+    expect(mergeBibleStudy(local, null)).toBe(local)
+    expect(mergeBibleStudy(null, null)).toEqual(EMPTY_BIBLE_STUDY())
+  })
+})
+
 describe('summarize', () => {
   it('counts everything the import preview shows', () => {
     const backup = buildBackup({
@@ -202,9 +253,13 @@ describe('summarize', () => {
       watches: [{ id: 'w1' }],
       extensions: { customExts: [{ id: 'e1' }] },
       local: { 'aihub-custom-themes': JSON.stringify([{ id: 't1' }, { id: 't2' }]) },
+      bibleStudy: {
+        verses: { 'JHN.3.16': { box: 2, dueAt: 1 }, 'PSA.23.1': { box: 1, dueAt: 2 } },
+        lessons: {}, streak: { days: [], best: 0 }, badges: [], plans: {},
+      },
     }, meta)
     expect(summarize(backup)).toEqual({
-      verses: 1, highlights: 1, bibleNotes: 1, bookmarks: 2,
+      verses: 1, highlights: 1, bibleNotes: 1, versesLearning: 2, bookmarks: 2,
       notePages: 1, rememberedSites: 1, watches: 1, extensions: 1, themes: 2,
     })
   })

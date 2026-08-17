@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Bookmark, Sparkles, Search, Share2 } from 'lucide-react'
+import { Bookmark, GraduationCap, Sparkles, Search, Share2 } from 'lucide-react'
 import { getBookMeta, getBooks, getChapter, parseRef, refKey, bookListOptions, COVER_OPTION, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
@@ -13,6 +13,7 @@ import BookCover from '../bible/BookCover'
 import VerseSearch from '../bible/VerseSearch'
 import VerseGraph from '../bible/VerseGraph'
 import { useBibleSettings } from '../../services/bibleSettings'
+import { useBrowserStore } from '../../store/browserStore'
 
 // Shape persisted by the main process (see `bible:getMarks` / `bible:setMarks`
 // in src/main/index.ts) — highlights, saved verses, notes and the last
@@ -541,6 +542,7 @@ export default function BiblePage() {
           // restored — before that, `chapter` is still the default and the
           // cover would promise a page the reader never left off on.
           subtitle={restored && marks.lastRead && book ? `Continue — ${book.name} ${chapter}` : 'Click to open'}
+          cover={bibleSettings.cover}
         />
       </div>
     )
@@ -616,6 +618,13 @@ export default function BiblePage() {
           className="ml-auto flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
         >
           <Search size={14} /> Search
+        </button>
+        <button
+          onClick={() => useBrowserStore.getState().addTab('aihub://study', 'study')}
+          title="Bible Study — daily verse, courses and memorisation"
+          className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
+        >
+          <GraduationCap size={14} /> Study
         </button>
         <button
           onClick={() => setGraphOpen(true)}

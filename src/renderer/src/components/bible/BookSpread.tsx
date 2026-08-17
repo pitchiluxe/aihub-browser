@@ -5,7 +5,7 @@ interface Props {
   right: React.ReactNode
   leaf?: React.ReactNode          // the turning PageLeaf, when a turn is in flight
   leafSide?: 'left' | 'right'     // which half the turning sheet lifts off
-  paper?: 'aged' | 'clean'        // parchment, or plain modern stock
+  paper?: 'aged' | 'clean' | 'linen' | 'midnight'        // parchment, or plain modern stock
 }
 
 // Two bound pages with a centre gutter. The turning leaf is layered over one
@@ -20,7 +20,7 @@ interface Props {
 // carries its own `overflow-y-auto` scroller, and the outer wrapper still
 // keeps content inside the rounded corners.
 export default function BookSpread({ left, right, leaf, leafSide = 'right', paper = 'aged' }: Props) {
-  const paperClass = paper === 'clean' ? 'bible-paper bible-paper-clean' : 'bible-paper'
+  const paperClass = paper === 'aged' ? 'bible-paper' : `bible-paper bible-paper-${paper}`
   return (
     <div className="relative mx-auto flex h-full w-full max-w-6xl overflow-hidden rounded-2xl shadow-2xl">
       <div className={`relative w-1/2 ${paperClass} p-10`}>{left}</div>

@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react'
 // main-process consumer for any of them.
 export interface BibleSettings {
   fontScale: number        // 0.85 – 1.5, multiplies the base verse size
-  paper: 'aged' | 'clean'  // aged parchment, or plain modern stock
+  // 'linen' and 'midnight' are earned in the study room — see bibleRewards.
+  paper: 'aged' | 'clean' | 'linen' | 'midnight'
+  cover: 'oxblood' | 'forest' | 'midnight'  // the closed book's binding
   justify: boolean         // justified columns like a printed Bible
   animateTurn: boolean     // 3D page turn, or an instant change
   showCover: boolean       // open on the closed book, or straight into the text
@@ -15,6 +17,7 @@ export interface BibleSettings {
 export const DEFAULT_BIBLE_SETTINGS: BibleSettings = {
   fontScale: 1,
   paper: 'aged',
+  cover: 'oxblood',
   justify: true,
   animateTurn: true,
   showCover: true,

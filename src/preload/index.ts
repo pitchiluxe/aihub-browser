@@ -199,6 +199,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   bible: {
     getMarks: () => ipcRenderer.invoke('bible:getMarks'),
     setMarks: (marks: any, opts?: { allowEmpty?: boolean }) => ipcRenderer.invoke('bible:setMarks', marks, opts),
+    getStudy: () => ipcRenderer.invoke('bible:getStudy'),
+    setStudy: (study: any, opts?: { allowEmpty?: boolean }) => ipcRenderer.invoke('bible:setStudy', study, opts),
   },
   // Opens a URL in the user's default system browser (or default mail
   // client for mailto:), never inside the app shell. Used by the Bible

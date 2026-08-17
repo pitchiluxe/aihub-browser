@@ -1,8 +1,21 @@
 import React, { useEffect, useState } from 'react'
 
+export type CoverStyle = 'oxblood' | 'forest' | 'midnight'
+
 interface Props {
   onOpen: () => void            // fired once the cover has finished swinging open
   subtitle?: string             // e.g. "Continue — John 7"
+  /** The binding. Anything but oxblood is earned in the study room. */
+  cover?: CoverStyle
+}
+
+// Three bindings, same board. Only the leather changes — the gilt, the spine
+// bands and the ribbon are what make it read as a book, and they work over any
+// of these.
+const LEATHER: Record<CoverStyle, string> = {
+  oxblood: 'linear-gradient(145deg, #5b1d1d 0%, #3f1212 45%, #2c0c0c 100%)',
+  forest:  'linear-gradient(145deg, #1f4032 0%, #142c22 45%, #0d1d16 100%)',
+  midnight:'linear-gradient(145deg, #1d2c4d 0%, #131f37 45%, #0b1424 100%)',
 }
 
 // The closed cover occupies the same box as the open spread, so opening the
@@ -19,7 +32,7 @@ const SWING_MS = 900
 // it reads as opening a real volume rather than dismissing a splash screen.
 // Everything is drawn in CSS — no image asset — so it stays crisp at any size
 // and costs nothing to ship.
-export default function BookCover({ onOpen, subtitle }: Props) {
+export default function BookCover({ onOpen, subtitle, cover = 'oxblood' }: Props) {
   const [opening, setOpening] = useState(false)
   // The book settles onto the table on first paint rather than being there
   // already — a short entrance is what makes it read as a real object arriving
@@ -53,7 +66,7 @@ export default function BookCover({ onOpen, subtitle }: Props) {
   const leather = `
     radial-gradient(120% 90% at 30% 10%, rgba(255,255,255,0.10), transparent 60%),
     radial-gradient(100% 120% at 80% 100%, rgba(0,0,0,0.45), transparent 55%),
-    linear-gradient(145deg, #5b1d1d 0%, #3f1212 45%, #2c0c0c 100%)
+    ${LEATHER[cover] || LEATHER.oxblood}
   `
 
   return (

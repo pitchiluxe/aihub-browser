@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Palette, Bot, Shield, ShieldBan, Layers, Info, CheckCircle2, Loader2, RefreshCw, Download, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked } from 'lucide-react'
+import { Palette, Bot, Shield, ShieldBan, Layers, Info, CheckCircle2, Loader2, RefreshCw, Download, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked, Lock } from 'lucide-react'
 import ClaudeKitSection from './ClaudeKitSection'
 import { useBibleSettings } from '../../services/bibleSettings'
+import { BADGES, isUnlocked, type UnlockKind } from '../../services/bibleRewards'
 import { useBrowserStore } from '../../store/browserStore'
 import {
   THEMES, loadCustomThemes, deleteCustomTheme, generateThemes, CustomTheme,
@@ -371,6 +372,14 @@ export default function SettingsPage() {
   const [gmailError, setGmailError] = useState('')
   // Bible reader preferences (localStorage; the open reader updates live)
   const [bible, setBible] = useBibleSettings()
+  // Which reader styles the study room has earned. Read once — the badge list
+  // only grows, and Settings is not the place to watch it happen live.
+  const [studyBadges, setStudyBadges] = useState<string[]>([])
+  useEffect(() => {
+    ;(window.electronAPI as any)?.bible?.getStudy?.()
+      .then((s: any) => setStudyBadges(Array.isArray(s?.badges) ? s.badges : []))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     // Real version from the main process (app.getVersion()) — never hardcode;
@@ -1075,18 +1084,48 @@ export default function SettingsPage() {
         <div className={ROW}>
           <div>
             <div className={LBL}>Paper</div>
-            <div className="text-xs text-aihub-muted">Aged parchment, or plain modern stock</div>
+            <div className="text-xs text-aihub-muted">
+              Aged parchment, or plain modern stock. Linen and midnight are earned in Bible Study.
+            </div>
           </div>
           <div className="flex gap-1.5">
-            {(['aged', 'clean'] as const).map(p => (
-              <button key={p} onClick={() => setBible({ paper: p })}
-                className="rounded-xl px-3 py-1.5 text-xs font-medium capitalize transition-all"
-                style={bible.paper === p
-                  ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
-                  : { background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))' }}>
-                {p}
-              </button>
-            ))}
+            {(['aged', 'clean', 'linen', 'midnight'] as const).map(p => {
+              const locked = !['aged', 'clean'].includes(p) && !isUnlocked('paper', p, studyBadges)
+              return (
+                <button key={p} onClick={() => !locked && setBible({ paper: p })}
+                  disabled={locked}
+                  title={locked ? lockedHint('paper', p) : undefined}
+                  className="flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium capitalize transition-all disabled:cursor-not-allowed disabled:opacity-40"
+                  style={bible.paper === p
+                    ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
+                    : { background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))' }}>
+                  {locked && <Lock size={10} />}{p}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Binding</div>
+            <div className="text-xs text-aihub-muted">The cover you open the book on</div>
+          </div>
+          <div className="flex gap-1.5">
+            {(['oxblood', 'forest', 'midnight'] as const).map(c => {
+              const locked = c !== 'oxblood' && !isUnlocked('cover', c, studyBadges)
+              return (
+                <button key={c} onClick={() => !locked && setBible({ cover: c })}
+                  disabled={locked}
+                  title={locked ? lockedHint('cover', c) : undefined}
+                  className="flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium capitalize transition-all disabled:cursor-not-allowed disabled:opacity-40"
+                  style={bible.cover === c
+                    ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
+                    : { background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))' }}>
+                  {locked && <Lock size={10} />}{c}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -1531,4 +1570,10 @@ function Pager({ total, page, setPage }: { total: number; page: number; setPage:
       {btn('Next ›', page + 1, page >= pages - 1)}
     </div>
   )
+}
+
+/** Why a reader style is greyed out — the requirement in the reader's words. */
+function lockedHint(kind: UnlockKind, value: string): string {
+  const badge = BADGES.find(b => b.unlock?.kind === kind && b.unlock.value === value)
+  return badge ? `Locked — ${badge.requirement.toLowerCase()} in Bible Study` : 'Locked'
 }

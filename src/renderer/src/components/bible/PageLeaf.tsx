@@ -7,7 +7,7 @@ interface Props {
   angle: number                   // 0 → 180 degrees, owned by the page
   animating: boolean              // true while easing to a resting angle
   durationMs: number
-  paper?: 'aged' | 'clean'
+  paper?: 'aged' | 'clean' | 'linen' | 'midnight'
 }
 
 // One turning sheet, rendered from an angle the page hands it.
@@ -26,7 +26,7 @@ interface Props {
 // `angle`. A button/arrow turn animates purely in CSS with no per-frame render,
 // so the same effects run as a CSS keyframe (globals.css) that peaks halfway.
 export default function PageLeaf({ front, back, direction, angle, animating, durationMs, paper = 'aged' }: Props) {
-  const paperClass = paper === 'clean' ? 'bible-paper bible-paper-clean' : 'bible-paper'
+  const paperClass = paper === 'aged' ? 'bible-paper' : `bible-paper bible-paper-${paper}`
   const t = angle / 180
   const arc = Math.sin(t * Math.PI)          // 0 at rest, 1 upright at the halfway point
 

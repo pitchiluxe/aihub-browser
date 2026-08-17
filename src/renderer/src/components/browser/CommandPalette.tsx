@@ -5,10 +5,11 @@ import {
   Home, FlaskConical, Sparkles, StickyNote, History, Download, Puzzle, Wifi,
   Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft, GitCompare, BellRing,
   Smartphone, Laptop, BookMarked, Layers, Columns2, PictureInPicture2, Camera, CopyMinus,
+  GraduationCap,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
-type PageType = 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch' | 'bible'
+type PageType = 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch' | 'bible' | 'study'
 
 interface Cmd {
   id: string
@@ -92,7 +93,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     rewind: <History size={15} />, watch: <BellRing size={15} />, history: <History size={15} />, downloads: <Download size={15} />, extensions: <Puzzle size={15} />,
     wifi: <Wifi size={15} />, vpn: <Shield size={15} />, mail: <Mail size={15} />,
     manual: <BookOpen size={15} />, settings: <Settings size={15} />,
-    bible: <BookMarked size={15} />,
+    bible: <BookMarked size={15} />, study: <GraduationCap size={15} />,
   }
 
   const commands: Cmd[] = useMemo(() => {
@@ -149,7 +150,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     const pages: [PageType, string][] = [
       ['research', 'Research Mode'], ['agents', 'Agent Mode'], ['notes', 'Sticky Notes'],
       ['rewind', 'Rewind — search what you\'ve read'], ['watch', 'Watch & Ping — track a page for changes'],
-      ['bible', 'Bible — read, highlight and study'], ['history', 'History'], ['downloads', 'Downloads'],
+      ['bible', 'Bible — read, highlight and study'], ['study', 'Bible Study — daily verse, courses and memorisation'], ['history', 'History'], ['downloads', 'Downloads'],
       ['extensions', 'Extensions'], ['wifi', 'Free WiFi'], ['vpn', 'VPN / Proxy'], ['mail', 'Mail'],
       ['manual', 'User Manual'], ['settings', 'Settings'],
     ]

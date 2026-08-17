@@ -37,9 +37,13 @@ import {
 import { buildLevels, buildTradePlan, trendContext, buildBracketPlan } from './trading/levels'
 import {
   buildBackup, validateBackup, backupFileName, BACKUP_EXTENSION,
-  mergeBibleMarks, mergeBookmarks as mergeBackupBookmarks, mergeRecords, mergeById,
-  type BackupSections,
+  mergeBibleMarks, mergeBibleStudy, EMPTY_BIBLE_STUDY,
+  mergeBookmarks as mergeBackupBookmarks, mergeRecords, mergeById,
+  type BackupSections, type BibleStudyData,
 } from './backup'
+import {
+  forOllama, forOpenRouter, withoutImages, hasImages, looksVisionCapable, pickVisionModel,
+} from './visionMessages'
 import { pushSync, pullSync, clearSync } from './google/apis/sync'
 import {
   decideRequest, hostOf, emptyStats, recordBlock,
@@ -2610,6 +2614,7 @@ function collectBackupSections(local: Record<string, string> | undefined): Backu
   const data = getData()
   return {
     bible: readBibleMarksForBackup(),
+    bibleStudy: readBibleStudy(),
     bookmarks: data.bookmarks || [],
     stickyNotes: readJson(NOTES_FILE, {}),
     siteMemory: readJson(SITE_MEMORY_FILE, {}),
@@ -2670,6 +2675,9 @@ ipcMain.handle('backup:apply', (_e) => {
     if (sections.bible) {
       const merged = mergeBibleMarks(readBibleMarksForBackup(), sections.bible)
       writeBibleMarks(merged)
+    }
+    if (sections.bibleStudy) {
+      writeBibleStudy(mergeBibleStudy(readBibleStudy(), sections.bibleStudy))
     }
 
     const data = getData()
@@ -3410,6 +3418,101 @@ ipcMain.handle('debug:write', (_e, name: string, data: string) => {
   try { fs.writeFileSync(join(APP_DIR, `debug-${name}.txt`), String(data)) } catch {}
 })
 
+// ── Bible study progress ──────────────────────────────────────────────────
+// Deliberately its own file, not another key inside bible-marks.json. The two
+// have different blast radii: losing a drill queue is an annoyance, losing a
+// year of highlights and notes is unrecoverable. Keeping them apart means a
+// corrupt study file cannot take the marks down with it, and clearing the
+// reader's marks does not wipe out what they have memorised.
+const BIBLE_STUDY_FILE = join(APP_DIR, 'bible-study.json')
+const BIBLE_STUDY_BAK  = `${BIBLE_STUDY_FILE}.bak`
+
+function normaliseStudy(stored: any): BibleStudyData | null {
+  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) return null
+  const streak = stored.streak && typeof stored.streak === 'object' ? stored.streak : {}
+  return {
+    verses:  stored.verses  && typeof stored.verses  === 'object' ? stored.verses  : {},
+    lessons: stored.lessons && typeof stored.lessons === 'object' ? stored.lessons : {},
+    streak: {
+      days: Array.isArray(streak.days) ? streak.days.filter((d: any) => typeof d === 'string') : [],
+      best: Number(streak.best) || 0,
+    },
+    badges: Array.isArray(stored.badges) ? stored.badges.filter((b: any) => typeof b === 'string') : [],
+    plans:  stored.plans && typeof stored.plans === 'object' ? stored.plans : {},
+  }
+}
+
+function studyHasContent(s: BibleStudyData): boolean {
+  return Object.keys(s.verses).length > 0
+    || Object.keys(s.lessons).length > 0
+    || s.streak.days.length > 0
+    || s.badges.length > 0
+}
+
+function readBibleStudy(): BibleStudyData {
+  const readFile = (f: string): BibleStudyData | null => {
+    try { return normaliseStudy(JSON.parse(fs.readFileSync(f, 'utf-8'))) } catch { return null }
+  }
+  return (fs.existsSync(BIBLE_STUDY_FILE) ? readFile(BIBLE_STUDY_FILE) : null)
+    || (fs.existsSync(BIBLE_STUDY_BAK) ? readFile(BIBLE_STUDY_BAK) : null)
+    || EMPTY_BIBLE_STUDY()
+}
+
+function writeBibleStudy(next: BibleStudyData): void {
+  ensureDir()
+  if (fs.existsSync(BIBLE_STUDY_FILE)) {
+    try { fs.copyFileSync(BIBLE_STUDY_FILE, BIBLE_STUDY_BAK) } catch {}
+  }
+  const tmp = `${BIBLE_STUDY_FILE}.tmp`
+  fs.writeFileSync(tmp, JSON.stringify(next, null, 2))
+  fs.renameSync(tmp, BIBLE_STUDY_FILE)
+}
+
+ipcMain.handle('bible:getStudy', (): BibleStudyData & { status: 'ok' | 'empty' | 'unreadable' } => {
+  const readFile = (f: string): BibleStudyData | null => {
+    try { return normaliseStudy(JSON.parse(fs.readFileSync(f, 'utf-8'))) } catch { return null }
+  }
+  const primaryExists = fs.existsSync(BIBLE_STUDY_FILE)
+  if (!primaryExists && !fs.existsSync(BIBLE_STUDY_BAK)) {
+    return { ...EMPTY_BIBLE_STUDY(), status: 'empty' }
+  }
+  const primary = primaryExists ? readFile(BIBLE_STUDY_FILE) : null
+  if (primary) return { ...primary, status: 'ok' }
+
+  const backup = readFile(BIBLE_STUDY_BAK)
+  if (backup) {
+    try { fs.copyFileSync(BIBLE_STUDY_BAK, BIBLE_STUDY_FILE) } catch {}
+    console.warn('[aihub] bible study progress recovered from backup')
+    return { ...backup, status: 'ok' }
+  }
+  console.warn('[aihub] bible study progress unreadable and no usable backup')
+  return { ...EMPTY_BIBLE_STUDY(), status: 'unreadable' }
+})
+
+ipcMain.handle('bible:setStudy', (_e, study: BibleStudyData, opts?: { allowEmpty?: boolean }) => {
+  const next = normaliseStudy(study)
+  if (!next) return { ok: false, error: 'bad-shape' }
+
+  // Same guard as the marks file: never let a renderer that started from a
+  // blank slate persist that blankness over real progress.
+  if (!opts?.allowEmpty && !studyHasContent(next)) {
+    const current = (() => {
+      try { return normaliseStudy(JSON.parse(fs.readFileSync(BIBLE_STUDY_FILE, 'utf-8'))) } catch { return null }
+    })()
+    if (current && studyHasContent(current)) {
+      console.warn('[aihub] refused an empty bible-study write over existing progress')
+      return { ok: false, error: 'refused-empty' }
+    }
+  }
+
+  try {
+    writeBibleStudy(next)
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'write-failed' }
+  }
+  return { ok: true }
+})
+
 ipcMain.handle('bible:setMarks', (_e, marks: BibleMarks, opts?: { allowEmpty?: boolean }) => {
   const next = normaliseMarks(marks)
   if (!next) return { ok: false, error: 'bad-shape' }
@@ -3944,7 +4047,18 @@ async function runAiRequest(
         // can. Plain chat keeps whatever the user chose — no reason to make
         // "what's 2+2" wait on a 14B model.
         let chosen = model
-        if (opts?.needsTools && probe.info?.length) {
+        // A picture in the conversation overrides everything else about model
+        // choice: a text-only model handed base64 does not fail loudly, it
+        // confidently describes something that is not there.
+        const carriesImages = hasImages(messages)
+        if (carriesImages) {
+          const vision = pickVisionModel(probe.models || [], configured || model)
+          if (vision && vision !== chosen) {
+            console.log(`[aihub] image turn: routing ${chosen || '(unset)'} → ${vision}`)
+            chosen = vision
+          }
+        }
+        if (!carriesImages && opts?.needsTools && probe.info?.length) {
           // Models this machine has already proven it cannot serve in time are
           // out of the running — on a CPU-only box a 7B upgrade turns a slow
           // answer into no answer at all.
@@ -3971,8 +4085,13 @@ async function runAiRequest(
             // starts, or a timed-out model's half-answer would sit spliced in
             // front of the real one.
             opts?.onDelta?.('', true)
+            // Converted per attempt, because whether the pictures survive
+            // depends on which model this attempt is using.
+            const payload = !carriesImages ? messages
+              : looksVisionCapable(attempt) ? forOllama(messages)
+              : withoutImages(messages)
             const raw = await ollamaChatStream(
-              olBase, attempt, messages, 120000, isRoutedUpgrade ? 60000 : 120000, opts?.onDelta,
+              olBase, attempt, payload, 120000, isRoutedUpgrade ? 60000 : 120000, opts?.onDelta,
             )
             const content = stripThinkTags(raw)
             if (content) return { ok: true as const, value: content }
@@ -4004,13 +4123,17 @@ async function runAiRequest(
         // A single 429 on a shared free model shouldn't end the request when
         // another free model would answer (§32).
         const candidates = [model, ...(await buildOrCandidates(orBase, model, !!opts?.preferCloud))]
+        // The OpenAI parts shape, once, up front: every candidate in the chain
+        // speaks it, and a model that cannot see rejects the request rather
+        // than answering about an image it never received.
+        const payload = hasImages(messages) ? forOpenRouter(messages) : messages
         let hardError = ''
         for (const candidate of [...new Set(candidates)]) {
           try {
             // 8192 tokens: long structured replies (extension generation emits
             // 5-10 objects with code) blow through the old 2048 default and get
             // truncated mid-JSON — same failure the Ollama path fixed via num_ctx.
-            const content = await openRouterChat(orBase, orKey, candidate, messages, opts?.maxTokens ?? 8192)
+            const content = await openRouterChat(orBase, orKey, candidate, payload, opts?.maxTokens ?? 8192)
             if (content) return { ok: true as const, content, model: candidate }
             // null = 402/404/429 on this model — try the next candidate.
           } catch (e: any) {

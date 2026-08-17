@@ -1,0 +1,310 @@
+{
+  "version": 1,
+  "courses": [
+    {
+      "id": "life-of-christ",
+      "title": "Life of Christ",
+      "blurb": "Six lessons through the Gospels, from the manger to the empty tomb.",
+      "accent": "#e6c86e",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "The Word Made Flesh",
+          "subtitle": "Birth",
+          "teaching": [
+            "Two Gospels tell the story of Jesus' birth and they tell it differently. Luke writes from the edges — a census, a borrowed feeding trough, shepherds working a night shift. Matthew writes from the centre — scholars from the east, a nervous king, a family fleeing across a border. John does not tell the story at all. He goes further back than Bethlehem and says that the Word who was with God in the beginning became flesh and lived among us.",
+            "The historical setting matters. Judea in this period was ruled by Herod under Roman authority, and a census meant taxation, which meant travel, which is why Luke has a heavily pregnant woman on a road she had no reason to be on. The birth is not staged in a palace. Luke is careful to place it among people with no standing: the first announcement goes to shepherds, whose testimony would not have been accepted in a court.",
+            "What the text says plainly is that God entered the world at its ordinary end, not its powerful one. Traditions differ on much surrounding this — the date, the number of visitors, the nature of the star — and the Gospels themselves are unbothered by those questions. They are interested in one claim: the God who made the world came into it as a child."
+          ],
+          "passages": [
+            { "bookId": "LUK", "chapter": 2, "from": 1, "to": 20, "label": "Luke 2:1–20" },
+            { "bookId": "JHN", "chapter": 1, "from": 1, "to": 14, "label": "John 1:1–14" },
+            { "bookId": "MAT", "chapter": 2, "from": 1, "to": 12, "label": "Matthew 2:1–12" }
+          ],
+          "memory": ["JHN.1.14", "LUK.2.11", "JHN.1.1"]
+        },
+        {
+          "id": "02",
+          "title": "Water and Wilderness",
+          "subtitle": "Baptism and temptation",
+          "teaching": [
+            "Jesus' public life begins with two scenes set back to back, and the order is not accidental. First he is baptised by John in the Jordan and a voice names him beloved. Then the same Spirit that descended on him drives him into the wilderness to be tested for forty days.",
+            "John's baptism was a baptism of repentance, which is why Matthew records John's protest: he does not think he should be baptising Jesus at all. The Gospels do not resolve that tension by explaining it away. Jesus insists, and the reader is left with a figure who steps into the water alongside everyone else rather than above them.",
+            "The temptations are all offers of a shorter route — bread without hunger, safety without trust, authority without a cross. Each is refused with a line from Deuteronomy, the book Israel read about its own forty years in a wilderness. The parallel is deliberate: where the nation faltered, this one does not."
+          ],
+          "passages": [
+            { "bookId": "MAT", "chapter": 3, "from": 13, "to": 17, "label": "Matthew 3:13–17" },
+            { "bookId": "MAT", "chapter": 4, "from": 1, "to": 11, "label": "Matthew 4:1–11" },
+            { "bookId": "DEU", "chapter": 8, "from": 1, "to": 5, "label": "Deuteronomy 8:1–5" }
+          ],
+          "memory": ["MAT.4.4", "MAT.3.17"]
+        },
+        {
+          "id": "03",
+          "title": "The Kingdom Arrives",
+          "subtitle": "Ministry and teaching",
+          "teaching": [
+            "Mark's account moves fast. Jesus calls fishermen away from their nets, teaches in a synagogue, heals, and by the end of a single chapter cannot enter a town openly because of the crowds. The pace is the point: something has started and it is not going to be contained.",
+            "Alongside the healings comes the teaching, and the Sermon on the Mount is its densest statement. The blessings at its opening are not advice; they are announcements about who is already favoured in this kingdom — the poor in spirit, the mourning, the merciful — and every one of them names a group the world does not consider fortunate.",
+            "Two things sit together here that readers often separate. Jesus heals bodies and he teaches about righteousness, and the Gospels present both as the same work. Christian traditions differ on how far the healings continue today; they do not differ on the claim that the kingdom Jesus announced showed up in ordinary flesh and ordinary illness."
+          ],
+          "passages": [
+            { "bookId": "MRK", "chapter": 1, "from": 14, "to": 45, "label": "Mark 1:14–45" },
+            { "bookId": "MAT", "chapter": 5, "from": 1, "to": 16, "label": "Matthew 5:1–16" },
+            { "bookId": "MAT", "chapter": 6, "from": 25, "to": 34, "label": "Matthew 6:25–34" }
+          ],
+          "memory": ["MAT.5.16", "MAT.6.33", "MRK.1.15"]
+        },
+        {
+          "id": "04",
+          "title": "On the Mountain",
+          "subtitle": "Transfiguration",
+          "teaching": [
+            "Six days after Peter's confession that Jesus is the Christ, three of the disciples are taken up a high mountain and see him changed — his face and clothing lit from within, with Moses and Elijah beside him. The two figures stand for the Law and the Prophets, and their presence says that what is happening is continuous with everything that came before it, not a break from it.",
+            "Peter offers to build three shelters. It is a well-meaning instinct to make a moment permanent, and it is interrupted mid-sentence by a cloud and a voice: this is my beloved Son; listen to him. Then the vision ends abruptly and they are back on the road, walking down.",
+            "Luke adds a detail the others leave out: Moses and Elijah were speaking with Jesus about his departure, which he was about to accomplish at Jerusalem. The glory scene is set immediately next to the road to the cross. The Gospels keep them adjacent on purpose."
+          ],
+          "passages": [
+            { "bookId": "LUK", "chapter": 9, "from": 28, "to": 36, "label": "Luke 9:28–36" },
+            { "bookId": "MRK", "chapter": 9, "from": 2, "to": 13, "label": "Mark 9:2–13" },
+            { "bookId": "2PE", "chapter": 1, "from": 16, "to": 21, "label": "2 Peter 1:16–21" }
+          ],
+          "memory": ["LUK.9.35", "LUK.9.23"]
+        },
+        {
+          "id": "05",
+          "title": "The Long Night",
+          "subtitle": "Passion",
+          "teaching": [
+            "The final days are told slowly. A supper, a garden, an arrest, a series of hearings through the night, and an execution the following morning. The Gospel writers who moved through three years in a few chapters now slow to hours, which tells you where they thought the weight of the story lay.",
+            "The trials are not one trial. There is a religious hearing before the council and a civil one before Pilate, and the charge changes between them — blasphemy in the first, sedition in the second, because only the second was something Rome would execute for. Crucifixion was a public political punishment, reserved for slaves and rebels, designed to be seen.",
+            "Luke keeps the small human details: a servant's ear healed, Peter weeping outside, a criminal beside him asking to be remembered. Christians have understood the meaning of the cross in several different ways across the centuries, and the Gospels themselves offer images rather than a single theory — a ransom, a covenant, a lamb, a shepherd who lays down his life."
+          ],
+          "passages": [
+            { "bookId": "LUK", "chapter": 22, "from": 39, "to": 62, "label": "Luke 22:39–62" },
+            { "bookId": "LUK", "chapter": 23, "from": 32, "to": 49, "label": "Luke 23:32–49" },
+            { "bookId": "ISA", "chapter": 53, "from": 1, "to": 12, "label": "Isaiah 53" }
+          ],
+          "memory": ["ISA.53.5", "LUK.23.34", "JHN.15.13"]
+        },
+        {
+          "id": "06",
+          "title": "The First Day of the Week",
+          "subtitle": "Resurrection",
+          "teaching": [
+            "Every Gospel account of the resurrection begins with people who were not expecting it. Women come to the tomb at dawn to finish a burial, not to witness a miracle. The disciples' first reaction to their report is that it sounds like nonsense.",
+            "The accounts differ in detail — how many women, how many messengers, the order of the appearances — in the way independent testimony to a chaotic morning usually does. What they agree on is stark and specific: the tomb was empty, and people who had known Jesus well met him afterwards, ate with him, and were changed permanently by it.",
+            "John's account narrows to two people in a garden. Mary mistakes him for the gardener until he says her name. It is a small, personal scene at the hinge of the whole story, and it sets the pattern for what follows: the news travels because particular people were sent to tell it."
+          ],
+          "passages": [
+            { "bookId": "JHN", "chapter": 20, "from": 1, "to": 18, "label": "John 20:1–18" },
+            { "bookId": "LUK", "chapter": 24, "from": 13, "to": 35, "label": "Luke 24:13–35" },
+            { "bookId": "1CO", "chapter": 15, "from": 1, "to": 8, "label": "1 Corinthians 15:1–8" }
+          ],
+          "memory": ["JHN.11.25", "1CO.15.58", "JHN.20.29"]
+        }
+      ]
+    },
+    {
+      "id": "parables",
+      "title": "The Parables",
+      "blurb": "Six of Jesus' stories, read closely for what they actually say.",
+      "accent": "#7dd3a0",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "The Sower",
+          "subtitle": "Four soils",
+          "teaching": [
+            "A farmer scatters seed and it lands on four kinds of ground: a path, rocky shallow soil, thorns, and good earth. Only the last produces anything. This is one of the few parables the Gospels record Jesus explaining, and the explanation identifies the seed as the word and the soils as four ways of receiving it.",
+            "The sowing method is worth knowing. Broadcast sowing threw seed widely before ploughing, so seed landing on a path or among thorns was normal practice, not carelessness. The parable is not criticising the farmer.",
+            "Notice what the four soils are actually distinguished by: not intelligence or moral effort, but depth, and what else is already growing there. The thorns are named as worry and the deceitfulness of riches — the conditions of an ordinary busy life rather than any dramatic rejection."
+          ],
+          "passages": [
+            { "bookId": "MRK", "chapter": 4, "from": 1, "to": 20, "label": "Mark 4:1–20" },
+            { "bookId": "MAT", "chapter": 13, "from": 1, "to": 23, "label": "Matthew 13:1–23" }
+          ],
+          "memory": ["MRK.4.20", "MAT.13.23"]
+        },
+        {
+          "id": "02",
+          "title": "The Prodigal Son",
+          "subtitle": "Two sons, one father",
+          "teaching": [
+            "A younger son asks for his inheritance while his father is still alive — in that culture a startling request, close to wishing him dead. He gets it, spends it, ends up feeding pigs, and rehearses a speech on the way home. He never finishes the speech, because his father sees him a long way off and runs.",
+            "An older man running was undignified in that setting; the detail is doing work. So is the robe, the ring and the shoes, which restore the son to the household rather than to hired-hand status, which is all he had dared ask for.",
+            "The story does not end there, and it is often stopped too early. The elder brother refuses to come in, and the father goes out to him as well. The parable is told to an audience of religious professionals complaining that Jesus eats with the wrong people; the second half is aimed squarely at them, and it ends unresolved — we are never told whether the older son goes in."
+          ],
+          "passages": [
+            { "bookId": "LUK", "chapter": 15, "from": 11, "to": 32, "label": "Luke 15:11–32" }
+          ],
+          "memory": ["LUK.15.20", "LUK.15.32"]
+        },
+        {
+          "id": "03",
+          "title": "The Good Samaritan",
+          "subtitle": "Who is my neighbour",
+          "teaching": [
+            "A lawyer asks a question designed to draw a boundary: who counts as my neighbour? Jesus answers with a story set on the Jerusalem-to-Jericho road, a real seventeen-mile descent through country known for robbery.",
+            "Two religious officials pass the injured man. The text does not tell us their reasoning, and readers have supplied several over the centuries — ritual purity, fear of an ambush, hurry. Then a Samaritan stops. First-century Judeans and Samaritans were not neighbours in any social sense; the choice of that character is the sharpest thing in the parable.",
+            "The question is answered by being reversed. Jesus does not define which categories of person qualify as a neighbour to me; he asks which of the three proved to be a neighbour to the man in the ditch. The boundary the lawyer wanted to draw is simply removed."
+          ],
+          "passages": [
+            { "bookId": "LUK", "chapter": 10, "from": 25, "to": 37, "label": "Luke 10:25–37" },
+            { "bookId": "LEV", "chapter": 19, "from": 15, "to": 18, "label": "Leviticus 19:15–18" }
+          ],
+          "memory": ["LUK.10.27", "LEV.19.18"]
+        },
+        {
+          "id": "04",
+          "title": "The Talents",
+          "subtitle": "What was entrusted",
+          "teaching": [
+            "A man going abroad hands three servants different sums and leaves. A talent was an enormous amount — years of a labourer's wages — so even the servant given one was trusted with a fortune.",
+            "Two of them trade and double the money. The third buries his, and when the master returns he explains himself by describing the master as harsh, someone who reaps where he did not sow. He is judged on that description as much as on the buried money.",
+            "Christian readings of this parable have differed on how much it is about money, ability, or opportunity. What the text itself emphasises is risk: the two commended servants did something that could have gone wrong, and the condemned one chose the option with no downside and no return. Fear is named as the reason."
+          ],
+          "passages": [
+            { "bookId": "MAT", "chapter": 25, "from": 14, "to": 30, "label": "Matthew 25:14–30" },
+            { "bookId": "LUK", "chapter": 19, "from": 11, "to": 27, "label": "Luke 19:11–27" }
+          ],
+          "memory": ["MAT.25.21", "2TI.1.7"]
+        },
+        {
+          "id": "05",
+          "title": "The Lost Sheep",
+          "subtitle": "Leaving the ninety-nine",
+          "teaching": [
+            "A shepherd with a hundred sheep loses one and leaves the ninety-nine to find it. It is a short parable, told with two companions in Luke — a woman sweeping her house for one lost coin, and the story of the younger son — all three making the same point from different angles.",
+            "The arithmetic is deliberately poor. Leaving ninety-nine to chase one is not sound flock management, and every listener would have known that. The story is not modelling efficiency; it is describing a value that does not average people out.",
+            "Both Matthew and Luke record it, in different settings: Matthew among instructions to a community about not despising 'one of these little ones', Luke as an answer to the complaint that Jesus welcomes sinners. Both endings turn on the same word — joy over the one that was found."
+          ],
+          "passages": [
+            { "bookId": "LUK", "chapter": 15, "from": 1, "to": 10, "label": "Luke 15:1–10" },
+            { "bookId": "MAT", "chapter": 18, "from": 10, "to": 14, "label": "Matthew 18:10–14" }
+          ],
+          "memory": ["LUK.15.7", "MAT.18.14"]
+        },
+        {
+          "id": "06",
+          "title": "Sheep and Goats",
+          "subtitle": "The least of these",
+          "teaching": [
+            "The last parable in Matthew's teaching section is a judgement scene. Everyone is separated as a shepherd separates sheep from goats, and the criterion turns out to be food, water, welcome, clothing, care in sickness, and visits in prison.",
+            "Both groups are surprised. Neither recognised whom they were serving or failing to serve, which is the hinge of the story: 'inasmuch as you did it to one of the least of these, you did it to me.' The judgement is not on stated belief or on intention but on what was actually done, to people who could not repay it.",
+            "Traditions differ on who 'the least of these' primarily refers to — the poor generally, or Jesus' own messengers in particular — and on how this passage relates to teaching elsewhere that no one is saved by their works. The passage itself does not settle those debates. It leaves a list of six very concrete actions."
+          ],
+          "passages": [
+            { "bookId": "MAT", "chapter": 25, "from": 31, "to": 46, "label": "Matthew 25:31–46" },
+            { "bookId": "JAS", "chapter": 2, "from": 14, "to": 26, "label": "James 2:14–26" }
+          ],
+          "memory": ["MAT.25.40", "JAS.2.17", "MIC.6.8"]
+        }
+      ]
+    },
+    {
+      "id": "psalms",
+      "title": "Psalms for Hard Days",
+      "blurb": "Six psalms for the days you do not have words of your own.",
+      "accent": "#8fb8f0",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Grief",
+          "subtitle": "When it does not lift",
+          "teaching": [
+            "The Psalms contain more laments than praises, and the laments are not tidy. Psalm 13 opens by asking 'how long' four times in two verses. Psalm 42 talks to its own soul because there is nobody else left to talk to.",
+            "What is unusual about these prayers is that they were kept. A community that only wanted its faith to look confident would have edited them out. Instead they were collected, set to music, and sung publicly — which means grief was given a place in worship rather than a place outside it.",
+            "Most laments turn somewhere near the end, though not all of them do; Psalm 88 finishes in the dark. The turn, when it comes, is usually not an explanation. It is a decision to keep speaking to God, which the psalms treat as the thing that carries a person rather than an answer they were given."
+          ],
+          "passages": [
+            { "bookId": "PSA", "chapter": 13, "from": 1, "to": 6, "label": "Psalm 13" },
+            { "bookId": "PSA", "chapter": 42, "from": 1, "to": 11, "label": "Psalm 42" },
+            { "bookId": "PSA", "chapter": 34, "from": 15, "to": 22, "label": "Psalm 34:15–22" }
+          ],
+          "memory": ["PSA.34.18", "PSA.42.11", "PSA.147.3"]
+        },
+        {
+          "id": "02",
+          "title": "Fear",
+          "subtitle": "When the ground moves",
+          "teaching": [
+            "Psalm 27 and Psalm 56 both name fear directly rather than denying it. 'What time I am afraid, I will put my trust in you' assumes the fear is still there while the trust is happening; the two are not presented as alternatives.",
+            "Psalm 46 is set against a background of collapsing geography — mountains falling into the sea — and its famous line, 'be still and know that I am God', sits inside that scene rather than a calm one. The stillness is commanded in the middle of upheaval, not after it has passed.",
+            "These psalms give fear a vocabulary. That is much of their usefulness: on a day when a person cannot construct a prayer, they can read one that was written by somebody in the same condition, which is why they have been read aloud at bedsides for three thousand years."
+          ],
+          "passages": [
+            { "bookId": "PSA", "chapter": 27, "from": 1, "to": 14, "label": "Psalm 27" },
+            { "bookId": "PSA", "chapter": 46, "from": 1, "to": 11, "label": "Psalm 46" },
+            { "bookId": "PSA", "chapter": 56, "from": 1, "to": 13, "label": "Psalm 56" }
+          ],
+          "memory": ["PSA.56.3", "PSA.27.1", "PSA.46.1"]
+        },
+        {
+          "id": "03",
+          "title": "Guilt",
+          "subtitle": "When you were in the wrong",
+          "teaching": [
+            "Psalm 51 is traditionally connected to David after the affair with Bathsheba and the killing of her husband. Whatever its origin, it is a prayer written by someone with no defence to offer, and it does not attempt one.",
+            "It asks for three distinct things: to be forgiven, to be cleaned, and to be changed — 'create in me a clean heart'. The third is the request that separates this psalm from a simple apology. It assumes the problem is not only what was done but what the person is capable of doing.",
+            "Psalm 32 is the same territory from the other side, describing the physical weight of unconfessed wrong and the relief of speaking it. Christian traditions differ on the practice of confession — to God alone, to a community, or to a priest — while agreeing with these psalms that saying it out loud is where the relief starts."
+          ],
+          "passages": [
+            { "bookId": "PSA", "chapter": 51, "from": 1, "to": 17, "label": "Psalm 51:1–17" },
+            { "bookId": "PSA", "chapter": 32, "from": 1, "to": 11, "label": "Psalm 32" },
+            { "bookId": "PSA", "chapter": 103, "from": 8, "to": 14, "label": "Psalm 103:8–14" }
+          ],
+          "memory": ["PSA.51.10", "PSA.103.12", "1JN.1.9"]
+        },
+        {
+          "id": "04",
+          "title": "Waiting",
+          "subtitle": "When nothing is happening",
+          "teaching": [
+            "Psalm 40 begins in the past tense: 'I waited patiently for Yahweh.' The rescue it describes has already happened, and by the end of the same psalm the writer is asking for help again. The pattern is honest about how relief and need alternate.",
+            "Psalm 130 measures waiting against the night watch — 'more than watchmen long for the morning' — a comparison anyone who has lain awake will recognise. Waiting in these psalms is not passive resignation; it is a specific, uncomfortable, watchful posture.",
+            "Psalm 27 ends with the same instruction it needs itself: wait for Yahweh, be strong, and let your heart take courage. The Psalter is unembarrassed about repeating advice it has not yet been able to take."
+          ],
+          "passages": [
+            { "bookId": "PSA", "chapter": 40, "from": 1, "to": 11, "label": "Psalm 40:1–11" },
+            { "bookId": "PSA", "chapter": 130, "from": 1, "to": 8, "label": "Psalm 130" },
+            { "bookId": "ISA", "chapter": 40, "from": 27, "to": 31, "label": "Isaiah 40:27–31" }
+          ],
+          "memory": ["PSA.130.5", "ISA.40.31", "PSA.27.14"]
+        },
+        {
+          "id": "05",
+          "title": "Anger",
+          "subtitle": "When it is not fair",
+          "teaching": [
+            "Psalm 73 says the quiet part out loud: the writer looked at people who did wrong and prospered by it, and nearly lost his footing over the unfairness. He does not resolve it by deciding it was fine. He resolves it by changing where he is standing.",
+            "Psalm 37 is the counsel of someone older — do not fret because of evildoers — and it is aimed at the corrosive effect of resentment on the person carrying it, not at the question of whether the anger is justified.",
+            "Some psalms go much further, calling down harm on enemies in terms most readers find shocking. Christian traditions handle those passages very differently: as raw honesty brought to God rather than acted on, as legal appeals for justice, or as texts to be read in the light of Jesus' teaching on enemies. The disagreement is real and worth knowing about."
+          ],
+          "passages": [
+            { "bookId": "PSA", "chapter": 73, "from": 1, "to": 28, "label": "Psalm 73" },
+            { "bookId": "PSA", "chapter": 37, "from": 1, "to": 11, "label": "Psalm 37:1–11" },
+            { "bookId": "PSA", "chapter": 4, "from": 1, "to": 8, "label": "Psalm 4" }
+          ],
+          "memory": ["PSA.73.26", "PSA.37.4", "PSA.37.5"]
+        },
+        {
+          "id": "06",
+          "title": "Thanksgiving",
+          "subtitle": "When it lifts",
+          "teaching": [
+            "Psalm 136 repeats one line twenty-six times: 'for his loving kindness endures forever.' It was almost certainly sung antiphonally, one voice reciting the history and everyone else answering. Repetition is doing something here that argument cannot.",
+            "Psalm 103 gives thanks by listing — forgiveness, healing, redemption, steadfast love — and instructs the soul not to forget any of it. The instruction implies forgetting is the default, which is why the list exists.",
+            "Thanksgiving in the Psalms is rarely detached from difficulty. Psalm 30 thanks God for a rescue while still remembering the pit. This course ends here not because hard days stop, but because the Psalter itself keeps putting gratitude and grief in the same book, often on the same page."
+          ],
+          "passages": [
+            { "bookId": "PSA", "chapter": 103, "from": 1, "to": 14, "label": "Psalm 103:1–14" },
+            { "bookId": "PSA", "chapter": 136, "from": 1, "to": 9, "label": "Psalm 136:1–9" },
+            { "bookId": "PSA", "chapter": 30, "from": 1, "to": 12, "label": "Psalm 30" }
+          ],
+          "memory": ["PSA.136.1", "PSA.30.5", "PSA.100.4"]
+        }
+      ]
+    }
+  ]
+}
