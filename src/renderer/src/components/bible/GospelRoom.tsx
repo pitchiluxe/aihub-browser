@@ -73,6 +73,11 @@ export default function GospelRoom({ open, onClose }: Props) {
   const [query, setQuery]       = useState('')
   const [playing, setPlaying]   = useState<GospelVideo | null>(null)
   const [nonce, setNonce]       = useState(0)
+  // youtube-nocookie is the privacy-preserving host and the default. It is
+  // also the stricter of the two about how it is embedded, so if a video will
+  // not start there the reader can drop to the ordinary host rather than being
+  // stuck looking at a player error.
+  const [altHost, setAltHost]   = useState(false)
   // Re-rolled every time the room is opened, so the shelf is a different
   // shelf each visit rather than the same ten videos in the same order. The
   // main process caches a query's results for fifteen minutes, which is right
@@ -131,6 +136,9 @@ export default function GospelRoom({ open, onClose }: Props) {
   // Stop the player when the listing changes underneath it — an iframe still
   // singing over a screen that has moved on is the worst version of this.
   useEffect(() => { setPlaying(null) }, [shelf, nonce])
+
+  // Each new video starts on the preferred host again.
+  useEffect(() => { setAltHost(false) }, [playing?.id])
 
   const shown = useMemo(() => {
     const ordered = shuffleSeeded(videos, seed)
@@ -251,7 +259,7 @@ export default function GospelRoom({ open, onClose }: Props) {
               <div className="relative aspect-video w-full bg-black">
                 <iframe
                   key={playing.id}
-                  src={`https://www.youtube-nocookie.com/embed/${playing.id}?autoplay=1&rel=0&modestbranding=1&color=white`}
+                  src={`https://${altHost ? 'www.youtube.com' : 'www.youtube-nocookie.com'}/embed/${playing.id}?autoplay=1&rel=0&modestbranding=1&color=white`}
                   title={playing.title}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
@@ -259,11 +267,19 @@ export default function GospelRoom({ open, onClose }: Props) {
                 />
               </div>
               <div className="p-4">
-                <button
-                  onClick={() => addTab(playing.url, 'browser')}
-                  className="inline-flex items-center gap-1 text-[10.5px] opacity-50 transition-opacity hover:opacity-100">
-                  Open on YouTube <ChevronRight size={11} />
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={() => addTab(playing.url, 'browser')}
+                    className="inline-flex items-center gap-1 text-[10.5px] opacity-50 transition-opacity hover:opacity-100">
+                    Open on YouTube <ChevronRight size={11} />
+                  </button>
+                  <button
+                    onClick={() => setAltHost(h => !h)}
+                    title="Reload the player on the other YouTube host"
+                    className="inline-flex items-center gap-1 text-[10.5px] opacity-40 transition-opacity hover:opacity-100">
+                    {altHost ? 'Back to the private player' : "Won't play? Try the standard player"}
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>

@@ -1429,6 +1429,27 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   hookDownloadSession(session.defaultSession)
   hookDownloadSession(firstWin.webContents.session)
 
+  // YouTube's embedded player refuses a request that reaches it without a
+  // Referer, and reports it as "Error 153 — video player configuration error".
+  // A packaged build serves the renderer from file://, which sends no Referer
+  // at all, so the Gospel room's embed failed on every real install while
+  // working perfectly against the dev server on http://localhost.
+  //
+  // The header is set to the app's own site, which is precisely what a Referer
+  // is for: telling YouTube who is embedding. Nothing is impersonated, and
+  // nothing restricted is reached — these are public videos the uploader
+  // marked embeddable. A request that already carries a Referer (a real web
+  // page in a browser tab that embeds YouTube itself) is left untouched.
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    { urls: ['https://www.youtube-nocookie.com/*', 'https://www.youtube.com/*'] },
+    (details, callback) => {
+      const headers = { ...details.requestHeaders }
+      const hasReferer = Object.keys(headers).some(k => k.toLowerCase() === 'referer')
+      if (!hasReferer) headers['Referer'] = 'https://aihub-browser.app/'
+      callback({ requestHeaders: headers })
+    },
+  )
+
   app.on('web-contents-created', (_e, wc) => {
     hookDownloadSession(wc.session)
     let wcType: string | undefined
