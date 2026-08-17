@@ -17,11 +17,33 @@
             "What the text says plainly is that God entered the world at its ordinary end, not its powerful one. Traditions differ on much surrounding this — the date, the number of visitors, the nature of the star — and the Gospels themselves are unbothered by those questions. They are interested in one claim: the God who made the world came into it as a child."
           ],
           "passages": [
-            { "bookId": "LUK", "chapter": 2, "from": 1, "to": 20, "label": "Luke 2:1–20" },
-            { "bookId": "JHN", "chapter": 1, "from": 1, "to": 14, "label": "John 1:1–14" },
-            { "bookId": "MAT", "chapter": 2, "from": 1, "to": 12, "label": "Matthew 2:1–12" }
+            {
+              "bookId": "LUK",
+              "chapter": 2,
+              "from": 1,
+              "to": 20,
+              "label": "Luke 2:1–20"
+            },
+            {
+              "bookId": "JHN",
+              "chapter": 1,
+              "from": 1,
+              "to": 14,
+              "label": "John 1:1–14"
+            },
+            {
+              "bookId": "MAT",
+              "chapter": 2,
+              "from": 1,
+              "to": 12,
+              "label": "Matthew 2:1–12"
+            }
           ],
-          "memory": ["JHN.1.14", "LUK.2.11", "JHN.1.1"]
+          "memory": [
+            "JHN.1.14",
+            "LUK.2.11",
+            "JHN.1.1"
+          ]
         },
         {
           "id": "02",
@@ -33,11 +55,32 @@
             "The temptations are all offers of a shorter route — bread without hunger, safety without trust, authority without a cross. Each is refused with a line from Deuteronomy, the book Israel read about its own forty years in a wilderness. The parallel is deliberate: where the nation faltered, this one does not."
           ],
           "passages": [
-            { "bookId": "MAT", "chapter": 3, "from": 13, "to": 17, "label": "Matthew 3:13–17" },
-            { "bookId": "MAT", "chapter": 4, "from": 1, "to": 11, "label": "Matthew 4:1–11" },
-            { "bookId": "DEU", "chapter": 8, "from": 1, "to": 5, "label": "Deuteronomy 8:1–5" }
+            {
+              "bookId": "MAT",
+              "chapter": 3,
+              "from": 13,
+              "to": 17,
+              "label": "Matthew 3:13–17"
+            },
+            {
+              "bookId": "MAT",
+              "chapter": 4,
+              "from": 1,
+              "to": 11,
+              "label": "Matthew 4:1–11"
+            },
+            {
+              "bookId": "DEU",
+              "chapter": 8,
+              "from": 1,
+              "to": 5,
+              "label": "Deuteronomy 8:1–5"
+            }
           ],
-          "memory": ["MAT.4.4", "MAT.3.17"]
+          "memory": [
+            "MAT.4.4",
+            "MAT.3.17"
+          ]
         },
         {
           "id": "03",
@@ -49,11 +92,33 @@
             "Two things sit together here that readers often separate. Jesus heals bodies and he teaches about righteousness, and the Gospels present both as the same work. Christian traditions differ on how far the healings continue today; they do not differ on the claim that the kingdom Jesus announced showed up in ordinary flesh and ordinary illness."
           ],
           "passages": [
-            { "bookId": "MRK", "chapter": 1, "from": 14, "to": 45, "label": "Mark 1:14–45" },
-            { "bookId": "MAT", "chapter": 5, "from": 1, "to": 16, "label": "Matthew 5:1–16" },
-            { "bookId": "MAT", "chapter": 6, "from": 25, "to": 34, "label": "Matthew 6:25–34" }
+            {
+              "bookId": "MRK",
+              "chapter": 1,
+              "from": 14,
+              "to": 45,
+              "label": "Mark 1:14–45"
+            },
+            {
+              "bookId": "MAT",
+              "chapter": 5,
+              "from": 1,
+              "to": 16,
+              "label": "Matthew 5:1–16"
+            },
+            {
+              "bookId": "MAT",
+              "chapter": 6,
+              "from": 25,
+              "to": 34,
+              "label": "Matthew 6:25–34"
+            }
           ],
-          "memory": ["MAT.5.16", "MAT.6.33", "MRK.1.15"]
+          "memory": [
+            "MAT.5.16",
+            "MAT.6.33",
+            "MRK.1.15"
+          ]
         },
         {
           "id": "04",
@@ -65,11 +130,32 @@
             "Luke adds a detail the others leave out: Moses and Elijah were speaking with Jesus about his departure, which he was about to accomplish at Jerusalem. The glory scene is set immediately next to the road to the cross. The Gospels keep them adjacent on purpose."
           ],
           "passages": [
-            { "bookId": "LUK", "chapter": 9, "from": 28, "to": 36, "label": "Luke 9:28–36" },
-            { "bookId": "MRK", "chapter": 9, "from": 2, "to": 13, "label": "Mark 9:2–13" },
-            { "bookId": "2PE", "chapter": 1, "from": 16, "to": 21, "label": "2 Peter 1:16–21" }
+            {
+              "bookId": "LUK",
+              "chapter": 9,
+              "from": 28,
+              "to": 36,
+              "label": "Luke 9:28–36"
+            },
+            {
+              "bookId": "MRK",
+              "chapter": 9,
+              "from": 2,
+              "to": 13,
+              "label": "Mark 9:2–13"
+            },
+            {
+              "bookId": "2PE",
+              "chapter": 1,
+              "from": 16,
+              "to": 21,
+              "label": "2 Peter 1:16–21"
+            }
           ],
-          "memory": ["LUK.9.35", "LUK.9.23"]
+          "memory": [
+            "LUK.9.35",
+            "LUK.9.23"
+          ]
         },
         {
           "id": "05",
@@ -81,11 +167,33 @@
             "Luke keeps the small human details: a servant's ear healed, Peter weeping outside, a criminal beside him asking to be remembered. Christians have understood the meaning of the cross in several different ways across the centuries, and the Gospels themselves offer images rather than a single theory — a ransom, a covenant, a lamb, a shepherd who lays down his life."
           ],
           "passages": [
-            { "bookId": "LUK", "chapter": 22, "from": 39, "to": 62, "label": "Luke 22:39–62" },
-            { "bookId": "LUK", "chapter": 23, "from": 32, "to": 49, "label": "Luke 23:32–49" },
-            { "bookId": "ISA", "chapter": 53, "from": 1, "to": 12, "label": "Isaiah 53" }
+            {
+              "bookId": "LUK",
+              "chapter": 22,
+              "from": 39,
+              "to": 62,
+              "label": "Luke 22:39–62"
+            },
+            {
+              "bookId": "LUK",
+              "chapter": 23,
+              "from": 32,
+              "to": 49,
+              "label": "Luke 23:32–49"
+            },
+            {
+              "bookId": "ISA",
+              "chapter": 53,
+              "from": 1,
+              "to": 12,
+              "label": "Isaiah 53"
+            }
           ],
-          "memory": ["ISA.53.5", "LUK.23.34", "JHN.15.13"]
+          "memory": [
+            "ISA.53.5",
+            "LUK.23.34",
+            "JHN.15.13"
+          ]
         },
         {
           "id": "06",
@@ -97,11 +205,33 @@
             "John's account narrows to two people in a garden. Mary mistakes him for the gardener until he says her name. It is a small, personal scene at the hinge of the whole story, and it sets the pattern for what follows: the news travels because particular people were sent to tell it."
           ],
           "passages": [
-            { "bookId": "JHN", "chapter": 20, "from": 1, "to": 18, "label": "John 20:1–18" },
-            { "bookId": "LUK", "chapter": 24, "from": 13, "to": 35, "label": "Luke 24:13–35" },
-            { "bookId": "1CO", "chapter": 15, "from": 1, "to": 8, "label": "1 Corinthians 15:1–8" }
+            {
+              "bookId": "JHN",
+              "chapter": 20,
+              "from": 1,
+              "to": 18,
+              "label": "John 20:1–18"
+            },
+            {
+              "bookId": "LUK",
+              "chapter": 24,
+              "from": 13,
+              "to": 35,
+              "label": "Luke 24:13–35"
+            },
+            {
+              "bookId": "1CO",
+              "chapter": 15,
+              "from": 1,
+              "to": 8,
+              "label": "1 Corinthians 15:1–8"
+            }
           ],
-          "memory": ["JHN.11.25", "1CO.15.58", "JHN.20.29"]
+          "memory": [
+            "JHN.11.25",
+            "1CO.15.58",
+            "JHN.20.29"
+          ]
         }
       ]
     },
@@ -121,10 +251,25 @@
             "Notice what the four soils are actually distinguished by: not intelligence or moral effort, but depth, and what else is already growing there. The thorns are named as worry and the deceitfulness of riches — the conditions of an ordinary busy life rather than any dramatic rejection."
           ],
           "passages": [
-            { "bookId": "MRK", "chapter": 4, "from": 1, "to": 20, "label": "Mark 4:1–20" },
-            { "bookId": "MAT", "chapter": 13, "from": 1, "to": 23, "label": "Matthew 13:1–23" }
+            {
+              "bookId": "MRK",
+              "chapter": 4,
+              "from": 1,
+              "to": 20,
+              "label": "Mark 4:1–20"
+            },
+            {
+              "bookId": "MAT",
+              "chapter": 13,
+              "from": 1,
+              "to": 23,
+              "label": "Matthew 13:1–23"
+            }
           ],
-          "memory": ["MRK.4.20", "MAT.13.23"]
+          "memory": [
+            "MRK.4.20",
+            "MAT.13.23"
+          ]
         },
         {
           "id": "02",
@@ -136,9 +281,18 @@
             "The story does not end there, and it is often stopped too early. The elder brother refuses to come in, and the father goes out to him as well. The parable is told to an audience of religious professionals complaining that Jesus eats with the wrong people; the second half is aimed squarely at them, and it ends unresolved — we are never told whether the older son goes in."
           ],
           "passages": [
-            { "bookId": "LUK", "chapter": 15, "from": 11, "to": 32, "label": "Luke 15:11–32" }
+            {
+              "bookId": "LUK",
+              "chapter": 15,
+              "from": 11,
+              "to": 32,
+              "label": "Luke 15:11–32"
+            }
           ],
-          "memory": ["LUK.15.20", "LUK.15.32"]
+          "memory": [
+            "LUK.15.20",
+            "LUK.15.32"
+          ]
         },
         {
           "id": "03",
@@ -150,10 +304,25 @@
             "The question is answered by being reversed. Jesus does not define which categories of person qualify as a neighbour to me; he asks which of the three proved to be a neighbour to the man in the ditch. The boundary the lawyer wanted to draw is simply removed."
           ],
           "passages": [
-            { "bookId": "LUK", "chapter": 10, "from": 25, "to": 37, "label": "Luke 10:25–37" },
-            { "bookId": "LEV", "chapter": 19, "from": 15, "to": 18, "label": "Leviticus 19:15–18" }
+            {
+              "bookId": "LUK",
+              "chapter": 10,
+              "from": 25,
+              "to": 37,
+              "label": "Luke 10:25–37"
+            },
+            {
+              "bookId": "LEV",
+              "chapter": 19,
+              "from": 15,
+              "to": 18,
+              "label": "Leviticus 19:15–18"
+            }
           ],
-          "memory": ["LUK.10.27", "LEV.19.18"]
+          "memory": [
+            "LUK.10.27",
+            "LEV.19.18"
+          ]
         },
         {
           "id": "04",
@@ -165,10 +334,25 @@
             "Christian readings of this parable have differed on how much it is about money, ability, or opportunity. What the text itself emphasises is risk: the two commended servants did something that could have gone wrong, and the condemned one chose the option with no downside and no return. Fear is named as the reason."
           ],
           "passages": [
-            { "bookId": "MAT", "chapter": 25, "from": 14, "to": 30, "label": "Matthew 25:14–30" },
-            { "bookId": "LUK", "chapter": 19, "from": 11, "to": 27, "label": "Luke 19:11–27" }
+            {
+              "bookId": "MAT",
+              "chapter": 25,
+              "from": 14,
+              "to": 30,
+              "label": "Matthew 25:14–30"
+            },
+            {
+              "bookId": "LUK",
+              "chapter": 19,
+              "from": 11,
+              "to": 27,
+              "label": "Luke 19:11–27"
+            }
           ],
-          "memory": ["MAT.25.21", "2TI.1.7"]
+          "memory": [
+            "MAT.25.21",
+            "2TI.1.7"
+          ]
         },
         {
           "id": "05",
@@ -180,10 +364,25 @@
             "Both Matthew and Luke record it, in different settings: Matthew among instructions to a community about not despising 'one of these little ones', Luke as an answer to the complaint that Jesus welcomes sinners. Both endings turn on the same word — joy over the one that was found."
           ],
           "passages": [
-            { "bookId": "LUK", "chapter": 15, "from": 1, "to": 10, "label": "Luke 15:1–10" },
-            { "bookId": "MAT", "chapter": 18, "from": 10, "to": 14, "label": "Matthew 18:10–14" }
+            {
+              "bookId": "LUK",
+              "chapter": 15,
+              "from": 1,
+              "to": 10,
+              "label": "Luke 15:1–10"
+            },
+            {
+              "bookId": "MAT",
+              "chapter": 18,
+              "from": 10,
+              "to": 14,
+              "label": "Matthew 18:10–14"
+            }
           ],
-          "memory": ["LUK.15.7", "MAT.18.14"]
+          "memory": [
+            "LUK.15.7",
+            "MAT.18.14"
+          ]
         },
         {
           "id": "06",
@@ -195,10 +394,26 @@
             "Traditions differ on who 'the least of these' primarily refers to — the poor generally, or Jesus' own messengers in particular — and on how this passage relates to teaching elsewhere that no one is saved by their works. The passage itself does not settle those debates. It leaves a list of six very concrete actions."
           ],
           "passages": [
-            { "bookId": "MAT", "chapter": 25, "from": 31, "to": 46, "label": "Matthew 25:31–46" },
-            { "bookId": "JAS", "chapter": 2, "from": 14, "to": 26, "label": "James 2:14–26" }
+            {
+              "bookId": "MAT",
+              "chapter": 25,
+              "from": 31,
+              "to": 46,
+              "label": "Matthew 25:31–46"
+            },
+            {
+              "bookId": "JAS",
+              "chapter": 2,
+              "from": 14,
+              "to": 26,
+              "label": "James 2:14–26"
+            }
           ],
-          "memory": ["MAT.25.40", "JAS.2.17", "MIC.6.8"]
+          "memory": [
+            "MAT.25.40",
+            "JAS.2.17",
+            "MIC.6.8"
+          ]
         }
       ]
     },
@@ -218,11 +433,33 @@
             "Most laments turn somewhere near the end, though not all of them do; Psalm 88 finishes in the dark. The turn, when it comes, is usually not an explanation. It is a decision to keep speaking to God, which the psalms treat as the thing that carries a person rather than an answer they were given."
           ],
           "passages": [
-            { "bookId": "PSA", "chapter": 13, "from": 1, "to": 6, "label": "Psalm 13" },
-            { "bookId": "PSA", "chapter": 42, "from": 1, "to": 11, "label": "Psalm 42" },
-            { "bookId": "PSA", "chapter": 34, "from": 15, "to": 22, "label": "Psalm 34:15–22" }
+            {
+              "bookId": "PSA",
+              "chapter": 13,
+              "from": 1,
+              "to": 6,
+              "label": "Psalm 13"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 42,
+              "from": 1,
+              "to": 11,
+              "label": "Psalm 42"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 34,
+              "from": 15,
+              "to": 22,
+              "label": "Psalm 34:15–22"
+            }
           ],
-          "memory": ["PSA.34.18", "PSA.42.11", "PSA.147.3"]
+          "memory": [
+            "PSA.34.18",
+            "PSA.42.11",
+            "PSA.147.3"
+          ]
         },
         {
           "id": "02",
@@ -234,11 +471,33 @@
             "These psalms give fear a vocabulary. That is much of their usefulness: on a day when a person cannot construct a prayer, they can read one that was written by somebody in the same condition, which is why they have been read aloud at bedsides for three thousand years."
           ],
           "passages": [
-            { "bookId": "PSA", "chapter": 27, "from": 1, "to": 14, "label": "Psalm 27" },
-            { "bookId": "PSA", "chapter": 46, "from": 1, "to": 11, "label": "Psalm 46" },
-            { "bookId": "PSA", "chapter": 56, "from": 1, "to": 13, "label": "Psalm 56" }
+            {
+              "bookId": "PSA",
+              "chapter": 27,
+              "from": 1,
+              "to": 14,
+              "label": "Psalm 27"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 46,
+              "from": 1,
+              "to": 11,
+              "label": "Psalm 46"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 56,
+              "from": 1,
+              "to": 13,
+              "label": "Psalm 56"
+            }
           ],
-          "memory": ["PSA.56.3", "PSA.27.1", "PSA.46.1"]
+          "memory": [
+            "PSA.56.3",
+            "PSA.27.1",
+            "PSA.46.1"
+          ]
         },
         {
           "id": "03",
@@ -250,11 +509,33 @@
             "Psalm 32 is the same territory from the other side, describing the physical weight of unconfessed wrong and the relief of speaking it. Christian traditions differ on the practice of confession — to God alone, to a community, or to a priest — while agreeing with these psalms that saying it out loud is where the relief starts."
           ],
           "passages": [
-            { "bookId": "PSA", "chapter": 51, "from": 1, "to": 17, "label": "Psalm 51:1–17" },
-            { "bookId": "PSA", "chapter": 32, "from": 1, "to": 11, "label": "Psalm 32" },
-            { "bookId": "PSA", "chapter": 103, "from": 8, "to": 14, "label": "Psalm 103:8–14" }
+            {
+              "bookId": "PSA",
+              "chapter": 51,
+              "from": 1,
+              "to": 17,
+              "label": "Psalm 51:1–17"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 32,
+              "from": 1,
+              "to": 11,
+              "label": "Psalm 32"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 103,
+              "from": 8,
+              "to": 14,
+              "label": "Psalm 103:8–14"
+            }
           ],
-          "memory": ["PSA.51.10", "PSA.103.12", "1JN.1.9"]
+          "memory": [
+            "PSA.51.10",
+            "PSA.103.12",
+            "1JN.1.9"
+          ]
         },
         {
           "id": "04",
@@ -266,11 +547,33 @@
             "Psalm 27 ends with the same instruction it needs itself: wait for Yahweh, be strong, and let your heart take courage. The Psalter is unembarrassed about repeating advice it has not yet been able to take."
           ],
           "passages": [
-            { "bookId": "PSA", "chapter": 40, "from": 1, "to": 11, "label": "Psalm 40:1–11" },
-            { "bookId": "PSA", "chapter": 130, "from": 1, "to": 8, "label": "Psalm 130" },
-            { "bookId": "ISA", "chapter": 40, "from": 27, "to": 31, "label": "Isaiah 40:27–31" }
+            {
+              "bookId": "PSA",
+              "chapter": 40,
+              "from": 1,
+              "to": 11,
+              "label": "Psalm 40:1–11"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 130,
+              "from": 1,
+              "to": 8,
+              "label": "Psalm 130"
+            },
+            {
+              "bookId": "ISA",
+              "chapter": 40,
+              "from": 27,
+              "to": 31,
+              "label": "Isaiah 40:27–31"
+            }
           ],
-          "memory": ["PSA.130.5", "ISA.40.31", "PSA.27.14"]
+          "memory": [
+            "PSA.130.5",
+            "ISA.40.31",
+            "PSA.27.14"
+          ]
         },
         {
           "id": "05",
@@ -282,11 +585,33 @@
             "Some psalms go much further, calling down harm on enemies in terms most readers find shocking. Christian traditions handle those passages very differently: as raw honesty brought to God rather than acted on, as legal appeals for justice, or as texts to be read in the light of Jesus' teaching on enemies. The disagreement is real and worth knowing about."
           ],
           "passages": [
-            { "bookId": "PSA", "chapter": 73, "from": 1, "to": 28, "label": "Psalm 73" },
-            { "bookId": "PSA", "chapter": 37, "from": 1, "to": 11, "label": "Psalm 37:1–11" },
-            { "bookId": "PSA", "chapter": 4, "from": 1, "to": 8, "label": "Psalm 4" }
+            {
+              "bookId": "PSA",
+              "chapter": 73,
+              "from": 1,
+              "to": 28,
+              "label": "Psalm 73"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 37,
+              "from": 1,
+              "to": 11,
+              "label": "Psalm 37:1–11"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 4,
+              "from": 1,
+              "to": 8,
+              "label": "Psalm 4"
+            }
           ],
-          "memory": ["PSA.73.26", "PSA.37.4", "PSA.37.5"]
+          "memory": [
+            "PSA.73.26",
+            "PSA.37.4",
+            "PSA.37.5"
+          ]
         },
         {
           "id": "06",
@@ -298,11 +623,1029 @@
             "Thanksgiving in the Psalms is rarely detached from difficulty. Psalm 30 thanks God for a rescue while still remembering the pit. This course ends here not because hard days stop, but because the Psalter itself keeps putting gratitude and grief in the same book, often on the same page."
           ],
           "passages": [
-            { "bookId": "PSA", "chapter": 103, "from": 1, "to": 14, "label": "Psalm 103:1–14" },
-            { "bookId": "PSA", "chapter": 136, "from": 1, "to": 9, "label": "Psalm 136:1–9" },
-            { "bookId": "PSA", "chapter": 30, "from": 1, "to": 12, "label": "Psalm 30" }
+            {
+              "bookId": "PSA",
+              "chapter": 103,
+              "from": 1,
+              "to": 14,
+              "label": "Psalm 103:1–14"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 136,
+              "from": 1,
+              "to": 9,
+              "label": "Psalm 136:1–9"
+            },
+            {
+              "bookId": "PSA",
+              "chapter": 30,
+              "from": 1,
+              "to": 12,
+              "label": "Psalm 30"
+            }
           ],
-          "memory": ["PSA.136.1", "PSA.30.5", "PSA.100.4"]
+          "memory": [
+            "PSA.136.1",
+            "PSA.30.5",
+            "PSA.100.4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "genesis",
+      "title": "Genesis: In the Beginning",
+      "blurb": "Where the whole story starts — creation, the break, the flood, and one family called out of nowhere.",
+      "accent": "#c98f6b",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "The Making of the World",
+          "subtitle": "Genesis 1",
+          "teaching": [
+            "Genesis opens without argument. It does not try to prove that God exists; it simply says that in the beginning God created the heavens and the earth, and then describes that work unfolding in an ordered rhythm of days. Each day is a pattern: God speaks, something comes into being, and God calls it good. The repetition is doing something deliberate — it establishes that the world is neither an accident nor a battlefield left over from a war between gods, which is how the creation stories of the surrounding cultures told it.",
+            "The historical setting is worth knowing. Israel's neighbours had creation accounts in which the world was made from the corpse of a defeated deity and humanity was made to do the gods' manual labour. Genesis 1 answers a culture that already had those stories. Here the sun and moon are not gods to be feared but lamps that God hangs; the sea monsters that other nations dreaded are simply creatures God made and blessed; and human beings are not slave labour but image-bearers given responsibility.",
+            "Christians have read the days of Genesis 1 in several ways — as ordinary days, as long ages, as a literary framework, as a temple-building account. Those readings are genuinely disputed and this lesson does not settle them. What the text says plainly, on any reading, is that the world is made, ordered, and good, and that people are made in God's image, male and female, and given work to do in it."
+          ],
+          "passages": [
+            {
+              "bookId": "GEN",
+              "chapter": 1,
+              "from": 1,
+              "to": 13,
+              "label": "Genesis 1:1–13"
+            },
+            {
+              "bookId": "GEN",
+              "chapter": 1,
+              "from": 26,
+              "to": 31,
+              "label": "Genesis 1:26–31"
+            }
+          ],
+          "memory": [
+            "GEN.1.1",
+            "GEN.1.27"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "The Garden and the Break",
+          "subtitle": "Genesis 2–3",
+          "teaching": [
+            "Genesis 2 narrows the camera. Where chapter 1 sweeps across the cosmos, chapter 2 kneels in the dirt: God forms a man from the ground, plants a garden, and gives him work and a boundary. The man is placed there to tend and keep it — labour is part of the good world, not a punishment added later. And it is the first thing in the account called 'not good' that drives the chapter: it is not good for the man to be alone.",
+            "Chapter 3 is the break. The serpent's method is not brute force but a question that reframes God's generosity as stinginess — 'has God really said?' — and the man and woman take what was withheld. What follows is not a lightning bolt but a series of ruptures: shame between the two of them, hiding from God, blame passed along, and hard ground under their feet. The text is unsparing about how quickly the relationships fracture.",
+            "Genesis 3:15 has been read by Christians for centuries as the first hint of rescue — the offspring of the woman who will crush the serpent's head. Jewish readers have generally read it as a plain statement about lasting hostility between snakes and people. The verse is a genuine crossroads in interpretation, and it is worth knowing that the disagreement is old and honest rather than pretending the text settles it in one line."
+          ],
+          "passages": [
+            {
+              "bookId": "GEN",
+              "chapter": 2,
+              "from": 15,
+              "to": 25,
+              "label": "Genesis 2:15–25"
+            },
+            {
+              "bookId": "GEN",
+              "chapter": 3,
+              "from": 1,
+              "to": 13,
+              "label": "Genesis 3:1–13"
+            }
+          ],
+          "memory": [
+            "GEN.2.24",
+            "GEN.3.15"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "The Flood and the Bow",
+          "subtitle": "Genesis 6–9",
+          "teaching": [
+            "The flood account is often remembered as a children's story about animals, which is a strange fate for a passage this dark. Genesis says the earth was filled with violence, and the word it uses is the word for bloodshed and ruin, not mere naughtiness. What follows is described as a kind of un-creation: the waters God separated in chapter 1 come back together, and the world returns to the formless deep it was drawn out of.",
+            "Flood accounts existed across the ancient Near East, and the similarities to Israel's neighbours are real and were noticed long before modern scholarship. The differences are where Genesis is making its argument. In the surrounding versions the gods send a flood because humanity is noisy and keeping them awake, and they panic when the food offerings stop. Here the reason is moral, the judgement is grieved rather than petulant, and the outcome is a promise.",
+            "The bow in the cloud is the hinge of the story. It is a weapon, hung up — the sign is given not to remind humanity of anything, but as something God says he will see and remember. Whatever else the account is doing, it ends with the world's continuation resting on a promise God made to himself, and Genesis will return to that pattern with Abraham a few chapters later."
+          ],
+          "passages": [
+            {
+              "bookId": "GEN",
+              "chapter": 6,
+              "from": 11,
+              "to": 22,
+              "label": "Genesis 6:11–22"
+            },
+            {
+              "bookId": "GEN",
+              "chapter": 9,
+              "from": 8,
+              "to": 17,
+              "label": "Genesis 9:8–17"
+            }
+          ],
+          "memory": [
+            "GEN.9.13"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "The Call of Abram",
+          "subtitle": "Genesis 12 & 15",
+          "teaching": [
+            "After eleven chapters of humanity in general, Genesis suddenly narrows to one man from Ur, and stays narrow for the rest of the book. God tells Abram to leave his country, his relatives and his father's house — three concentric circles of everything that gave a person identity and security in that world — for a land he will only be shown once he is on the way. The scale of that ask is easy to miss from a culture where moving is normal.",
+            "The promise made to him has a shape worth noticing: he is blessed in order that others will be. It is not a private arrangement. Genesis has just finished describing a world scattered and fractured, and the call of Abram is presented as the beginning of God's answer to it, running through one family toward all the families of the earth.",
+            "Chapter 15 is the promise put on a legal footing, and it is unsettling. Abram asks, in effect, how he can be sure — and God answers with a covenant ceremony in which animals are cut in two and a smoking pot and a flaming torch pass between the pieces. In that culture both parties walked between the halves, invoking the same fate on themselves if they broke faith. Here only God passes through. The text does not explain why; it simply lets the reader see it."
+          ],
+          "passages": [
+            {
+              "bookId": "GEN",
+              "chapter": 12,
+              "from": 1,
+              "to": 9,
+              "label": "Genesis 12:1–9"
+            },
+            {
+              "bookId": "GEN",
+              "chapter": 15,
+              "from": 1,
+              "to": 6,
+              "label": "Genesis 15:1–6"
+            }
+          ],
+          "memory": [
+            "GEN.12.2",
+            "GEN.15.6"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "Jacob at the Ford",
+          "subtitle": "Genesis 28 & 32",
+          "teaching": [
+            "Jacob is not an admirable man when we meet him. He has bought his brother's birthright off him at a low moment and stolen his blessing outright, and chapter 28 finds him running for his life with nothing but a stone for a pillow. What happens there is unearned in every sense: a stairway, messengers going up and down, and God standing beside him repeating the promise made to his grandfather, to a man who has done nothing to deserve carrying it.",
+            "Twenty years later he is coming home, and chapter 32 puts him alone at a river crossing the night before he must face the brother he cheated. He has sent his family across ahead of him. What follows is one of the strangest passages in the Bible: a man wrestles him until daybreak, dislocates his hip when he cannot win, and refuses to give his name.",
+            "Jacob comes out of it renamed and limping, and Genesis does not resolve the ambiguity of who he wrestled — the text says 'a man', Jacob says he has seen God face to face, and the prophet Hosea later calls the figure an angel. Interpreters differ, and have for a very long time. What the passage says without ambiguity is that Jacob was changed by the encounter and carried the mark of it for the rest of his life."
+          ],
+          "passages": [
+            {
+              "bookId": "GEN",
+              "chapter": 28,
+              "from": 10,
+              "to": 22,
+              "label": "Genesis 28:10–22"
+            },
+            {
+              "bookId": "GEN",
+              "chapter": 32,
+              "from": 22,
+              "to": 32,
+              "label": "Genesis 32:22–32"
+            }
+          ],
+          "memory": [
+            "GEN.28.15"
+          ]
+        },
+        {
+          "id": "06",
+          "title": "What Was Meant for Harm",
+          "subtitle": "Genesis 45 & 50",
+          "teaching": [
+            "The Joseph narrative is the longest sustained story in Genesis and the least interrupted by direct speech from God. He barely appears as a speaker; the account works instead through a long chain of ordinary events — jealousy, a pit, a caravan, a false accusation, a prison, a forgotten favour, a dream — that only make sense as a shape when you reach the end and look back.",
+            "The reunion in chapter 45 is worth reading slowly. Joseph is now the second most powerful man in Egypt and the brothers who sold him are standing in front of him, entirely at his mercy and not yet aware of who he is. He clears the room before he tells them, which spares them being humiliated in front of Egyptian officials — a small mercy the text records without comment.",
+            "Chapter 50 gives the sentence the whole book has been building toward. After their father dies the brothers assume the reckoning has only been postponed, and Joseph's answer neither denies what they did nor makes it acceptable: 'you meant evil against me, but God meant it for good.' Both halves stand. The text does not explain how those two things fit together, and Christians have argued about that ever since; it simply insists that they do."
+          ],
+          "passages": [
+            {
+              "bookId": "GEN",
+              "chapter": 45,
+              "from": 1,
+              "to": 15,
+              "label": "Genesis 45:1–15"
+            },
+            {
+              "bookId": "GEN",
+              "chapter": 50,
+              "from": 15,
+              "to": 21,
+              "label": "Genesis 50:15–21"
+            }
+          ],
+          "memory": [
+            "GEN.50.20"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "exodus",
+      "title": "Exodus: Out of Egypt",
+      "blurb": "A rescue story that the rest of the Bible keeps coming back to — a bush, a passover, a sea, and a mountain.",
+      "accent": "#e08a5f",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "The Bush That Burned",
+          "subtitle": "Exodus 3",
+          "teaching": [
+            "Exodus opens four hundred years after Genesis ends, with the descendants of Joseph's family now a slave population and a new king who has no memory of him. Moses, raised in the palace and then exiled for killing an Egyptian, is eighty years old and keeping someone else's sheep in the desert when the story restarts. The text is careful to make him unremarkable by then.",
+            "The sign at the bush is not the fire but that the bush is not consumed — something burning without being used up. What follows is a commission Moses spends the next chapter and a half trying to decline, offering five separate objections. It is not a heroic call narrative, and the Bible does not present it as one.",
+            "When Moses asks what name to give, the answer he receives is the sentence the rest of the Old Testament orbits: I AM WHO I AM. Translators have rendered it 'I am who I am', 'I will be what I will be', and other ways besides, because the Hebrew genuinely carries that range. What is not in doubt is that the name is connected to being itself, and that Israel afterwards treated it as too weighty to say casually."
+          ],
+          "passages": [
+            {
+              "bookId": "EXO",
+              "chapter": 3,
+              "from": 1,
+              "to": 15,
+              "label": "Exodus 3:1–15"
+            }
+          ],
+          "memory": [
+            "EXO.3.14"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "Let My People Go",
+          "subtitle": "Exodus 5–11",
+          "teaching": [
+            "Moses' first attempt makes things worse. Pharaoh not only refuses but removes the straw from the brick quota, and the Israelite foremen — beaten for the shortfall — come out of the meeting and turn on Moses. The text does not skip this. A deliverance that starts by increasing the suffering is a hard thing, and Exodus lets Moses take it back to God as a complaint.",
+            "The plagues that follow are not random disasters. Each one strikes at something Egypt held sacred or depended on: the Nile that watered everything and was worshipped, the livestock, the sun. Read against Egyptian religion they are an argument, made in public, about who actually holds the country's life in his hand.",
+            "The hardening of Pharaoh's heart runs through these chapters and is one of the genuinely contested passages in the Bible. Sometimes the text says Pharaoh hardened his own heart, sometimes that God hardened it, and different traditions weigh those two strands differently — some reading it as God confirming a man in a choice he kept making, others as sovereign action. The disagreement is real and this lesson leaves it standing."
+          ],
+          "passages": [
+            {
+              "bookId": "EXO",
+              "chapter": 5,
+              "from": 1,
+              "to": 9,
+              "label": "Exodus 5:1–9"
+            },
+            {
+              "bookId": "EXO",
+              "chapter": 6,
+              "from": 1,
+              "to": 9,
+              "label": "Exodus 6:1–9"
+            }
+          ],
+          "memory": [
+            "EXO.6.7"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "The Passover",
+          "subtitle": "Exodus 12",
+          "teaching": [
+            "Before the last plague, Israel is given something to do. The instructions in chapter 12 are domestic and specific: a lamb per household, eaten with unleavened bread and bitter herbs, dressed and ready to travel. The blood goes on the doorframe. The meal is eaten in haste, standing, because the whole point is that they will not be here in the morning.",
+            "The text also does something unusual: in the middle of the night of the exodus it stops to legislate how this meal is to be kept every year afterwards, including what to say when a child asks what it means. The rescue is being turned into a rehearsal before it has even happened, and Passover has been kept continuously ever since — one of the oldest observances in continuous practice anywhere.",
+            "Christians read the Passover lamb in connection with the death of Jesus, and the New Testament makes that link explicitly. Jewish readers keep the festival as the founding act of the nation. Both are reading the same passage honestly, and the shape they share is worth noticing: a people defined not by what they achieved but by what was done for them while they waited indoors."
+          ],
+          "passages": [
+            {
+              "bookId": "EXO",
+              "chapter": 12,
+              "from": 1,
+              "to": 14,
+              "label": "Exodus 12:1–14"
+            },
+            {
+              "bookId": "EXO",
+              "chapter": 12,
+              "from": 21,
+              "to": 28,
+              "label": "Exodus 12:21–28"
+            }
+          ],
+          "memory": [
+            "EXO.12.13"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "The Sea",
+          "subtitle": "Exodus 14",
+          "teaching": [
+            "Chapter 14 is where the escape nearly fails. Israel is camped with water in front and the Egyptian chariot corps behind, and the first thing they do is turn on Moses with a line that is bitter and, in its way, entirely reasonable: were there not enough graves in Egypt? Deliverance is terrifying while it is happening, and the text does not pretend otherwise.",
+            "Moses' answer — stand still and see — is followed immediately by God telling him to get the people moving. The passage refuses to be reduced to either 'do nothing' or 'save yourselves'. They walk through on dry ground, all night, with the water held back and a pillar of cloud between them and the army.",
+            "This event becomes the reference point for everything after it. The Psalms return to it, the prophets use it as the picture of what God is like, and when Israel is later in exile they are told to expect a new exodus. Whatever a reader concludes about the mechanics of the crossing, its function in the Bible is not in question: this is the night Israel learned who had rescued them."
+          ],
+          "passages": [
+            {
+              "bookId": "EXO",
+              "chapter": 14,
+              "from": 10,
+              "to": 31,
+              "label": "Exodus 14:10–31"
+            }
+          ],
+          "memory": [
+            "EXO.14.14"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "Ten Words at Sinai",
+          "subtitle": "Exodus 19–20",
+          "teaching": [
+            "The commandments do not begin with a command. They begin with a sentence of history: I am the LORD your God, who brought you out of the land of Egypt, out of the house of bondage. Everything that follows is addressed to people who have already been rescued. The order matters, and the Ten Commandments are frequently quoted without it.",
+            "The mountain scene before them is deliberately overwhelming — smoke, fire, a trumpet blast, boundaries the people are told not to cross. Israel is being formed into a nation at the same moment it is being given a law, and the terms offered are covenant terms familiar from the treaties of the period between a great king and a people under his protection.",
+            "The commandments themselves divide roughly into duties toward God and duties toward neighbours, and traditions number them differently — Jewish, Catholic, Lutheran and Reformed enumerations do not all match, which is why the count of 'the fourth commandment' depends on who is speaking. The content is not in dispute; only where the lines fall."
+          ],
+          "passages": [
+            {
+              "bookId": "EXO",
+              "chapter": 19,
+              "from": 1,
+              "to": 9,
+              "label": "Exodus 19:1–9"
+            },
+            {
+              "bookId": "EXO",
+              "chapter": 20,
+              "from": 1,
+              "to": 17,
+              "label": "Exodus 20:1–17"
+            }
+          ],
+          "memory": [
+            "EXO.20.2",
+            "EXO.20.12"
+          ]
+        },
+        {
+          "id": "06",
+          "title": "The Calf and the Face of God",
+          "subtitle": "Exodus 32–34",
+          "teaching": [
+            "The golden calf happens while Moses is still on the mountain receiving the terms. That timing is the point. The people have not forgotten God — Aaron announces a festival to the LORD — they have decided to have him on manageable terms, in a form they can see and carry. The text treats that as the more dangerous failure.",
+            "What follows is a remarkable exchange in which Moses argues with God on the basis of God's own promises and reputation, and then refuses an offer to be made into a great nation himself if Israel is destroyed. He asks instead to see God's glory, and is placed in a cleft of rock and shown what the text carefully calls God's back.",
+            "The declaration in chapter 34 — merciful and gracious, slow to anger, abounding in loving kindness and truth — becomes the most quoted description of God's character in the Old Testament. Prophets and psalmists reach for it repeatedly, sometimes as comfort and sometimes as complaint. It is given here, immediately after the worst thing Israel has done."
+          ],
+          "passages": [
+            {
+              "bookId": "EXO",
+              "chapter": 32,
+              "from": 1,
+              "to": 14,
+              "label": "Exodus 32:1–14"
+            },
+            {
+              "bookId": "EXO",
+              "chapter": 34,
+              "from": 1,
+              "to": 9,
+              "label": "Exodus 34:1–9"
+            }
+          ],
+          "memory": [
+            "EXO.34.6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "proverbs",
+      "title": "Proverbs: Wisdom for Ordinary Days",
+      "blurb": "Money, words, friendship, work and self-control — the Bible at its most practical.",
+      "accent": "#9fb87a",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Where Wisdom Starts",
+          "subtitle": "Proverbs 1–3",
+          "teaching": [
+            "Proverbs is not a rulebook and reading it as one produces contradictions almost immediately. It is a collection of observations about how life usually goes, gathered for the training of the young, and its sayings are general truths rather than guarantees. Reading a proverb as a promise is the single most common way the book gets misused.",
+            "The opening chapter states the book's own thesis: the fear of the LORD is the beginning of knowledge. The word translated 'fear' covers a range from terror to reverence, and the sense here is closer to the awe that keeps a person honest than to being frightened. The claim is that wisdom has a starting point outside of cleverness, and that intelligence without it goes wrong.",
+            "Chapter 3 sets the alternative plainly: trust with the whole heart rather than lean on your own understanding. Ancient wisdom literature across the region traded in similar practical advice, and Proverbs shares some of it almost word for word. What it adds is that framing — that the world is ordered by someone, and that living well means living with the grain of it."
+          ],
+          "passages": [
+            {
+              "bookId": "PRO",
+              "chapter": 1,
+              "from": 1,
+              "to": 7,
+              "label": "Proverbs 1:1–7"
+            },
+            {
+              "bookId": "PRO",
+              "chapter": 3,
+              "from": 1,
+              "to": 12,
+              "label": "Proverbs 3:1–12"
+            }
+          ],
+          "memory": [
+            "PRO.1.7",
+            "PRO.3.5"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "The Weight of Words",
+          "subtitle": "Proverbs 15 & 18",
+          "teaching": [
+            "Few subjects get more attention in Proverbs than speech. It returns again and again to the difference a sentence makes: the soft answer that turns away wrath, the word spoken at the right time, the gossip whose words go down like choice morsels into the innermost parts. The book treats talking as a skill that can be learned and a danger that can be managed.",
+            "Its picture of the tongue is not sentimental. Proverbs 18 says death and life are in the power of the tongue, which is the sort of line that sounds like exaggeration until you have watched a family or a workplace shaped for years by what somebody said once. The book also has a low view of speaking first and thinking after.",
+            "Practically, most of the sayings here point in one direction: slow down. Answer softly, listen before replying, say less than you could, and be willing to leave a thing unsaid. None of that is complicated advice, which is exactly why Proverbs assumes it needs repeating."
+          ],
+          "passages": [
+            {
+              "bookId": "PRO",
+              "chapter": 15,
+              "from": 1,
+              "to": 7,
+              "label": "Proverbs 15:1–7"
+            },
+            {
+              "bookId": "PRO",
+              "chapter": 18,
+              "from": 13,
+              "to": 24,
+              "label": "Proverbs 18:13–24"
+            }
+          ],
+          "memory": [
+            "PRO.15.1"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "Money, Work and Enough",
+          "subtitle": "Proverbs 6, 11 & 30",
+          "teaching": [
+            "Proverbs is unembarrassed about money. It observes that diligence tends to build and laziness tends to lose, it praises generosity in blunt commercial language — the liberal soul shall be made fat — and it warns repeatedly against standing surety for someone else's debt. It is the voice of long experience rather than idealism.",
+            "It is also honest about the limits of what wealth does. Riches are described as making themselves wings and flying away, and the book keeps insisting that a small amount with integrity beats a large amount without it. Wisdom literature elsewhere in the ancient world made similar observations; Proverbs is not claiming novelty here.",
+            "The prayer in chapter 30 is unusual and worth sitting with: give me neither poverty nor riches, feed me with the food that is needful for me — with a reason attached for each. Too much and I may deny you; too little and I may steal. It is the rare biblical passage that treats prosperity itself as a spiritual risk worth praying about."
+          ],
+          "passages": [
+            {
+              "bookId": "PRO",
+              "chapter": 6,
+              "from": 6,
+              "to": 11,
+              "label": "Proverbs 6:6–11"
+            },
+            {
+              "bookId": "PRO",
+              "chapter": 11,
+              "from": 23,
+              "to": 28,
+              "label": "Proverbs 11:23–28"
+            },
+            {
+              "bookId": "PRO",
+              "chapter": 30,
+              "from": 7,
+              "to": 9,
+              "label": "Proverbs 30:7–9"
+            }
+          ],
+          "memory": [
+            "PRO.11.25"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "The Company You Keep",
+          "subtitle": "Proverbs 17 & 27",
+          "teaching": [
+            "Proverbs assumes you become the people you spend time with. Walk with the wise and be wise; a companion of fools suffers harm. It is stated as a mechanism rather than a moral, and the book applies it in both directions — to who you choose and to who you are to others.",
+            "Its picture of friendship is not comfortable. Faithful are the wounds of a friend, but the kisses of an enemy are deceitful; better is open rebuke than hidden love. The book values a friend who will tell you the truth over one who will keep you pleased, and it says plainly that the second kind is easier to find.",
+            "The line most often quoted from these chapters — iron sharpens iron, so one person sharpens another — is a picture of friction, not agreement. Sharpening makes sparks. Read alongside 'a friend loves at all times, and a brother is born for adversity', the chapter's argument is that the friendships worth having are the ones that can survive being honest."
+          ],
+          "passages": [
+            {
+              "bookId": "PRO",
+              "chapter": 17,
+              "from": 9,
+              "to": 22,
+              "label": "Proverbs 17:9–22"
+            },
+            {
+              "bookId": "PRO",
+              "chapter": 27,
+              "from": 1,
+              "to": 17,
+              "label": "Proverbs 27:1–17"
+            }
+          ],
+          "memory": [
+            "PRO.17.17",
+            "PRO.27.17"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "Guarding the Heart",
+          "subtitle": "Proverbs 4 & 16",
+          "teaching": [
+            "Chapter 4 is a father's speech, and its central instruction is to keep the heart with all diligence, for out of it flow the springs of life. In Hebrew usage the heart is not primarily the seat of emotion — it is closer to the will and the thinking self, the place decisions are actually made. The instruction is about what you let form you.",
+            "What follows is physical and concrete: put away a deceitful mouth, let your eyes look straight ahead, make level paths for your feet. The chapter treats attention as something you steer rather than something that happens to you, which is an uncomfortable claim in an age built to capture it.",
+            "Chapter 16 sets that alongside a limit. A person plans their way, but the LORD directs their steps; commit your works to the LORD and your plans will be established. Proverbs holds both without resolving the tension, and Christians have long differed on how much room the second sentence leaves the first. The book simply asks you to plan seriously and hold the plan loosely."
+          ],
+          "passages": [
+            {
+              "bookId": "PRO",
+              "chapter": 4,
+              "from": 20,
+              "to": 27,
+              "label": "Proverbs 4:20–27"
+            },
+            {
+              "bookId": "PRO",
+              "chapter": 16,
+              "from": 1,
+              "to": 9,
+              "label": "Proverbs 16:1–9"
+            }
+          ],
+          "memory": [
+            "PRO.4.23",
+            "PRO.16.9"
+          ]
+        },
+        {
+          "id": "06",
+          "title": "A Life Worth Praising",
+          "subtitle": "Proverbs 31",
+          "teaching": [
+            "The final poem of Proverbs is an acrostic — each verse begins with the next letter of the Hebrew alphabet — which is a form used for completeness, an A to Z of a subject. It has often been read as a checklist for wives, and read that way it has done real damage. As a poem of praise gathering up the whole book's picture of wisdom in a single portrait, it reads very differently.",
+            "The woman described runs an estate. She evaluates a field and buys it, plants a vineyard from her own earnings, trades profitably, manages staff, makes and sells linen, and gives to the poor. The text is describing competence and enterprise in specific commercial detail, which sits oddly with how the passage is sometimes used to argue for a narrow domestic role.",
+            "The poem's own conclusion is where its weight falls: charm is deceitful and beauty is vain, but a woman who fears the LORD shall be praised. That returns the book to the sentence it opened with, closing the circle. Interpreters differ over whether the portrait is an individual, an ideal, or wisdom personified — the poem does not say, and it works as all three."
+          ],
+          "passages": [
+            {
+              "bookId": "PRO",
+              "chapter": 31,
+              "from": 10,
+              "to": 31,
+              "label": "Proverbs 31:10–31"
+            }
+          ],
+          "memory": [
+            "PRO.31.25",
+            "PRO.31.30"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "john",
+      "title": "John: The Book of Signs",
+      "blurb": "The fourth Gospel, told through seven signs and seven 'I am' sayings — the slowest and strangest of the four.",
+      "accent": "#6fb6d6",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "In the Beginning Was the Word",
+          "subtitle": "John 1",
+          "teaching": [
+            "John does not begin with a birth. He begins with the same three words Genesis begins with, and then makes a claim about someone who was already there. The prologue is compressed and deliberate: the Word was with God, the Word was God, all things were made through him, and in him was life.",
+            "The term John chooses — logos — was doing heavy work in both the Greek philosophical world, where it meant the rational principle ordering the universe, and in Jewish thought, where God's word is what creates and what comes to the prophets. Choosing it lets John address two audiences at once without conceding either.",
+            "Then comes the sentence the whole Gospel rests on: the Word became flesh and lived among us. The verb translated 'lived among' is literally 'pitched his tent', which for a Jewish reader points straight back to the tabernacle in Exodus — God camping in the middle of the people. John has taken the most abstract claim available and landed it in a body."
+          ],
+          "passages": [
+            {
+              "bookId": "JHN",
+              "chapter": 1,
+              "from": 1,
+              "to": 18,
+              "label": "John 1:1–18"
+            }
+          ],
+          "memory": [
+            "JHN.1.1",
+            "JHN.1.12"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "Water into Wine",
+          "subtitle": "John 2",
+          "teaching": [
+            "The first sign happens at a village wedding, and the crisis is social rather than mortal: the wine has run out, which in that culture would have shamed the family for years. Jesus' first recorded miracle in this Gospel is not a healing or a rescue but the saving of somebody's party.",
+            "The detail John records is the six stone water jars used for ceremonial washing, holding twenty or thirty gallons each. That is an enormous quantity — well over five hundred bottles by modern measure — and it is drawn from the vessels of ritual purification. John rarely includes a detail without intending it to be noticed.",
+            "The master of the feast, who does not know where it came from, complains that the good wine has been kept until last. John closes the account by calling it the beginning of the signs, through which Jesus revealed his glory. In this Gospel the miracles are called signs rather than wonders throughout, because they are pointing at something beyond themselves."
+          ],
+          "passages": [
+            {
+              "bookId": "JHN",
+              "chapter": 2,
+              "from": 1,
+              "to": 11,
+              "label": "John 2:1–11"
+            }
+          ],
+          "memory": [
+            "JHN.2.11"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "Born Again",
+          "subtitle": "John 3",
+          "teaching": [
+            "Nicodemus is a Pharisee and a member of the ruling council, and he comes at night — a detail John leaves without explanation and readers have been drawing conclusions from ever since. He opens politely, and the conversation immediately goes somewhere he did not steer it: no one can see the kingdom of God without being born again.",
+            "The Greek word behind 'again' also means 'from above', and the ambiguity is almost certainly deliberate; Nicodemus hears the first meaning and asks the obvious biological question. What follows is a discussion of birth by water and the Spirit that Christians have interpreted variously — baptism, natural birth, cleansing — and the differences are longstanding.",
+            "John 3:16 sits in the middle of this conversation, which is worth remembering given how often it is quoted alone. It is the most memorised sentence in the Bible, and the verse immediately after it is the one that most changes its tone: God did not send his Son into the world to judge the world, but that the world might be saved through him."
+          ],
+          "passages": [
+            {
+              "bookId": "JHN",
+              "chapter": 3,
+              "from": 1,
+              "to": 21,
+              "label": "John 3:1–21"
+            }
+          ],
+          "memory": [
+            "JHN.3.16",
+            "JHN.3.17"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "The Bread of Life",
+          "subtitle": "John 6",
+          "teaching": [
+            "The crowd in chapter 6 has just been fed on a hillside and comes looking for more, and Jesus tells them so directly: you seek me not because you saw signs but because you ate the loaves and were filled. It is the least flattering thing said to a crowd in the Gospels and it sets up everything after it.",
+            "They ask for a sign like the manna their ancestors ate in the wilderness — an odd request from people who were fed yesterday — and the answer reframes it: the bread of God is the one who comes down out of heaven and gives life to the world. Then the first of the great 'I am' sayings: I am the bread of life.",
+            "What follows is the point at which John's crowd thins. The language of eating his flesh and drinking his blood was as shocking then as it reads now, and the chapter ends with many disciples leaving. Christians have long differed over how literally to take that language, and the disagreement runs through the history of the church's understanding of communion. John records the offence without softening it."
+          ],
+          "passages": [
+            {
+              "bookId": "JHN",
+              "chapter": 6,
+              "from": 25,
+              "to": 40,
+              "label": "John 6:25–40"
+            }
+          ],
+          "memory": [
+            "JHN.6.35"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "Lazarus",
+          "subtitle": "John 11",
+          "teaching": [
+            "John spends more time on this account than on any other sign, and the pacing is strange on purpose: told that his friend is ill, Jesus stays where he is for two more days. By the time he arrives Lazarus has been in the tomb four days, a detail that mattered in a culture that held the soul lingered near the body for three.",
+            "Both sisters meet him with the same sentence — if you had been here, my brother would not have died — and he answers them differently. To Martha he makes a claim: I am the resurrection and the life. To Mary he says nothing recorded at all. He is deeply moved, and he weeps.",
+            "That is the part of the chapter people remember, and reasonably. He is about to raise the man, and he weeps anyway. Whatever the passage is teaching about resurrection, it declines to treat grief as something to be argued out of, and it does so in the shortest verse in the Bible."
+          ],
+          "passages": [
+            {
+              "bookId": "JHN",
+              "chapter": 11,
+              "from": 17,
+              "to": 44,
+              "label": "John 11:17–44"
+            }
+          ],
+          "memory": [
+            "JHN.11.25"
+          ]
+        },
+        {
+          "id": "06",
+          "title": "The Vine and the Room",
+          "subtitle": "John 15",
+          "teaching": [
+            "Chapters 13 to 17 are a single evening in a borrowed room, and they are the longest continuous teaching in the Gospels. The vine image comes near the end of it, hours before the arrest, and it is agricultural rather than heroic: branches do not produce fruit by effort but by staying connected.",
+            "The verb translated 'abide' or 'remain' appears repeatedly in a short space, and the claim attached to it is uncompromising — apart from me you can do nothing. The image also includes pruning, and the passage says the branch that is bearing fruit is the one that gets cut back, which is not a comfortable thing to be told.",
+            "Then the definition: greater love has no one than this, that someone lay down his life for his friends. He says it to a room he knows is about to abandon him, which is the context in which the sentence was first spoken. The command that frames the whole passage is not to achieve anything but to love one another."
+          ],
+          "passages": [
+            {
+              "bookId": "JHN",
+              "chapter": 15,
+              "from": 1,
+              "to": 17,
+              "label": "John 15:1–17"
+            }
+          ],
+          "memory": [
+            "JHN.15.5",
+            "JHN.15.13"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "romans",
+      "title": "Romans: The Gospel, Argued",
+      "blurb": "Paul's longest letter, written to a church he had never met — the closest thing the New Testament has to a sustained argument.",
+      "accent": "#a78bfa",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Not Ashamed",
+          "subtitle": "Romans 1",
+          "teaching": [
+            "Romans is the only major letter Paul wrote to a church he had not founded and had never visited. That shapes it. He cannot appeal to shared history or settle local disputes from memory, so he does something he does nowhere else at this length: he sets out the argument from the beginning, carefully, for readers who have no reason to take his word for it.",
+            "The church in Rome was a mixed community of Jewish and Gentile believers in the empire's capital, and Jewish residents had been expelled from the city under Claudius a few years earlier and were returning. Much of the letter's tension — who belongs, on what basis, and who is looking down on whom — makes far more sense against that background.",
+            "The thesis lands in verses 16 and 17: I am not ashamed of the Good News, for it is the power of God for salvation to everyone who believes, to the Jew first and also to the Greek. Everything for the next eleven chapters is an unpacking of that sentence, including the order of those last two words."
+          ],
+          "passages": [
+            {
+              "bookId": "ROM",
+              "chapter": 1,
+              "from": 1,
+              "to": 17,
+              "label": "Romans 1:1–17"
+            }
+          ],
+          "memory": [
+            "ROM.1.16"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "All Have Sinned",
+          "subtitle": "Romans 3",
+          "teaching": [
+            "Paul spends two chapters closing off every exit before he offers a way through. The moral pagan, the philosophical critic and the religious insider are each addressed in turn, and the conclusion is deliberately levelling: there is no distinction, for all have sinned and fall short of the glory of God.",
+            "The 'no distinction' is doing as much work as the 'all have sinned'. In a congregation arguing about whether Gentile believers needed to keep the law, the claim that everyone arrives at the same place by different roads is not an abstract doctrine — it is a settlement of the dispute in the room.",
+            "The answer he gives uses three images at once, drawn from three different worlds: justification from the law court, redemption from the slave market, and propitiation from the temple. Christians have argued for centuries over how much weight each image should carry, and the differences are real. What the passage states plainly is that it is a gift, and not a wage."
+          ],
+          "passages": [
+            {
+              "bookId": "ROM",
+              "chapter": 3,
+              "from": 9,
+              "to": 26,
+              "label": "Romans 3:9–26"
+            }
+          ],
+          "memory": [
+            "ROM.3.23",
+            "ROM.3.24"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "Peace with God",
+          "subtitle": "Romans 5",
+          "teaching": [
+            "Chapter 5 turns from argument to consequence: having been justified by faith, we have peace with God. Paul uses the language of a war ended and access granted, and the word for 'access' is the one used for being introduced into the presence of a king.",
+            "What follows is the passage on suffering, and it is worth reading slowly because it is easily made glib. Paul does not say suffering is good; he traces a chain — suffering produces perseverance, perseverance character, character hope — and grounds the last link not in optimism but in love already poured out.",
+            "The centre of the chapter is a statement about timing: God commends his own love toward us in that while we were yet sinners, Christ died for us. Not once we improved, and not on condition. Paul builds much of the rest of the letter on the order of those events."
+          ],
+          "passages": [
+            {
+              "bookId": "ROM",
+              "chapter": 5,
+              "from": 1,
+              "to": 11,
+              "label": "Romans 5:1–11"
+            }
+          ],
+          "memory": [
+            "ROM.5.1",
+            "ROM.5.8"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "No Condemnation",
+          "subtitle": "Romans 8",
+          "teaching": [
+            "Chapter 7 ends with a cry for rescue from a divided self, and chapter 8 opens with the answer: there is therefore now no condemnation for those who are in Christ Jesus. The 'therefore' is load-bearing — it is a conclusion drawn from everything argued so far, not a slogan.",
+            "The chapter is where the Spirit becomes central. Paul contrasts life set on the flesh with life set on the Spirit, and he is careful that this is not a division between physical and spiritual people but between two orientations of the same person. The Spirit is described as living in believers, giving life, and leading.",
+            "The image he closes the section with is family rather than legal: you did not receive a spirit of slavery leading to fear again, but a spirit of adoption, by whom we cry 'Abba! Father!' Adoption in Roman law made the adopted heir legally indistinguishable from a natural-born one, debts cancelled and all. Paul's Roman readers would have caught that immediately."
+          ],
+          "passages": [
+            {
+              "bookId": "ROM",
+              "chapter": 8,
+              "from": 1,
+              "to": 17,
+              "label": "Romans 8:1–17"
+            }
+          ],
+          "memory": [
+            "ROM.8.1"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "Nothing Can Separate",
+          "subtitle": "Romans 8:26–39",
+          "teaching": [
+            "The end of chapter 8 begins with weakness, which is not where its reputation suggests it starts. We do not know how to pray as we ought — an admission from the man writing the letter — and the Spirit is described as interceding with groanings that cannot be uttered.",
+            "Then the most quoted and most misquoted sentence in the chapter: all things work together for good to those who love God. It does not say all things are good, and it is addressed to people Paul has just described as groaning. Read as a promise that nothing painful will happen, it fails almost immediately; read as a claim about where the story is going, it holds.",
+            "The chapter finishes as a courtroom scene turned celebration — who could bring a charge, who could condemn — and then the list: neither death nor life, nor angels nor principalities, nor things present nor things to come. Paul is writing to a church in the capital city of an empire that would eventually kill him, and he includes 'sword' in the list."
+          ],
+          "passages": [
+            {
+              "bookId": "ROM",
+              "chapter": 8,
+              "from": 26,
+              "to": 39,
+              "label": "Romans 8:26–39"
+            }
+          ],
+          "memory": [
+            "ROM.8.28",
+            "ROM.8.38"
+          ]
+        },
+        {
+          "id": "06",
+          "title": "A Living Sacrifice",
+          "subtitle": "Romans 12",
+          "teaching": [
+            "After eleven chapters of argument Paul writes 'therefore' and turns to what it looks like. The request is to present your bodies a living sacrifice — a deliberately awkward image, since a sacrifice is by definition something that dies. The point is a whole life given rather than a moment of it.",
+            "Do not be conformed to this world, but be transformed by the renewing of your mind. The two verbs are passive, which is easily lost: this is something done to a person, not a self-improvement programme, though Paul plainly expects them to cooperate with it.",
+            "The rest of the chapter is startlingly ordinary. Use whatever gift you have. Let love be without hypocrisy. Rejoice with those who rejoice, weep with those who weep. Do not be wise in your own conceits. Bless those who persecute you. After the heights of chapter 8, the application is a list of things to do with your neighbours this week."
+          ],
+          "passages": [
+            {
+              "bookId": "ROM",
+              "chapter": 12,
+              "from": 1,
+              "to": 21,
+              "label": "Romans 12:1–21"
+            }
+          ],
+          "memory": [
+            "ROM.12.1",
+            "ROM.12.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "acts",
+      "title": "Acts: How the Church Began",
+      "blurb": "From a locked upper room to the capital of the empire — the first thirty years, with all the arguments left in.",
+      "accent": "#f0918f",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Wind and Fire",
+          "subtitle": "Acts 2",
+          "teaching": [
+            "Acts is the second volume of a two-part work; its opening sentence refers back to 'the first book' and it is addressed to the same Theophilus as Luke's Gospel. The instruction that ends the first chapter is to wait, which is not what a group expecting a restored kingdom wanted to hear.",
+            "Pentecost was a harvest festival that brought Jewish pilgrims to Jerusalem from across the Mediterranean world, which is why Luke's list of nationalities is so specific. The sign given is linguistic: each hears the disciples speaking in their own language. Whatever else is happening, the first act of the church in Acts is to be understood.",
+            "Peter's explanation quotes the prophet Joel rather than making a new claim, arguing that what they are seeing is what was promised. The chapter's programmatic verse comes earlier, in chapter 1: you will be witnesses in Jerusalem, in all Judea and Samaria, and to the uttermost parts of the earth — which is also, almost exactly, the outline of the book."
+          ],
+          "passages": [
+            {
+              "bookId": "ACT",
+              "chapter": 1,
+              "from": 1,
+              "to": 11,
+              "label": "Acts 1:1–11"
+            },
+            {
+              "bookId": "ACT",
+              "chapter": 2,
+              "from": 1,
+              "to": 21,
+              "label": "Acts 2:1–21"
+            }
+          ],
+          "memory": [
+            "ACT.1.8"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "Everything in Common",
+          "subtitle": "Acts 2 & 4",
+          "teaching": [
+            "Luke twice pauses the narrative to describe what the community was actually like, and both summaries are economic as much as spiritual. They continued in the apostles' teaching and fellowship, in the breaking of bread and prayers; they sold possessions and distributed to any who had need.",
+            "The arrangement described is voluntary rather than compulsory — Acts 5 makes that explicit in an unpleasant episode — and it is local, not a system imposed anywhere else in the New Testament. Christians have drawn very different conclusions from these chapters about what they oblige, and those differences are old and unresolved.",
+            "What is not ambiguous is the effect Luke records: there was not a needy person among them. He also notes, without drawing the connection out, that they had favour with all the people and that the community grew daily. The two observations sit next to each other in the text."
+          ],
+          "passages": [
+            {
+              "bookId": "ACT",
+              "chapter": 2,
+              "from": 37,
+              "to": 47,
+              "label": "Acts 2:37–47"
+            },
+            {
+              "bookId": "ACT",
+              "chapter": 4,
+              "from": 32,
+              "to": 37,
+              "label": "Acts 4:32–37"
+            }
+          ],
+          "memory": [
+            "ACT.2.38",
+            "ACT.2.42"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "The First to Die",
+          "subtitle": "Acts 6–7",
+          "teaching": [
+            "Stephen enters the story through an administrative complaint: the Greek-speaking widows were being overlooked in the daily distribution. The apostles' solution is to appoint seven men to handle it, and every one of the names chosen is Greek — a detail that suggests the complaint was taken seriously rather than managed.",
+            "His speech before the council is the longest in Acts and reads as a history lesson until its final turn. He walks through Abraham, Joseph, Moses and the temple, building a case that God has never been confined to one place and that the people have a long record of resisting the ones sent to them.",
+            "The stoning that follows is the first killing of a Christian recorded in Acts, and Luke gives Stephen words that deliberately echo the crucifixion — receive my spirit, and do not hold this sin against them. He also drops in, almost in passing, that the witnesses laid their coats at the feet of a young man named Saul."
+          ],
+          "passages": [
+            {
+              "bookId": "ACT",
+              "chapter": 6,
+              "from": 8,
+              "to": 15,
+              "label": "Acts 6:8–15"
+            },
+            {
+              "bookId": "ACT",
+              "chapter": 7,
+              "from": 51,
+              "to": 60,
+              "label": "Acts 7:51–60"
+            }
+          ],
+          "memory": [
+            "ACT.7.60"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "The Road to Damascus",
+          "subtitle": "Acts 9",
+          "teaching": [
+            "Luke has already shown us Saul approving Stephen's death and going house to house dragging believers to prison. Chapter 9 opens with him still breathing threats and carrying letters authorising arrests in another city. He is not a seeker.",
+            "The encounter itself is brief and disorienting: a light, a voice, a question — why do you persecute me? — and three days blind without eating or drinking. Luke tells the story three times across Acts, with small differences each time, which has occupied readers for a very long time.",
+            "The part usually skipped is Ananias, who is told to go and lay hands on the man and answers God with an objection amounting to 'do you know who this is?'. He goes anyway, and the first word he says to the man who came to arrest him is 'brother'. The commission given about Saul — that he is a chosen vessel to carry the name before Gentiles and kings — is spoken to Ananias, not to Saul."
+          ],
+          "passages": [
+            {
+              "bookId": "ACT",
+              "chapter": 9,
+              "from": 1,
+              "to": 19,
+              "label": "Acts 9:1–19"
+            }
+          ],
+          "memory": [
+            "ACT.9.15"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "What God Has Made Clean",
+          "subtitle": "Acts 10",
+          "teaching": [
+            "The Cornelius episode is given more space than almost anything else in Acts, and Luke tells it twice over — once as it happens and again as Peter reports it. That much repetition is a signal about how contested it was.",
+            "Two visions converge. A Roman centurion is told to send for Peter; Peter, hungry on a rooftop, sees a sheet of animals and is told to kill and eat, and refuses three times on the grounds that he has never eaten anything unclean. The answer he gets is that what God has cleansed, he must not call unclean.",
+            "The sentence Peter says when he finally walks into a Gentile house is the turning point of the book: truly I perceive that God does not show favouritism. What is striking is that the Spirit falls on the household while he is still speaking, before anything has been decided — Peter is left arguing that they can hardly refuse water to people who have already been given what the apostles received."
+          ],
+          "passages": [
+            {
+              "bookId": "ACT",
+              "chapter": 10,
+              "from": 9,
+              "to": 35,
+              "label": "Acts 10:9–35"
+            }
+          ],
+          "memory": [
+            "ACT.10.34"
+          ]
+        },
+        {
+          "id": "06",
+          "title": "To the Ends of the Earth",
+          "subtitle": "Acts 16 & 28",
+          "teaching": [
+            "Philippi gives Luke one of his sharpest scenes. Paul and Silas are beaten and locked in the inner prison, and at midnight they are singing. The earthquake that follows opens the doors, and the jailer — who would have been executed for an escape — draws his sword on himself before Paul stops him.",
+            "The question he asks and the answer he gets have been quoted ever since. What is easy to miss is what happens next: the jailer washes their wounds, in the middle of the night, and sets a meal in front of the men he had been guarding. Luke reports the practical reversal as carefully as the conversion.",
+            "Acts ends without an ending. Paul is in Rome under house arrest, receiving all who come to him, preaching with all boldness and without hindrance — and there the book simply stops, with the trial unresolved and the reader knowing more about Paul's future than the text admits. Whether Luke intended that as an open door or simply wrote to the present moment is still argued."
+          ],
+          "passages": [
+            {
+              "bookId": "ACT",
+              "chapter": 16,
+              "from": 22,
+              "to": 34,
+              "label": "Acts 16:22–34"
+            },
+            {
+              "bookId": "ACT",
+              "chapter": 28,
+              "from": 23,
+              "to": 31,
+              "label": "Acts 28:23–31"
+            }
+          ],
+          "memory": [
+            "ACT.16.31"
+          ]
         }
       ]
     }

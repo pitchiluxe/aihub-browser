@@ -6,6 +6,7 @@ import {
   getCourse, getCourses, getLesson, getPlans, lessonKey, lessonsCompleted,
   validateCourse, type LessonBook,
 } from './bibleCourses'
+import { COURSE_BADGE_IDS } from './bibleRewards'
 
 const BIBLE_DIR = join(process.cwd(), 'src/renderer/src/assets/bible')
 const index = JSON.parse(readFileSync(join(BIBLE_DIR, 'index.json'), 'utf-8'))
@@ -24,9 +25,17 @@ function chapterOf(bookId: string, chapter: number): { v: number; t: string }[] 
 describe('the shipped courses', () => {
   const courses = getCourses()
 
-  it('loads all three, with no validation errors', () => {
+  it('loads every shipped course, with no validation errors', () => {
     expect(courseLoadErrors()).toEqual([])
-    expect(courses.map(c => c.id).sort()).toEqual(['life-of-christ', 'parables', 'psalms'])
+    expect(courses.map(c => c.id).sort()).toEqual([
+      'acts', 'exodus', 'genesis', 'john', 'life-of-christ', 'parables',
+      'proverbs', 'psalms', 'romans',
+    ])
+  })
+
+  it('gives every course a distinct accent colour', () => {
+    const accents = courses.map(c => c.accent)
+    expect(new Set(accents).size).toBe(accents.length)
   })
 
   it('gives every course six lessons', () => {
@@ -79,10 +88,11 @@ describe('the shipped courses', () => {
     }
   })
 
-  it('has a badge waiting for each course id', () => {
-    // The badge ids in bibleRewards are `course-<id>`; a renamed course would
-    // silently stop awarding anything.
-    expect(courses.map(c => c.id).sort()).toEqual(['life-of-christ', 'parables', 'psalms'])
+  it('has a badge waiting for each course id, and no badge without a course', () => {
+    // The badge ids in bibleRewards are `course-<id>`. A course added to the
+    // JSON without a badge would silently award nothing on completion, and a
+    // badge left behind by a renamed course could never be earned at all.
+    expect(courses.map(c => c.id).sort()).toEqual([...COURSE_BADGE_IDS].sort())
   })
 })
 

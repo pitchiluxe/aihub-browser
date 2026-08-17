@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  BADGES, currentStreak, evaluateBadges, isUnlocked, newlyEarned,
+  BADGES, COURSE_BADGE_IDS, currentStreak, evaluateBadges, isUnlocked, newlyEarned,
   qualifyingBadges, recordDay, shiftDay, unlockedStyles, type RewardFacts,
 } from './bibleRewards'
 
@@ -74,12 +74,16 @@ describe('badges fire at their threshold and not before', () => {
     expect(qualifyingBadges({ ...NO_FACTS, streakBest: 7 })).toContain('streak-7')
   })
 
-  it('awards a course badge per finished course, and one for all three', () => {
+  it('awards a course badge per finished course, and one for finishing them all', () => {
     const two = qualifyingBadges({ ...NO_FACTS, coursesCompleted: ['parables', 'psalms'] })
     expect(two).toContain('course-parables')
     expect(two).not.toContain('all-courses')
-    const three = qualifyingBadges({ ...NO_FACTS, coursesCompleted: ['life-of-christ', 'parables', 'psalms'] })
-    expect(three).toContain('all-courses')
+    // Driven off the badge list, so shipping a new course raises the bar for
+    // "every course" instead of leaving it already cleared.
+    const all = qualifyingBadges({ ...NO_FACTS, coursesCompleted: [...COURSE_BADGE_IDS] })
+    expect(all).toContain('all-courses')
+    const allButOne = qualifyingBadges({ ...NO_FACTS, coursesCompleted: COURSE_BADGE_IDS.slice(1) })
+    expect(allButOne).not.toContain('all-courses')
   })
 
   it('ignores a course id that has no badge', () => {

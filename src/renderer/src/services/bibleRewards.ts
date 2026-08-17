@@ -97,14 +97,29 @@ export const BADGES: Badge[] = [
   { id: 'verses-50',    name: 'Fifty by heart',   requirement: 'Master fifty verses' },
   { id: 'verses-100',   name: 'A hundred by heart', requirement: 'Master a hundred verses' },
   { id: 'first-lesson', name: 'First lesson',     requirement: 'Finish a lesson' },
+  // One per shipped course. The ids are `course-<course id>`, and
+  // bibleCourses.test.ts checks the two lists still line up — a course added
+  // to the JSON without a badge here would silently award nothing.
   { id: 'course-life-of-christ', name: 'Life of Christ', requirement: 'Finish the Life of Christ course' },
   { id: 'course-parables',       name: 'The Parables',   requirement: 'Finish The Parables course' },
   { id: 'course-psalms',         name: 'Psalms for Hard Days', requirement: 'Finish Psalms for Hard Days' },
+  { id: 'course-genesis',        name: 'In the Beginning', requirement: 'Finish Genesis: In the Beginning' },
+  { id: 'course-exodus',         name: 'Out of Egypt',   requirement: 'Finish Exodus: Out of Egypt' },
+  { id: 'course-proverbs',       name: 'Everyday Wisdom', requirement: 'Finish Proverbs: Wisdom for Ordinary Days' },
+  { id: 'course-john',           name: 'The Book of Signs', requirement: 'Finish John: The Book of Signs' },
+  { id: 'course-romans',         name: 'The Argument',   requirement: 'Finish Romans: The Gospel, Argued' },
+  { id: 'course-acts',           name: 'The Church Begins', requirement: 'Finish Acts: How the Church Began' },
   {
-    id: 'all-courses', name: 'Every course', requirement: 'Finish all three courses',
+    id: 'all-courses', name: 'Every course', requirement: 'Finish every course in the Classroom',
     unlock: { kind: 'cover', value: 'midnight', label: 'Midnight-blue binding' },
   },
 ]
+
+/** Course ids that have a completion badge — derived, never a second list. */
+export const COURSE_BADGE_IDS: string[] = BADGES
+  .map(b => b.id)
+  .filter(id => id.startsWith('course-'))
+  .map(id => id.slice('course-'.length))
 
 const BY_ID = new Map(BADGES.map(b => [b.id, b]))
 
@@ -128,7 +143,9 @@ export function qualifyingBadges(facts: RewardFacts): string[] {
     const badge = `course-${id}`
     if (BY_ID.has(badge)) out.push(badge)
   }
-  if (['life-of-christ', 'parables', 'psalms'].every(c => facts.coursesCompleted.includes(c))) {
+  // "Every course" reads the badge list rather than a hardcoded trio, so
+  // adding a course raises the bar instead of leaving it already cleared.
+  if (COURSE_BADGE_IDS.every(c => facts.coursesCompleted.includes(c))) {
     out.push('all-courses')
   }
   return out
