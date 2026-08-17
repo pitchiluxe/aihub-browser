@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Bookmark, GraduationCap, Sparkles, Search, Share2 } from 'lucide-react'
+import { Bookmark, GraduationCap, Music, Sparkles, Search, Share2 } from 'lucide-react'
 import { getBookMeta, getBooks, getChapter, parseRef, refKey, formatRef, bookListOptions, COVER_OPTION, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
@@ -13,6 +13,7 @@ import BookCover from '../bible/BookCover'
 import VerseSearch from '../bible/VerseSearch'
 import VerseGraph from '../bible/VerseGraph'
 import ListenButton from '../bible/ListenButton'
+import GospelRoom from '../bible/GospelRoom'
 import { useBibleSettings } from '../../services/bibleSettings'
 import { onBibleVerseRequest, takeBibleVerseRequest } from '../../services/bibleNavigation'
 import { useBrowserStore } from '../../store/browserStore'
@@ -63,6 +64,7 @@ export default function BiblePage() {
   const [coverRequested, setCoverRequested] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [graphOpen, setGraphOpen] = useState(false)
+  const [gospelOpen, setGospelOpen] = useState(false)
   const [bibleSettings] = useBibleSettings()
 
   // Highlights, saved verses, notes and reading position. `marks` drives
@@ -664,6 +666,13 @@ export default function BiblePage() {
           <GraduationCap size={14} /> Study
         </button>
         <button
+          onClick={() => setGospelOpen(true)}
+          title="Gospel — music to read to"
+          className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
+        >
+          <Music size={14} /> Gospel
+        </button>
+        <button
           onClick={() => setGraphOpen(true)}
           title="Verse constellation — your saved verses as a graph"
           className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
@@ -734,6 +743,8 @@ export default function BiblePage() {
       </div>
 
       <VerseSearch open={searchOpen} onClose={() => setSearchOpen(false)} onGoto={gotoRef} />
+
+      <GospelRoom open={gospelOpen} onClose={() => setGospelOpen(false)} />
 
       <VerseGraph
         open={graphOpen}

@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' blob:;" />
+    <!-- frame-src lists YouTube's two embed origins because the Gospel room
+         plays videos in an iframe. Without them the player is blocked by this
+         policy and renders as a blank white frame with no console error the
+         user would ever see — which is exactly how it shipped the first time.
+         Kept to the embed hosts specifically rather than opening frame-src up:
+         every other frame in the app is still 'self' or a blob. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' blob: https://www.youtube-nocookie.com https://www.youtube.com;" />
     <title>AIHub Browser</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <!-- media="print" makes the font stylesheet non-render-blocking: offline

@@ -43,7 +43,27 @@ const SHELVES: { label: string; query: string }[] = [
   { label: 'A cappella',    query: 'acapella gospel choir' },
 ]
 
-export default function GospelRoom() {
+/** Fisher-Yates with a seed, so one open keeps one order. */
+function shuffleSeeded<T>(items: T[], seed: number): T[] {
+  const out = items.slice()
+  let a = seed >>> 0
+  const next = () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
+interface Props { open: boolean; onClose: () => void }
+
+export default function GospelRoom({ open, onClose }: Props) {
   const addTab = useBrowserStore(s => s.addTab)
   const [shelf, setShelf]       = useState(0)
   const [search, setSearch]     = useState('')
@@ -53,6 +73,12 @@ export default function GospelRoom() {
   const [query, setQuery]       = useState('')
   const [playing, setPlaying]   = useState<GospelVideo | null>(null)
   const [nonce, setNonce]       = useState(0)
+  // Re-rolled every time the room is opened, so the shelf is a different
+  // shelf each visit rather than the same ten videos in the same order. The
+  // main process caches a query's results for fifteen minutes, which is right
+  // for not hammering YouTube and wrong for feeling alive — the ordering is
+  // therefore shuffled here, on top of the cache.
+  const [seed, setSeed]         = useState(() => (Math.random() * 2 ** 32) >>> 0)
 
   const load = useCallback(async (q: string) => {
     setLoading(true)
@@ -78,21 +104,57 @@ export default function GospelRoom() {
     }
   }, [])
 
-  useEffect(() => { load(SHELVES[shelf].query) }, [shelf, nonce, load])
+  // Opening the room starts it fresh: a new seed, back to "Now showing"
+  // (which asks the main process for a random tradition), and nothing playing.
+  useEffect(() => {
+    if (!open) return
+    setSeed((Math.random() * 2 ** 32) >>> 0)
+    setShelf(0)
+    setSearch('')
+    setPlaying(null)
+    setNonce(n => n + 1)
+  }, [open])
+
+  useEffect(() => { if (open) load(SHELVES[shelf].query) }, [open, shelf, nonce, load])
+
+  // Escape closes it, like every other overlay in the reader.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  // Nothing should keep singing behind a closed door.
+  useEffect(() => { if (!open) setPlaying(null) }, [open])
 
   // Stop the player when the listing changes underneath it — an iframe still
   // singing over a screen that has moved on is the worst version of this.
   useEffect(() => { setPlaying(null) }, [shelf, nonce])
 
   const shown = useMemo(() => {
+    const ordered = shuffleSeeded(videos, seed)
     const q = search.trim().toLowerCase()
-    if (!q) return videos
-    return videos.filter(v =>
+    if (!q) return ordered
+    return ordered.filter(v =>
       v.title.toLowerCase().includes(q) || v.channel.toLowerCase().includes(q))
-  }, [videos, search])
+  }, [videos, search, seed])
 
+  if (!open) return null
+
+  // A darkened house over the reader rather than a separate page: the Bible is
+  // still open behind it, and closing puts you back on the same spread.
+  //
+  // `no-drag` is load-bearing here for the same reason it is on the verse
+  // graph: the overlay covers the tab bar's draggable title strip, and
+  // Chromium computes -webkit-app-region document-wide regardless of z-order.
+  // Without carving the overlay out, every click in the top strip — including
+  // Shuffle and the close button — becomes a window-drag and never reaches
+  // the DOM.
   return (
-    <div className="mx-auto w-full max-w-6xl pb-10">
+    <div className="no-drag fixed inset-0 z-[280] overflow-y-auto"
+      style={{ background: 'rgba(6,4,9,0.94)', backdropFilter: 'blur(14px)' }}>
+    <div className="mx-auto w-full max-w-6xl px-6 py-7 pb-10">
 
       {/* ── The marquee ── */}
       <div className="mb-5 flex flex-wrap items-center gap-3">
@@ -109,10 +171,15 @@ export default function GospelRoom() {
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => setNonce(n => n + 1)} disabled={loading}
+          <button onClick={() => { setSeed((Math.random() * 2 ** 32) >>> 0); setNonce(n => n + 1) }} disabled={loading}
             className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all disabled:opacity-50"
             style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
             {loading ? <Loader2 size={13} className="animate-spin" /> : <Shuffle size={13} />} Shuffle
+          </button>
+          <button onClick={onClose} title="Back to the Bible"
+            className="flex h-8 w-8 items-center justify-center rounded-lg"
+            style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)' }}>
+            <X size={15} />
           </button>
         </div>
       </div>
@@ -256,6 +323,7 @@ export default function GospelRoom() {
         Played from YouTube in a privacy-preserving embed. Nothing about you is sent with the
         search — no account, no cookies — and nothing is stored.
       </p>
+    </div>
     </div>
   )
 }
