@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildBackup, validateBackup, summarize, portableSettings,
-  mergeBibleMarks, mergeBibleStudy, EMPTY_BIBLE_STUDY, mergeBookmarks, mergeRecords, mergeById,
+  mergeBibleMarks, mergeBibleStudy, EMPTY_BIBLE_STUDY, studyHasContent, mergeBookmarks, mergeRecords, mergeById,
   bookmarkKey, backupFileName, BACKUP_APP, BACKUP_VERSION,
   type BibleMarksData,
 } from './backup'
@@ -266,5 +266,32 @@ describe('summarize', () => {
 
   it('is all zeroes for an empty backup rather than throwing', () => {
     expect(summarize(buildBackup({}, meta)).verses).toBe(0)
+  })
+})
+
+describe('studyHasContent — the guard that decides a write is not blankness', () => {
+  const base = () => EMPTY_BIBLE_STUDY()
+
+  it('is false for a genuinely empty study file', () => {
+    expect(studyHasContent(base())).toBe(false)
+  })
+
+  it('counts reading-plan progress on its own', () => {
+    // The regression this pins: a reader whose only activity is working
+    // through a plan had every write refused as "empty", so the plan reset to
+    // day zero on each restart.
+    expect(studyHasContent({ ...base(), plans: { 'gospel-in-a-week': { day: 3, startedAt: 1 } } })).toBe(true)
+  })
+
+  it('counts verses, lessons, streak days and badges', () => {
+    expect(studyHasContent({ ...base(), verses: { 'JHN.3.16': { box: 1, dueAt: 0 } } })).toBe(true)
+    expect(studyHasContent({ ...base(), lessons: { 'life-of-christ/01': { completedAt: 1, score: 3, total: 3 } } })).toBe(true)
+    expect(studyHasContent({ ...base(), streak: { days: ['2026-08-17'], best: 1 } })).toBe(true)
+    expect(studyHasContent({ ...base(), badges: ['streak-7'] })).toBe(true)
+  })
+
+  it('survives a file missing whole sections rather than throwing', () => {
+    expect(studyHasContent({} as any)).toBe(false)
+    expect(studyHasContent({ plans: { p: { day: 1, startedAt: 0 } } } as any)).toBe(true)
   })
 })

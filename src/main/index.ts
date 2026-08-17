@@ -37,7 +37,7 @@ import {
 import { buildLevels, buildTradePlan, trendContext, buildBracketPlan } from './trading/levels'
 import {
   buildBackup, validateBackup, backupFileName, BACKUP_EXTENSION,
-  mergeBibleMarks, mergeBibleStudy, EMPTY_BIBLE_STUDY,
+  mergeBibleMarks, mergeBibleStudy, EMPTY_BIBLE_STUDY, studyHasContent,
   mergeBookmarks as mergeBackupBookmarks, mergeRecords, mergeById,
   type BackupSections, type BibleStudyData,
 } from './backup'
@@ -3440,13 +3440,6 @@ function normaliseStudy(stored: any): BibleStudyData | null {
     badges: Array.isArray(stored.badges) ? stored.badges.filter((b: any) => typeof b === 'string') : [],
     plans:  stored.plans && typeof stored.plans === 'object' ? stored.plans : {},
   }
-}
-
-function studyHasContent(s: BibleStudyData): boolean {
-  return Object.keys(s.verses).length > 0
-    || Object.keys(s.lessons).length > 0
-    || s.streak.days.length > 0
-    || s.badges.length > 0
 }
 
 function readBibleStudy(): BibleStudyData {

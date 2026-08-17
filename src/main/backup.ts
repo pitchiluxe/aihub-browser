@@ -201,6 +201,28 @@ export const EMPTY_BIBLE_STUDY = (): BibleStudyData => ({
 })
 
 /**
+ * Does this study file hold anything the reader would miss?
+ *
+ * The write path refuses to persist a "blank" study file over one that has
+ * content, which is what stops a renderer that failed to load from erasing
+ * real progress. That makes this predicate load-bearing: anything it forgets
+ * to count is a kind of progress that silently cannot be saved.
+ *
+ * Reading-plan progress is here for exactly that reason. It is the one kind of
+ * progress a reader can accumulate without ever touching a drill, a lesson or
+ * the daily verse, and while it was missing, someone whose only activity was
+ * working through a plan had every write refused — so the plan reset to day
+ * zero on every restart.
+ */
+export function studyHasContent(s: BibleStudyData): boolean {
+  return Object.keys(s.verses || {}).length > 0
+    || Object.keys(s.lessons || {}).length > 0
+    || Object.keys(s.plans || {}).length > 0
+    || (s.streak?.days || []).length > 0
+    || (s.badges || []).length > 0
+}
+
+/**
  * Merge study progress.
  *
  * The rule everywhere here is "keep the better of the two", not "local wins".
