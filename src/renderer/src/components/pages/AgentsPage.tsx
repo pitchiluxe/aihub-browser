@@ -2,13 +2,15 @@ import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, Plus, Play, Loader2, Sparkles, X, CheckCircle, Search, Globe,
-  FormInput, Bell, BarChart2, ExternalLink, Copy, Download, Check, Archive, Trash2,
+  FormInput, Bell, BarChart2, Download, Check, Archive, Trash2,
   FolderOpen, AlertCircle, Briefcase,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, describeAction, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
 import { withFallbackNotice } from '../../services/routeNotice'
 import { streamChat } from '../../services/streamingChat'
+import ChatMessage from '../ai/ChatMessage'
+import { AttachImageButton, AttachmentStrip, useImageAttachments } from '../ai/ImageComposer'
 
 interface Agent {
   id: string
@@ -26,13 +28,15 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   steps?: StepState[]
+  /** Data URLs the user attached to this turn. */
+  images?: string[]
 }
 
 interface ArchivedConvo {
   id: string
   agent: { id: string; name: string; description: string; template: string; color: string; custom?: boolean }
   title: string
-  messages: { role: 'user' | 'assistant'; content: string }[]
+  messages: { role: 'user' | 'assistant'; content: string; images?: string[] }[]
   createdAt: number
   updatedAt: number
 }
@@ -116,7 +120,14 @@ function agentIcon(agent: Agent, size = 18): React.ReactNode {
 function agentSystemPrompt(agent: Agent): string {
   return `${agent.template}
 
-You are running inside AIHub Browser as a saved agent named "${agent.name}". Be concise and practical. Use **bold** for key terms, bullet lists where useful, and fenced code blocks (\`\`\`lang) for any code, markdown documents, or file content you produce — the user can copy or download every code block, and download several at once as a ZIP.
+You are running inside AIHub Browser as a saved agent named "${agent.name}". Be concise and practical.
+
+## Answer formatting — your replies render as full GitHub-flavored markdown
+- **Any multi-attribute data — comparisons, options, specs, prices, pros and cons, extracted records, search results — goes in a markdown table.** Header row, one concept per column, short cells. Never dump comparable data as a wall of bullets or as raw JSON in prose.
+- **Structure longer answers**: a one-line takeaway first, then \`##\` sections, bullets, and **bold** for key terms. Short answers stay short.
+- **Links** as \`[Descriptive title](https://full-url)\` — never bare URLs, never "click here".
+- **Code, documents and file content** go in fenced blocks with a language tag (\`\`\`python), optionally followed by a filename (\`\`\`python resume.py). The user gets copy and save buttons on every block, and can download several at once as a ZIP.
+- The user may attach **images**; when they do, answer from what you can actually see in them.
 ${AGENT_TOOLS_DOC}`
 }
 
@@ -144,6 +155,9 @@ export default function AgentsPage() {
   const [customAgents, setCustomAgents] = useState<Agent[]>([])
   const [conversations, setConversations] = useState<ArchivedConvo[]>([])
 
+  const attach = useImageAttachments()
+  const canSend = (!!chatInput.trim() || attach.images.length > 0) && !loading
+
   const convoIdRef   = useRef<string | null>(null)
   const createdAtRef = useRef<number>(0)
   const scrollRef    = useRef<HTMLDivElement>(null)
@@ -169,7 +183,7 @@ export default function AgentsPage() {
       id,
       agent: { id: agent.id, name: agent.name, description: agent.description, template: agent.template, color: agent.color, custom: !!agent.custom },
       title: (firstUser?.content || agent.name).replace(/\s+/g, ' ').slice(0, 60),
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
+      messages: messages.map(m => ({ role: m.role, content: m.content, ...(m.images?.length ? { images: m.images } : {}) })),
       createdAt: createdAtRef.current,
       updatedAt: Date.now(),
     }
@@ -207,7 +221,7 @@ export default function AgentsPage() {
   const resumeConversation = (convo: ArchivedConvo) => {
     const agent: Agent = { ...convo.agent, steps: TEMPLATE_AGENTS.find(t => t.id === convo.agent.id)?.steps }
     setSelected(agent)
-    setChatHistory(convo.messages.map(m => ({ role: m.role, content: m.content })))
+    setChatHistory(convo.messages.map(m => ({ role: m.role, content: m.content, images: m.images })))
     convoIdRef.current = convo.id
     createdAtRef.current = convo.createdAt
   }
@@ -216,11 +230,17 @@ export default function AgentsPage() {
   // via the ###ACTIONS### protocol; we run them, feed results back, and loop.
   const sendMessage = async () => {
     const msg = chatInput.trim()
-    if (!msg || loading || !selected) return
+    const images = attach.dataUrls
+    // An image on its own is a legitimate turn — "what is this?" is implied.
+    if ((!msg && !images.length) || loading || !selected) return
     const agent = selected
     setChatInput('')
+    attach.clear()
 
-    let visible: ChatMessage[] = [...chatHistory, { role: 'user', content: msg }]
+    let visible: ChatMessage[] = [
+      ...chatHistory,
+      { role: 'user', content: msg || 'What is in this image?', ...(images.length ? { images } : {}) },
+    ]
     setChatHistory(visible)
     setLoading(true)
 
@@ -231,7 +251,11 @@ export default function AgentsPage() {
     let actionsUsed = 0
     // Mirrors what the model sees — includes raw action blocks and synthetic
     // tool-result turns that never appear in the visible chat.
-    let loopHistory: { role: string; content: string }[] = visible.map(m => ({ role: m.role, content: m.content }))
+    // Images ride along in the portable shape the main process converts per
+    // provider (see src/main/visionMessages.ts) — the page never has to know
+    // whether Ollama or OpenRouter will answer.
+    let loopHistory: { role: string; content: string; images?: string[] }[] =
+      visible.map(m => ({ role: m.role, content: m.content, ...(m.images?.length ? { images: m.images } : {}) }))
 
     const pushVisible = (m: ChatMessage) => { visible = [...visible, m]; setChatHistory(visible) }
     const patchLastSteps = (idx: number, status: StepState['status']) => {
@@ -442,27 +466,21 @@ export default function AgentsPage() {
               <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                 <AnimatePresence>
                   {chatHistory.map((msg, i) => (
-                    <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
-                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-2`}>
-                      {msg.role === 'assistant' && (
-                        <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                          style={{ background: `${selected.color}18`, border: `1px solid ${selected.color}25`, color: selected.color }}>
-                          <Bot size={12} />
-                        </div>
-                      )}
-                      <div
-                        className="max-w-[80%] px-3 py-2 rounded-xl text-xs leading-relaxed"
-                        style={msg.role === 'user' ? {
-                          background: 'linear-gradient(135deg,rgba(139,92,246,0.7),rgba(99,102,241,0.65))',
-                          color: '#fff', borderTopRightRadius: 4, whiteSpace: 'pre-wrap',
-                        } : {
-                          background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
-                          color: 'rgb(var(--ds-text-3))', borderTopLeftRadius: 4,
-                        }}
+                    <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
+                      <ChatMessage
+                        role={msg.role}
+                        content={msg.content}
+                        images={msg.images}
+                        accent={selected.color}
+                        onNavigate={url => useBrowserStore.getState().addTab(url, 'browser')}
+                        avatar={
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                            style={{ background: `${selected.color}18`, border: `1px solid ${selected.color}25`, color: selected.color }}>
+                            <Bot size={12} />
+                          </div>
+                        }
                       >
-                        {msg.role === 'user'
-                          ? msg.content
-                          : <AgentMessage content={msg.content} color={selected.color} agentName={selected.name} />}
+                        {msg.role === 'assistant' && <MessageExtras content={msg.content} color={selected.color} agentName={selected.name} />}
                         {msg.steps && msg.steps.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {msg.steps.map((s, j) => (
@@ -478,7 +496,7 @@ export default function AgentsPage() {
                             ))}
                           </div>
                         )}
-                      </div>
+                      </ChatMessage>
                     </motion.div>
                   ))}
                 </AnimatePresence>
@@ -515,26 +533,35 @@ export default function AgentsPage() {
               </div>
 
               {/* Chat input */}
-              <div className="px-5 pb-4 pt-2 shrink-0" style={{ borderTop: '1px solid var(--ds-glass-sm)' }}>
-                <div className="flex gap-2">
-                  <input
+              <div
+                className="px-5 pb-4 pt-2 shrink-0"
+                style={{ borderTop: '1px solid var(--ds-glass-sm)' }}
+                onDragOver={e => e.preventDefault()}
+                onDrop={attach.onDrop}
+              >
+                <AttachmentStrip images={attach.images} onRemove={attach.remove} error={attach.error} />
+                <div className="flex gap-2 items-end">
+                  <AttachImageButton onFiles={attach.add} disabled={loading} accent={selected.color} size={36} />
+                  <textarea
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
+                    onPaste={attach.onPaste}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-                    placeholder="Reply to the agent…"
+                    placeholder="Reply to the agent — paste or drop an image to send one…"
                     disabled={loading}
-                    className="flex-1 px-3 py-2 rounded-xl text-xs text-slate-300 placeholder:text-slate-700 outline-none transition-all"
-                    style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', userSelect: 'text' }}
+                    rows={1}
+                    className="flex-1 px-3 py-2 rounded-xl text-xs text-slate-300 placeholder:text-slate-700 outline-none transition-all resize-none"
+                    style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', userSelect: 'text', maxHeight: 110 }}
                     onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = `${selected.color}45` }}
                     onBlur={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-glass-md)' }}
                   />
-                  <button onClick={sendMessage} disabled={!chatInput.trim() || loading}
+                  <button onClick={sendMessage} disabled={(!chatInput.trim() && !attach.images.length) || loading}
                     className="w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0"
                     style={{
-                      background: chatInput.trim() && !loading ? `${selected.color}22` : 'var(--ds-glass-sm)',
-                      border: `1px solid ${chatInput.trim() && !loading ? `${selected.color}35` : 'var(--ds-glass-md)'}`,
-                      color: chatInput.trim() && !loading ? selected.color : '#2d4060',
-                      cursor: chatInput.trim() && !loading ? 'pointer' : 'not-allowed',
+                      background: canSend ? `${selected.color}22` : 'var(--ds-glass-sm)',
+                      border: `1px solid ${canSend ? `${selected.color}35` : 'var(--ds-glass-md)'}`,
+                      color: canSend ? selected.color : '#2d4060',
+                      cursor: canSend ? 'pointer' : 'not-allowed',
                     }}>
                     {loading
                       ? <Loader2 size={13} className="animate-spin" />
@@ -681,7 +708,11 @@ function ConvoCard({ convo, active, onOpen, onDelete }: {
   )
 }
 
-// ── Rich message rendering: markdown, clickable links, downloadable code ──────
+// ── Extras that hang off an assistant message ────────────────────────────────
+// The message body itself is rendered by <ChatMessage> — the same markdown,
+// tables and code blocks the AI assistant panel uses. What is specific to an
+// agent is the delivery: a task that produced several files should hand them
+// over as files, not as text to be copied one block at a time.
 
 interface Fence { lang: string; filename?: string; code: string }
 
@@ -700,35 +731,23 @@ function fenceFilename(f: Fence, idx: number): string {
   return `snippet-${idx + 1}.${ext}`
 }
 
-// Splits a message into text segments and fenced code blocks. The fence info
-// line may carry a language and optionally a filename: ```python resume.py
-function parseSegments(content: string): (string | Fence)[] {
-  const out: (string | Fence)[] = []
+/** The fenced blocks in a message. The info line may carry a language and a
+ *  filename: ```python resume.py */
+export function parseFences(content: string): Fence[] {
+  const out: Fence[] = []
   const re = /```([^\n`]*)\n([\s\S]*?)(?:\n)?```/g
-  let last = 0
   let m: RegExpExecArray | null
   while ((m = re.exec(content)) !== null) {
-    if (m.index > last) out.push(content.slice(last, m.index))
     const info = (m[1] || '').trim().split(/\s+/)
     out.push({ lang: info[0] || '', filename: info[1], code: m[2] || '' })
-    last = m.index + m[0].length
   }
-  if (last < content.length) out.push(content.slice(last))
   return out
 }
 
-function openLink(url: string) {
-  try {
-    const u = new URL(url)
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return
-    useBrowserStore.getState().addTab(url, 'browser')
-  } catch {}
-}
-
-function AgentMessage({ content, color, agentName }: { content: string; color: string; agentName: string }) {
-  const segments = parseSegments(content)
-  const fences = segments.filter((s): s is Fence => typeof s !== 'string')
+function MessageExtras({ content, color, agentName }: { content: string; color: string; agentName: string }) {
+  const fences = parseFences(content)
   const [zipped, setZipped] = useState(false)
+  if (fences.length < 2) return null
 
   const downloadZip = async () => {
     const files = fences.map((f, i) => ({ path: fenceFilename(f, i), content: f.code }))
@@ -737,110 +756,12 @@ function AgentMessage({ content, color, agentName }: { content: string; color: s
     if (res?.success) { setZipped(true); setTimeout(() => setZipped(false), 2000) }
   }
 
-  let fenceIdx = -1
   return (
-    <div>
-      {segments.map((seg, i) => {
-        if (typeof seg === 'string') return <MdText key={i} text={seg} />
-        fenceIdx++
-        return <CodeBlock key={i} fence={seg} idx={fenceIdx} color={color} />
-      })}
-      {fences.length >= 2 && (
-        <button onClick={downloadZip}
-          className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all"
-          style={{ background: `${color}14`, border: `1px solid ${color}28`, color, cursor: 'pointer' }}>
-          {zipped ? <Check size={11} /> : <Download size={11} />}
-          {zipped ? 'Saved!' : `Download all ${fences.length} files as ZIP`}
-        </button>
-      )}
-    </div>
+    <button onClick={downloadZip}
+      className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all"
+      style={{ background: `${color}14`, border: `1px solid ${color}28`, color, cursor: 'pointer' }}>
+      {zipped ? <Check size={11} /> : <Download size={11} />}
+      {zipped ? 'Saved!' : `Download all ${fences.length} files as ZIP`}
+    </button>
   )
-}
-
-function CodeBlock({ fence, idx, color }: { fence: Fence; idx: number; color: string }) {
-  const [copied, setCopied] = useState(false)
-  const [saved, setSaved]   = useState(false)
-
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(fence.code); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch {}
-  }
-  const download = async () => {
-    const res = await window.electronAPI.file.saveText({ filename: fenceFilename(fence, idx), content: fence.code })
-    if (res?.success) { setSaved(true); setTimeout(() => setSaved(false), 2000) }
-  }
-
-  return (
-    <div className="my-2 rounded-lg overflow-hidden" style={{ border: '1px solid var(--ds-border-sm)' }}>
-      <div className="flex items-center justify-between px-2.5 py-1"
-        style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid var(--ds-border-sm)' }}>
-        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: `${color}cc` }}>
-          {fence.filename || fence.lang || 'code'}
-        </span>
-        <div className="flex items-center gap-1">
-          <button onClick={copy} title="Copy code"
-            className="w-5 h-5 rounded flex items-center justify-center text-slate-500 hover:text-slate-200 transition-colors">
-            {copied ? <Check size={10} style={{ color }} /> : <Copy size={10} />}
-          </button>
-          <button onClick={download} title="Download file"
-            className="w-5 h-5 rounded flex items-center justify-center text-slate-500 hover:text-slate-200 transition-colors">
-            {saved ? <Check size={10} style={{ color }} /> : <Download size={10} />}
-          </button>
-        </div>
-      </div>
-      <pre className="px-2.5 py-2 overflow-x-auto text-[11px] leading-relaxed m-0"
-        style={{ background: 'rgba(0,0,0,0.35)', color: '#cbd5e1', userSelect: 'text', fontFamily: 'ui-monospace, monospace' }}>
-        {fence.code}
-      </pre>
-    </div>
-  )
-}
-
-function MdText({ text }: { text: string }) {
-  const lines = text.replace(/^\n+|\n+$/g, '').split('\n')
-  return (
-    <div className="whitespace-pre-wrap">
-      {lines.map((line, i) => (
-        <div key={i} style={{ minHeight: line === '' ? 6 : undefined }}>{renderInline(line)}</div>
-      ))}
-    </div>
-  )
-}
-
-// Inline markdown: **bold**, `code`, [label](url), and bare https:// links —
-// every link opens in a new browser tab.
-function renderInline(line: string): React.ReactNode {
-  const segments: React.ReactNode[] = []
-  const re = /(\*\*(.+?)\*\*)|(`([^`]+)`)|(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))|(https?:\/\/[^\s<>")\]]+)/g
-  let m: RegExpExecArray | null
-  let last = 0
-  let key = 0
-  while ((m = re.exec(line)) !== null) {
-    if (m.index > last) segments.push(<span key={key++}>{line.slice(last, m.index)}</span>)
-    if (m[1]) {
-      segments.push(<strong key={key++} style={{ color: 'rgb(var(--ds-text-2))', fontWeight: 600 }}>{m[2]}</strong>)
-    } else if (m[3]) {
-      segments.push(
-        <code key={key++} className="px-1 rounded text-[11px]"
-          style={{ background: 'rgba(0,0,0,0.3)', color: '#93c5fd', fontFamily: 'ui-monospace, monospace' }}>
-          {m[4]}
-        </code>
-      )
-    } else {
-      const label = m[5] ? m[6] : (m[8].length > 48 ? m[8].slice(0, 48) + '…' : m[8])
-      const url = m[5] ? m[7] : m[8]
-      segments.push(
-        <button key={key++} onClick={() => openLink(url)} title={url} style={{
-          background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-          color: '#60a5fa', textDecoration: 'underline', fontSize: 'inherit',
-          display: 'inline-flex', alignItems: 'center', gap: 2,
-        }}>
-          {label}
-          <ExternalLink size={9} />
-        </button>
-      )
-    }
-    last = m.index + m[0].length
-  }
-  if (last < line.length) segments.push(<span key={key++}>{line.slice(last)}</span>)
-  return <>{segments}</>
 }

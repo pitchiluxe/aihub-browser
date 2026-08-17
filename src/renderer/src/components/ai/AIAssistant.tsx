@@ -12,7 +12,8 @@ import { resolveNavTarget } from '../../services/navIntent'
 import { withFallbackNotice } from '../../services/routeNotice'
 import { streamChat } from '../../services/streamingChat'
 import { PAGE_REFERENCE, REFUSAL, wantedTools, selectBookmarksForPrompt, CHAT_ONLY_NOTE } from '../../services/assistantIntent'
-import Markdown from './Markdown'
+import ChatMessage from './ChatMessage'
+import { AttachImageButton, AttachmentStrip, useImageAttachments } from './ImageComposer'
 
 interface Props {
   currentUrl?: string
@@ -95,12 +96,13 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
     if (!chatRestored.current) return
     // Debounced: a streamed answer updates this array many times a second.
     const t = setTimeout(() => {
-      window.electronAPI.chat.save(aiMessages.map(m => ({ role: m.role, content: m.content })))
+      window.electronAPI.chat.save(aiMessages.map(m => ({ role: m.role, content: m.content, ...(m.images?.length ? { images: m.images } : {}) })))
     }, 1500)
     return () => clearTimeout(t)
   }, [aiMessages])
 
   const [input,         setInput]         = useState('')
+  const attach = useImageAttachments()
   // Pending exec_command approval — the agent loop blocks on this until the
   // user clicks Run or Deny on the card rendered above the composer.
   const [pendingExec,   setPendingExec]   = useState<{ command: string; cwd: string; resolve: (ok: boolean) => void } | null>(null)
@@ -355,6 +357,7 @@ Your chat renders full GitHub-flavored markdown: tables, fenced code, headings, 
 - **Code**: fenced blocks with a language tag (\`\`\`python …). Users get a copy button. Inline \`code\` for names, commands, paths.
 - **Structure long answers**: one-line takeaway first → ## sections → bullets → **bold** key terms. Short answers stay short — no headers on a two-line reply.
 - **Research answers** end with a "Sources" section of markdown links to what you actually consulted.
+- **Images**: the user can attach screenshots and photos. When one is attached, answer from what you can actually see in it — describe, transcribe, debug or extract from the real picture, never guess from the filename.
 - Never say you can't browse the internet — you have web_search and fetch_url. Use them.
 
 Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT_ONLY_NOTE}\n\n${FEATURE_MAP}${appCtx}`}${pageCtx}${memoryCtx}${bookmarkCtx}${historyCtx}`
@@ -363,22 +366,26 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
   // ── Send message — agent loop: the model can request tool actions via a
   // JSON block (see agentTools.ts); we execute them and loop, until it
   // answers with plain text or a safety cap is hit. ─────────────────────────
-  const sendMessage = () => sendText(input, { showAsUser: true })
+  const sendMessage = () => sendText(input, { showAsUser: true, images: attach.dataUrls })
 
   // Core send path — used by the composer and by programmatic senders (e.g.
   // Compare Mode). `displayText` lets a big machine prompt be sent while the
   // chat shows a short human label instead of the raw payload.
-  const sendText = async (rawText: string, opts?: { showAsUser?: boolean; displayText?: string }) => {
+  const sendText = async (rawText: string, opts?: { showAsUser?: boolean; displayText?: string; images?: string[] }) => {
     const msg = rawText.trim()
-    if (!msg || isAILoading) return
+    const images = opts?.images || []
+    // A picture with no words is a real question — "what is this?" is implied.
+    if ((!msg && !images.length) || isAILoading) return
     setInput('')
+    if (images.length) attach.clear()
 
-    // Check navigation intent first — no AI call needed
-    if (tryNavIntent(msg)) return
+    // Check navigation intent first — no AI call needed. Skipped when an image
+    // is attached: "open this" about a screenshot is not a bookmark request.
+    if (!images.length && tryNavIntent(msg)) return
 
     lastUserMsgRef.current = msg
 
-    addAIMessage({ role: 'user', content: opts?.displayText || msg })
+    addAIMessage({ role: 'user', content: opts?.displayText || msg || 'What is in this image?', ...(images.length ? { images } : {}) })
     setAILoading(true)
     stopRequestedRef.current = false
 
@@ -410,8 +417,10 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
     // rest means the instructions always survive.
     const contextPlan = planContext(useBrowserStore.getState().aiMessages, HISTORY_TOKEN_BUDGET)
     const earlierDigest = summarizeCondensed(contextPlan.condensed)
-    let loopHistory: { role: string; content: string }[] =
-      contextPlan.kept.map(m => ({ role: m.role, content: m.content }))
+    // Images ride along in the portable shape the main process converts per
+    // provider (src/main/visionMessages.ts).
+    let loopHistory: { role: string; content: string; images?: string[] }[] =
+      contextPlan.kept.map(m => ({ role: m.role, content: m.content, ...(m.images?.length ? { images: m.images } : {}) }))
     // When the chat shows a short label but the model must see the full prompt
     // (Compare Mode), swap the real payload into the last user turn.
     if (opts?.displayText && loopHistory.length) {
@@ -632,6 +641,7 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
   }
 
   const hasUrl = !!(currentUrl && currentUrl !== 'home')
+  const canSend = (!!input.trim() || attach.images.length > 0) && !isAILoading
 
   // Conversation UI, rendered inside the docked panel shell below.
   const chatBody = (
@@ -845,36 +855,21 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                 {aiMessages.map((msg, i) => (
                   <motion.div key={i}
                     initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}
-                    style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', alignItems: 'flex-start', gap: 8 }}
                   >
-                    {msg.role === 'assistant' && (
-                      <div style={{
-                        width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2,
-                        background: 'rgb(var(--ds-accent) / 0.15)', border: '1px solid rgb(var(--ds-accent) / 0.2)',
-                      }}>
-                        <Zap size={11} style={{ color: 'rgb(var(--ds-accent-soft))' }} />
-                      </div>
-                    )}
-                    <div style={msg.role === 'user' ? {
-                      maxWidth: '82%', borderRadius: 14, borderTopRightRadius: 4,
-                      padding: '9px 12px', fontSize: 12, lineHeight: 1.55, whiteSpace: 'pre-wrap',
-                      background: 'linear-gradient(135deg, rgb(var(--ds-accent) / 0.82), rgb(var(--ds-accent-2) / 0.72))',
-                      color: '#fff', boxShadow: '0 2px 14px rgb(var(--ds-accent) / 0.28)',
-                      userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text',
-                      wordBreak: 'break-word', overflowWrap: 'break-word',
-                    } : {
-                      // Assistant bubbles render full markdown (tables, code) —
-                      // wider, and no pre-wrap (markdown handles its own layout).
-                      maxWidth: '94%', minWidth: 0, borderRadius: 14, borderTopLeftRadius: 4,
-                      padding: '9px 12px', fontSize: 12, lineHeight: 1.55,
-                      background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
-                      color: 'rgb(var(--ds-text-2))', userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text',
-                      overflow: 'hidden', wordBreak: 'break-word', overflowWrap: 'break-word',
-                    }}>
-                      {msg.content && (msg.role === 'assistant'
-                        ? <Markdown content={msg.content} onNavigate={url => addTab(url, 'browser')} />
-                        : <span>{msg.content}</span>)}
-                    </div>
+                    <ChatMessage
+                      role={msg.role === 'user' ? 'user' : 'assistant'}
+                      content={msg.content}
+                      images={msg.images}
+                      onNavigate={url => addTab(url, 'browser')}
+                      avatar={
+                        <div style={{
+                          width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2,
+                          background: 'rgb(var(--ds-accent) / 0.15)', border: '1px solid rgb(var(--ds-accent) / 0.2)',
+                        }}>
+                          <Zap size={11} style={{ color: 'rgb(var(--ds-accent-soft))' }} />
+                        </div>
+                      }
+                    />
                   </motion.div>
                 ))}
               </div>
@@ -960,7 +955,12 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
             )}
 
             {/* ── Input ── */}
-            <div style={{ padding: 12, borderTop: '1px solid var(--ds-border-sm)', flexShrink: 0 }}>
+            <div
+              style={{ padding: 12, borderTop: '1px solid var(--ds-border-sm)', flexShrink: 0 }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={attach.onDrop}
+            >
+              <AttachmentStrip images={attach.images} onRemove={attach.remove} error={attach.error} />
               <div
                 style={{
                   display: 'flex', alignItems: 'flex-end', gap: 8,
@@ -971,12 +971,14 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                 onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgb(var(--ds-accent) / 0.4)'}
                 onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-border-sm)'}
               >
+                <AttachImageButton onFiles={attach.add} disabled={isAILoading} size={26} />
                 <textarea
                   ref={inputRef}
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask me anything or say 'open YouTube'…"
+                  onPaste={attach.onPaste}
+                  placeholder="Ask me anything, or paste an image…"
                   rows={1}
                   style={{
                     flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
@@ -984,12 +986,12 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                     userSelect: 'text',
                   }}
                 />
-                <button onClick={sendMessage} disabled={!input.trim() || isAILoading} style={{
-                  width: 30, height: 30, borderRadius: 10, border: 'none', cursor: input.trim() ? 'pointer' : 'not-allowed',
+                <button onClick={sendMessage} disabled={(!input.trim() && !attach.images.length) || isAILoading} style={{
+                  width: 30, height: 30, borderRadius: 10, border: 'none', cursor: canSend ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  background: input.trim() && !isAILoading ? 'linear-gradient(135deg, rgb(var(--ds-accent)), rgb(var(--ds-accent-2)))' : 'var(--ds-glass-sm)',
-                  opacity: !input.trim() || isAILoading ? 0.35 : 1,
-                  boxShadow: input.trim() && !isAILoading ? '0 2px 14px rgb(var(--ds-accent) / 0.4)' : 'none',
+                  background: canSend ? 'linear-gradient(135deg, rgb(var(--ds-accent)), rgb(var(--ds-accent-2)))' : 'var(--ds-glass-sm)',
+                  opacity: canSend ? 1 : 0.35,
+                  boxShadow: canSend ? '0 2px 14px rgb(var(--ds-accent) / 0.4)' : 'none',
                   transition: 'all 0.15s',
                 }}>
                   {isAILoading

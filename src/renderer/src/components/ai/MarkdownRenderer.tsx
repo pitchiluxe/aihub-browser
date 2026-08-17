@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import TradePlanCard, { parseTradePlan } from './TradePlanCard'
 import remarkGfm from 'remark-gfm'
-import { Copy, Check, ExternalLink } from 'lucide-react'
+import { Copy, Check, Download, ExternalLink } from 'lucide-react'
 
 // Full GitHub-flavored markdown renderer for AI chat messages — tables,
 // fenced code with copy button, headings, lists, blockquotes, task lists.
@@ -85,7 +85,10 @@ export default function Markdown({ content, onNavigate }: Props) {
               const plan = parseTradePlan(text)
               if (plan) return <TradePlanCard plan={plan} />
             }
-            return <CodeBlock text={text} lang={lang} />
+            // The fence info line may carry a filename after the language:
+            // ```python resume.py — used as the download name.
+            const [, filename] = (props.node?.data?.meta ?? '').split(/\s+/)
+            return <CodeBlock text={text} lang={lang} filename={filename} />
           },
           pre: ({ children }) => <>{children}</>,
 
@@ -120,13 +123,36 @@ export default function Markdown({ content, onNavigate }: Props) {
   )
 }
 
-function CodeBlock({ text, lang }: { text: string; lang: string }) {
+// Extensions for the languages a model actually emits, so a downloaded block
+// opens in the right editor instead of as `snippet.txt`.
+const LANG_EXT: Record<string, string> = {
+  javascript: 'js', js: 'js', typescript: 'ts', ts: 'ts', tsx: 'tsx', jsx: 'jsx',
+  python: 'py', py: 'py', markdown: 'md', md: 'md', html: 'html', css: 'css',
+  json: 'json', bash: 'sh', sh: 'sh', shell: 'sh', powershell: 'ps1', sql: 'sql',
+  java: 'java', csharp: 'cs', cs: 'cs', cpp: 'cpp', 'c++': 'cpp', c: 'c',
+  go: 'go', rust: 'rs', ruby: 'rb', php: 'php', yaml: 'yml', yml: 'yml',
+  xml: 'xml', csv: 'csv', text: 'txt', txt: 'txt',
+}
+
+function CodeBlock({ text, lang, filename }: { text: string; lang: string; filename?: string }) {
   const [copied, setCopied] = useState(false)
+  const [saved, setSaved] = useState(false)
   const copy = () => {
     navigator.clipboard?.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1400)
     }).catch(() => {})
+  }
+  // A generated file is worth more as a file than as text on a screen. The
+  // main process owns the save dialog; if it is not there (a preload without
+  // it), the button simply does not appear rather than failing on click.
+  const saveText = (window as any).electronAPI?.file?.saveText
+  const download = async () => {
+    const name = filename && /^[\w.\- ]+\.\w+$/.test(filename)
+      ? filename
+      : `snippet.${LANG_EXT[lang.toLowerCase()] || 'txt'}`
+    const res = await saveText({ filename: name, content: text }).catch(() => null)
+    if (res?.success) { setSaved(true); setTimeout(() => setSaved(false), 2000) }
   }
   return (
     <div style={{ margin: '8px 0', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--ds-border)' }}>
@@ -135,15 +161,26 @@ function CodeBlock({ text, lang }: { text: string; lang: string }) {
         padding: '4px 10px', background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid var(--ds-glass-sm)',
       }}>
         <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgb(var(--ds-text-4))' }}>
-          {lang || 'code'}
+          {filename || lang || 'code'}
         </span>
-        <button onClick={copy} title="Copy code" style={{
-          display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
-          cursor: 'pointer', color: copied ? '#34d399' : 'rgb(var(--ds-text-4))', fontSize: 10, padding: 2,
-        }}>
-          {copied ? <Check size={11} /> : <Copy size={11} />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!!saveText && (
+            <button onClick={download} title="Save as a file" style={{
+              display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
+              cursor: 'pointer', color: saved ? '#34d399' : 'rgb(var(--ds-text-4))', fontSize: 10, padding: 2,
+            }}>
+              {saved ? <Check size={11} /> : <Download size={11} />}
+              {saved ? 'Saved' : 'Save'}
+            </button>
+          )}
+          <button onClick={copy} title="Copy code" style={{
+            display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
+            cursor: 'pointer', color: copied ? '#34d399' : 'rgb(var(--ds-text-4))', fontSize: 10, padding: 2,
+          }}>
+            {copied ? <Check size={11} /> : <Copy size={11} />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </span>
       </div>
       <pre style={{
         margin: 0, padding: '8px 10px', overflowX: 'auto',

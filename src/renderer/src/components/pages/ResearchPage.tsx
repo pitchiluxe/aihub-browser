@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FlaskConical, Loader2, Sparkles, ExternalLink, FileText, Download, RefreshCw, Plus, X } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { cleanNarration } from '../../services/agentTools'
+import Markdown from '../ai/Markdown'
 
 interface Props { onNavigate?: (url: string) => void }
 
@@ -51,7 +52,7 @@ export default function ResearchPage({ onNavigate }: Props) {
 
     try {
       const result = await window.electronAPI.ai.chat([
-        { role: 'system', content: 'You are an expert research analyst. Produce well-structured, insightful reports in markdown format.' },
+        { role: 'system', content: 'You are an expert research analyst. Produce well-structured, insightful reports in GitHub-flavored markdown: ## sections, **bold** key terms, and a markdown table wherever you are comparing options, specifications, prices or any other multi-attribute data. End with a Sources section of [title](url) links to what you actually read.' },
         { role: 'user', content: prompt },
       ])
       setReport(cleanNarration(result.content || '') || 'No response from AI.')
@@ -286,30 +287,15 @@ function SourceRow({ url, title, onNavigate }: { url: string; title: string; onN
   )
 }
 
-function ReportRenderer({ content }: { content: string; onNavigate?: (u: string) => void }) {
-  const lines = content.split('\n')
+// The report renders through the same markdown pipeline as every other AI
+// answer in the app — tables, fenced code, links and headings all behave
+// identically here and in the assistant panel. It used to have its own
+// line-by-line renderer that understood four prefixes, so a research report
+// full of comparison tables arrived as raw pipe characters.
+function ReportRenderer({ content, onNavigate }: { content: string; onNavigate?: (u: string) => void }) {
   return (
-    <div style={{ fontFamily: 'inherit' }}>
-      {lines.map((line, i) => {
-        if (line.startsWith('# '))       return <h1 key={i} style={{ fontSize: 20, fontWeight: 700, color: 'rgb(var(--ds-text-2))', marginBottom: 12, marginTop: i > 0 ? 24 : 0 }}>{line.slice(2)}</h1>
-        if (line.startsWith('## '))      return <h2 key={i} style={{ fontSize: 15, fontWeight: 600, color: 'rgb(var(--ds-text-2))', marginBottom: 8, marginTop: 20 }}>{line.slice(3)}</h2>
-        if (line.startsWith('### '))     return <h3 key={i} style={{ fontSize: 13, fontWeight: 600, color: 'rgb(var(--ds-text-3))', marginBottom: 6, marginTop: 16 }}>{line.slice(4)}</h3>
-        if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} style={{ fontSize: 13, color: 'rgb(var(--ds-text-4))', marginBottom: 4, marginLeft: 16 }}>{renderInline(line.slice(2))}</li>
-        if (line.startsWith('**') && line.endsWith('**')) return <p key={i} style={{ fontSize: 13, fontWeight: 600, color: 'rgb(var(--ds-text-3))', marginBottom: 6 }}>{line.slice(2, -2)}</p>
-        if (line.startsWith('---'))      return <hr key={i} style={{ border: 'none', borderTop: '1px solid var(--ds-border-sm)', margin: '16px 0' }} />
-        if (line.trim() === '')          return <div key={i} style={{ height: 6 }} />
-        return <p key={i} style={{ fontSize: 13, color: 'rgb(var(--ds-text-4))', lineHeight: 1.7, marginBottom: 6 }}>{renderInline(line)}</p>
-      })}
+    <div style={{ fontSize: 13, lineHeight: 1.7, color: 'rgb(var(--ds-text-3))', userSelect: 'text' }}>
+      <Markdown content={content} onNavigate={onNavigate || (() => {})} />
     </div>
   )
-}
-
-function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g)
-  return parts.map((p, i) => {
-    if (p.startsWith('**') && p.endsWith('**')) {
-      return <strong key={i} style={{ color: 'rgb(var(--ds-text-3))', fontWeight: 600 }}>{p.slice(2, -2)}</strong>
-    }
-    return p
-  })
 }
