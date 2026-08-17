@@ -1,12 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  BookOpen, Bookmark, BookmarkCheck, ChevronLeft, ChevronRight, ExternalLink,
+  BookOpen, ChevronLeft, ChevronRight, ExternalLink,
   FlaskConical, Loader2, Maximize2, Minimize2, X,
 } from 'lucide-react'
 import { getBookMeta, getChapter, refKey, type Verse } from '../../services/bibleService'
 import { useBibleSettings } from '../../services/bibleSettings'
 import VerseText from './VerseText'
+import VerseActions from './VerseActions'
+import NoteEditor from './NoteEditor'
+import ShareSheet from './ShareSheet'
+import ListenButton from './ListenButton'
 
 export interface PassageView {
   bookId: string
@@ -29,6 +33,10 @@ interface Props {
   /** Leave the popup for the full reader, at this verse. */
   onOpenInBible: (ref: string) => void
   onToggleSave: (ref: string) => void
+  /** null clears the highlight. Same colours and same store as the reader. */
+  onHighlight: (ref: string, color: string | null) => void
+  /** An empty string clears the note. */
+  onSaveNote: (ref: string, text: string) => void
   onAddToLab?: (ref: string) => void
   inLab?: (ref: string) => boolean
 }
@@ -49,9 +57,11 @@ interface Props {
  */
 export default function PassageModal({
   views, startIndex = 0, focusRef, highlights, notes, savedRefs,
-  onClose, onOpenInBible, onToggleSave, onAddToLab, inLab,
+  onClose, onOpenInBible, onToggleSave, onHighlight, onSaveNote, onAddToLab, inLab,
 }: Props) {
   const [settings] = useBibleSettings()
+  const [noteOpen, setNoteOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [index, setIndex] = useState(Math.min(Math.max(startIndex, 0), Math.max(views.length - 1, 0)))
   // A passage is a window on a chapter; the chapter is always there behind it.
   // Expanding reads the rest without ever leaving this sheet.
@@ -123,7 +133,11 @@ export default function PassageModal({
 
   // Esc closes and the arrow keys page. The reader expects both, and a popup
   // you can only dismiss with the mouse is a popup that traps you mid-lesson.
+  // The note editor and the share sheet own those keys while they are open —
+  // Escape out of a half-written note must not also close the passage.
+  const busy = noteOpen || shareOpen
   useEffect(() => {
+    if (busy) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape')     { e.stopPropagation(); onClose() }
       if (e.key === 'ArrowRight') next()
@@ -131,7 +145,7 @@ export default function PassageModal({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, next, prev])
+  }, [busy, onClose, next, prev])
 
   if (!view) return null
 
@@ -141,6 +155,9 @@ export default function PassageModal({
   const selectedSaved = !!selected && savedSet.has(selected)
   const canPrev = index > 0 || chapter > 1
   const canNext = index < views.length - 1 || (!!meta && chapter < meta.chapters)
+  // The selected verse's own text, for the share sheet's quote and image.
+  const selectedVerseNo = selected ? Number(selected.split('.')[2]) : 0
+  const selectedText = (verses || []).find(v => v.v === selectedVerseNo)?.t || ''
 
   return (
     <AnimatePresence>
@@ -234,32 +251,25 @@ export default function PassageModal({
               Next <ChevronRight size={13} />
             </button>
 
+            {/* Reads what is actually on the page — the selected verse alone
+                when one is tapped, otherwise the whole passage. */}
+            <ListenButton
+              text={selected ? selectedText : (shown || []).map(v => v.t).join(' ')}
+              reference={selected ? heading : undefined}
+              label="Listen"
+            />
+
             <div className="flex-1" />
 
-            {selected ? (
-              <>
-                <span className="text-[10.5px] font-semibold opacity-45">
-                  {selected.split('.')[2] ? `verse ${selected.split('.')[2]}` : ''}
-                </span>
-                <button onClick={() => onToggleSave(selected)}
-                  className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold"
-                  style={selectedSaved
-                    ? { background: 'rgba(52,211,153,0.14)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399' }
-                    : { background: 'rgba(230,200,110,0.14)', border: '1px solid rgba(230,200,110,0.3)', color: '#e6c86e' }}>
-                  {selectedSaved ? <BookmarkCheck size={12} /> : <Bookmark size={12} />}
-                  {selectedSaved ? 'Saved' : 'Save verse'}
-                </button>
-                {onAddToLab && (
-                  <button onClick={() => onAddToLab(selected)} disabled={inLab?.(selected)}
-                    className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-40"
-                    style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
-                    <FlaskConical size={12} /> {inLab?.(selected) ? 'In the Lab' : 'Learn it'}
-                  </button>
-                )}
-              </>
-            ) : (
-              <span className="text-[10.5px] opacity-40">Tap a verse to save it or learn it by heart</span>
-            )}
+            {selected && onAddToLab ? (
+              <button onClick={() => onAddToLab(selected)} disabled={inLab?.(selected)}
+                className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-40"
+                style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
+                <FlaskConical size={12} /> {inLab?.(selected) ? 'In the Lab' : 'Learn it'}
+              </button>
+            ) : !selected ? (
+              <span className="text-[10.5px] opacity-40">Tap a verse to highlight, bookmark or note it</span>
+            ) : null}
 
             <button
               onClick={() => onOpenInBible(selected || refKey(view.bookId, chapter, whole || offChapter ? 1 : view.from))}
@@ -270,6 +280,44 @@ export default function PassageModal({
             </button>
           </div>
         </motion.div>
+
+        {/* The reader's own verse bar, unchanged — the same five highlight
+            colours, the same bookmark, note and share buttons, writing to the
+            same marks file. A verse bookmarked while studying is bookmarked,
+            full stop; there is no second kind of saved verse.
+            Wrapped so a click on the bar never reaches the backdrop's close. */}
+        {selected && !noteOpen && !shareOpen && (
+          <div onClick={e => e.stopPropagation()}>
+            <VerseActions
+              verseRef={selected}
+              currentColor={highlights[selected]}
+              isSaved={selectedSaved}
+              hasNote={!!notes[selected]}
+              onHighlight={color => onHighlight(selected, color)}
+              onSave={() => onToggleSave(selected)}
+              onNote={() => setNoteOpen(true)}
+              onShare={() => setShareOpen(true)}
+              onClose={() => setSelected(null)}
+            />
+          </div>
+        )}
+
+        {selected && noteOpen && (
+          <div onClick={e => e.stopPropagation()}>
+            <NoteEditor
+              verseRef={selected}
+              initial={notes[selected] || ''}
+              onSave={text => { onSaveNote(selected, text); setNoteOpen(false) }}
+              onClose={() => setNoteOpen(false)}
+            />
+          </div>
+        )}
+
+        {selected && shareOpen && (
+          <div onClick={e => e.stopPropagation()}>
+            <ShareSheet verseRef={selected} text={selectedText} onClose={() => setShareOpen(false)} />
+          </div>
+        )}
       </motion.div>
     </AnimatePresence>
   )

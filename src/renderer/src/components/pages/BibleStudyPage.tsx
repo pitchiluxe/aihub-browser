@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Award, BookOpen, FlaskConical, GraduationCap, Sun } from 'lucide-react'
+import { Award, BookOpen, FlaskConical, GraduationCap, Share2, Sun } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { dayKey, verseForDay } from '../../services/dailyVerse'
 import { grade, labStats, type VerseBook } from '../../services/bibleSrs'
@@ -14,6 +14,7 @@ import {
 import { formatRef, parseRef } from '../../services/bibleService'
 import { requestBibleVerse } from '../../services/bibleNavigation'
 import PassageModal, { verseView, type PassageView } from '../bible/PassageModal'
+import VerseGraph from '../bible/VerseGraph'
 import DailyVerseCard from '../study/DailyVerseCard'
 import StudyDesk, { type DeskMarks } from '../study/StudyDesk'
 import Classroom from '../study/Classroom'
@@ -44,6 +45,7 @@ export default function BibleStudyPage() {
   const [marks, setMarks] = useState<DeskMarks>(EMPTY_MARKS)
   const [celebrating, setCelebrating] = useState<Badge[]>([])
   const [reading, setReading] = useState<Reading | null>(null)
+  const [graphOpen, setGraphOpen] = useState(false)
 
   // The whole marks object, including the fields this page never shows
   // (lastRead). Saving a verse has to write the file back whole, and merging
@@ -74,8 +76,10 @@ export default function BibleStudyPage() {
     ;(window as any).electronAPI?.bible?.setMarks?.(next).catch(() => {})
   }, [])
 
-  // Saving from the study room writes the same list the reader's own Save
-  // button writes, so a verse kept here shows up there and in Saved verses.
+  // Marking a verse from the study room writes the same three collections the
+  // reader's own verse bar writes. There is no second kind of bookmark, no
+  // study-only highlight — a verse marked while studying is marked, and it is
+  // waiting in the reader and in Saved verses.
   const toggleSaveVerse = useCallback((ref: string) => {
     persistMarks(current => {
       const exists = (current.saved || []).some((s: any) => s.ref === ref)
@@ -85,6 +89,24 @@ export default function BibleStudyPage() {
           ? current.saved.filter((s: any) => s.ref !== ref)
           : [{ ref, ts: Date.now() }, ...(current.saved || [])],
       }
+    })
+  }, [persistMarks])
+
+  const highlightVerse = useCallback((ref: string, color: string | null) => {
+    persistMarks(current => {
+      const highlights = { ...(current.highlights || {}) }
+      if (color) highlights[ref] = color
+      else delete highlights[ref]
+      return { ...current, highlights }
+    })
+  }, [persistMarks])
+
+  const saveNote = useCallback((ref: string, text: string) => {
+    persistMarks(current => {
+      const notes = { ...(current.notes || {}) }
+      if (text.trim()) notes[ref] = text.trim()
+      else delete notes[ref]
+      return { ...current, notes }
     })
   }, [persistMarks])
 
@@ -193,7 +215,15 @@ export default function BibleStudyPage() {
             <div className="text-xs opacity-50">A verse a day, courses, and a drill room that remembers for you</div>
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
+          {/* The constellation of everything saved, without a trip back to the
+              reader to reach it. */}
+          <button onClick={() => setGraphOpen(true)}
+            title="Verse constellation — your saved verses as a graph"
+            className="mr-1 flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-semibold transition-all"
+            style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-4))' }}>
+            <Share2 size={14} /> Graph
+          </button>
           {ROOMS.map(r => (
             <button key={r.id} onClick={() => setRoom(r.id)}
               className="relative flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-semibold transition-all"
@@ -273,10 +303,23 @@ export default function BibleStudyPage() {
           onClose={() => setReading(null)}
           onOpenInBible={openInBible}
           onToggleSave={toggleSaveVerse}
+          onHighlight={highlightVerse}
+          onSaveNote={saveNote}
           onAddToLab={ref => addToLab([ref])}
           inLab={inLab}
         />
       )}
+
+      {/* The verse constellation, reachable without going back to the reader.
+          Opening a node lands in the passage popup rather than a tab, so the
+          graph behaves like every other way into scripture in this page. */}
+      <VerseGraph
+        open={graphOpen}
+        onClose={() => setGraphOpen(false)}
+        saved={marks.saved}
+        notes={marks.notes}
+        onOpenRef={ref => { setGraphOpen(false); readVerse(ref) }}
+      />
 
       {/* A badge landing is worth one quiet card, not confetti. */}
       <AnimatePresence>

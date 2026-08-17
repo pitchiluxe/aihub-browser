@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Bookmark, GraduationCap, Sparkles, Search, Share2 } from 'lucide-react'
-import { getBookMeta, getBooks, getChapter, parseRef, refKey, bookListOptions, COVER_OPTION, type Verse } from '../../services/bibleService'
+import { getBookMeta, getBooks, getChapter, parseRef, refKey, formatRef, bookListOptions, COVER_OPTION, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
 import PageLeaf from '../bible/PageLeaf'
@@ -12,6 +12,7 @@ import BibleAssistant from '../bible/BibleAssistant'
 import BookCover from '../bible/BookCover'
 import VerseSearch from '../bible/VerseSearch'
 import VerseGraph from '../bible/VerseGraph'
+import ListenButton from '../bible/ListenButton'
 import { useBibleSettings } from '../../services/bibleSettings'
 import { onBibleVerseRequest, takeBibleVerseRequest } from '../../services/bibleNavigation'
 import { useBrowserStore } from '../../store/browserStore'
@@ -634,10 +635,24 @@ export default function BiblePage() {
           disabled={!canTurn('next') || !!turning}
           className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm disabled:opacity-40"
         >Next</button>
+        {/* Reads the spread that is open — the selected verse if one is
+            chosen, otherwise both pages, in order. */}
+        <div className="ml-auto">
+          <ListenButton
+            variant="icon"
+            label="Listen"
+            text={selectedRef
+              ? selectedVerseText
+              : [spreadBase, spreadBase + 1]
+                  .flatMap(ch => chapterVerses(ch).map(v => v.t))
+                  .join(' ')}
+            reference={selectedRef ? formatRef(selectedRef) : `${book?.name ?? ''} ${spreadBase}`}
+          />
+        </div>
         <button
           onClick={() => setSearchOpen(true)}
           title="Search the Bible (Ctrl+F)"
-          className="ml-auto flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
+          className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
         >
           <Search size={14} /> Search
         </button>

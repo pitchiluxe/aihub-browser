@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { BookOpen, Bookmark, BookmarkCheck, Check, FlaskConical, Flame, Loader2 } from 'lucide-react'
 import { formatRef } from '../../services/bibleService'
 import { verseText } from '../../services/verseText'
+import ListenButton from '../bible/ListenButton'
 
 interface Props {
   verseRef: string
@@ -85,6 +86,7 @@ export default function DailyVerseCard({
           >
             {meditatedToday ? <><Check size={13} /> Sat with it today</> : <>Meditate on this</>}
           </button>
+          <ListenButton text={text || ''} reference={formatRef(verseRef)} label="Listen" />
           <button
             onClick={() => onRead(verseRef)}
             className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold"
