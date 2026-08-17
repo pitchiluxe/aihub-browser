@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Award, BookOpen, FlaskConical, GraduationCap, Sun } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
@@ -11,7 +11,9 @@ import { completedCourses, lessonKey, lessonsCompleted } from '../../services/bi
 import {
   addVerses, advancePlan, removeVerse, setLesson, useBibleStudy, type StudyState,
 } from '../../services/bibleStudyStore'
-import { parseRef } from '../../services/bibleService'
+import { formatRef, parseRef } from '../../services/bibleService'
+import { requestBibleVerse } from '../../services/bibleNavigation'
+import PassageModal, { verseView, type PassageView } from '../bible/PassageModal'
 import DailyVerseCard from '../study/DailyVerseCard'
 import StudyDesk, { type DeskMarks } from '../study/StudyDesk'
 import Classroom from '../study/Classroom'
@@ -33,24 +35,58 @@ const EMPTY_MARKS: DeskMarks = { highlights: {}, saved: [], notes: {} }
 // The study page is a shell: rooms and routing only. Each room is its own
 // component, so this file never grows into the reader's 700-line shape — the
 // two are different activities and deliberately do not share a component tree.
+interface Reading { views: PassageView[]; index: number; focusRef: string | null }
+
 export default function BibleStudyPage() {
   const { study, loaded, update } = useBibleStudy()
-  const addTab = useBrowserStore(s => s.addTab)
+  const focusOrOpenPage = useBrowserStore(s => s.focusOrOpenPage)
   const [room, setRoom] = useState<Room>('today')
   const [marks, setMarks] = useState<DeskMarks>(EMPTY_MARKS)
   const [celebrating, setCelebrating] = useState<Badge[]>([])
+  const [reading, setReading] = useState<Reading | null>(null)
+
+  // The whole marks object, including the fields this page never shows
+  // (lastRead). Saving a verse has to write the file back whole, and merging
+  // onto a partial copy is how a reading position or a note quietly vanishes.
+  const marksRef = useRef<any>({ ...EMPTY_MARKS, lastRead: null })
+  // Never write from a slate we failed to read — same rule the reader follows.
+  const marksSafe = useRef(false)
 
   const today = dayKey()
   const todayRef = useMemo(() => verseForDay(new Date()), [today])
 
-  // Read-only here. The reader owns the marks file; the desk only shows what is
-  // in it, and the one thing this page writes is the reading position, so
-  // "open in reader" lands on the verse that was clicked.
   useEffect(() => {
     ;(window as any).electronAPI?.bible?.getMarks?.()
-      .then((m: any) => setMarks({ highlights: m?.highlights || {}, saved: m?.saved || [], notes: m?.notes || {} }))
+      .then((m: any) => {
+        marksRef.current = { highlights: m?.highlights || {}, saved: m?.saved || [], notes: m?.notes || {}, lastRead: m?.lastRead ?? null }
+        marksSafe.current = m?.status !== 'unreadable'
+        setMarks({ highlights: marksRef.current.highlights, saved: marksRef.current.saved, notes: marksRef.current.notes })
+      })
       .catch(() => {})
   }, [])
+
+  /** The one path every marks write in this page goes through. */
+  const persistMarks = useCallback((mutate: (current: any) => any) => {
+    const next = mutate(marksRef.current)
+    marksRef.current = next
+    setMarks({ highlights: next.highlights, saved: next.saved, notes: next.notes })
+    if (!marksSafe.current) return
+    ;(window as any).electronAPI?.bible?.setMarks?.(next).catch(() => {})
+  }, [])
+
+  // Saving from the study room writes the same list the reader's own Save
+  // button writes, so a verse kept here shows up there and in Saved verses.
+  const toggleSaveVerse = useCallback((ref: string) => {
+    persistMarks(current => {
+      const exists = (current.saved || []).some((s: any) => s.ref === ref)
+      return {
+        ...current,
+        saved: exists
+          ? current.saved.filter((s: any) => s.ref !== ref)
+          : [{ ref, ts: Date.now() }, ...(current.saved || [])],
+      }
+    })
+  }, [persistMarks])
 
   const facts = useCallback((next: StudyState): RewardFacts => {
     const stats = labStats(next.verses, Date.now())
@@ -99,22 +135,35 @@ export default function BibleStudyPage() {
     commit(current => setLesson(current, lessonKey(courseId, lessonId), { completedAt: Date.now(), score, total }))
   }, [commit])
 
-  // Opening the reader on a verse: write the position into the marks file the
-  // reader restores from, then open its tab. No new channel, no shared state —
-  // the reader already knows how to come back to where you were.
-  const openReader = useCallback((ref: string) => {
+  // "Read it" anywhere in the study rooms opens the passage over this page, on
+  // the reader's own paper — it never opens a tab. Losing your place in a
+  // lesson or a reading plan to go and look at one verse is not a trade worth
+  // making, and every trip used to leave another Bible tab behind.
+  const readPassages = useCallback((views: PassageView[], focusRef?: string | null, index = 0) => {
+    const usable = views.filter(Boolean)
+    if (!usable.length) return
+    setReading({ views: usable, index, focusRef: focusRef ?? null })
+  }, [])
+
+  const readVerse = useCallback((ref: string) => {
+    const view = verseView(ref, formatRef(ref))
+    if (view) readPassages([view], ref)
+  }, [readPassages])
+
+  // The one path that does change tabs, and only because the reader asked for
+  // it by name. The verse is handed over explicitly — the marks file's
+  // lastRead only carries a book and a chapter, and on its own it would land
+  // the reader on the closed cover instead of the verse they clicked. The
+  // Bible tab is FOCUSED rather than duplicated.
+  const openInBible = useCallback((ref: string) => {
     const parsed = parseRef(ref)
-    const api = (window as any).electronAPI?.bible
-    const go = () => addTab('aihub://bible', 'bible')
-    if (!parsed || !api?.getMarks) { go(); return }
-    api.getMarks()
-      .then((m: any) => {
-        if (m?.status === 'unreadable') return
-        return api.setMarks({ ...m, lastRead: { book: parsed.bookId, chapter: parsed.chapter } })
-      })
-      .catch(() => {})
-      .finally(go)
-  }, [addTab])
+    setReading(null)
+    if (parsed && marksSafe.current) {
+      persistMarks(current => ({ ...current, lastRead: { book: parsed.bookId, chapter: parsed.chapter } }))
+    }
+    if (parsed) requestBibleVerse(ref)
+    focusOrOpenPage('aihub://bible', 'bible')
+  }, [focusOrOpenPage, persistMarks])
 
   const askAI = useCallback((question: string) => {
     document.dispatchEvent(new CustomEvent('aihub-ai-send', { detail: { text: question, display: question } }))
@@ -168,8 +217,10 @@ export default function BibleStudyPage() {
             meditatedToday={study.streak.days.includes(today)}
             streak={streakNow}
             inLab={inLab(todayRef)}
+            saved={marks.saved.some(s => s.ref === todayRef)}
             onMeditate={meditate}
-            onOpenReader={openReader}
+            onRead={readVerse}
+            onToggleSave={toggleSaveVerse}
             onAddToLab={ref => addToLab([ref])}
           />
         ) : room === 'study' ? (
@@ -177,7 +228,8 @@ export default function BibleStudyPage() {
             marks={marks}
             plans={study.plans}
             onAdvancePlan={(planId, day) => commit(c => advancePlan(c, planId, day, Date.now()))}
-            onOpenReader={openReader}
+            onOpenReader={readVerse}
+            onReadPassages={readPassages}
             onAddToLab={addToLab}
             inLab={inLab}
           />
@@ -187,7 +239,8 @@ export default function BibleStudyPage() {
             inLab={inLab}
             onComplete={completeLesson}
             onAddToLab={addToLab}
-            onOpenReader={openReader}
+            onOpenReader={readVerse}
+            onReadPassages={readPassages}
             onAskAI={askAI}
           />
         ) : room === 'lab' ? (
@@ -195,7 +248,7 @@ export default function BibleStudyPage() {
             verses={study.verses as VerseBook}
             onGrade={gradeVerse}
             onRemove={ref => commit(c => removeVerse(c, ref))}
-            onOpenReader={openReader}
+            onOpenReader={readVerse}
           />
         ) : (
           <ProgressPanel
@@ -206,6 +259,24 @@ export default function BibleStudyPage() {
           />
         )}
       </div>
+
+      {/* Scripture, over whatever room asked for it. Closing it puts the reader
+          straight back on the plan or the lesson they were working through. */}
+      {reading && (
+        <PassageModal
+          views={reading.views}
+          startIndex={reading.index}
+          focusRef={reading.focusRef}
+          highlights={marks.highlights}
+          notes={marks.notes}
+          savedRefs={marks.saved.map(s => s.ref)}
+          onClose={() => setReading(null)}
+          onOpenInBible={openInBible}
+          onToggleSave={toggleSaveVerse}
+          onAddToLab={ref => addToLab([ref])}
+          inLab={inLab}
+        />
+      )}
 
       {/* A badge landing is worth one quiet card, not confetti. */}
       <AnimatePresence>

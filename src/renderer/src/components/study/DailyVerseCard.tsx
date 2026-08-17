@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { BookOpen, Check, FlaskConical, Flame, Loader2 } from 'lucide-react'
+import { BookOpen, Bookmark, BookmarkCheck, Check, FlaskConical, Flame, Loader2 } from 'lucide-react'
 import { formatRef } from '../../services/bibleService'
 import { verseText } from '../../services/verseText'
 
@@ -8,8 +8,11 @@ interface Props {
   meditatedToday: boolean
   streak: number
   inLab: boolean
+  saved: boolean
   onMeditate: () => void
-  onOpenReader: (ref: string) => void
+  /** Opens the passage popup over this card — never a new tab. */
+  onRead: (ref: string) => void
+  onToggleSave: (ref: string) => void
   onAddToLab: (ref: string) => void
 }
 
@@ -17,7 +20,7 @@ interface Props {
 // things you might want to do with it — sit with it, read around it, or learn
 // it by heart. No AI, no network: the verse is chosen from the date alone.
 export default function DailyVerseCard({
-  verseRef, meditatedToday, streak, inLab, onMeditate, onOpenReader, onAddToLab,
+  verseRef, meditatedToday, streak, inLab, saved, onMeditate, onRead, onToggleSave, onAddToLab,
 }: Props) {
   const [text, setText] = useState<string | null>(null)
 
@@ -83,11 +86,22 @@ export default function DailyVerseCard({
             {meditatedToday ? <><Check size={13} /> Sat with it today</> : <>Meditate on this</>}
           </button>
           <button
-            onClick={() => onOpenReader(verseRef)}
+            onClick={() => onRead(verseRef)}
             className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold"
             style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}
           >
-            <BookOpen size={13} /> Open in reader
+            <BookOpen size={13} /> Read it
+          </button>
+          {/* Saves to the same list the reader's own Save button writes, so a
+              verse kept here is waiting in Saved verses when the Bible opens. */}
+          <button
+            onClick={() => onToggleSave(verseRef)}
+            className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all"
+            style={saved
+              ? { background: 'rgba(52,211,153,0.14)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399' }
+              : { background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}
+          >
+            {saved ? <><BookmarkCheck size={13} /> Saved</> : <><Bookmark size={13} /> Save verse</>}
           </button>
           <button
             onClick={() => onAddToLab(verseRef)}

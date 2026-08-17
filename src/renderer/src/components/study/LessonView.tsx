@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, BookOpen, Check, FlaskConical, Loader2, Sparkles } from 'lucide-react'
-import type { Course, Lesson } from '../../services/bibleCourses'
+import type { Course, Lesson, Passage } from '../../services/bibleCourses'
 import { formatRef, parseRef } from '../../services/bibleService'
 import { buildExercise, checkAnswer, type Exercise } from '../../services/bibleQuiz'
 import { distractorPool, passageVerses, quizVerses } from '../../services/verseText'
+import { useBibleSettings } from '../../services/bibleSettings'
 
 interface Props {
   course: Course
@@ -14,6 +15,8 @@ interface Props {
   onComplete: (score: number, total: number) => void
   onAddToLab: (refs: string[]) => void
   onOpenReader: (ref: string) => void
+  /** Opens the lesson's passages in the popup, starting at the one clicked. */
+  onReadPassages: (views: Passage[], focusRef?: string | null, index?: number) => void
   onAskAI?: (question: string) => void
 }
 
@@ -24,8 +27,9 @@ type Stage = 'read' | 'quiz' | 'done'
 // bundled scripture, never written by a model — the wrong answers are other
 // real verses from the same book.
 export default function LessonView({
-  course, lesson, completed, inLab, onBack, onComplete, onAddToLab, onOpenReader, onAskAI,
+  course, lesson, completed, inLab, onBack, onComplete, onAddToLab, onOpenReader, onReadPassages, onAskAI,
 }: Props) {
+  const [settings] = useBibleSettings()
   const [stage, setStage] = useState<Stage>('read')
   const [passages, setPassages] = useState<Record<string, { ref: string; v: number; t: string }[]>>({})
   const [quiz, setQuiz] = useState<Exercise[] | null>(null)
@@ -94,16 +98,23 @@ export default function LessonView({
 
           <div className="mt-8 mb-2 text-[11px] font-bold uppercase tracking-[0.16em] opacity-45">Read</div>
           <div className="flex flex-col gap-4">
-            {lesson.passages.map(p => (
-              <div key={p.label} className="rounded-2xl p-5"
-                style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)' }}>
-                <div className="mb-3 flex items-center justify-between">
+            {/* Scripture in a lesson is scripture, so it gets the reader's own
+                page — same paper, same serif column, same font-scale and
+                justification the reader set. A lesson that renders verses as
+                chrome-coloured body text quietly says they are just more of the
+                lesson's prose, and they are not. */}
+            {lesson.passages.map((p, pi) => (
+              <div key={p.label} className="overflow-hidden rounded-2xl"
+                style={{ border: '1px solid var(--ds-border-sm)' }}>
+                <div className="flex items-center justify-between px-4 py-2"
+                  style={{ background: 'var(--ds-glass-xs)' }}>
                   <div className="text-xs font-bold" style={{ color: course.accent }}>{p.label}</div>
                   <div className="flex gap-1.5">
-                    <button onClick={() => onOpenReader(`${p.bookId}.${p.chapter}.${p.from}`)}
+                    <button onClick={() => onReadPassages(lesson.passages, null, pi)}
+                      title="Read it on the page"
                       className="flex items-center gap-1 rounded-lg px-2 py-1 text-[10.5px] font-semibold opacity-60 hover:opacity-100"
                       style={{ border: '1px solid var(--ds-border-sm)' }}>
-                      <BookOpen size={11} /> Reader
+                      <BookOpen size={11} /> Read it
                     </button>
                     {onAskAI && (
                       <button onClick={() => onAskAI(`Explain ${p.label} — what does it mean and what was going on when it was written?`)}
@@ -114,19 +125,29 @@ export default function LessonView({
                     )}
                   </div>
                 </div>
-                {passages[p.label] ? (
-                  <p className="selectable-text" style={{ fontFamily: 'Georgia, serif', fontSize: 14, lineHeight: 1.9, color: 'rgb(var(--ds-text-2))' }}>
-                    {passages[p.label].map(v => (
-                      <span key={v.ref}>
-                        <sup className="mr-1 select-none opacity-40">{v.v}</sup>{v.t}{' '}
-                      </span>
-                    ))}
-                  </p>
-                ) : (
-                  <div className="flex items-center gap-2 py-3 text-xs opacity-50">
-                    <Loader2 size={12} className="animate-spin" /> Loading the passage…
-                  </div>
-                )}
+                <div
+                  className={settings.paper === 'clean' ? 'bible-paper bible-paper-clean' : 'bible-paper'}
+                  style={{
+                    padding: '22px 26px',
+                    ['--bible-font-scale' as any]: settings.fontScale * 0.94,
+                    ['--bible-align' as any]: settings.justify ? 'justify' : 'left',
+                  }}
+                >
+                  {passages[p.label] ? (
+                    <div className="bible-prose">
+                      {passages[p.label].map(v => (
+                        <span key={v.ref}>
+                          {settings.verseNumbers && <sup className="mr-0.5 select-none opacity-50">{v.v}</sup>}
+                          {v.t}{' '}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 py-3 text-xs" style={{ color: 'rgba(80,58,30,0.7)' }}>
+                      <Loader2 size={12} className="animate-spin" /> Loading the passage…
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -155,7 +176,10 @@ export default function LessonView({
               <div className="flex flex-col gap-6">
                 {quiz.map((ex, qi) => (
                   <div key={ex.ref}>
-                    <div className="mb-2 text-xs font-bold" style={{ color: course.accent }}>{formatRef(ex.ref)}</div>
+                    <button onClick={() => onOpenReader(ex.ref)} title="Read it on the page"
+                      className="mb-2 text-xs font-bold" style={{ color: course.accent }}>
+                      {formatRef(ex.ref)}
+                    </button>
                     <div className="flex flex-col gap-2">
                       {ex.options!.map((opt, oi) => {
                         const chosen = answers[qi] === oi

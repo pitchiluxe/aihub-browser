@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { ArrowLeft, Check, GraduationCap, Lock } from 'lucide-react'
-import { courseProgress, getCourses, lessonKey, type LessonBook } from '../../services/bibleCourses'
+import { courseProgress, getCourses, lessonKey, type LessonBook, type Passage } from '../../services/bibleCourses'
 import LessonView from './LessonView'
 
 interface Props {
@@ -9,13 +9,14 @@ interface Props {
   onComplete: (courseId: string, lessonId: string, score: number, total: number) => void
   onAddToLab: (refs: string[]) => void
   onOpenReader: (ref: string) => void
+  onReadPassages: (views: Passage[], focusRef?: string | null, index?: number) => void
   onAskAI?: (question: string) => void
 }
 
 // Three authored courses, six lessons each. The lessons are readable in any
 // order — nothing is locked — because gating a devotional course behind a quiz
 // score would be the wrong kind of pressure entirely.
-export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOpenReader, onAskAI }: Props) {
+export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOpenReader, onReadPassages, onAskAI }: Props) {
   const courses = getCourses()
   const [openCourse, setOpenCourse] = useState<string | null>(null)
   const [openLesson, setOpenLesson] = useState<string | null>(null)
@@ -34,6 +35,7 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
         onComplete={(score, total) => onComplete(course.id, lesson.id, score, total)}
         onAddToLab={onAddToLab}
         onOpenReader={onOpenReader}
+        onReadPassages={onReadPassages}
         onAskAI={onAskAI}
       />
     )

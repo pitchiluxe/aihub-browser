@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { BookOpen, Check, FlaskConical, Highlighter, NotebookPen, RotateCcw } from 'lucide-react'
 import { formatRef } from '../../services/bibleService'
-import { getPlans, type ReadingPlan } from '../../services/bibleCourses'
+import { getPlans, type Passage, type ReadingPlan } from '../../services/bibleCourses'
 import { passageVerses } from '../../services/verseText'
 import type { PlanProgress } from '../../services/bibleStudyStore'
 
@@ -16,6 +16,8 @@ interface Props {
   plans: Record<string, PlanProgress>
   onAdvancePlan: (planId: string, day: number) => void
   onOpenReader: (ref: string) => void
+  /** Opens the day's reading in the passage popup, on the reader's own paper. */
+  onReadPassages: (views: Passage[], focusRef?: string | null, index?: number) => void
   onAddToLab: (refs: string[]) => void
   inLab: (ref: string) => boolean
 }
@@ -25,7 +27,7 @@ type Tab = 'plans' | 'saved' | 'highlights' | 'notes'
 // The self-directed desk. It reads the reader's own marks rather than keeping
 // a second copy of them — a verse saved here and a verse saved in the reader
 // are the same verse, and there is no second source of truth to drift.
-export default function StudyDesk({ marks, plans, onAdvancePlan, onOpenReader, onAddToLab, inLab }: Props) {
+export default function StudyDesk({ marks, plans, onAdvancePlan, onOpenReader, onReadPassages, onAddToLab, inLab }: Props) {
   const [tab, setTab] = useState<Tab>('plans')
   const highlighted = Object.keys(marks.highlights || {})
   const noted = Object.keys(marks.notes || {})
@@ -55,7 +57,7 @@ export default function StudyDesk({ marks, plans, onAdvancePlan, onOpenReader, o
         <div className="flex flex-col gap-3">
           {getPlans().map(plan => (
             <PlanCard key={plan.id} plan={plan} progress={plans[plan.id]}
-              onAdvance={day => onAdvancePlan(plan.id, day)} onOpenReader={onOpenReader} />
+              onAdvance={day => onAdvancePlan(plan.id, day)} onRead={onReadPassages} />
           ))}
         </div>
       )}
@@ -106,11 +108,11 @@ export default function StudyDesk({ marks, plans, onAdvancePlan, onOpenReader, o
   )
 }
 
-function PlanCard({ plan, progress, onAdvance, onOpenReader }: {
+function PlanCard({ plan, progress, onAdvance, onRead }: {
   plan: ReadingPlan
   progress?: PlanProgress
   onAdvance: (day: number) => void
-  onOpenReader: (ref: string) => void
+  onRead: (views: Passage[], focusRef?: string | null, index?: number) => void
 }) {
   const day = Math.min(progress?.day || 0, plan.days.length)
   const done = day >= plan.days.length
@@ -160,7 +162,10 @@ function PlanCard({ plan, progress, onAdvance, onOpenReader }: {
           </div>
           {preview && <p className="mb-3 text-[11.5px] italic leading-relaxed opacity-45">“{preview}…”</p>}
           <div className="flex gap-2">
-            <button onClick={() => onOpenReader(`${today.passages[0].bookId}.${today.passages[0].chapter}.${today.passages[0].from}`)}
+            {/* The whole day's reading, in one popup you can page through. It
+                opens over this card rather than in the Bible tab, so closing it
+                puts "mark done" straight back under the cursor. */}
+            <button onClick={() => onRead(today.passages)}
               className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-semibold"
               style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
               <BookOpen size={12} /> Read it

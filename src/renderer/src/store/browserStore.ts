@@ -19,6 +19,15 @@ interface BrowserState {
   tabs: Tab[]
   activeTabId: string | null
   addTab: (url?: string, pageType?: Tab['pageType'], containerId?: string) => string
+  /**
+   * Show one of AIHub's own pages, reusing the tab it is already open in.
+   *
+   * The Bible and the study room link to each other, and with plain addTab
+   * every trip between them left another identical tab behind — five clicks,
+   * five Bibles. Focusing the existing one instead makes the pair behave like
+   * two views of the same place, which is what they are.
+   */
+  focusOrOpenPage: (url: string, pageType: Tab['pageType']) => string
   /** Replace every open tab with a saved set (session restore, workspaces). */
   restoreTabs: (entries: { url: string; title?: string; pageType?: Tab['pageType'] }[], activeIndex: number) => void
   /** Close duplicate tabs, keeping one of each page. Returns how many closed. */
@@ -141,6 +150,24 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       canGoForward: false,
     }))
     return id
+  },
+
+  focusOrOpenPage: (url, pageType) => {
+    const { tabs, addTab } = get()
+    const existing = tabs.find(t => t.pageType === pageType)
+    if (existing) {
+      // Wake it if it was slept, and put it back on the URL asked for — the
+      // tab is the page, so reusing it must not strand the reader somewhere
+      // else in it.
+      set(s => ({
+        tabs: s.tabs.map(t => (t.id === existing.id ? { ...t, url, asleep: false } : t)),
+        activeTabId: existing.id,
+        canGoBack: false,
+        canGoForward: false,
+      }))
+      return existing.id
+    }
+    return addTab(url, pageType)
   },
 
   // Session restore and workspaces both land here: build the whole strip in one

@@ -13,6 +13,7 @@ import BookCover from '../bible/BookCover'
 import VerseSearch from '../bible/VerseSearch'
 import VerseGraph from '../bible/VerseGraph'
 import { useBibleSettings } from '../../services/bibleSettings'
+import { onBibleVerseRequest, takeBibleVerseRequest } from '../../services/bibleNavigation'
 import { useBrowserStore } from '../../store/browserStore'
 
 // Shape persisted by the main process (see `bible:getMarks` / `bible:setMarks`
@@ -474,6 +475,27 @@ export default function BiblePage() {
     setSavedOpen(false)
   }, [turning])
 
+  // A verse asked for from elsewhere in the app — the study room's "Open in the
+  // Bible" — beats both the restored reading position and the cover. Someone
+  // who asked for John 3:16 and got the front board instead has been answered
+  // with a different question.
+  const openRequestedVerse = useCallback((ref: string) => {
+    setCoverOpen(true)
+    setCoverRequested(false)
+    gotoRef(ref)
+  }, [gotoRef])
+
+  // Declared after the restore effect on purpose: both run in the same commit
+  // when the marks land, and this one's position must be the one that sticks.
+  useEffect(() => {
+    if (!marksLoaded) return
+    const pending = takeBibleVerseRequest()
+    if (pending) openRequestedVerse(pending)
+  }, [marksLoaded, openRequestedVerse])
+
+  // And for a request that arrives while the reader is already on screen.
+  useEffect(() => onBibleVerseRequest(openRequestedVerse), [openRequestedVerse])
+
   // Toolbar chapter/verse pickers — jump straight to a chapter, or to a
   // specific verse within it, instead of flipping pages to find it. Both are
   // refused mid-turn for the same reason the book dropdown is: a sheet in
@@ -620,7 +642,7 @@ export default function BiblePage() {
           <Search size={14} /> Search
         </button>
         <button
-          onClick={() => useBrowserStore.getState().addTab('aihub://study', 'study')}
+          onClick={() => useBrowserStore.getState().focusOrOpenPage('aihub://study', 'study')}
           title="Bible Study — daily verse, courses and memorisation"
           className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
         >
