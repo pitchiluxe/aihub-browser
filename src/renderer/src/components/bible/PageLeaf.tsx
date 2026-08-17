@@ -2,7 +2,7 @@ import React from 'react'
 
 interface Props {
   front: React.ReactNode          // the face of the leaf as it lies on the book
-  back: React.ReactNode           // the face revealed as the leaf swings over
+  back: React.ReactNode           // the face revealed as the sheet folds over
   direction: 'next' | 'prev'
   angle: number                   // 0 → 180 degrees, owned by the page
   animating: boolean              // true while easing to a resting angle
@@ -10,170 +10,111 @@ interface Props {
   paper?: 'aged' | 'clean' | 'linen' | 'midnight'
 }
 
-// One turning sheet, rendered from an angle the page hands it.
+// One turning sheet, as a FOLD rather than a hinge — the Kindle page-curl
+// model instead of the swinging-board model.
 //
-// This is deliberately a dumb view: the page owns the gesture and drives this
-// component through `angle`, so the sheet follows the finger from the first pixel.
+// The difference is where the crease is. A hinge rotates the whole sheet about
+// the spine, so the page leaves the book as one rigid panel. A real reader —
+// and Kindle's curl — creases the paper somewhere out in the middle of the
+// page: the part beyond the crease flips over and lies back across the part
+// before it, the crease travels toward the spine as the turn progresses, and
+// the page underneath is revealed in the widening gap.
 //
-// The sheet stays a single, continuous page — no split panels, no duplicated
-// text. The sense of a page bending comes entirely from LIGHT: the free edge
-// darkens and curls into shadow as the sheet lifts, a soft sheen crosses it at
-// the halfway point, and the whole leaf leans slightly out of plane. Faking the
-// bend with real geometry (a hard crease down the middle) looked artificial;
-// shading a flat sheet reads as paper without any seam.
+// That is what this draws, in two layers:
 //
-// A dragged turn re-renders every frame, so the shading is driven inline from
-// `angle`. A button/arrow turn animates purely in CSS with no per-frame render,
-// so the same effects run as a CSS keyframe (globals.css) that peaks halfway.
+//   • the FRONT, clipped to the part of the sheet that has not folded yet;
+//   • the FLAP, which is the back of the sheet, mirrored about the crease so
+//     it lands exactly where the folded paper would be.
+//
+// The double mirror is the fiddly part and is worth spelling out. The flap
+// wrapper is mirrored about the crease (that is the fold itself). Its child is
+// mirrored again about its own centre, which pre-flips the text so that after
+// the fold it reads the right way round — the same trick the old 3D version
+// got for free from `rotateY(180deg)` on its backface. The net effect is that
+// the back's left-hand portion appears, readable, lying across the front.
+//
+// Everything is CSS: two clip-paths, two transforms and some gradients. No
+// per-frame JavaScript, so a dragged turn and a button turn use the same code
+// path — the drag drives `angle` directly, and a button turn transitions the
+// same properties.
 export default function PageLeaf({ front, back, direction, angle, animating, durationMs, paper = 'aged' }: Props) {
   const paperClass = paper === 'aged' ? 'bible-paper' : `bible-paper bible-paper-${paper}`
-  const t = angle / 180
-  const arc = Math.sin(t * Math.PI)          // 0 at rest, 1 upright at the halfway point
 
-  const easing = 'cubic-bezier(0.32, 0.10, 0.22, 1)'
-  const peakAnim = animating ? `bible-page-peak-early ${durationMs}ms ${easing} both` : undefined
+  const t = Math.max(0, Math.min(1, angle / 180))
+  const forward = direction === 'next'
 
-  // A turn driven by a button runs as a keyframe rather than a transition, so
-  // the rotation can overshoot its resting angle by a couple of degrees and
-  // settle back — the small flop a real sheet makes as it lands. An easing
-  // curve cannot do that without dragging the shading overshoot along with it.
-  const signed = direction === 'next' ? -angle : angle
-  const settleAnim = animating
-    ? `bible-page-settle ${durationMs}ms ${easing} both`
-    : undefined
+  // Where the crease is, as a percentage across this half of the spread.
+  // Forward turns crease at the outer (right) edge and travel to the gutter;
+  // backward turns do the reverse.
+  const crease = forward ? (1 - t) * 100 : t * 100
 
-  // The whole sheet leans out of plane as it swings — pinned at the spine,
-  // lifting at the free edge — so it never reads as a rigid board. Steeper
-  // than a token tilt: at 6 degrees the lean is visible without the sheet
-  // looking bent in half.
-  const curl = arc * (direction === 'next' ? -6 : 6)
-  // A bowed sheet is fractionally narrower on screen than a flat one held at
-  // the same angle. Small, but it is most of what separates paper from card.
-  const bow = 1 - arc * 0.03
-  // And it comes off the book as it rises, rather than pivoting flush against
-  // the page beneath it.
-  const lift = arc * 26
-  const cast = arc * 0.38                    // shadow the sheet throws on the page beneath
+  // How far through the fold we are, peaking mid-turn. Used for the shading:
+  // a sheet is at its most lifted, and throws its darkest shadow, halfway.
+  const arc = Math.sin(t * Math.PI)
 
-  // Light rakes from the spine: the gutter edge stays dark, the mid-page catches
-  // the light (reversed on the verso).
-  const frontShade = direction === 'next'
-    ? 'linear-gradient(to left, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 42%, rgba(0,0,0,0) 72%)'
-    : 'linear-gradient(to right, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 42%, rgba(0,0,0,0) 72%)'
-  const backShade = direction === 'next'
-    ? 'linear-gradient(to right, rgba(0,0,0,0.46) 0%, rgba(0,0,0,0.08) 48%, rgba(0,0,0,0) 78%)'
-    : 'linear-gradient(to left, rgba(0,0,0,0.46) 0%, rgba(0,0,0,0.08) 48%, rgba(0,0,0,0) 78%)'
-  // The free edge curls into shadow — a soft dark band hugging the outer edge
-  // that deepens as the sheet stands up. This is what makes the flat page read
-  // as gently bent rather than a rotating card.
-  const curlDarkRight = 'linear-gradient(to right, rgba(0,0,0,0) 60%, rgba(0,0,0,0.22) 86%, rgba(0,0,0,0.34) 100%)'
-  const curlDarkLeft = 'linear-gradient(to left, rgba(0,0,0,0) 60%, rgba(0,0,0,0.22) 86%, rgba(0,0,0,0.34) 100%)'
-  const sheenBand = direction === 'next'
-    ? 'linear-gradient(100deg, rgba(255,255,255,0) 32%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 68%)'
-    : 'linear-gradient(260deg, rgba(255,255,255,0) 32%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 68%)'
+  const easing = 'cubic-bezier(0.25, 0.55, 0.25, 1)'
+  const move = animating
+    ? `clip-path ${durationMs}ms ${easing}, transform ${durationMs}ms ${easing}, opacity ${durationMs}ms ${easing}`
+    : 'none'
 
-  // A shading overlay: keyframe-driven (peaks mid-turn) on button turns, inline
-  // (from the live arc) while dragging.
-  const shadeLayer = (bg: string, peak: number, blend?: 'soft-light'): React.CSSProperties =>
-    animating
-      ? { background: bg, animation: peakAnim, ...( { ['--peak' as any]: peak } ), ...(blend ? { mixBlendMode: blend } : {}) }
-      : { background: bg, opacity: arc * peak, ...(blend ? { mixBlendMode: blend } : {}) }
+  // The un-folded part of the front: everything on the spine side of the crease.
+  const frontClip = forward
+    ? `inset(0 ${100 - crease}% 0 0)`
+    : `inset(0 0 0 ${crease}%)`
 
-  const face = (content: React.ReactNode, isBack: boolean) => {
-    // The free (outer) edge is on the right for a forward turn — mirrored on the
-    // verso, which is itself flipped by rotateY(180).
-    const freeRight = direction === 'next' ? !isBack : isBack
-    return (
+  // The folded part, taken from the back of the sheet. Clipped in the sheet's
+  // own coordinates, then mirrored about the crease by the transform below.
+  const flapClip = forward
+    ? `inset(0 0 0 ${crease}%)`
+    : `inset(0 ${100 - crease}% 0 0)`
+
+  // A soft band of shadow hugging the crease on the page that is still flat —
+  // the folded paper is standing over it.
+  const creaseShadowOnFront = forward
+    ? 'linear-gradient(to right, rgba(0,0,0,0) 55%, rgba(0,0,0,0.30) 92%, rgba(0,0,0,0.44) 100%)'
+    : 'linear-gradient(to left,  rgba(0,0,0,0) 55%, rgba(0,0,0,0.30) 92%, rgba(0,0,0,0.44) 100%)'
+
+  // The flap is lit from the crease outward: bright where the paper rolls over
+  // and catches the light, falling into shade at its free edge.
+  const flapShade = forward
+    ? 'linear-gradient(to left, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.04) 14%, rgba(0,0,0,0.10) 55%, rgba(0,0,0,0.30) 100%)'
+    : 'linear-gradient(to right, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.04) 14%, rgba(0,0,0,0.10) 55%, rgba(0,0,0,0.30) 100%)'
+
+  return (
+    // The leaf never swallows clicks meant for the text underneath it.
+    <div className="pointer-events-none absolute inset-0 z-30">
+
+      {/* The part of the sheet still lying flat on the book. */}
       <div
         className={`absolute inset-0 ${paperClass} overflow-hidden p-10`}
-        style={{
-          backfaceVisibility: 'hidden',
-          transform: isBack ? 'rotateY(180deg)' : undefined,
-          boxShadow: '0 14px 40px rgba(0,0,0,0.30)',
-        }}
+        style={{ clipPath: frontClip, transition: move, willChange: 'clip-path' }}
       >
-        {content}
-        {/* Rake shading from the spine */}
-        <div className="pointer-events-none absolute inset-0" style={shadeLayer(isBack ? backShade : frontShade, isBack ? 0.42 : 0.5)} />
-        {/* Free-edge curl shadow */}
-        <div className="pointer-events-none absolute inset-0" style={shadeLayer(freeRight ? curlDarkRight : curlDarkLeft, 0.9)} />
-        {/* Specular sheen sweeping across the standing sheet */}
-        <div className="pointer-events-none absolute inset-0" style={shadeLayer(sheenBand, isBack ? 0.42 : 0.5, 'soft-light')} />
-        {/* The thickness of the sheet itself. A page caught side-on catches
-            the light along its cut edge, and that hairline is a surprisingly
-            large part of reading the leaf as a physical object rather than a
-            texture. It only shows while the sheet is off the page. */}
-        <div
-          className="pointer-events-none absolute inset-y-0"
-          style={{
-            ...shadeLayer(
-              freeRight
-                ? 'linear-gradient(to right, rgba(255,250,235,0) 0%, rgba(255,250,235,0.85) 100%)'
-                : 'linear-gradient(to left,  rgba(255,250,235,0) 0%, rgba(255,250,235,0.85) 100%)',
-              0.8,
-            ),
-            [freeRight ? 'right' : 'left']: 0,
-            width: 2,
-          } as React.CSSProperties}
-        />
+        {front}
+        <div className="pointer-events-none absolute inset-0"
+          style={{ background: creaseShadowOnFront, opacity: arc, transition: move }} />
       </div>
-    )
-  }
 
-  // The leaf is purely a picture of the turn — the page drives it, so it must
-  // never swallow clicks meant for the text underneath.
-  return (
-    <div
-      className="pointer-events-none absolute inset-0 z-30"
-      style={{
-        // Closer than it was, and looking from the spine rather than from
-        // dead centre. A distant, centred perspective flattens the turn into
-        // something that reads as a slide.
-        perspective: 1400,
-        perspectiveOrigin: direction === 'next' ? '0% 50%' : '100% 50%',
-      }}
-    >
-      {/* Shadow the rising sheet throws onto the page beneath it. */}
+      {/* The folded part, lying back across the page. */}
       <div
-        className="pointer-events-none absolute inset-0"
+        className="absolute inset-0 overflow-hidden"
         style={{
-          background: direction === 'next'
-            ? 'linear-gradient(to right, rgba(0,0,0,0.5), rgba(0,0,0,0) 62%)'
-            : 'linear-gradient(to left, rgba(0,0,0,0.5), rgba(0,0,0,0) 62%)',
-          ...(animating
-            ? { animation: peakAnim, ...( { ['--peak' as any]: 0.62 } ) }
-            : { opacity: cast }),
-          willChange: 'opacity',
-        }}
-      />
-      {/* Two nested transforms rather than one. The inner element owns the
-          rotation, so the settle keyframe can overshoot it alone; the outer
-          owns the lean and the lift, which must not bounce with it. */}
-      <div
-        className={`absolute inset-0 ${direction === 'next' ? 'origin-left' : 'origin-right'}`}
-        style={{
-          transformStyle: 'preserve-3d',
-          transform: `rotateZ(${curl}deg) translateZ(${lift}px)`,
-          transition: animating ? `transform ${durationMs}ms ${easing}` : 'none',
-          willChange: 'transform',
+          clipPath: flapClip,
+          transformOrigin: `${crease}% 50%`,
+          transform: 'scaleX(-1)',
+          transition: move,
+          willChange: 'clip-path, transform',
+          // The paper has thickness and is off the page, so it casts.
+          filter: `drop-shadow(${forward ? '-' : ''}10px 6px 14px rgba(0,0,0,${0.20 + arc * 0.22}))`,
         }}
       >
-      <div
-        className={`absolute inset-0 ${direction === 'next' ? 'origin-left' : 'origin-right'}`}
-        style={{
-          transformStyle: 'preserve-3d',
-          ...(animating
-            ? {
-                animation: settleAnim,
-                ...({ ['--from' as any]: '0deg', ['--to' as any]: `${signed}deg` }),
-              }
-            : { transform: `rotateY(${signed}deg) scaleX(${bow})` }),
-          willChange: 'transform',
-        }}
-      >
-        {face(front, false)}
-        {face(back, true)}
-      </div>
+        {/* Mirrored again, so the text on the back reads the right way round
+            once the fold has flipped it. */}
+        <div className={`absolute inset-0 ${paperClass} overflow-hidden p-10`} style={{ transform: 'scaleX(-1)' }}>
+          {back}
+        </div>
+        {/* Shading sits OUTSIDE the counter-mirror, so its bright edge stays
+            pinned to the crease rather than travelling with the text. */}
+        <div className="pointer-events-none absolute inset-0" style={{ background: flapShade }} />
       </div>
     </div>
   )
