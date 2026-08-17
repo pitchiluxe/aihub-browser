@@ -1648,6 +1648,1682 @@
           ]
         }
       ]
+    },
+    {
+      "id": "ruth",
+      "title": "Ruth: Loyalty in a Famine",
+      "accent": "#d9a066",
+      "blurb": "Four chapters about a widow, a foreigner and a field — the quietest book in the Bible and one of the most deliberate.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Leaving and Losing",
+          "subtitle": "Ruth 1",
+          "teaching": [
+            "Ruth opens with a family leaving Israel during a famine and losing everything anyway. Within five verses a husband and both sons are dead, and Naomi is left in a foreign country with two foreign daughters-in-law and no means of support. The book does not explain the deaths or assign blame for them; it simply reports the situation of three women with no standing in either society.",
+            "Ruth's speech to Naomi is the most quoted passage in the book and is often read at weddings, which slightly obscures what it is. It is said by a Moabite woman to her mother-in-law, on a road, with nothing to gain — Naomi has just spent a paragraph explaining that following her offers no future. The pledge covers people, place, God and burial, which is the whole of a life in that world."
+          ],
+          "passages": [
+            {
+              "bookId": "RUT",
+              "chapter": 1,
+              "from": 1,
+              "to": 22,
+              "label": "Ruth 1:1–22"
+            }
+          ],
+          "memory": [
+            "RUT.1.16"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "Gleaning in the Corners",
+          "subtitle": "Ruth 2",
+          "teaching": [
+            "Chapter 2 turns on a law most modern readers skip over. Israelite landowners were forbidden to harvest the edges of their fields or to go back for what was dropped, and the remainder belonged to the poor, the widow and the immigrant. Gleaning was not charity handed down; it was a legal claim, and Ruth is exercising it.",
+            "The narrator says Ruth 'happened' to come to Boaz's field, and the Hebrew is pointedly casual about it. The book never once says God arranged anything, and that reticence is deliberate — it leaves the reader to decide what to make of a chain of coincidences that keeps landing the right way."
+          ],
+          "passages": [
+            {
+              "bookId": "RUT",
+              "chapter": 2,
+              "from": 1,
+              "to": 23,
+              "label": "Ruth 2:1–23"
+            }
+          ],
+          "memory": [
+            "RUT.2.12"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "The Threshing Floor",
+          "subtitle": "Ruth 3",
+          "teaching": [
+            "Chapter 3 is the riskiest thing in the book and it is Naomi's idea. Ruth is sent at night to a threshing floor where men are sleeping after a harvest celebration, to lie down at Boaz's feet and ask him, in effect, to marry her. The Hebrew of this scene carries deliberate ambiguity that translators have handled in noticeably different ways.",
+            "What she asks for is the covering of his garment — the same word as the 'wings' of God she was blessed under in the previous chapter. She is asking him to become the answer to the blessing he himself spoke over her, and Boaz's first reaction is not scandal but relief."
+          ],
+          "passages": [
+            {
+              "bookId": "RUT",
+              "chapter": 3,
+              "from": 1,
+              "to": 18,
+              "label": "Ruth 3:1–18"
+            }
+          ],
+          "memory": [
+            "RUT.3.11"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "A Name in the List",
+          "subtitle": "Ruth 4",
+          "teaching": [
+            "The final chapter is a property transaction conducted at the town gate with ten elders as witnesses, and it hinges on a legal duty — the redemption of a dead relative's land and line — that the nearer kinsman declines because it would damage his own inheritance. He is not villainous; he is doing the arithmetic.",
+            "The book ends with a genealogy, which is a strange ending for a story until you read the last name in it. Ruth the Moabite becomes the great-grandmother of David, and Matthew's Gospel names her again in the opening lines of the New Testament. A book that began with a famine and three funerals ends with a family line running straight through a foreigner."
+          ],
+          "passages": [
+            {
+              "bookId": "RUT",
+              "chapter": 4,
+              "from": 9,
+              "to": 22,
+              "label": "Ruth 4:9–22"
+            }
+          ],
+          "memory": [
+            "RUT.4.14"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1samuel",
+      "title": "Samuel and David: Choosing a King",
+      "accent": "#8e9fd4",
+      "blurb": "A boy who hears a voice, a nation that wants a king, and a shepherd nobody thought to call in from the field.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Speak, Your Servant Hears",
+          "subtitle": "1 Samuel 3",
+          "teaching": [
+            "The chapter opens with a line that sets the scene precisely: the word of the LORD was rare in those days, and there was no frequent vision. Samuel is a boy serving at a sanctuary under an old priest whose own sons are corrupt, and the text says plainly that Samuel did not yet know the LORD.",
+            "The comedy of the passage is real — three times he runs to the wrong person — and its point is that hearing takes learning. It is Eli, whose own family is about to be judged, who works out what is happening and teaches the boy how to answer. The first message Samuel receives is one he is afraid to repeat, and to Eli's credit he insists on hearing it."
+          ],
+          "passages": [
+            {
+              "bookId": "1SA",
+              "chapter": 3,
+              "from": 1,
+              "to": 21,
+              "label": "1 Samuel 3:1–21"
+            }
+          ],
+          "memory": [
+            "1SA.3.10"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "Give Us a King",
+          "subtitle": "1 Samuel 8",
+          "teaching": [
+            "Israel asks for a king so they can be like all the nations, and the request is treated in the text as both reasonable and a rejection. Samuel's sons are as corrupt as Eli's were, so the people have a real grievance; the narrative lets both things be true at once.",
+            "What follows is a warning delivered in detail: a king will conscript their sons, take their daughters, take the best of their fields, and take a tenth of everything. The word 'take' runs through the speech like a drumbeat. The people hear all of it and say they want one anyway, and they are given one."
+          ],
+          "passages": [
+            {
+              "bookId": "1SA",
+              "chapter": 8,
+              "from": 1,
+              "to": 22,
+              "label": "1 Samuel 8:1–22"
+            }
+          ],
+          "memory": [
+            "1SA.8.7"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "The One Left in the Field",
+          "subtitle": "1 Samuel 16",
+          "teaching": [
+            "Samuel is sent to anoint a king from among Jesse's sons and immediately picks wrong. Eliab looks the part, and the correction is the verse the chapter is remembered for: man looks at the outward appearance, but the LORD looks at the heart.",
+            "Seven sons pass by and none is chosen. The youngest is not even called in from the sheep until Samuel asks whether that is all of them — a detail that says a great deal about how David was regarded at home. The anointing happens in the middle of his family, years before it means anything publicly."
+          ],
+          "passages": [
+            {
+              "bookId": "1SA",
+              "chapter": 16,
+              "from": 1,
+              "to": 13,
+              "label": "1 Samuel 16:1–13"
+            }
+          ],
+          "memory": [
+            "1SA.16.7"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "The Battle Is the LORD’s",
+          "subtitle": "1 Samuel 17",
+          "teaching": [
+            "The Goliath story is so familiar it is worth reading for what is actually in it. The armies are stalemated for forty days; David arrives as a delivery boy bringing food to his brothers; his eldest brother accuses him of coming to watch the fighting. The confrontation begins as a family argument.",
+            "Saul's armour does not fit and David takes it off, which is the practical hinge of the account. The line he shouts across the valley is not about his own courage: the battle is the LORD's. Whatever else the passage is doing, it is not a story about a plucky underdog believing in himself."
+          ],
+          "passages": [
+            {
+              "bookId": "1SA",
+              "chapter": 17,
+              "from": 32,
+              "to": 51,
+              "label": "1 Samuel 17:32–51"
+            }
+          ],
+          "memory": [
+            "1SA.17.47"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "The Friendship and the Spear",
+          "subtitle": "1 Samuel 18",
+          "teaching": [
+            "Chapter 18 sets two responses to the same man side by side. Jonathan, the king's son and the natural heir, binds himself to David and gives him his robe, armour, sword and belt — an act that in that culture signals the handing over of a claim. Saul, watching the same success, begins to calculate.",
+            "The women's song crediting David with more than Saul is the trigger, and from that point the chapter tracks a man being consumed by comparison. He throws a spear, then tries to arrange David's death at Philistine hands, then simply becomes his enemy continually. The text presents jealousy as something that narrows a person by degrees."
+          ],
+          "passages": [
+            {
+              "bookId": "1SA",
+              "chapter": 18,
+              "from": 1,
+              "to": 16,
+              "label": "1 Samuel 18:1–16"
+            }
+          ],
+          "memory": [
+            "1SA.18.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "job",
+      "title": "Job: When There Is No Answer",
+      "accent": "#7f8ca3",
+      "blurb": "The Bible’s longest argument about suffering, and the fact that it never receives the explanation it asks for.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "A Wager and a Ruin",
+          "subtitle": "Job 1–2",
+          "teaching": [
+            "Job opens in a heavenly court the human characters never learn about, which is the structural key to the whole book. The reader is told why the disasters happen; Job never is. Every speech that follows is made by people arguing in the dark about something the audience can see.",
+            "The question raised is whether Job serves God for nothing — whether devotion survives the removal of its rewards. What follows in a single day is the loss of livestock, servants, and all ten children, and then of his health. His wife's line, usually quoted as faithlessness, reads more like grief that cannot watch any more."
+          ],
+          "passages": [
+            {
+              "bookId": "JOB",
+              "chapter": 1,
+              "from": 1,
+              "to": 22,
+              "label": "Job 1:1–22"
+            },
+            {
+              "bookId": "JOB",
+              "chapter": 2,
+              "from": 1,
+              "to": 13,
+              "label": "Job 2:1–13"
+            }
+          ],
+          "memory": [
+            "JOB.1.21"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "Seven Days of Silence",
+          "subtitle": "Job 2–3",
+          "teaching": [
+            "The one thing Job's friends do unambiguously well is at the end of chapter 2: they come, they weep, they tear their clothes, and they sit with him on the ground for seven days and seven nights without saying a word, because they saw that his grief was very great. It is the best pastoral care in the book.",
+            "Chapter 3 is Job breaking that silence by cursing the day he was born. It is not a polite lament. The Bible includes an extended, unedited passage of a faithful man wishing he had never existed, and does not correct it — a fact worth holding onto by anyone who has been told that faith rules such words out."
+          ],
+          "passages": [
+            {
+              "bookId": "JOB",
+              "chapter": 2,
+              "from": 11,
+              "to": 13,
+              "label": "Job 2:11–13"
+            },
+            {
+              "bookId": "JOB",
+              "chapter": 3,
+              "from": 1,
+              "to": 26,
+              "label": "Job 3:1–26"
+            }
+          ],
+          "memory": [
+            "JOB.3.25"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "The Comfort That Wasn’t",
+          "subtitle": "Job 19",
+          "teaching": [
+            "The friends' argument is consistent and, in its way, pious: God is just, suffering is punishment, therefore Job has sinned and should repent. It is a tidy system, and the book spends thirty chapters showing what it does to a person who is actually suffering.",
+            "Chapter 19 is Job at his lowest and, in the same breath, at his most defiant. He says his relatives have failed him, his servants no longer answer him, his breath is offensive to his wife — and then declares that he knows his Redeemer lives. The Hebrew here is difficult and translations differ noticeably; the certainty in the middle of the wreckage is not in doubt."
+          ],
+          "passages": [
+            {
+              "bookId": "JOB",
+              "chapter": 19,
+              "from": 13,
+              "to": 27,
+              "label": "Job 19:13–27"
+            }
+          ],
+          "memory": [
+            "JOB.19.25"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "Out of the Whirlwind",
+          "subtitle": "Job 38",
+          "teaching": [
+            "When God finally speaks, he does not answer the question. There is no explanation of the suffering, no mention of the wager, no defence. Instead there are seventy-odd questions about the created world: where were you when I laid the foundations of the earth, have you entered the storehouses of the snow, who provides for the raven.",
+            "Readers have taken this very differently — as a rebuke, as a refusal, as an invitation to a larger view, as God treating Job as a serious enough person to argue with. What the text records is that it satisfies Job, who says he had heard of God by hearing but now his eye sees him, and that it is the friends, not Job, whom God says spoke wrongly."
+          ],
+          "passages": [
+            {
+              "bookId": "JOB",
+              "chapter": 38,
+              "from": 1,
+              "to": 21,
+              "label": "Job 38:1–21"
+            }
+          ],
+          "memory": [
+            "JOB.38.4"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "Restored, Not Explained",
+          "subtitle": "Job 42",
+          "teaching": [
+            "The ending has troubled readers for a long time. Job's fortunes are restored double, he has ten more children, and he dies old and full of days. Read as a moral it is unbearable — children are not replaceable — and the book seems to know that, since it never claims the loss was undone.",
+            "What is easy to miss is the order of events. God rebukes the friends and tells them Job must pray for them, and it is while Job prays for the men who spent thirty chapters accusing him that his own restoration begins. The book ends without ever telling Job why, and that silence is its most honest feature."
+          ],
+          "passages": [
+            {
+              "bookId": "JOB",
+              "chapter": 42,
+              "from": 1,
+              "to": 17,
+              "label": "Job 42:1–17"
+            }
+          ],
+          "memory": [
+            "JOB.42.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ecclesiastes",
+      "title": "Ecclesiastes: Under the Sun",
+      "accent": "#b39ddb",
+      "blurb": "The strangest book in the Bible — a hard look at work, time, money and death that refuses to be consoled cheaply.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Vanity of Vanities",
+          "subtitle": "Ecclesiastes 1",
+          "teaching": [
+            "The word translated 'vanity' is hevel — vapour, breath, mist. It is not primarily a moral judgement but a statement about substance: you cannot hold it, and it is gone. The Preacher applies it to everything he examines, and the book's argument depends on hearing that image rather than a sermon about worldliness.",
+            "The phrase 'under the sun' appears nearly thirty times and marks the book's deliberate limit. It is describing life as observed, without appeal to anything beyond it, and what it observes is repetition: generations come and go, rivers run to a sea that is never full, and there is nothing new."
+          ],
+          "passages": [
+            {
+              "bookId": "ECC",
+              "chapter": 1,
+              "from": 1,
+              "to": 18,
+              "label": "Ecclesiastes 1:1–18"
+            }
+          ],
+          "memory": [
+            "ECC.1.2"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "Everything Tried",
+          "subtitle": "Ecclesiastes 2",
+          "teaching": [
+            "Chapter 2 is an experiment written up as memoir. The Preacher tries pleasure, wine, building projects, gardens, pools, servants, herds, silver and gold, singers, and denies himself nothing his eyes desired. He has the resources to test the hypothesis properly, which is what makes the report worth reading.",
+            "His conclusion is not that any of it was wicked but that none of it held: he must leave it all to someone who comes after, and he has no idea whether that person will be wise or a fool. What he arrives at instead is small and concrete — eat, drink, and find enjoyment in your work, and recognise even that as a gift."
+          ],
+          "passages": [
+            {
+              "bookId": "ECC",
+              "chapter": 2,
+              "from": 1,
+              "to": 11,
+              "label": "Ecclesiastes 2:1–11"
+            },
+            {
+              "bookId": "ECC",
+              "chapter": 2,
+              "from": 22,
+              "to": 26,
+              "label": "Ecclesiastes 2:22–26"
+            }
+          ],
+          "memory": [
+            "ECC.2.24"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "A Time for Everything",
+          "subtitle": "Ecclesiastes 3",
+          "teaching": [
+            "The poem of times is the best-known passage in the book and is usually read as serene. In context it is doing something harder: it lists fourteen pairs of opposites — birth and death, planting and uprooting, war and peace — and then asks what the worker gains from his toil, because he does not control which time he is in.",
+            "The verse that follows is the hinge: God has put eternity in their hearts, yet so that no one can find out what God has done from beginning to end. The Preacher's diagnosis is that we are built to want the whole picture and are not given it, and that this is the actual source of the ache."
+          ],
+          "passages": [
+            {
+              "bookId": "ECC",
+              "chapter": 3,
+              "from": 1,
+              "to": 15,
+              "label": "Ecclesiastes 3:1–15"
+            }
+          ],
+          "memory": [
+            "ECC.3.1",
+            "ECC.3.11"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "Remember Now Your Creator",
+          "subtitle": "Ecclesiastes 11–12",
+          "teaching": [
+            "After eleven chapters of unsparing observation the book turns to advice, and it is not what the preceding argument would predict. Cast your bread on the waters. Sow in the morning and do not withhold your hand in the evening, because you do not know which will prosper. Uncertainty becomes a reason to act, not to freeze.",
+            "The closing poem describes ageing in a series of images — the keepers of the house trembling, the grinders ceasing, the almond tree blossoming, the silver cord snapped — and lands on the instruction to remember your Creator in the days of your youth, before those days arrive. Many scholars read the final two verses as a later editor's summary; the book's own voice ends in the poem."
+          ],
+          "passages": [
+            {
+              "bookId": "ECC",
+              "chapter": 11,
+              "from": 1,
+              "to": 10,
+              "label": "Ecclesiastes 11:1–10"
+            },
+            {
+              "bookId": "ECC",
+              "chapter": 12,
+              "from": 1,
+              "to": 8,
+              "label": "Ecclesiastes 12:1–8"
+            }
+          ],
+          "memory": [
+            "ECC.12.13"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "isaiah",
+      "title": "Isaiah: Comfort and the Servant",
+      "accent": "#66c2b0",
+      "blurb": "A prophet across four decades of crisis — judgement, comfort, and the figure at the centre of the book’s hardest chapter.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Here Am I",
+          "subtitle": "Isaiah 6",
+          "teaching": [
+            "The call vision is dated precisely — the year King Uzziah died — which for Judah meant the end of a long, stable and prosperous reign. Isaiah sees the throne that is not vacant in the year the visible one becomes so, and his first reaction is not enthusiasm but the conviction that he is undone.",
+            "The commission he is given is bleak and is quoted repeatedly in the New Testament: go and tell this people who will hear but not understand. It has been read as prediction, as judicial hardening, and as prophetic irony, and the readings differ sharply. What is plain is that Isaiah accepts a job he is told in advance will not appear to work."
+          ],
+          "passages": [
+            {
+              "bookId": "ISA",
+              "chapter": 6,
+              "from": 1,
+              "to": 13,
+              "label": "Isaiah 6:1–13"
+            }
+          ],
+          "memory": [
+            "ISA.6.8"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "A Child Is Born",
+          "subtitle": "Isaiah 9",
+          "teaching": [
+            "The passage begins in gloom for the northern territories that had already fallen to Assyria — the people walking in darkness are a specific people in a specific occupation. The light is announced to them first, which matters when Matthew later quotes the verse about Galilee.",
+            "The titles given to the child — Wonderful Counsellor, Mighty God, Everlasting Father, Prince of Peace — are read by Christians as pointing to Christ and by Jewish interpreters as royal court language for a Davidic king, most often Hezekiah. The disagreement is ancient. The passage's own emphasis falls on the government resting on his shoulder and having no end."
+          ],
+          "passages": [
+            {
+              "bookId": "ISA",
+              "chapter": 9,
+              "from": 1,
+              "to": 7,
+              "label": "Isaiah 9:1–7"
+            }
+          ],
+          "memory": [
+            "ISA.9.6"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "Comfort My People",
+          "subtitle": "Isaiah 40",
+          "teaching": [
+            "Chapter 40 opens the second half of the book and the change in tone is abrupt: comfort, comfort my people. The addressee is a people in exile, and the announcement is that the sentence is served. Handel set much of this chapter, which is why it can be hard to hear it as the political news it was.",
+            "The chapter's argument is scale. Nations are a drop in a bucket; princes are brought to nothing; the one who numbers the stars and calls them by name is the one being told that Israel's way is hidden from him. It ends with the promise about waiting — mounting up with wings like eagles — which is addressed to the exhausted, not the energetic."
+          ],
+          "passages": [
+            {
+              "bookId": "ISA",
+              "chapter": 40,
+              "from": 1,
+              "to": 11,
+              "label": "Isaiah 40:1–11"
+            },
+            {
+              "bookId": "ISA",
+              "chapter": 40,
+              "from": 27,
+              "to": 31,
+              "label": "Isaiah 40:27–31"
+            }
+          ],
+          "memory": [
+            "ISA.40.31"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "The Suffering Servant",
+          "subtitle": "Isaiah 53",
+          "teaching": [
+            "The fourth of the servant songs is the most disputed passage in the Old Testament. It describes a figure despised and rejected, wounded for transgressions not his own, silent before his accusers, buried with the rich, and afterwards seeing light and being satisfied.",
+            "Christian readers have understood the servant as Jesus since the first century, and Acts 8 shows that reading being made. Jewish interpretation has generally understood the servant as Israel itself, suffering among the nations. Both readings are serious, both are old, and the passage is not made less powerful by naming the disagreement instead of settling it."
+          ],
+          "passages": [
+            {
+              "bookId": "ISA",
+              "chapter": 53,
+              "from": 1,
+              "to": 12,
+              "label": "Isaiah 53:1–12"
+            }
+          ],
+          "memory": [
+            "ISA.53.5",
+            "ISA.53.6"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "Good News to the Poor",
+          "subtitle": "Isaiah 61",
+          "teaching": [
+            "The chapter announces a commission: good news to the poor, binding up the broken-hearted, liberty to captives, the opening of the prison. The language is drawn from the year of jubilee, the debt-cancelling reset described in Leviticus, which makes the announcement economic as well as spiritual.",
+            "Jesus reads the opening verses aloud in Luke 4 and stops mid-sentence, before the line about the day of vengeance, then says the scripture has been fulfilled in their hearing. Where he stopped has been discussed ever since. The chapter's own image for the outcome is exchange: beauty for ashes, the oil of joy for mourning."
+          ],
+          "passages": [
+            {
+              "bookId": "ISA",
+              "chapter": 61,
+              "from": 1,
+              "to": 11,
+              "label": "Isaiah 61:1–11"
+            }
+          ],
+          "memory": [
+            "ISA.61.1",
+            "ISA.61.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "daniel",
+      "title": "Daniel: Faith in Exile",
+      "accent": "#e2a03f",
+      "blurb": "How to live faithfully inside a system you did not choose — six stories and a set of visions from the heart of an empire.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Food, Names and Lines",
+          "subtitle": "Daniel 1",
+          "teaching": [
+            "The programme described in chapter 1 is a re-education: young men of the Judean nobility are taken to Babylon, taught its literature and language, given new names built on Babylonian gods, and fed from the king's table. Almost all of it Daniel accepts. He learns the language, works in the administration, and answers to the new name for the rest of the book.",
+            "The one thing he refuses is the food, and the text does not fully explain why. What it shows is a person who has decided in advance where his line is, and who proposes a test rather than staging a confrontation. The chapter is a study in the difference between assimilation and compromise."
+          ],
+          "passages": [
+            {
+              "bookId": "DAN",
+              "chapter": 1,
+              "from": 1,
+              "to": 21,
+              "label": "Daniel 1:1–21"
+            }
+          ],
+          "memory": [
+            "DAN.1.8"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "The Dream Nobody Could Tell",
+          "subtitle": "Daniel 2",
+          "teaching": [
+            "Nebuchadnezzar's demand is deliberately impossible: tell me the dream and then interpret it. The wise men point out, reasonably, that no king has ever asked such a thing. The death sentence that follows puts Daniel and his friends in the same condemned group as the professional diviners they had nothing to do with.",
+            "Daniel asks for time and goes to pray with his friends, and the first thing he does with the answer is not to run to the king but to bless God — a prayer the text quotes in full. The statue of four metals broken by a stone cut without hands has been mapped onto empires in many competing ways, and those readings remain genuinely disputed."
+          ],
+          "passages": [
+            {
+              "bookId": "DAN",
+              "chapter": 2,
+              "from": 1,
+              "to": 23,
+              "label": "Daniel 2:1–23"
+            }
+          ],
+          "memory": [
+            "DAN.2.21"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "But If Not",
+          "subtitle": "Daniel 3",
+          "teaching": [
+            "The image on the plain of Dura is a loyalty test with music as its cue and a furnace as its penalty, and the three men's refusal is reported without any speech about courage. Their answer to the king contains the sentence the chapter turns on: our God is able to deliver us, and he will — but if not, we still will not serve your gods.",
+            "That 'but if not' is the whole point. The faith described is not confidence in a particular outcome; it survives the possibility that rescue does not come. The furnace is heated seven times hotter and kills the men who carry them to it, and the king counts a fourth figure walking in the fire."
+          ],
+          "passages": [
+            {
+              "bookId": "DAN",
+              "chapter": 3,
+              "from": 13,
+              "to": 30,
+              "label": "Daniel 3:13–30"
+            }
+          ],
+          "memory": [
+            "DAN.3.17"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "The Window Left Open",
+          "subtitle": "Daniel 6",
+          "teaching": [
+            "Daniel is now an old man serving a third administration, and the plot against him is bureaucratic: his rivals cannot find corruption, so they legislate against his prayers. The decree is drafted so that it cannot be revoked, which traps the king who signs it as much as the man it targets.",
+            "The detail the text supplies is that Daniel went home and prayed as he had done previously, with his windows open toward Jerusalem, three times a day. He does not increase his devotion for the occasion or hide it; he simply does not change. The king spends the night fasting, and the lions' den is described in less space than the politics that produced it."
+          ],
+          "passages": [
+            {
+              "bookId": "DAN",
+              "chapter": 6,
+              "from": 1,
+              "to": 23,
+              "label": "Daniel 6:1–23"
+            }
+          ],
+          "memory": [
+            "DAN.6.23"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "A Prayer for a Nation",
+          "subtitle": "Daniel 9",
+          "teaching": [
+            "Chapter 9 shows Daniel reading Jeremiah and working out from the text that the exile has a term of seventy years. His response to discovering a promise is to pray for it rather than to wait for it, which is a striking thing to record about a man who has just found out the outcome is fixed.",
+            "The prayer is a confession in the first person plural: we have sinned, we have done wickedly. Daniel, whom the book has spent eight chapters presenting as blameless, includes himself without qualification. The vision of the seventy weeks that follows is among the most contested passages in the Bible, and the interpretations differ so widely that naming the dispute is the honest summary."
+          ],
+          "passages": [
+            {
+              "bookId": "DAN",
+              "chapter": 9,
+              "from": 1,
+              "to": 19,
+              "label": "Daniel 9:1–19"
+            }
+          ],
+          "memory": [
+            "DAN.9.9"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "jonah",
+      "title": "Jonah: The Reluctant Prophet",
+      "accent": "#5fb3b3",
+      "blurb": "Four short chapters about a man who runs, a city that repents, and a prophet who is furious that it worked.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "The Other Direction",
+          "subtitle": "Jonah 1",
+          "teaching": [
+            "Jonah is sent east to Nineveh and immediately buys passage west to Tarshish, about as far in the opposite direction as the known world allowed. Nineveh was the capital of Assyria, the empire that had brutalised his people, and the book will eventually let him explain that his objection was never fear.",
+            "The storm scene is quietly pointed. The pagan sailors pray, act with restraint, try to row back to land rather than throw a man overboard, and are reluctant to take his life — while the prophet sleeps below deck. The narrative's sympathies are not where a reader might expect."
+          ],
+          "passages": [
+            {
+              "bookId": "JON",
+              "chapter": 1,
+              "from": 1,
+              "to": 17,
+              "label": "Jonah 1:1–17"
+            }
+          ],
+          "memory": [
+            "JON.1.3"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "Out of the Belly",
+          "subtitle": "Jonah 2",
+          "teaching": [
+            "The prayer from inside the fish is stitched together almost entirely from lines in the Psalms, which is what a person under pressure often prays: borrowed words. It is a thanksgiving for rescue offered before the rescue is complete, from a man who is still swallowed.",
+            "It ends with the line the book will test: salvation belongs to the LORD. Jonah says it in the dark and will spend chapter 4 objecting to what it means when it is applied to people he does not like."
+          ],
+          "passages": [
+            {
+              "bookId": "JON",
+              "chapter": 2,
+              "from": 1,
+              "to": 10,
+              "label": "Jonah 2:1–10"
+            }
+          ],
+          "memory": [
+            "JON.2.9"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "The Shortest Sermon",
+          "subtitle": "Jonah 3",
+          "teaching": [
+            "Jonah's message is eight words in Hebrew and contains no mention of God, no call to repent and no offer of mercy: forty days and Nineveh will be overthrown. It is the least promising sermon in scripture, and the entire city responds, from the king to the livestock.",
+            "The king's decree includes a sentence that is theologically careful — who knows, God may turn and relent — which claims nothing and hopes anyway. The text says God saw their works, that they turned from their evil way, and relented."
+          ],
+          "passages": [
+            {
+              "bookId": "JON",
+              "chapter": 3,
+              "from": 1,
+              "to": 10,
+              "label": "Jonah 3:1–10"
+            }
+          ],
+          "memory": [
+            "JON.3.10"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "Angry Enough to Die",
+          "subtitle": "Jonah 4",
+          "teaching": [
+            "The last chapter finally explains the running. Jonah tells God that this is exactly what he expected — that God is gracious and merciful, slow to anger and abundant in loving kindness — and that this is why he fled. He is quoting Exodus 34 back at God as a complaint.",
+            "The book ends on a question rather than a resolution. A plant grows, a worm kills it, Jonah is angrier about the plant than about a hundred and twenty thousand people, and God asks whether he should not have pity on a city that cannot tell its right hand from its left. Nobody answers, and the reader is left holding it."
+          ],
+          "passages": [
+            {
+              "bookId": "JON",
+              "chapter": 4,
+              "from": 1,
+              "to": 11,
+              "label": "Jonah 4:1–11"
+            }
+          ],
+          "memory": [
+            "JON.4.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "matthew",
+      "title": "Matthew: The Sermon on the Mount",
+      "accent": "#d98cb3",
+      "blurb": "Three chapters of teaching that have unsettled every generation that has taken them literally.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Blessed Are",
+          "subtitle": "Matthew 5:1–16",
+          "teaching": [
+            "The Beatitudes are announcements rather than instructions. Nobody is told to become poor in spirit or to mourn; the sentences declare that people already in those conditions are the fortunate ones, which inverts every list of the blessed the audience would have known.",
+            "The images that follow — salt that has lost its taste, a city on a hill, a lamp under a basket — are all about being unavoidably noticeable. The sermon opens by telling people with no status that they are the point, and then that they cannot be hidden."
+          ],
+          "passages": [
+            {
+              "bookId": "MAT",
+              "chapter": 5,
+              "from": 1,
+              "to": 16,
+              "label": "Matthew 5:1–16"
+            }
+          ],
+          "memory": [
+            "MAT.5.14",
+            "MAT.5.16"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "You Have Heard It Said",
+          "subtitle": "Matthew 5:17–48",
+          "teaching": [
+            "Six times Jesus quotes a command and then goes behind it to the disposition underneath: murder to contempt, adultery to the appetite, oaths to plain speech, retaliation to non-resistance. The pattern is not the loosening of the law that his critics expected but a tightening of it.",
+            "The section on enemies is the hardest and is stated without qualification: love your enemies and pray for those who persecute you, because God sends rain on the just and the unjust alike. Christians have differed for centuries over how far this extends into public and political life, and the disagreement is not a modern invention."
+          ],
+          "passages": [
+            {
+              "bookId": "MAT",
+              "chapter": 5,
+              "from": 38,
+              "to": 48,
+              "label": "Matthew 5:38–48"
+            }
+          ],
+          "memory": [
+            "MAT.5.44"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "In Secret",
+          "subtitle": "Matthew 6:1–18",
+          "teaching": [
+            "The three practices addressed — giving, praying, fasting — were the pillars of devout life, and the instruction for each is identical in shape: do it, and do it where nobody can see. The warning is not against the practices but against performing them.",
+            "The Lord's Prayer sits in the middle of this and is notably short. It asks for bread for today rather than security, and ties being forgiven to forgiving, which is the one clause the passage circles back to afterwards to underline."
+          ],
+          "passages": [
+            {
+              "bookId": "MAT",
+              "chapter": 6,
+              "from": 1,
+              "to": 18,
+              "label": "Matthew 6:1–18"
+            }
+          ],
+          "memory": [
+            "MAT.6.6"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "Do Not Be Anxious",
+          "subtitle": "Matthew 6:19–34",
+          "teaching": [
+            "The argument moves from treasure to sight to service and lands on a claim rather than a comfort: you cannot serve God and money. The word used for money is mammon, and treating it as a rival master rather than a neutral tool is the section's whole move.",
+            "What follows is not advice to stop caring. It is an argument from observation — birds, lilies, the shortness of a life you cannot extend by worrying — ending in an instruction about sequence: seek first the kingdom, and let tomorrow carry its own trouble."
+          ],
+          "passages": [
+            {
+              "bookId": "MAT",
+              "chapter": 6,
+              "from": 19,
+              "to": 34,
+              "label": "Matthew 6:19–34"
+            }
+          ],
+          "memory": [
+            "MAT.6.33",
+            "MAT.6.34"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "Ask, and Judge Not",
+          "subtitle": "Matthew 7:1–14",
+          "teaching": [
+            "The instruction about judging is regularly quoted as a ban on all moral assessment, which the same paragraph rules out by telling the reader to remove the plank and then help with the speck. The target is the disqualifying inconsistency, not the helping.",
+            "The section on asking uses ordinary parental logic — you would not hand your child a stone instead of bread — and the golden rule arrives as the summary of the law and the prophets. The gate that follows is narrow, and Matthew does not soften it."
+          ],
+          "passages": [
+            {
+              "bookId": "MAT",
+              "chapter": 7,
+              "from": 1,
+              "to": 14,
+              "label": "Matthew 7:1–14"
+            }
+          ],
+          "memory": [
+            "MAT.7.7",
+            "MAT.7.12"
+          ]
+        },
+        {
+          "id": "06",
+          "title": "Two Foundations",
+          "subtitle": "Matthew 7:15–29",
+          "teaching": [
+            "The sermon ends with tests rather than summaries: fruit rather than claims, doing rather than saying. The most sobering paragraph is addressed to people who prophesied and performed miracles and are told they were never known, which places the sermon's warning inside the religious community rather than outside it.",
+            "The closing image gives both houses the same storm. The difference is not the weather but the foundation, and the foundation is defined as hearing these words and doing them. Matthew notes that the crowds were astonished, because he taught as one having authority rather than as their scribes."
+          ],
+          "passages": [
+            {
+              "bookId": "MAT",
+              "chapter": 7,
+              "from": 15,
+              "to": 29,
+              "label": "Matthew 7:15–29"
+            }
+          ],
+          "memory": [
+            "MAT.7.24"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1corinthians",
+      "title": "1 Corinthians: A Difficult Church",
+      "accent": "#90a955",
+      "blurb": "Factions, lawsuits, a chaotic communion table and a famous chapter on love — written to a congregation in trouble.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "I Follow Paul, I Follow Apollos",
+          "subtitle": "1 Corinthians 1",
+          "teaching": [
+            "Corinth was a wealthy port city with a mixed population and a reputation, and the church there had split into parties named after their favourite teachers. Paul's first move is to point out that none of them was crucified for anyone, and that he can barely remember whom he baptised.",
+            "The argument goes to the message itself: a crucified messiah was an offence to Jews expecting deliverance and nonsense to Greeks trained in rhetoric. Paul does not soften it. He says God chose what the world calls foolish and weak, and points out that not many of them were influential to begin with."
+          ],
+          "passages": [
+            {
+              "bookId": "1CO",
+              "chapter": 1,
+              "from": 10,
+              "to": 31,
+              "label": "1 Corinthians 1:10–31"
+            }
+          ],
+          "memory": [
+            "1CO.1.18"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "A Table That Divides",
+          "subtitle": "1 Corinthians 11",
+          "teaching": [
+            "The problem at the communion meal is social before it is theological. The wealthier members, whose time was their own, arrived early and ate; those who worked arrived to nothing. Paul says that meeting like this means it is not the Lord's supper they are eating at all.",
+            "The words of institution he quotes are the earliest written record of them, predating the Gospels. What is striking is the context he puts them in: the remedy for eating unworthily is not more introspection but waiting for one another. The doctrine is deployed to fix a seating problem."
+          ],
+          "passages": [
+            {
+              "bookId": "1CO",
+              "chapter": 11,
+              "from": 17,
+              "to": 34,
+              "label": "1 Corinthians 11:17–34"
+            }
+          ],
+          "memory": [
+            "1CO.11.26"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "One Body, Many Parts",
+          "subtitle": "1 Corinthians 12",
+          "teaching": [
+            "The body image was a standard piece of Greco-Roman political rhetoric, normally used to tell the lower orders to stay in their place. Paul takes the familiar figure and turns it: the parts that seem weaker are indispensable, and the less honourable are given greater honour.",
+            "The list of gifts is deliberately varied and deliberately unranked in worth, though Paul does order them by usefulness to others. The chapter's conclusion is that a body cannot be composed of one organ, which is aimed squarely at a congregation prizing one spectacular gift above the rest."
+          ],
+          "passages": [
+            {
+              "bookId": "1CO",
+              "chapter": 12,
+              "from": 12,
+              "to": 31,
+              "label": "1 Corinthians 12:12–31"
+            }
+          ],
+          "memory": [
+            "1CO.12.27"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "The More Excellent Way",
+          "subtitle": "1 Corinthians 13",
+          "teaching": [
+            "The love chapter is read at weddings and was written into an argument about spiritual one-upmanship. Its first move is to price the gifts the Corinthians were competing over — tongues, prophecy, knowledge, faith, even martyrdom — at nothing without love.",
+            "The description that follows is almost entirely made of verbs and negatives: patient, kind, does not envy, does not boast, is not puffed up, does not seek its own, is not provoked, keeps no record of wrongs. It is a list of behaviours rather than feelings, which is what makes it usable."
+          ],
+          "passages": [
+            {
+              "bookId": "1CO",
+              "chapter": 13,
+              "from": 1,
+              "to": 13,
+              "label": "1 Corinthians 13:1–13"
+            }
+          ],
+          "memory": [
+            "1CO.13.4",
+            "1CO.13.13"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "If Christ Has Not Been Raised",
+          "subtitle": "1 Corinthians 15",
+          "teaching": [
+            "Paul hands on a summary he says he received — died, was buried, was raised, appeared — and then lists witnesses including more than five hundred at once, most of whom he notes are still alive, which is an invitation to check.",
+            "The argument he builds is unusually blunt for a religious text: if the resurrection did not happen, the preaching is empty, the faith is futile, and the apostles are liars. He does not offer the doctrine as a helpful metaphor. The chapter ends in practical terms — be steadfast, immovable, because the labour is not in vain."
+          ],
+          "passages": [
+            {
+              "bookId": "1CO",
+              "chapter": 15,
+              "from": 1,
+              "to": 20,
+              "label": "1 Corinthians 15:1–20"
+            },
+            {
+              "bookId": "1CO",
+              "chapter": 15,
+              "from": 50,
+              "to": 58,
+              "label": "1 Corinthians 15:50–58"
+            }
+          ],
+          "memory": [
+            "1CO.15.58"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ephesians",
+      "title": "Ephesians: Grace and the New Humanity",
+      "accent": "#7cc4e8",
+      "blurb": "Three chapters of what is true, three of what to do about it — and a wall pulled down in the middle.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Every Spiritual Blessing",
+          "subtitle": "Ephesians 1",
+          "teaching": [
+            "The opening of Ephesians is one enormous sentence in Greek, and its breathlessness is part of the point: chosen, adopted, redeemed, forgiven, sealed. Nothing in the list is something the reader did, and the paragraph keeps returning to the phrase 'to the praise of his glory'.",
+            "The prayer that closes the chapter asks not for new circumstances but for sight — that the eyes of their hearts would be enlightened to know what they already have. Christians differ sharply over the chapter's language of choosing, and those differences are serious and old; the passage's own emphasis falls on what the choosing is for."
+          ],
+          "passages": [
+            {
+              "bookId": "EPH",
+              "chapter": 1,
+              "from": 3,
+              "to": 23,
+              "label": "Ephesians 1:3–23"
+            }
+          ],
+          "memory": [
+            "EPH.1.7"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "By Grace, Through Faith",
+          "subtitle": "Ephesians 2:1–10",
+          "teaching": [
+            "The paragraph begins with a diagnosis stated in the past tense — dead in trespasses, following the course of this world — and then interrupts itself with two words that carry the whole letter: but God. The sentence structure enacts the argument.",
+            "Then the summary: by grace you have been saved through faith, and that not of yourselves, it is the gift of God, not of works, so that no one can boast. And immediately after, the balance most quoting of the passage omits — we are his workmanship, created for good works prepared beforehand. Works are the destination, not the entry fee."
+          ],
+          "passages": [
+            {
+              "bookId": "EPH",
+              "chapter": 2,
+              "from": 1,
+              "to": 10,
+              "label": "Ephesians 2:1–10"
+            }
+          ],
+          "memory": [
+            "EPH.2.8",
+            "EPH.2.10"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "The Wall Pulled Down",
+          "subtitle": "Ephesians 2:11–22",
+          "teaching": [
+            "The dividing wall Paul refers to was probably literal: the barrier in the Jerusalem temple beyond which Gentiles could not pass on pain of death. Its inscription has been found. He says it has been abolished, and that the two groups are made into one new humanity.",
+            "The images pile up — no longer strangers and foreigners but fellow citizens, members of the household, a building fitted together into a temple. For a first-century reader the claim that Jew and Gentile now share one household was not a sentiment but a social earthquake."
+          ],
+          "passages": [
+            {
+              "bookId": "EPH",
+              "chapter": 2,
+              "from": 11,
+              "to": 22,
+              "label": "Ephesians 2:11–22"
+            }
+          ],
+          "memory": [
+            "EPH.2.14"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "Walk Worthy",
+          "subtitle": "Ephesians 4",
+          "teaching": [
+            "Chapter 4 is where the letter turns from indicative to imperative, and the first instruction is about how to treat each other: humility, gentleness, patience, bearing with one another in love, eager to maintain unity. Unity is presented as something to be kept rather than created.",
+            "The practical list that follows is startlingly concrete — tell the truth, do not let the sun go down on your anger, stop stealing and work so you have something to give away, let no corrupting talk come out of your mouth. It ends with kindness and forgiveness modelled on having been forgiven."
+          ],
+          "passages": [
+            {
+              "bookId": "EPH",
+              "chapter": 4,
+              "from": 1,
+              "to": 16,
+              "label": "Ephesians 4:1–16"
+            },
+            {
+              "bookId": "EPH",
+              "chapter": 4,
+              "from": 25,
+              "to": 32,
+              "label": "Ephesians 4:25–32"
+            }
+          ],
+          "memory": [
+            "EPH.4.32"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "philippians",
+      "title": "Philippians: Joy from a Prison Cell",
+      "accent": "#f2b880",
+      "blurb": "The most cheerful letter in the New Testament, written by a man in chains to a church he loved.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "To Live Is Christ",
+          "subtitle": "Philippians 1",
+          "teaching": [
+            "Paul is under guard and possibly facing execution, and his report on the situation is that it has actually advanced the message — the whole praetorian guard has heard why he is there. He even notes that some are preaching out of rivalry to make his imprisonment harder, and says he does not care as long as the message goes out.",
+            "The sentence the chapter is known for is a genuine dilemma rather than a slogan: for me to live is Christ and to die is gain. He works through both sides honestly, concludes that staying is more useful to them, and settles it there."
+          ],
+          "passages": [
+            {
+              "bookId": "PHP",
+              "chapter": 1,
+              "from": 12,
+              "to": 30,
+              "label": "Philippians 1:12–30"
+            }
+          ],
+          "memory": [
+            "PHP.1.6",
+            "PHP.1.21"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "The Mind of Christ",
+          "subtitle": "Philippians 2",
+          "teaching": [
+            "The hymn in chapter 2 is widely thought to predate the letter, quoted rather than composed here. It traces a descent — equality with God not clung to, emptied, taking the form of a servant, obedient to death, even death on a cross — and then a reversal, exalted and given the name above every name.",
+            "Its framing is the surprise. Paul introduces this soaring passage as an argument for a practical instruction: do nothing from selfish ambition, count others better than yourselves, look to their interests. The highest thing the letter says about Christ is deployed to settle a disagreement between two women in the congregation."
+          ],
+          "passages": [
+            {
+              "bookId": "PHP",
+              "chapter": 2,
+              "from": 1,
+              "to": 18,
+              "label": "Philippians 2:1–18"
+            }
+          ],
+          "memory": [
+            "PHP.2.3"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "Counting It Loss",
+          "subtitle": "Philippians 3",
+          "teaching": [
+            "Paul lists his credentials — circumcised the eighth day, of the tribe of Benjamin, a Pharisee, blameless under the law — and then writes them all off, using a word most translations soften considerably. The point is not that they were bad but that he no longer counts them as assets.",
+            "What replaces the ledger is a race: forgetting what is behind, straining toward what is ahead, pressing on toward the goal. He is explicit that he has not already obtained it, which is a notable thing for the writer to say about himself."
+          ],
+          "passages": [
+            {
+              "bookId": "PHP",
+              "chapter": 3,
+              "from": 4,
+              "to": 21,
+              "label": "Philippians 3:4–21"
+            }
+          ],
+          "memory": [
+            "PHP.3.14"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "Learned to Be Content",
+          "subtitle": "Philippians 4",
+          "teaching": [
+            "The chapter opens by naming two women in disagreement and asking a third party to help them, which is the most specific pastoral moment in the letter. The famous instruction about anxiety follows immediately: do not be anxious, but in everything by prayer and supplication with thanksgiving, let your requests be made known.",
+            "The contentment Paul describes is explicitly a learned skill rather than a temperament — he says he has learned it, in plenty and in hunger. That context is worth keeping attached to the verse about doing all things through him who strengthens, which is otherwise routinely quoted about achievement."
+          ],
+          "passages": [
+            {
+              "bookId": "PHP",
+              "chapter": 4,
+              "from": 1,
+              "to": 23,
+              "label": "Philippians 4:1–23"
+            }
+          ],
+          "memory": [
+            "PHP.4.6",
+            "PHP.4.13"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hebrews",
+      "title": "Hebrews: Better Things",
+      "accent": "#a3866b",
+      "blurb": "A sermon to people thinking of giving up, arguing that what they already have is better than what they miss.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "God Has Spoken",
+          "subtitle": "Hebrews 1",
+          "teaching": [
+            "Hebrews does not open like a letter — no greeting, no named sender — and reads more like a sermon sent in writing. Its first sentence sets the whole argument: God spoke in many portions and many ways through the prophets, and has now spoken in a Son.",
+            "The chapter then argues from a chain of Old Testament quotations that the Son is greater than the angels, which seems an odd priority until you notice the audience. These were people tempted to go back to something they regarded as angelically mediated and therefore weighty."
+          ],
+          "passages": [
+            {
+              "bookId": "HEB",
+              "chapter": 1,
+              "from": 1,
+              "to": 14,
+              "label": "Hebrews 1:1–14"
+            }
+          ],
+          "memory": [
+            "HEB.1.3"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "A Sympathetic High Priest",
+          "subtitle": "Hebrews 4",
+          "teaching": [
+            "The image of the word of God as living and active, sharper than a two-edged sword, is usually quoted alone. In place it is the conclusion of a warning about a generation that heard a promise and did not enter it, and the point is that nothing about the hearer stays hidden.",
+            "What follows immediately is the counterweight, and the two belong together: we do not have a high priest who cannot sympathise with our weaknesses. The invitation is to come boldly — the word carries the sense of speaking freely — to find mercy and grace in time of need."
+          ],
+          "passages": [
+            {
+              "bookId": "HEB",
+              "chapter": 4,
+              "from": 1,
+              "to": 16,
+              "label": "Hebrews 4:1–16"
+            }
+          ],
+          "memory": [
+            "HEB.4.12",
+            "HEB.4.16"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "By Faith",
+          "subtitle": "Hebrews 11",
+          "teaching": [
+            "The chapter's definition of faith is about substance and evidence rather than feeling, and what follows is a roll call: Abel, Noah, Abraham, Sarah, Moses, Rahab. It is a list of people who acted on something they could not yet see, and the writer is careful to say they died without receiving what was promised.",
+            "The second half of the chapter is the part usually left out of the summary. After the conquests and the stopped mouths of lions come those who were tortured, mocked, imprisoned, sawn in two, and destitute — described in the same breath and with the same commendation. Faith here does not predict the outcome."
+          ],
+          "passages": [
+            {
+              "bookId": "HEB",
+              "chapter": 11,
+              "from": 1,
+              "to": 16,
+              "label": "Hebrews 11:1–16"
+            },
+            {
+              "bookId": "HEB",
+              "chapter": 11,
+              "from": 32,
+              "to": 40,
+              "label": "Hebrews 11:32–40"
+            }
+          ],
+          "memory": [
+            "HEB.11.1"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "Run the Race",
+          "subtitle": "Hebrews 12",
+          "teaching": [
+            "The cloud of witnesses in chapter 12 is the crowd of chapter 11, and the image is athletic: lay aside the weight and the entangling sin, and run with endurance the race set before you, looking to Jesus. Endurance rather than speed is the quality named throughout.",
+            "The passage on discipline that follows is difficult and has been misused to justify a great deal. Its own claim is narrower than the uses made of it: that hardship endured in this relationship is not evidence of rejection, and that it yields the peaceful fruit of righteousness to those trained by it."
+          ],
+          "passages": [
+            {
+              "bookId": "HEB",
+              "chapter": 12,
+              "from": 1,
+              "to": 17,
+              "label": "Hebrews 12:1–17"
+            }
+          ],
+          "memory": [
+            "HEB.12.1",
+            "HEB.12.2"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "Outside the Camp",
+          "subtitle": "Hebrews 13",
+          "teaching": [
+            "The closing chapter turns practical in a list of short instructions: keep loving one another, show hospitality to strangers, remember prisoners as though in prison with them, keep your life free from the love of money, be content with what you have.",
+            "The image of going to him outside the camp, bearing his reproach, is addressed to people whose faith had cost them their standing in their own community. The letter ends by telling them that the loss of a permanent city here is not the disaster it appears to be, and that Jesus Christ is the same yesterday, today and forever."
+          ],
+          "passages": [
+            {
+              "bookId": "HEB",
+              "chapter": 13,
+              "from": 1,
+              "to": 21,
+              "label": "Hebrews 13:1–21"
+            }
+          ],
+          "memory": [
+            "HEB.13.8"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "james",
+      "title": "James: Faith That Works",
+      "accent": "#86c98e",
+      "blurb": "The bluntest book in the New Testament — on the tongue, on money, on favouritism, and on faith you can actually see.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "Count It All Joy",
+          "subtitle": "James 1",
+          "teaching": [
+            "James opens by telling people to count trials as joy, and the reason given is mechanical rather than sentimental: testing produces endurance, and endurance finishes its work. The letter is full of this kind of plain cause and effect.",
+            "The offer of wisdom to anyone who asks sits right next to it, along with a warning about asking while doubting. The chapter closes with the letter's thesis in miniature: be doers of the word and not hearers only, and a definition of pure religion that is entirely about widows, orphans and self-control."
+          ],
+          "passages": [
+            {
+              "bookId": "JAS",
+              "chapter": 1,
+              "from": 1,
+              "to": 27,
+              "label": "James 1:1–27"
+            }
+          ],
+          "memory": [
+            "JAS.1.5",
+            "JAS.1.22"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "The Seat by the Door",
+          "subtitle": "James 2:1–13",
+          "teaching": [
+            "The scenario is specific: a man in fine clothes with a gold ring and a poor man in shabby clothes arrive at the same meeting, and one is offered a good seat while the other is told to stand or sit on the floor. James calls this becoming judges with evil thoughts.",
+            "The argument he makes is not that the poor are more deserving but that favouritism contradicts the faith being professed, and he ties it to the law of love and to mercy triumphing over judgement. It is one of the most socially concrete passages in the New Testament."
+          ],
+          "passages": [
+            {
+              "bookId": "JAS",
+              "chapter": 2,
+              "from": 1,
+              "to": 13,
+              "label": "James 2:1–13"
+            }
+          ],
+          "memory": [
+            "JAS.2.1"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "Faith Without Works",
+          "subtitle": "James 2:14–26",
+          "teaching": [
+            "This is the passage Luther struggled with, and the tension with Paul is worth stating rather than smoothing over. James says a person is justified by works and not by faith alone; Paul says by faith apart from works of the law. Both cite Abraham.",
+            "The common resolution is that the two are answering different questions — Paul on how a person is accepted, James on how a claimed faith is recognised — and that they use 'works' to mean different things. James's own illustration is unanswerable on its own terms: telling a cold and hungry person to keep warm and well fed while giving them nothing."
+          ],
+          "passages": [
+            {
+              "bookId": "JAS",
+              "chapter": 2,
+              "from": 14,
+              "to": 26,
+              "label": "James 2:14–26"
+            }
+          ],
+          "memory": [
+            "JAS.2.17"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "A Small Fire",
+          "subtitle": "James 3",
+          "teaching": [
+            "James's images for the tongue escalate deliberately: a bit in a horse's mouth, a rudder on a ship, and then a spark that sets a forest alight. The first two are about small things steering large ones; the third is about small things destroying them.",
+            "The observation he lands on is the uncomfortable one — that blessing and cursing come out of the same mouth, and that a spring does not produce both fresh and salt water. The chapter ends by contrasting two kinds of wisdom, and the heavenly one is described almost entirely in terms of how it treats other people."
+          ],
+          "passages": [
+            {
+              "bookId": "JAS",
+              "chapter": 3,
+              "from": 1,
+              "to": 18,
+              "label": "James 3:1–18"
+            }
+          ],
+          "memory": [
+            "JAS.3.5"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "Tomorrow and the Prayer of Faith",
+          "subtitle": "James 4–5",
+          "teaching": [
+            "The rebuke of those who say they will go to such a city and trade and make a profit is not against planning but against the certainty — you do not know what tomorrow brings. The correction offered is a phrase, if the Lord wills, meant as a genuine posture rather than a verbal tic.",
+            "Chapter 5 opens with the sharpest economic language in the New Testament, addressed to the rich whose withheld wages are crying out. It closes gently, with prayer, anointing, confession to one another, and the note that Elijah was a man with a nature like ours."
+          ],
+          "passages": [
+            {
+              "bookId": "JAS",
+              "chapter": 4,
+              "from": 13,
+              "to": 17,
+              "label": "James 4:13–17"
+            },
+            {
+              "bookId": "JAS",
+              "chapter": 5,
+              "from": 13,
+              "to": 20,
+              "label": "James 5:13–20"
+            }
+          ],
+          "memory": [
+            "JAS.4.8",
+            "JAS.5.16"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1john",
+      "title": "1 John: Light, Love and Assurance",
+      "accent": "#c4a7e7",
+      "blurb": "A short letter written to people who had been told they were missing something — on how to know that you are not.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "What We Have Seen",
+          "subtitle": "1 John 1",
+          "teaching": [
+            "The opening insists on the physical: what we have heard, what we have seen with our eyes, what we have looked at and our hands have touched. The letter is written against teaching that treated the material world, and a genuinely embodied Christ, as beneath God.",
+            "The claim that follows — God is light and in him is no darkness at all — is paired immediately with a practical test about walking in that light, and with an admission the letter keeps making room for: if we say we have no sin we deceive ourselves."
+          ],
+          "passages": [
+            {
+              "bookId": "1JN",
+              "chapter": 1,
+              "from": 1,
+              "to": 10,
+              "label": "1 John 1:1–10"
+            }
+          ],
+          "memory": [
+            "1JN.1.9"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "Called Children of God",
+          "subtitle": "1 John 3:1–10",
+          "teaching": [
+            "See what kind of love the Father has given us, that we should be called children of God — and the writer adds, almost as an aside, that this is why the world does not recognise us. Identity and unfamiliarity are treated as the same fact.",
+            "What follows is honest about the gap between now and later: we are God's children now, and what we will be has not yet appeared. The passage's strong statements about not continuing in sin have been read in several ways, and the differences turn largely on the tense of the Greek verbs."
+          ],
+          "passages": [
+            {
+              "bookId": "1JN",
+              "chapter": 3,
+              "from": 1,
+              "to": 10,
+              "label": "1 John 3:1–10"
+            }
+          ],
+          "memory": [
+            "1JN.3.1"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "Love in Deed and Truth",
+          "subtitle": "1 John 3:11–24",
+          "teaching": [
+            "The letter's definition of love is not a feeling but an act, and it gives both a supreme example and an everyday one in consecutive sentences: he laid down his life for us, and if anyone has the world's goods and sees a brother in need and closes his heart, how does God's love abide in him?",
+            "The instruction that follows — let us not love in word or with the tongue only, but in deed and truth — leads into one of the most pastorally useful lines in the New Testament, addressed to people whose own hearts condemn them: God is greater than our heart, and knows all things."
+          ],
+          "passages": [
+            {
+              "bookId": "1JN",
+              "chapter": 3,
+              "from": 11,
+              "to": 24,
+              "label": "1 John 3:11–24"
+            }
+          ],
+          "memory": [
+            "1JN.3.18"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "Perfect Love Casts Out Fear",
+          "subtitle": "1 John 4",
+          "teaching": [
+            "The chapter contains the letter's most quoted sentence, God is love, and it is worth reading the sentences on either side of it. Love is defined not as our reaching but as his sending, and the immediate conclusion drawn is an obligation: if God so loved us, we also ought to love one another.",
+            "The line about fear is precise. There is no fear in love, because perfect love casts out fear, and fear has to do with punishment. It is written to people who were being made anxious about whether they measured up, and its answer is not to try harder but to look at where the love started."
+          ],
+          "passages": [
+            {
+              "bookId": "1JN",
+              "chapter": 4,
+              "from": 7,
+              "to": 21,
+              "label": "1 John 4:7–21"
+            }
+          ],
+          "memory": [
+            "1JN.4.18",
+            "1JN.4.19"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "revelation",
+      "title": "Revelation: Hope Under Pressure",
+      "accent": "#cf6f7e",
+      "blurb": "The most argued-over book in the Bible, read the way its first readers did — as encouragement under an empire.",
+      "lessons": [
+        {
+          "id": "01",
+          "title": "A Letter, Not a Puzzle",
+          "subtitle": "Revelation 1",
+          "teaching": [
+            "Revelation announces itself as three things at once: an apocalypse, a prophecy, and a letter to seven named churches in what is now western Turkey. The last of those is the most often forgotten, and it is the one that governs how the book was first heard.",
+            "Reading approaches differ enormously — some place its events in the first century, some at the end of history, some see a symbolic account of the whole church age, some a cyclical retelling. This course does not choose between them. It reads for what the book says to churches under pressure, which every approach agrees is its function."
+          ],
+          "passages": [
+            {
+              "bookId": "REV",
+              "chapter": 1,
+              "from": 1,
+              "to": 20,
+              "label": "Revelation 1:1–20"
+            }
+          ],
+          "memory": [
+            "REV.1.8"
+          ]
+        },
+        {
+          "id": "02",
+          "title": "Letters to Real Churches",
+          "subtitle": "Revelation 2–3",
+          "teaching": [
+            "The seven messages follow a pattern — a description of Christ, a commendation, a rebuke, a call, a promise — and their details are local. Laodicea's lukewarm water, Sardis's reputation for being alive, Smyrna's poverty are all things those cities would have recognised about themselves.",
+            "Two of the seven receive no rebuke at all, and both are the ones under the most external pressure. The most quoted image in the section, standing at the door and knocking, is addressed to a church, not to an individual outsider — it is Christ asking to be let back into his own congregation."
+          ],
+          "passages": [
+            {
+              "bookId": "REV",
+              "chapter": 3,
+              "from": 14,
+              "to": 22,
+              "label": "Revelation 3:14–22"
+            }
+          ],
+          "memory": [
+            "REV.3.20"
+          ]
+        },
+        {
+          "id": "03",
+          "title": "The Lamb Who Was Slain",
+          "subtitle": "Revelation 5",
+          "teaching": [
+            "The turning point of the book's imagery happens in chapter 5. A scroll cannot be opened, and John weeps; he is told to stop because the Lion of the tribe of Judah has conquered. Then he looks, and what he sees standing there is a Lamb, looking as though it had been slain.",
+            "The substitution is the interpretive key to everything after it. The victory the book celebrates is repeatedly described in the language of conquest and repeatedly shown in the shape of a sacrifice, and readers who miss that swap tend to misread the rest of the visions badly."
+          ],
+          "passages": [
+            {
+              "bookId": "REV",
+              "chapter": 5,
+              "from": 1,
+              "to": 14,
+              "label": "Revelation 5:1–14"
+            }
+          ],
+          "memory": [
+            "REV.5.12"
+          ]
+        },
+        {
+          "id": "04",
+          "title": "A Crowd Nobody Could Count",
+          "subtitle": "Revelation 7",
+          "teaching": [
+            "Between the sixth and seventh seals the narrative pauses, and John hears a number and then sees a crowd — a multitude from every nation, tribe, people and language that no one could count. The pause is placed deliberately at the point of maximum tension.",
+            "The description of them is where the chapter's comfort lies: they came out of the great tribulation, and God will wipe away every tear from their eyes. The book is not telling frightened readers that nothing will happen to them; it is telling them what is on the other side of it."
+          ],
+          "passages": [
+            {
+              "bookId": "REV",
+              "chapter": 7,
+              "from": 9,
+              "to": 17,
+              "label": "Revelation 7:9–17"
+            }
+          ],
+          "memory": [
+            "REV.7.17"
+          ]
+        },
+        {
+          "id": "05",
+          "title": "A New Heaven and a New Earth",
+          "subtitle": "Revelation 21–22",
+          "teaching": [
+            "The ending is not an evacuation. The city comes down, and the dwelling place of God is with people — the direction of travel is toward the world rather than away from it, which is worth noticing given how often the book is summarised the other way round.",
+            "What is promised is stated as removal before it is stated as addition: no more death, mourning, crying or pain, for the former things have passed away. And then the only line in scripture spoken from the throne in the middle of a vision of the end: behold, I am making all things new."
+          ],
+          "passages": [
+            {
+              "bookId": "REV",
+              "chapter": 21,
+              "from": 1,
+              "to": 8,
+              "label": "Revelation 21:1–8"
+            },
+            {
+              "bookId": "REV",
+              "chapter": 22,
+              "from": 1,
+              "to": 7,
+              "label": "Revelation 22:1–7"
+            }
+          ],
+          "memory": [
+            "REV.21.4",
+            "REV.21.5"
+          ]
+        }
+      ]
     }
   ]
 }

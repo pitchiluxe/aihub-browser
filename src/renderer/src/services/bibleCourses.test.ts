@@ -28,8 +28,11 @@ describe('the shipped courses', () => {
   it('loads every shipped course, with no validation errors', () => {
     expect(courseLoadErrors()).toEqual([])
     expect(courses.map(c => c.id).sort()).toEqual([
-      'acts', 'exodus', 'genesis', 'john', 'life-of-christ', 'parables',
-      'proverbs', 'psalms', 'romans',
+      '1corinthians', '1john', '1samuel', 'acts', 'daniel',
+      'ecclesiastes', 'ephesians', 'exodus', 'genesis', 'hebrews',
+      'isaiah', 'james', 'job', 'john', 'jonah',
+      'life-of-christ', 'matthew', 'parables', 'philippians', 'proverbs',
+      'psalms', 'revelation', 'romans', 'ruth',
     ])
   })
 
@@ -38,8 +41,14 @@ describe('the shipped courses', () => {
     expect(new Set(accents).size).toBe(accents.length)
   })
 
-  it('gives every course six lessons', () => {
-    for (const c of courses) expect(c.lessons).toHaveLength(6)
+  it('gives every course between four and eight lessons', () => {
+    // Not a fixed six: a short book like Ruth or Jonah has four natural
+    // divisions and padding it out to six would invent lessons the text does
+    // not support. The range still catches a course truncated by a bad edit.
+    for (const c of courses) {
+      expect(c.lessons.length, c.id).toBeGreaterThanOrEqual(4)
+      expect(c.lessons.length, c.id).toBeLessThanOrEqual(8)
+    }
   })
 
   it('gives every lesson real teaching prose, not a placeholder', () => {
