@@ -886,6 +886,27 @@ body.light-mode .text-slate-600 { color: rgb(var(--ds-text-4)); }
   50%      { opacity: var(--peak, 0); }
 }
 
+/* The shading peaks a little BEFORE the halfway point, because a real sheet is
+   at its most bowed on the way up — while it is still being lifted — and
+   flattens as it falls. Peaking symmetrically at 50% is the giveaway that a
+   page turn is a rotating card. */
+@keyframes bible-page-peak-early {
+  0%       { opacity: 0; }
+  38%      { opacity: var(--peak, 0); }
+  100%     { opacity: 0; }
+}
+
+/* Paper does not stop dead. The free edge overshoots its resting position by a
+   couple of degrees and settles back — the flop at the end of a page turn.
+   Driven as a keyframe rather than an easing curve so the overshoot happens in
+   the rotation only, and not in the shading riding along with it. */
+@keyframes bible-page-settle {
+  0%   { transform: rotateY(var(--from)) scaleX(1); }
+  62%  { transform: rotateY(calc(var(--to) * 0.88)) scaleX(0.972); }
+  88%  { transform: rotateY(calc(var(--to) * 1.022)) scaleX(0.998); }
+  100% { transform: rotateY(var(--to)) scaleX(1); }
+}
+
 /* ── Webview ── */
 webview {
   display: block;

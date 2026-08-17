@@ -31,13 +31,29 @@ export default function PageLeaf({ front, back, direction, angle, animating, dur
   const arc = Math.sin(t * Math.PI)          // 0 at rest, 1 upright at the halfway point
 
   const easing = 'cubic-bezier(0.32, 0.10, 0.22, 1)'
-  const transition = animating ? `transform ${durationMs}ms ${easing}` : 'none'
-  const peakAnim = animating ? `bible-page-peak ${durationMs}ms ${easing} both` : undefined
+  const peakAnim = animating ? `bible-page-peak-early ${durationMs}ms ${easing} both` : undefined
 
-  // The whole sheet leans out of plane a touch as it swings — pinned at the
-  // spine, lifting at the free edge — so it never reads as a rigid board.
-  const curl = arc * (direction === 'next' ? -3 : 3)
-  const cast = arc * 0.32                    // shadow the sheet throws on the page beneath
+  // A turn driven by a button runs as a keyframe rather than a transition, so
+  // the rotation can overshoot its resting angle by a couple of degrees and
+  // settle back — the small flop a real sheet makes as it lands. An easing
+  // curve cannot do that without dragging the shading overshoot along with it.
+  const signed = direction === 'next' ? -angle : angle
+  const settleAnim = animating
+    ? `bible-page-settle ${durationMs}ms ${easing} both`
+    : undefined
+
+  // The whole sheet leans out of plane as it swings — pinned at the spine,
+  // lifting at the free edge — so it never reads as a rigid board. Steeper
+  // than a token tilt: at 6 degrees the lean is visible without the sheet
+  // looking bent in half.
+  const curl = arc * (direction === 'next' ? -6 : 6)
+  // A bowed sheet is fractionally narrower on screen than a flat one held at
+  // the same angle. Small, but it is most of what separates paper from card.
+  const bow = 1 - arc * 0.03
+  // And it comes off the book as it rises, rather than pivoting flush against
+  // the page beneath it.
+  const lift = arc * 26
+  const cast = arc * 0.38                    // shadow the sheet throws on the page beneath
 
   // Light rakes from the spine: the gutter edge stays dark, the mid-page catches
   // the light (reversed on the verso).
@@ -83,6 +99,23 @@ export default function PageLeaf({ front, back, direction, angle, animating, dur
         <div className="pointer-events-none absolute inset-0" style={shadeLayer(freeRight ? curlDarkRight : curlDarkLeft, 0.9)} />
         {/* Specular sheen sweeping across the standing sheet */}
         <div className="pointer-events-none absolute inset-0" style={shadeLayer(sheenBand, isBack ? 0.42 : 0.5, 'soft-light')} />
+        {/* The thickness of the sheet itself. A page caught side-on catches
+            the light along its cut edge, and that hairline is a surprisingly
+            large part of reading the leaf as a physical object rather than a
+            texture. It only shows while the sheet is off the page. */}
+        <div
+          className="pointer-events-none absolute inset-y-0"
+          style={{
+            ...shadeLayer(
+              freeRight
+                ? 'linear-gradient(to right, rgba(255,250,235,0) 0%, rgba(255,250,235,0.85) 100%)'
+                : 'linear-gradient(to left,  rgba(255,250,235,0) 0%, rgba(255,250,235,0.85) 100%)',
+              0.8,
+            ),
+            [freeRight ? 'right' : 'left']: 0,
+            width: 2,
+          } as React.CSSProperties}
+        />
       </div>
     )
   }
@@ -90,7 +123,16 @@ export default function PageLeaf({ front, back, direction, angle, animating, dur
   // The leaf is purely a picture of the turn — the page drives it, so it must
   // never swallow clicks meant for the text underneath.
   return (
-    <div className="pointer-events-none absolute inset-0 z-30" style={{ perspective: 1800 }}>
+    <div
+      className="pointer-events-none absolute inset-0 z-30"
+      style={{
+        // Closer than it was, and looking from the spine rather than from
+        // dead centre. A distant, centred perspective flattens the turn into
+        // something that reads as a slide.
+        perspective: 1400,
+        perspectiveOrigin: direction === 'next' ? '0% 50%' : '100% 50%',
+      }}
+    >
       {/* Shadow the rising sheet throws onto the page beneath it. */}
       <div
         className="pointer-events-none absolute inset-0"
@@ -104,17 +146,34 @@ export default function PageLeaf({ front, back, direction, angle, animating, dur
           willChange: 'opacity',
         }}
       />
+      {/* Two nested transforms rather than one. The inner element owns the
+          rotation, so the settle keyframe can overshoot it alone; the outer
+          owns the lean and the lift, which must not bounce with it. */}
       <div
         className={`absolute inset-0 ${direction === 'next' ? 'origin-left' : 'origin-right'}`}
         style={{
           transformStyle: 'preserve-3d',
-          transform: `rotateY(${direction === 'next' ? -angle : angle}deg) rotateZ(${curl}deg)`,
-          transition,
+          transform: `rotateZ(${curl}deg) translateZ(${lift}px)`,
+          transition: animating ? `transform ${durationMs}ms ${easing}` : 'none',
+          willChange: 'transform',
+        }}
+      >
+      <div
+        className={`absolute inset-0 ${direction === 'next' ? 'origin-left' : 'origin-right'}`}
+        style={{
+          transformStyle: 'preserve-3d',
+          ...(animating
+            ? {
+                animation: settleAnim,
+                ...({ ['--from' as any]: '0deg', ['--to' as any]: `${signed}deg` }),
+              }
+            : { transform: `rotateY(${signed}deg) scaleX(${bow})` }),
           willChange: 'transform',
         }}
       >
         {face(front, false)}
         {face(back, true)}
+      </div>
       </div>
     </div>
   )
