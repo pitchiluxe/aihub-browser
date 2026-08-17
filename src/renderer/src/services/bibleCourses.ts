@@ -108,8 +108,63 @@ function load(): Course[] {
   return good
 }
 
-export function getCourses(): Course[] {
+// ── Generated courses ───────────────────────────────────────────────────────
+// AI-written courses live in localStorage rather than in the shipped asset:
+// they belong to this install, not to the build, and they must never be
+// mistaken for the hand-verified ones. They are validated on the way in (see
+// bibleCourseGen) and validated again on the way out, because localStorage is
+// editable by anything that can reach it.
+
+const CUSTOM_KEY = 'aihub-bible-custom-courses'
+const CUSTOM_EVT = 'aihub-bible-courses-changed'
+
+export function getCustomCourses(): Course[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    // Re-validated on read. A course that no longer validates is dropped
+    // rather than rendered as a broken room.
+    return parsed.filter((c: any) => validateCourse(c).length === 0) as Course[]
+  } catch {
+    return []
+  }
+}
+
+function writeCustom(courses: Course[]): void {
+  try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(courses)) } catch {}
+  window.dispatchEvent(new CustomEvent(CUSTOM_EVT))
+}
+
+export function addCustomCourse(course: Course): void {
+  writeCustom([...getCustomCourses().filter(c => c.id !== course.id), course])
+}
+
+export function removeCustomCourse(id: string): void {
+  writeCustom(getCustomCourses().filter(c => c.id !== id))
+}
+
+/** Fires when a course is generated or deleted, so the Classroom can refresh. */
+export function onCoursesChanged(cb: () => void): () => void {
+  window.addEventListener(CUSTOM_EVT, cb)
+  return () => window.removeEventListener(CUSTOM_EVT, cb)
+}
+
+/**
+ * The courses that shipped with this build.
+ *
+ * Kept separate from getCourses() because the badge list is checked against
+ * it: a generated course has no completion badge and must not make that check
+ * fail.
+ */
+export function getShippedCourses(): Course[] {
   return load()
+}
+
+/** Everything on the shelf — shipped first, then whatever was generated here. */
+export function getCourses(): Course[] {
+  return [...load(), ...getCustomCourses()]
 }
 
 export function courseLoadErrors(): string[] {
@@ -118,7 +173,7 @@ export function courseLoadErrors(): string[] {
 }
 
 export function getCourse(id: string): Course | undefined {
-  return load().find(c => c.id === id)
+  return getCourses().find(c => c.id === id)
 }
 
 export function getLesson(courseId: string, lessonId: string): Lesson | undefined {
@@ -168,7 +223,7 @@ export function courseProgress(course: Course, lessons: LessonBook | undefined):
 }
 
 export function completedCourses(lessons: LessonBook | undefined): string[] {
-  return load().filter(c => courseProgress(c, lessons).complete).map(c => c.id)
+  return getCourses().filter(c => courseProgress(c, lessons).complete).map(c => c.id)
 }
 
 export function lessonsCompleted(lessons: LessonBook | undefined): number {

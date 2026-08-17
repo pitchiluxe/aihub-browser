@@ -3,7 +3,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import {
   completedCourses, courseLoadErrors, courseMemoryVerses, courseProgress,
-  getCourse, getCourses, getLesson, getPlans, lessonKey, lessonsCompleted,
+  getCourse, getCourses, getShippedCourses, getLesson, getPlans, lessonKey, lessonsCompleted,
   validateCourse, type LessonBook,
 } from './bibleCourses'
 import { COURSE_BADGE_IDS } from './bibleRewards'
@@ -101,7 +101,8 @@ describe('the shipped courses', () => {
     // The badge ids in bibleRewards are `course-<id>`. A course added to the
     // JSON without a badge would silently award nothing on completion, and a
     // badge left behind by a renamed course could never be earned at all.
-    expect(courses.map(c => c.id).sort()).toEqual([...COURSE_BADGE_IDS].sort())
+    // Shipped only: a generated course has no badge by design.
+    expect(getShippedCourses().map(c => c.id).sort()).toEqual([...COURSE_BADGE_IDS].sort())
   })
 })
 
