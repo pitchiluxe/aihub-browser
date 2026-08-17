@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Award, BookOpen, FlaskConical, GraduationCap, Share2, Sun } from 'lucide-react'
+import { Award, BookOpen, FlaskConical, GraduationCap, Music, Share2, Sun } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { dayKey, verseForDay } from '../../services/dailyVerse'
 import { grade, labStats, type VerseBook } from '../../services/bibleSrs'
@@ -20,14 +20,16 @@ import StudyDesk, { type DeskMarks } from '../study/StudyDesk'
 import Classroom from '../study/Classroom'
 import Lab from '../study/Lab'
 import ProgressPanel from '../study/ProgressPanel'
+import GospelRoom from '../study/GospelRoom'
 
-type Room = 'today' | 'study' | 'classroom' | 'lab' | 'progress'
+type Room = 'today' | 'study' | 'classroom' | 'lab' | 'gospel' | 'progress'
 
 const ROOMS: { id: Room; label: string; icon: React.ReactNode }[] = [
   { id: 'today',     label: 'Today',     icon: <Sun size={14} /> },
   { id: 'study',     label: 'Study',     icon: <BookOpen size={14} /> },
   { id: 'classroom', label: 'Classroom', icon: <GraduationCap size={14} /> },
   { id: 'lab',       label: 'Lab',       icon: <FlaskConical size={14} /> },
+  { id: 'gospel',    label: 'Gospel',    icon: <Music size={14} /> },
   { id: 'progress',  label: 'Progress',  icon: <Award size={14} /> },
 ]
 
@@ -273,6 +275,8 @@ export default function BibleStudyPage() {
             onReadPassages={readPassages}
             onAskAI={askAI}
           />
+        ) : room === 'gospel' ? (
+          <GospelRoom />
         ) : room === 'lab' ? (
           <Lab
             verses={study.verses as VerseBook}

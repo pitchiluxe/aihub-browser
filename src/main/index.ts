@@ -42,6 +42,9 @@ import {
   type BackupSections, type BibleStudyData,
 } from './backup'
 import {
+  parseSearchResults, searchUrl, GOSPEL_QUERIES, type YouTubeVideo,
+} from './youtubeSearch'
+import {
   forOllama, forOpenRouter, withoutImages, hasImages, looksVisionCapable, pickVisionModel,
 } from './visionMessages'
 import { pushSync, pullSync, clearSync } from './google/apis/sync'
@@ -3460,6 +3463,42 @@ function writeBibleStudy(next: BibleStudyData): void {
   fs.writeFileSync(tmp, JSON.stringify(next, null, 2))
   fs.renameSync(tmp, BIBLE_STUDY_FILE)
 }
+
+// -- Gospel room: YouTube search without a key --------------------------------
+// The renderer cannot fetch youtube.com itself, so the fetch happens here and
+// only the parsed list crosses the boundary. Nothing about the user goes with
+// it: no cookies, no referrer, no account -- it is the request a signed-out
+// visitor would make.
+//
+// Results are cached for a while. Paging or shuffling re-queries otherwise,
+// and hammering search from a desktop app is both rude and a fast way to be
+// rate-limited into an empty room.
+const gospelCache = new Map<string, { at: number; videos: YouTubeVideo[] }>()
+const GOSPEL_TTL_MS = 15 * 60 * 1000
+
+ipcMain.handle('gospel:search', async (_e, query?: string) => {
+  const q = (typeof query === 'string' && query.trim())
+    ? query.trim()
+    : GOSPEL_QUERIES[Math.floor(Math.random() * GOSPEL_QUERIES.length)]
+
+  const cached = gospelCache.get(q)
+  if (cached && Date.now() - cached.at < GOSPEL_TTL_MS) {
+    return { ok: true, query: q, videos: cached.videos, cached: true }
+  }
+
+  try {
+    const { status, body } = await withNetRetry(() => httpGet(searchUrl(q), 12000), 2, 600)
+    if (status !== 200) return { ok: false, query: q, videos: [], error: `HTTP ${status}` }
+    const videos = parseSearchResults(body, 40)
+    // An empty parse on a 200 means the page shape changed, which is a very
+    // different problem from being offline and worth reporting differently.
+    if (!videos.length) return { ok: false, query: q, videos: [], error: 'no-results' }
+    gospelCache.set(q, { at: Date.now(), videos })
+    return { ok: true, query: q, videos, cached: false }
+  } catch (e: any) {
+    return { ok: false, query: q, videos: [], error: e?.message || 'network' }
+  }
+})
 
 ipcMain.handle('bible:getStudy', (): BibleStudyData & { status: 'ok' | 'empty' | 'unreadable' } => {
   const readFile = (f: string): BibleStudyData | null => {

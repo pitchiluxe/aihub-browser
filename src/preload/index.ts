@@ -196,6 +196,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     remove: (id: string) => ipcRenderer.invoke('rewind:remove', id),
     clear:  () => ipcRenderer.invoke('rewind:clear'),
   },
+  gospel: {
+    /** Gospel music from YouTube. Omit the query for a random tradition. */
+    search: (query?: string) => ipcRenderer.invoke('gospel:search', query),
+  },
   bible: {
     getMarks: () => ipcRenderer.invoke('bible:getMarks'),
     setMarks: (marks: any, opts?: { allowEmpty?: boolean }) => ipcRenderer.invoke('bible:setMarks', marks, opts),
