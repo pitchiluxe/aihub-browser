@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Volume2, VolumeX } from 'lucide-react'
 import { speak, speechSupported, type SpeechHandle } from '../../services/verseSpeech'
+import { getTranslationMeta } from '../../services/bibleService'
 
 interface Props {
   /** The scripture to read. Empty disables the button. */
@@ -46,6 +47,9 @@ export default function ListenButton({
     setState('starting')
     const h = await speak(text, {
       intro: reference,
+      // Read in the language of the open version: a French psalm handed to an
+      // English voice is unintelligible, however good that voice is.
+      lang: getTranslationMeta().locale,
       onChunk: () => setState('playing'),
       onDone: () => { handle.current = null; setState('idle') },
     })

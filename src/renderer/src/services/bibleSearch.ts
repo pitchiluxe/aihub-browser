@@ -1,4 +1,4 @@
-import { getBooks, getBook, refKey, type Verse } from './bibleService'
+import { getBooks, getBook, refKey, onTranslationChange, type Verse } from './bibleService'
 
 // Offline scripture retrieval.
 //
@@ -33,7 +33,40 @@ const STOP = new Set([
   'all', 'if', 'so', 'no', 'when', 'them', 'him', 'her', 'she', 'my', 'me', 'your', 'our', 'us',
   'said', 'unto', 'shall', 'thou', 'thee', 'thy', 'about', 'does', 'do', 'did', 'tell', 'show',
   'find', 'verse', 'verses', 'bible', 'scripture', 'say', 'says', 'any', 'some', 'who', 'how',
+  // French — the same list for Louis Segond. Kept in one set rather than
+  // switched per version: none of these are English content words, so they
+  // cost an English search nothing, and a reader can ask in either language
+  // whichever text is open.
+  'le', 'la', 'les', 'un', 'une', 'des', 'du', 'de', 'au', 'aux', 'et', 'ou', 'que', 'qui',
+  'quoi', 'dont', 'ne', 'pas', 'plus', 'ce', 'cet', 'cette', 'ces', 'son', 'sa', 'ses', 'leur',
+  'leurs', 'mon', 'ma', 'mes', 'ton', 'ta', 'tes', 'notre', 'nos', 'votre', 'vos', 'je', 'tu',
+  'il', 'elle', 'ils', 'elles', 'nous', 'vous', 'lui', 'eux', 'moi', 'toi', 'se', 'soi', 'y',
+  'est', 'sont', 'etait', 'etaient', 'fut', 'furent', 'sera', 'seront', 'etre', 'ete', 'suis',
+  'as', 'ont', 'avait', 'avaient', 'eut', 'eurent', 'avoir', 'dans', 'sur', 'sous', 'avec',
+  'sans', 'pour', 'par', 'vers', 'chez', 'entre', 'apres', 'avant', 'depuis', 'pendant',
+  'mais', 'donc', 'car', 'ni', 'or', 'comme', 'quand', 'lorsque', 'si', 'aussi', 'tout',
+  'tous', 'toute', 'toutes', 'meme', 'tres', 'bien', 'alors', 'ainsi', 'cela', 'ceux', 'celle',
+  'celui', 'dit', 'dire', 'verset', 'versets', 'ecriture', 'ecritures',
 ])
+
+// Elisions to break apart so the word after the apostrophe is indexed on its
+// own: "l'Éternel" must find "eternel", and "qu'il" must not become a token.
+// English possessives are deliberately left whole — "god's" stays one token,
+// as it always has, because "god" is not in this set.
+const ELISIONS = new Set([
+  'l', 'd', 'j', 'n', 's', 'c', 'm', 't', 'qu', 'lorsqu', 'puisqu', 'jusqu', 'quelqu', 'aujourd',
+])
+
+// Accents are folded rather than preserved. Readers type "priere" as often as
+// "prière", and the reference text is not consistent about which characters it
+// uses either. Folding both sides of the comparison makes the two agree.
+function fold(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[\u2018\u2019\u02bc]/g, "'")
+}
 
 // Light suffix folding so "giving"/"gives"/"gave" collide with "give". A real
 // stemmer would be better; this is deliberately conservative to avoid merging
@@ -47,23 +80,48 @@ function stem(w: string): string {
 }
 
 export function tokenize(s: string): string[] {
-  return (s.toLowerCase().match(/[a-z']+/g) || [])
-    .filter(w => w.length > 1 && !STOP.has(w))
-    .map(stem)
+  const out: string[] = []
+  for (const word of fold(s).match(/[a-z']+/g) || []) {
+    const cut = word.indexOf("'")
+    const w = cut > 0 && ELISIONS.has(word.slice(0, cut)) ? word.slice(cut + 1) : word
+    if (w.length > 1 && !STOP.has(w)) out.push(stem(w))
+  }
+  return out
 }
 
 let entries: Entry[] | null = null
 let postings: Map<string, number[]> | null = null
 let avgLen = 1
 let building: Promise<void> | null = null
+// Bumped whenever the index is thrown away. A build that was already running
+// when the reader switched versions finishes against the old text, so it
+// checks the generation before publishing rather than overwriting the new
+// index with French verses labelled English, or the reverse.
+let generation = 0
 
 export function isReady(): boolean { return entries !== null }
+
+/**
+ * Drop the index. The next search rebuilds it against whatever version is
+ * open — the entries carry the verse text itself, so a translation change
+ * invalidates every one of them.
+ */
+export function resetIndex(): void {
+  generation++
+  entries = null
+  postings = null
+  building = null
+  avgLen = 1
+}
+
+onTranslationChange(resetIndex)
 
 // Build once. Concurrent callers share the same promise rather than each
 // parsing 66 books.
 export function buildIndex(onProgress?: (done: number, total: number) => void): Promise<void> {
   if (entries) return Promise.resolve()
   if (building) return building
+  const gen = generation
   building = (async () => {
     const books = getBooks()
     const acc: Entry[] = []
@@ -93,6 +151,7 @@ export function buildIndex(onProgress?: (done: number, total: number) => void): 
       })
       onProgress?.(b + 1, books.length)
     }
+    if (gen !== generation) return          // superseded by a version change
     entries = acc
     postings = post
     avgLen = total / Math.max(1, acc.length)

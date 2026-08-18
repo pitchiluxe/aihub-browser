@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { BookOpen, Bookmark, BookmarkCheck, Check, FlaskConical, Flame, Loader2 } from 'lucide-react'
-import { formatRef } from '../../services/bibleService'
+import { formatRef, getTranslationMeta } from '../../services/bibleService'
 import { verseText } from '../../services/verseText'
 import ListenButton from '../bible/ListenButton'
 
@@ -70,7 +70,7 @@ export default function DailyVerseCard({
             </blockquote>
             <div className="mt-4 text-sm font-semibold" style={{ color: '#e6c86e' }}>
               {formatRef(verseRef)}
-              <span className="ml-2 text-[11px] font-normal opacity-50">World English Bible</span>
+              <span className="ml-2 text-[11px] font-normal opacity-50">{getTranslationMeta().name}</span>
             </div>
           </>
         )}

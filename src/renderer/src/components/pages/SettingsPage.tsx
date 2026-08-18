@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Palette, Bot, Shield, ShieldBan, Layers, Info, CheckCircle2, Loader2, RefreshCw, Download, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked, Lock } from 'lucide-react'
 import ClaudeKitSection from './ClaudeKitSection'
 import { useBibleSettings } from '../../services/bibleSettings'
+import { TRANSLATIONS } from '../../services/bibleService'
 import { BADGES, isUnlocked, type UnlockKind } from '../../services/bibleRewards'
 import { useBrowserStore } from '../../store/browserStore'
 import {
@@ -1065,6 +1066,27 @@ export default function SettingsPage() {
 
       {/* Bible reader */}
       <Section icon={<BookMarked size={15} />} title="Bible">
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Version</div>
+            <div className="text-xs text-aihub-muted">
+              Which translation the reader, the search and the study room all work from
+            </div>
+          </div>
+          <div className="flex gap-1.5">
+            {TRANSLATIONS.map(t => (
+              <button key={t.id} onClick={() => setBible({ translation: t.id })}
+                title={`${t.name} — ${t.language}`}
+                className="rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
+                style={bible.translation === t.id
+                  ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
+                  : { background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))' }}>
+                {t.short}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className={ROW}>
           <div>
             <div className={LBL}>Text size</div>

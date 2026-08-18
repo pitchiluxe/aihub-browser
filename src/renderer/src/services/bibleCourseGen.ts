@@ -20,6 +20,7 @@
 
 import type { Course, Lesson, Passage } from './bibleCourses'
 import { validateCourse } from './bibleCourses'
+import { getTranslationMeta } from './bibleService'
 
 /** A chapter's verse numbers, or null when the book/chapter does not exist. */
 export type VerseResolver = (bookId: string, chapter: number) => Promise<number[] | null>
@@ -68,7 +69,12 @@ export function buildCoursePrompt(topic: string, existingTitles: string[] = []):
     ? `\n\nCourses that already exist — pick a genuinely different angle from all of these:\n${existingTitles.map(t => `- ${t}`).join('\n')}`
     : ''
 
-  return `You are writing a study course for a Bible reading app. The translation is the World English Bible (WEB).
+  // Book ids are the same in every version, so a generated course still
+  // verifies against the bundled text whichever language it was written in —
+  // only the prose and the version it names change.
+  const version = getTranslationMeta()
+
+  return `You are writing a study course for a Bible reading app. The translation is the ${version.name} (${version.short}), and the reader reads in ${version.language} — write the title, blurb and all teaching prose in ${version.language}.
 
 TOPIC: ${topic}
 

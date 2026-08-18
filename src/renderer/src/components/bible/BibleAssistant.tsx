@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Sparkles, X, Send, Loader2, BookOpen, Trash2, Copy, Check } from 'lucide-react'
 import { buildIndex, isReady, search, context, expandQuery, type Hit } from '../../services/bibleSearch'
-import { parseRef, formatRef, refKey } from '../../services/bibleService'
+import { parseRef, formatRef, refKey, getTranslationMeta } from '../../services/bibleService'
 import { parseTypedRef } from './VerseSearch'
 import { cleanNarration } from '../../services/agentTools'
 
@@ -35,7 +35,13 @@ const SUGGESTIONS = [
 // prompt; it is told plainly that it may not quote anything else. That is what
 // stops a Bible app from inventing scripture, which is the one failure mode
 // that would make it worthless.
-const SYSTEM = [
+// Built per question rather than fixed, because the version the reader has
+// open decides two things the model must not get wrong: which translation it
+// is quoting, and which language to answer in. A French reader handed an
+// English answer about French verses is being talked past.
+const buildSystem = (): string => {
+  const version = getTranslationMeta()
+  return [
   'You are a warm, plain-spoken pastor and Bible teacher inside a Bible reader app.',
   'You are talking with someone who is reading scripture right now.',
   '',
@@ -50,7 +56,9 @@ const SYSTEM = [
   '   teach on the question and build your answer around them. Prefer teaching, wisdom and',
   '   promise passages over places where the word merely appears in a narrative, a genealogy',
   '   or a ledger. Ignore the rest — do not list everything you were given.',
-  '4. The translation is the World English Bible (WEB). Do not claim it is any other.',
+  `4. The translation is the ${version.name} (${version.short}). Do not claim it is any other.`,
+  `4b. The reader is reading in ${version.language}. Write your whole answer in that language,`,
+  '   including the book names in the references you cite.',
   '5. On contested doctrinal questions, say plainly that faithful Christians differ,',
   '   give the main views fairly, and point to the text rather than ruling.',
   '6. You are not a substitute for a real pastor, counsellor or doctor. If someone is',
@@ -66,7 +74,8 @@ const SYSTEM = [
   '• A short, concrete "so what" — how this lands in an ordinary day, in plain words.',
   'Keep it tight. Two or three short paragraphs is usually plenty; don\'t pad.',
   'When someone is hurting or afraid, be gentle first and doctrinal second.',
-].join('\n')
+  ].join('\n')
+}
 
 export default function BibleAssistant({
   open, onClose, bookId, bookName, chapter, selectedRef, onOpenRef,
@@ -168,7 +177,7 @@ export default function BibleAssistant({
         : `The reader is on ${bookName} ${chapter}.`
 
       const messages = [
-        { role: 'system', content: SYSTEM },
+        { role: 'system', content: buildSystem() },
         {
           role: 'user',
           content: `${where}\n\nPASSAGES (the only scripture you may quote):\n${passageBlock}\n\nQUESTION: ${q}`,

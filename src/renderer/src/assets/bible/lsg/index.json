@@ -1,0 +1,535 @@
+{
+  "translation": "LSG",
+  "name": "Louis Segond 1910",
+  "language": "fr",
+  "books": [
+    {
+      "id": "GEN",
+      "name": "Genèse",
+      "testament": "OT",
+      "slug": "genesis",
+      "enName": "Genesis",
+      "chapters": 50
+    },
+    {
+      "id": "EXO",
+      "name": "Exode",
+      "testament": "OT",
+      "slug": "exodus",
+      "enName": "Exodus",
+      "chapters": 40
+    },
+    {
+      "id": "LEV",
+      "name": "Lévitique",
+      "testament": "OT",
+      "slug": "leviticus",
+      "enName": "Leviticus",
+      "chapters": 27
+    },
+    {
+      "id": "NUM",
+      "name": "Nombres",
+      "testament": "OT",
+      "slug": "numbers",
+      "enName": "Numbers",
+      "chapters": 36
+    },
+    {
+      "id": "DEU",
+      "name": "Deutéronome",
+      "testament": "OT",
+      "slug": "deuteronomy",
+      "enName": "Deuteronomy",
+      "chapters": 34
+    },
+    {
+      "id": "JOS",
+      "name": "Josué",
+      "testament": "OT",
+      "slug": "joshua",
+      "enName": "Joshua",
+      "chapters": 24
+    },
+    {
+      "id": "JDG",
+      "name": "Juges",
+      "testament": "OT",
+      "slug": "judges",
+      "enName": "Judges",
+      "chapters": 21
+    },
+    {
+      "id": "RUT",
+      "name": "Ruth",
+      "testament": "OT",
+      "slug": "ruth",
+      "enName": "Ruth",
+      "chapters": 4
+    },
+    {
+      "id": "1SA",
+      "name": "1 Samuel",
+      "testament": "OT",
+      "slug": "1samuel",
+      "enName": "1 Samuel",
+      "chapters": 31
+    },
+    {
+      "id": "2SA",
+      "name": "2 Samuel",
+      "testament": "OT",
+      "slug": "2samuel",
+      "enName": "2 Samuel",
+      "chapters": 24
+    },
+    {
+      "id": "1KI",
+      "name": "1 Rois",
+      "testament": "OT",
+      "slug": "1kings",
+      "enName": "1 Kings",
+      "chapters": 22
+    },
+    {
+      "id": "2KI",
+      "name": "2 Rois",
+      "testament": "OT",
+      "slug": "2kings",
+      "enName": "2 Kings",
+      "chapters": 25
+    },
+    {
+      "id": "1CH",
+      "name": "1 Chroniques",
+      "testament": "OT",
+      "slug": "1chronicles",
+      "enName": "1 Chronicles",
+      "chapters": 29
+    },
+    {
+      "id": "2CH",
+      "name": "2 Chroniques",
+      "testament": "OT",
+      "slug": "2chronicles",
+      "enName": "2 Chronicles",
+      "chapters": 36
+    },
+    {
+      "id": "EZR",
+      "name": "Esdras",
+      "testament": "OT",
+      "slug": "ezra",
+      "enName": "Ezra",
+      "chapters": 10
+    },
+    {
+      "id": "NEH",
+      "name": "Néhémie",
+      "testament": "OT",
+      "slug": "nehemiah",
+      "enName": "Nehemiah",
+      "chapters": 13
+    },
+    {
+      "id": "EST",
+      "name": "Esther",
+      "testament": "OT",
+      "slug": "esther",
+      "enName": "Esther",
+      "chapters": 10
+    },
+    {
+      "id": "JOB",
+      "name": "Job",
+      "testament": "OT",
+      "slug": "job",
+      "enName": "Job",
+      "chapters": 42
+    },
+    {
+      "id": "PSA",
+      "name": "Psaumes",
+      "testament": "OT",
+      "slug": "psalms",
+      "enName": "Psalms",
+      "chapters": 150
+    },
+    {
+      "id": "PRO",
+      "name": "Proverbes",
+      "testament": "OT",
+      "slug": "proverbs",
+      "enName": "Proverbs",
+      "chapters": 31
+    },
+    {
+      "id": "ECC",
+      "name": "Ecclésiaste",
+      "testament": "OT",
+      "slug": "ecclesiastes",
+      "enName": "Ecclesiastes",
+      "chapters": 12
+    },
+    {
+      "id": "SNG",
+      "name": "Cantique des Cantiques",
+      "testament": "OT",
+      "slug": "songofsolomon",
+      "enName": "Song of Solomon",
+      "chapters": 8
+    },
+    {
+      "id": "ISA",
+      "name": "Ésaïe",
+      "testament": "OT",
+      "slug": "isaiah",
+      "enName": "Isaiah",
+      "chapters": 66
+    },
+    {
+      "id": "JER",
+      "name": "Jérémie",
+      "testament": "OT",
+      "slug": "jeremiah",
+      "enName": "Jeremiah",
+      "chapters": 52
+    },
+    {
+      "id": "LAM",
+      "name": "Lamentations",
+      "testament": "OT",
+      "slug": "lamentations",
+      "enName": "Lamentations",
+      "chapters": 5
+    },
+    {
+      "id": "EZK",
+      "name": "Ézéchiel",
+      "testament": "OT",
+      "slug": "ezekiel",
+      "enName": "Ezekiel",
+      "chapters": 48
+    },
+    {
+      "id": "DAN",
+      "name": "Daniel",
+      "testament": "OT",
+      "slug": "daniel",
+      "enName": "Daniel",
+      "chapters": 12
+    },
+    {
+      "id": "HOS",
+      "name": "Osée",
+      "testament": "OT",
+      "slug": "hosea",
+      "enName": "Hosea",
+      "chapters": 14
+    },
+    {
+      "id": "JOL",
+      "name": "Joël",
+      "testament": "OT",
+      "slug": "joel",
+      "enName": "Joel",
+      "chapters": 3
+    },
+    {
+      "id": "AMO",
+      "name": "Amos",
+      "testament": "OT",
+      "slug": "amos",
+      "enName": "Amos",
+      "chapters": 9
+    },
+    {
+      "id": "OBA",
+      "name": "Abdias",
+      "testament": "OT",
+      "slug": "obadiah",
+      "enName": "Obadiah",
+      "chapters": 1
+    },
+    {
+      "id": "JON",
+      "name": "Jonas",
+      "testament": "OT",
+      "slug": "jonah",
+      "enName": "Jonah",
+      "chapters": 4
+    },
+    {
+      "id": "MIC",
+      "name": "Michée",
+      "testament": "OT",
+      "slug": "micah",
+      "enName": "Micah",
+      "chapters": 7
+    },
+    {
+      "id": "NAM",
+      "name": "Nahum",
+      "testament": "OT",
+      "slug": "nahum",
+      "enName": "Nahum",
+      "chapters": 3
+    },
+    {
+      "id": "HAB",
+      "name": "Habacuc",
+      "testament": "OT",
+      "slug": "habakkuk",
+      "enName": "Habakkuk",
+      "chapters": 3
+    },
+    {
+      "id": "ZEP",
+      "name": "Sophonie",
+      "testament": "OT",
+      "slug": "zephaniah",
+      "enName": "Zephaniah",
+      "chapters": 3
+    },
+    {
+      "id": "HAG",
+      "name": "Aggée",
+      "testament": "OT",
+      "slug": "haggai",
+      "enName": "Haggai",
+      "chapters": 2
+    },
+    {
+      "id": "ZEC",
+      "name": "Zacharie",
+      "testament": "OT",
+      "slug": "zechariah",
+      "enName": "Zechariah",
+      "chapters": 14
+    },
+    {
+      "id": "MAL",
+      "name": "Malachie",
+      "testament": "OT",
+      "slug": "malachi",
+      "enName": "Malachi",
+      "chapters": 4
+    },
+    {
+      "id": "MAT",
+      "name": "Matthieu",
+      "testament": "NT",
+      "slug": "matthew",
+      "enName": "Matthew",
+      "chapters": 28
+    },
+    {
+      "id": "MRK",
+      "name": "Marc",
+      "testament": "NT",
+      "slug": "mark",
+      "enName": "Mark",
+      "chapters": 16
+    },
+    {
+      "id": "LUK",
+      "name": "Luc",
+      "testament": "NT",
+      "slug": "luke",
+      "enName": "Luke",
+      "chapters": 24
+    },
+    {
+      "id": "JHN",
+      "name": "Jean",
+      "testament": "NT",
+      "slug": "john",
+      "enName": "John",
+      "chapters": 21
+    },
+    {
+      "id": "ACT",
+      "name": "Actes des Apôtres",
+      "testament": "NT",
+      "slug": "acts",
+      "enName": "Acts",
+      "chapters": 28
+    },
+    {
+      "id": "ROM",
+      "name": "Romains",
+      "testament": "NT",
+      "slug": "romans",
+      "enName": "Romans",
+      "chapters": 16
+    },
+    {
+      "id": "1CO",
+      "name": "1 Corinthiens",
+      "testament": "NT",
+      "slug": "1corinthians",
+      "enName": "1 Corinthians",
+      "chapters": 16
+    },
+    {
+      "id": "2CO",
+      "name": "2 Corinthiens",
+      "testament": "NT",
+      "slug": "2corinthians",
+      "enName": "2 Corinthians",
+      "chapters": 13
+    },
+    {
+      "id": "GAL",
+      "name": "Galates",
+      "testament": "NT",
+      "slug": "galatians",
+      "enName": "Galatians",
+      "chapters": 6
+    },
+    {
+      "id": "EPH",
+      "name": "Éphésiens",
+      "testament": "NT",
+      "slug": "ephesians",
+      "enName": "Ephesians",
+      "chapters": 6
+    },
+    {
+      "id": "PHP",
+      "name": "Philippiens",
+      "testament": "NT",
+      "slug": "philippians",
+      "enName": "Philippians",
+      "chapters": 4
+    },
+    {
+      "id": "COL",
+      "name": "Colossiens",
+      "testament": "NT",
+      "slug": "colossians",
+      "enName": "Colossians",
+      "chapters": 4
+    },
+    {
+      "id": "1TH",
+      "name": "1 Thessaloniciens",
+      "testament": "NT",
+      "slug": "1thessalonians",
+      "enName": "1 Thessalonians",
+      "chapters": 5
+    },
+    {
+      "id": "2TH",
+      "name": "2 Thessaloniciens",
+      "testament": "NT",
+      "slug": "2thessalonians",
+      "enName": "2 Thessalonians",
+      "chapters": 3
+    },
+    {
+      "id": "1TI",
+      "name": "1 Timothée",
+      "testament": "NT",
+      "slug": "1timothy",
+      "enName": "1 Timothy",
+      "chapters": 6
+    },
+    {
+      "id": "2TI",
+      "name": "2 Timothée",
+      "testament": "NT",
+      "slug": "2timothy",
+      "enName": "2 Timothy",
+      "chapters": 4
+    },
+    {
+      "id": "TIT",
+      "name": "Tite",
+      "testament": "NT",
+      "slug": "titus",
+      "enName": "Titus",
+      "chapters": 3
+    },
+    {
+      "id": "PHM",
+      "name": "Philémon",
+      "testament": "NT",
+      "slug": "philemon",
+      "enName": "Philemon",
+      "chapters": 1
+    },
+    {
+      "id": "HEB",
+      "name": "Hébreux",
+      "testament": "NT",
+      "slug": "hebrews",
+      "enName": "Hebrews",
+      "chapters": 13
+    },
+    {
+      "id": "JAS",
+      "name": "Jacques",
+      "testament": "NT",
+      "slug": "james",
+      "enName": "James",
+      "chapters": 5
+    },
+    {
+      "id": "1PE",
+      "name": "1 Pierre",
+      "testament": "NT",
+      "slug": "1peter",
+      "enName": "1 Peter",
+      "chapters": 5
+    },
+    {
+      "id": "2PE",
+      "name": "2 Pierre",
+      "testament": "NT",
+      "slug": "2peter",
+      "enName": "2 Peter",
+      "chapters": 3
+    },
+    {
+      "id": "1JN",
+      "name": "1 Jean",
+      "testament": "NT",
+      "slug": "1john",
+      "enName": "1 John",
+      "chapters": 5
+    },
+    {
+      "id": "2JN",
+      "name": "2 Jean",
+      "testament": "NT",
+      "slug": "2john",
+      "enName": "2 John",
+      "chapters": 1
+    },
+    {
+      "id": "3JN",
+      "name": "3 Jean",
+      "testament": "NT",
+      "slug": "3john",
+      "enName": "3 John",
+      "chapters": 1
+    },
+    {
+      "id": "JUD",
+      "name": "Jude",
+      "testament": "NT",
+      "slug": "jude",
+      "enName": "Jude",
+      "chapters": 1
+    },
+    {
+      "id": "REV",
+      "name": "Apocalypse",
+      "testament": "NT",
+      "slug": "revelation",
+      "enName": "Revelation",
+      "chapters": 22
+    }
+  ]
+}

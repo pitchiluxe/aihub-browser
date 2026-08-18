@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Bookmark, GraduationCap, Music, Sparkles, Search, Share2 } from 'lucide-react'
-import { getBookMeta, getBooks, getChapter, parseRef, refKey, formatRef, bookListOptions, COVER_OPTION, type Verse } from '../../services/bibleService'
+import { getBookMeta, getBooks, getChapter, parseRef, refKey, formatRef, bookListOptions, setTranslation, COVER_OPTION, TRANSLATIONS, type TranslationId, type Verse } from '../../services/bibleService'
 import VerseText from '../bible/VerseText'
 import BookSpread from '../bible/BookSpread'
 import PageLeaf from '../bible/PageLeaf'
@@ -263,7 +263,10 @@ export default function BiblePage() {
     Promise.all(wanted.map(async c => [c, await getChapter(bookId, c)] as const))
       .then(entries => { if (!cancelled) setPages({ book: bookId, chapters: Object.fromEntries(entries) }) })
     return () => { cancelled = true }
-  }, [bookId, spreadBase, lastChapter])
+    // `translation` is a dependency even though it is not read here: getChapter
+    // resolves it internally, so changing versions must re-fetch the spread or
+    // the reader keeps looking at the text they just switched away from.
+  }, [bookId, spreadBase, lastChapter, bibleSettings.translation])
 
   const canTurn = useCallback((dir: 'next' | 'prev') => {
     if (dir === 'prev') return spreadBase > 1
@@ -578,6 +581,20 @@ export default function BiblePage() {
       <div className="flex min-w-0 flex-1 flex-col p-8">
       <div className="mb-4 flex shrink-0 items-center gap-2">
         <h1 className="mr-2 text-2xl font-bold">{book?.name} {chapter}</h1>
+        <select
+          // Which translation the reader is in. Kept next to the book and
+          // chapter because it belongs to the same question — what am I
+          // looking at — and because the book names themselves change with it.
+          value={bibleSettings.translation}
+          onChange={e => setTranslation(e.target.value as TranslationId)}
+          disabled={!!turning}
+          title="Bible version"
+          className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-40"
+        >
+          {TRANSLATIONS.map(t => (
+            <option key={t.id} value={t.id}>{t.short} · {t.language}</option>
+          ))}
+        </select>
         <select
           value={bookId}
           onChange={e => {

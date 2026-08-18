@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import index from './index.json'
+import lsgIndex from './lsg/index.json'
 
 const DIR = __dirname
 const load = (slug: string) => JSON.parse(readFileSync(join(DIR, `${slug}.json`), 'utf-8'))
+const loadLsg = (slug: string) => JSON.parse(readFileSync(join(DIR, 'lsg', `${slug}.json`), 'utf-8'))
 
 // The WEB source text retains a small, well-known set of verse numbers as
 // empty placeholders — verses absent from the oldest manuscripts (e.g. the
@@ -58,5 +60,53 @@ describe('bible assets', () => {
     const john = load('john')
     const v16 = john.chapters[2].find((v: { v: number }) => v.v === 16)
     expect(v16.t).toContain('For God so loved the world')
+  })
+})
+
+// The French text is a second complete Bible under the same book ids, so a
+// reference saved in one version resolves in the other. That correspondence is
+// the thing worth testing: same ids, same order, same chapter counts, and no
+// English left in the French files.
+describe('bible assets — Louis Segond 1910', () => {
+  it('has all 66 books, matching the English canon id for id', () => {
+    expect(lsgIndex.books).toHaveLength(66)
+    expect(lsgIndex.books.map(b => b.id)).toEqual(index.books.map(b => b.id))
+    expect(lsgIndex.books.map(b => b.slug)).toEqual(index.books.map(b => b.slug))
+  })
+
+  it('agrees with the English text on every chapter count', () => {
+    const en = Object.fromEntries(index.books.map(b => [b.id, b.chapters]))
+    for (const b of lsgIndex.books) expect([b.id, b.chapters]).toEqual([b.id, en[b.id]])
+  })
+
+  it('names its books in French', () => {
+    const byId = Object.fromEntries(lsgIndex.books.map(b => [b.id, b.name]))
+    expect(byId.GEN).toBe('Genèse')
+    expect(byId.PSA).toBe('Psaumes')
+    expect(byId.JHN).toBe('Jean')
+    expect(byId.REV).toBe('Apocalypse')
+  })
+
+  it('every book has chapters and no empty verses', () => {
+    for (const b of lsgIndex.books) {
+      const book = loadLsg(b.slug)
+      expect(book.id).toBe(b.id)
+      expect(book.chapters.length).toBe(b.chapters)
+      for (const chapter of book.chapters) {
+        expect(chapter.length).toBeGreaterThan(0)
+        for (const verse of chapter) {
+          expect(typeof verse.v).toBe('number')
+          expect(verse.t.trim().length).toBeGreaterThan(0)
+        }
+      }
+    }
+  })
+
+  it('renders a known verse in Segond, not in English', () => {
+    const jean = loadLsg('john')
+    const v16 = jean.chapters[2].find((v: { v: number }) => v.v === 16)
+    expect(v16.t).toContain('Car Dieu a tant aimé le monde')
+    const genese = loadLsg('genesis')
+    expect(genese.chapters[0][0].t).toBe('Au commencement, Dieu créa les cieux et la terre.')
   })
 })

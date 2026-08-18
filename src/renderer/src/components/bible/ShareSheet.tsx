@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Copy, Check, Download, X } from 'lucide-react'
-import { formatRef } from '../../services/bibleService'
+import { formatRef, getTranslationMeta } from '../../services/bibleService'
 
 interface Props {
   verseRef: string
@@ -50,7 +50,7 @@ const TARGETS = [
 export default function ShareSheet({ verseRef, text, onClose }: Props) {
   const [copied, setCopied] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const payload = `"${text}"\n\n— ${formatRef(verseRef)} (WEB)`
+  const payload = `"${text}"\n\n— ${formatRef(verseRef)} (${getTranslationMeta().short})`
 
   // Escape dismisses; nothing here traps focus, so a Tab press can still
   // leave the modal at any time.

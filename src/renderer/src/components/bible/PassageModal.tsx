@@ -4,7 +4,7 @@ import {
   BookOpen, ChevronLeft, ChevronRight, ExternalLink,
   FlaskConical, Loader2, Maximize2, Minimize2, X,
 } from 'lucide-react'
-import { getBookMeta, getChapter, refKey, type Verse } from '../../services/bibleService'
+import { getBookMeta, getChapter, refKey, getTranslationMeta, type Verse } from '../../services/bibleService'
 import { useBibleSettings } from '../../services/bibleSettings'
 import VerseText from './VerseText'
 import VerseActions from './VerseActions'
@@ -183,7 +183,7 @@ export default function PassageModal({
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-bold" style={{ color: 'rgb(var(--ds-text-2))' }}>{heading}</div>
               <div className="text-[10.5px] opacity-45">
-                World English Bible
+                {getTranslationMeta().name}
                 {views.length > 1 && !offChapter && ` · passage ${index + 1} of ${views.length}`}
               </div>
             </div>

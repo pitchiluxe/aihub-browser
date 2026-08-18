@@ -20,7 +20,8 @@
     "postinstall": "electron-builder install-app-deps",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "build:bible:lsg": "node scripts/build-bible-lsg.mjs"
   },
   "dependencies": {
     "@types/d3-force": "^3.0.10",
