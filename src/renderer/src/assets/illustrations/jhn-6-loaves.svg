@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6b073"/><stop offset="1" stop-color="#fce3c2"/></linearGradient></defs>
+<rect width="640" height="400" rx="18" fill="#0b1020"/>
+<g clip-path="url(#rnd)"><rect width="640" height="400" fill="url(#sky)"/><path d="M0 318 Q 128 282 268.8 300 T 512 306 T 640 290 L 640 400 L0 400 Z" fill="#7cb765"/><ellipse cx="320" cy="300" rx="140" ry="40" fill="#a86f38" opacity="0.35"/>
+   <g transform="translate(270,280)">
+     <ellipse rx="34" ry="22" fill="#f6b073"/><ellipse cy="-16" rx="28" ry="18" fill="#e8b878"/>
+   </g>
+   <g transform="translate(380,292)">
+     <ellipse rx="40" ry="18" fill="#9fc3d8"/><path d="M36 0 L58 -14 L58 14 Z" fill="#9fc3d8"/>
+     <circle cx="-16" cy="-4" r="3.4" fill="#4a3b2a"/>
+   </g></g>
+<clipPath id="rnd"><rect width="640" height="400" rx="18"/></clipPath>
+</svg>

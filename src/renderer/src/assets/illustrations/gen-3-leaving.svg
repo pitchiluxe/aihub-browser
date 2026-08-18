@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0975f"/><stop offset="1" stop-color="#f7dcc0"/></linearGradient></defs>
+<rect width="640" height="400" rx="18" fill="#0b1020"/>
+<g clip-path="url(#rnd)"><rect width="640" height="400" fill="url(#sky)"/><circle cx="120" cy="140" r="50" fill="#ffcf5c" opacity="0.5"/><path d="M0 318 Q 128 282 268.8 300 T 512 306 T 640 290 L 640 400 L0 400 Z" fill="#b8804a"/><rect x="470" y="180" width="26" height="140" fill="#918878"/>
+   <rect x="560" y="180" width="26" height="140" fill="#918878"/>
+   <rect x="470" y="164" width="116" height="20" rx="6" fill="#b9b0a0"/><g transform="translate(300,320) scale(1.4,1.4)">
+  <ellipse cx="0" cy="42" rx="17" ry="5" fill="#000" opacity="0.12"/>
+  <path d="M-13 40 L-8 4 Q0 -2 8 4 L13 40 Z" fill="#c96f5a"/>
+  <circle cx="0" cy="-8" r="10" fill="#e8b58a"/>
+  <path d="M-10 -10 Q0 -22 10 -10 Q6 -18 0 -19 Q-6 -18 -10 -10 Z" fill="#4a3b2a" opacity="0.75"/>
+</g><g transform="translate(360,322) scale(1.4,1.4)">
+  <ellipse cx="0" cy="42" rx="17" ry="5" fill="#000" opacity="0.12"/>
+  <path d="M-13 40 L-8 4 Q0 -2 8 4 L13 40 Z" fill="#6f8fc9"/>
+  <circle cx="0" cy="-8" r="10" fill="#e8b58a"/>
+  <path d="M-10 -10 Q0 -22 10 -10 Q6 -18 0 -19 Q-6 -18 -10 -10 Z" fill="#4a3b2a" opacity="0.75"/>
+</g></g>
+<clipPath id="rnd"><rect width="640" height="400" rx="18"/></clipPath>
+</svg>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fc4e8"/><stop offset="1" stop-color="#d9edf7"/></linearGradient></defs>
+<rect width="640" height="400" rx="18" fill="#0b1020"/>
+<g clip-path="url(#rnd)"><rect width="640" height="400" fill="url(#sky)"/><path d="M0 280 Q 128 200 268.8 240 T 512 246 T 640 230 L 640 400 L0 400 Z" fill="#5a9247"/><path d="M0 304 Q 128 256 268.8 280 T 512 286 T 640 270 L 640 400 L0 400 Z" fill="#7cb765"/><path d="M250 400 Q300 300 290 240 Q330 300 390 400 Z" fill="#5aa9d6" opacity="0.9"/><g transform="translate(110,320) scale(1.3)">
+  <rect x="-5" y="-2" width="10" height="34" rx="4" fill="#8a5a35"/>
+  <circle cx="0" cy="-16" r="26" fill="#427a3d"/>
+  <circle cx="-13" cy="-8" r="18" fill="#5f9e56"/>
+  <circle cx="13" cy="-10" r="17" fill="#5f9e56"/>
+  <circle cx="2" cy="-26" r="16" fill="#5f9e56"/>
+</g><g transform="translate(520,330) scale(1.4)">
+  <rect x="-5" y="-2" width="10" height="34" rx="4" fill="#8a5a35"/>
+  <circle cx="0" cy="-16" r="26" fill="#427a3d"/>
+  <circle cx="-13" cy="-8" r="18" fill="#5f9e56"/>
+  <circle cx="13" cy="-10" r="17" fill="#5f9e56"/>
+  <circle cx="2" cy="-26" r="16" fill="#5f9e56"/>
+</g><g transform="translate(430,290) scale(0.9)">
+  <rect x="-5" y="-2" width="10" height="34" rx="4" fill="#8a5a35"/>
+  <circle cx="0" cy="-16" r="26" fill="#427a3d"/>
+  <circle cx="-13" cy="-8" r="18" fill="#5f9e56"/>
+  <circle cx="13" cy="-10" r="17" fill="#5f9e56"/>
+  <circle cx="2" cy="-26" r="16" fill="#5f9e56"/>
+</g><g transform="translate(200,300) scale(0.8)">
+  <rect x="-5" y="-2" width="10" height="34" rx="4" fill="#8a5a35"/>
+  <circle cx="0" cy="-16" r="26" fill="#427a3d"/>
+  <circle cx="-13" cy="-8" r="18" fill="#5f9e56"/>
+  <circle cx="13" cy="-10" r="17" fill="#5f9e56"/>
+  <circle cx="2" cy="-26" r="16" fill="#5f9e56"/>
+</g></g>
+<clipPath id="rnd"><rect width="640" height="400" rx="18"/></clipPath>
+</svg>

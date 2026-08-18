@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fb2d8"/><stop offset="1" stop-color="#e6f2f9"/></linearGradient></defs>
+<rect width="640" height="400" rx="18" fill="#0b1020"/>
+<g clip-path="url(#rnd)"><rect width="640" height="400" fill="url(#sky)"/><g fill="none" stroke-width="16" opacity="0.85">
+     <path d="M60 340 A260 260 0 0 1 580 340" stroke="#e05a4f"/>
+     <path d="M84 340 A236 236 0 0 1 556 340" stroke="#ef8f43"/>
+     <path d="M108 340 A212 212 0 0 1 532 340" stroke="#f2c744"/>
+     <path d="M132 340 A188 188 0 0 1 508 340" stroke="#63ab5c"/>
+     <path d="M156 340 A164 164 0 0 1 484 340" stroke="#4b83c4"/>
+     <path d="M180 340 A140 140 0 0 1 460 340" stroke="#7a5ea8"/>
+   </g><path d="M0 352 Q 128 328 268.8 340 T 512 346 T 640 330 L 640 400 L0 400 Z" fill="#7cb765"/></g>
+<clipPath id="rnd"><rect width="640" height="400" rx="18"/></clipPath>
+</svg>

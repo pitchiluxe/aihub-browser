@@ -1,31 +1,29 @@
 {
   "translation": "LSG-KIDS",
-  "name": "Louis Segond 1910",
-  "language": "fr",
   "books": [
     {
       "id": "GEN",
       "name": "Genèse",
       "testament": "OT",
       "slug": "genesis",
-      "enName": "Genesis",
-      "chapters": 10
+      "chapters": 11,
+      "enName": "Genesis"
     },
     {
       "id": "MAT",
       "name": "Matthieu",
       "testament": "NT",
       "slug": "matthew",
-      "enName": "Matthew",
-      "chapters": 16
+      "chapters": 8,
+      "enName": "Matthew"
     },
     {
       "id": "JHN",
       "name": "Jean",
       "testament": "NT",
       "slug": "john",
-      "enName": "John",
-      "chapters": 21
+      "chapters": 21,
+      "enName": "John"
     }
   ]
 }

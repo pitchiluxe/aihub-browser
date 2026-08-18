@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6b073"/><stop offset="1" stop-color="#fce3c2"/></linearGradient></defs>
+<rect width="640" height="400" rx="18" fill="#0b1020"/>
+<g clip-path="url(#rnd)"><rect width="640" height="400" fill="url(#sky)"/><path d="M0 318 Q 128 282 268.8 300 T 512 306 T 640 290 L 640 400 L0 400 Z" fill="#7cb765"/><rect x="150" y="250" width="90" height="54" rx="8" fill="#b9b0a0"/>
+   <rect x="400" y="250" width="90" height="54" rx="8" fill="#b9b0a0"/>
+   <path d="M175 250 q10 -30 20 -14 q10 -26 22 8 z" fill="#ffcf5c"/>
+   <path d="M430 246 q6 -14 12 -6 q6 -12 12 6 z" fill="#c96f5a" opacity="0.7"/></g>
+<clipPath id="rnd"><rect width="640" height="400" rx="18"/></clipPath>
+</svg>

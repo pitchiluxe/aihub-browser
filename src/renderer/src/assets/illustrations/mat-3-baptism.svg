@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bcd9ec"/><stop offset="1" stop-color="#eef7fc"/></linearGradient></defs>
+<rect width="640" height="400" rx="18" fill="#0b1020"/>
+<g clip-path="url(#rnd)"><rect width="640" height="400" fill="url(#sky)"/><g transform="translate(320,110)">
+     <ellipse rx="24" ry="14" fill="#fdfcf7"/><circle cx="20" cy="-8" r="9" fill="#fdfcf7"/>
+     <path d="M-4 -4 q-18 -18 -32 -7 q15 4 23 15 z" fill="#fdfcf7"/>
+   </g>
+   <rect y="250" width="640" height="150" fill="#5aa9d6"/>
+   <path d="M0 262 Q80 248 160 262 T320 262 T480 262 T640 262 L640 250 L0 250 Z" fill="#eaf6fb" opacity="0.6"/><g transform="translate(280,300) scale(1.5,1.5)">
+  <ellipse cx="0" cy="42" rx="17" ry="5" fill="#000" opacity="0.12"/>
+  <path d="M-13 40 L-8 4 Q0 -2 8 4 L13 40 Z" fill="#6f8fc9"/>
+  <circle cx="0" cy="-8" r="10" fill="#e8b58a"/>
+  <path d="M-10 -10 Q0 -22 10 -10 Q6 -18 0 -19 Q-6 -18 -10 -10 Z" fill="#4a3b2a" opacity="0.75"/>
+</g><g transform="translate(360,300) scale(-1.5,1.5)">
+  <ellipse cx="0" cy="42" rx="17" ry="5" fill="#000" opacity="0.12"/>
+  <path d="M-13 40 L-8 4 Q0 -2 8 4 L13 40 Z" fill="#fdfcf7"/>
+  <circle cx="0" cy="-8" r="10" fill="#e8b58a"/>
+  <path d="M-10 -10 Q0 -22 10 -10 Q6 -18 0 -19 Q-6 -18 -10 -10 Z" fill="#4a3b2a" opacity="0.75"/>
+</g></g>
+<clipPath id="rnd"><rect width="640" height="400" rx="18"/></clipPath>
+</svg>

@@ -1,219 +1,99 @@
-# Kids Bible Implementation Summary
+# Kids Bible — implementation notes
 
-## Overview
-Successfully implemented Kids Bible versions in English and French with illustration support and French language audio for the listen feature.
+Two illustrated children's editions, English and French, alongside the WEB and
+LSG texts. Verified by driving the built Electron app, not only by tests.
 
----
+## What shipped
 
-## Changes Made
+| | |
+|---|---|
+| Editions | `WEB-KIDS` (Kids Bible), `LSG-KIDS` (Bible Enfants) |
+| Books | Genesis 1–11, Matthew 1–8, John 1–21 |
+| Verses | 227 per language, in step verse for verse |
+| Illustrations | 28 SVGs, every one referenced by at least one verse |
 
-### 1. **French Listen Feature** ✅
-**Status**: Already Implemented  
-**Files Modified**: None (feature was already present)
+### Chapter numbering follows the canon
 
-The listen button already supports French audio when the LSG (Louis Segond 1910) version is selected:
-- `ListenButton.tsx` uses `getTranslationMeta().locale` which returns 'fr' for LSG
-- `verseSpeech.ts` `pickVoice()` function filters voices by language
-- French-language text is automatically read using French system voices
-- **How it works**: 
-  - User selects LSG version
-  - Click "Listen" button on any verse
-  - System automatically picks the best French voice available
-  - Falls back to eSpeak if no native French voice is available
+Kids chapter *N* retells canonical chapter *N*. Verse numbers are the
+retelling's own — one kids verse gathers several canonical ones — but the
+chapter is always real, which is what keeps a highlight, note or saved verse
+landing on the same story when the reader switches versions.
 
----
+The first attempt invented its own numbering, so kids "Genesis 5" was the
+making of the animals while the real Genesis 5 is a genealogy. Every mark the
+reader had made showed up on unrelated words.
 
-### 2. **Kids Bible Versions** ✅
-**Status**: Implemented  
-**Files Created/Modified**:
+### The editions are abridged
 
-#### New Translation Types Added:
-- `WEB-KIDS`: English Kids Bible
-- `LSG-KIDS`: French Bible Enfants
+Each index lists only the books that exist, with the retelling's real chapter
+count. The book picker therefore never offers a page that cannot open.
 
-#### Modified Files:
-- `src/renderer/src/services/bibleService.ts`:
-  - Extended `TranslationId` type to include `'WEB-KIDS' | 'LSG-KIDS'`
-  - Added `isKids?: boolean` flag to `TranslationMeta` interface
-  - Added two new translation entries to `TRANSLATIONS` array
-  - Extended `INDEXES` and `BY_ID` records for kids versions
-  - Updated `isTranslation()` type guard function
+### Reading aloud
 
-#### New Asset Files Created:
-- `src/renderer/src/assets/bible/web-kids/index.json` - English Kids Bible index
-- `src/renderer/src/assets/bible/lsg-kids/index.json` - French Kids Bible index
-- `src/renderer/src/assets/bible/web-kids/genesis.json` - Genesis (simplified English)
-- `src/renderer/src/assets/bible/lsg-kids/genesis.json` - Genèse (simplified French)
-- `src/renderer/src/assets/bible/web-kids/matthew.json` - Matthew (simplified English)
-- `src/renderer/src/assets/bible/lsg-kids/matthew.json` - Matthieu (simplified French)
-- `src/renderer/src/assets/bible/web-kids/john.json` - John (simplified English)
-- `src/renderer/src/assets/bible/lsg-kids/john.json` - Jean (simplified French)
+`ListenButton` passes `getTranslationMeta().locale` to speech synthesis, so the
+French editions are read in French. Verified at runtime by intercepting
+`speechSynthesis.speak`: `{ lang: "fr", text: "Genèse 1" }`.
 
-#### Scope — the kids editions are abridged:
-Each kids version contains **three books only** (Genesis, Matthew, John), retold
-rather than translated. Their `index.json` lists exactly those three, with the
-chapter count of the retelling — not the full 66-book canon, and not the adult
-chapter counts. The book picker therefore offers only books that open.
+**Caveat:** the voice itself comes from the operating system. On a machine with
+no French voice installed, Windows falls back to an English voice still reading
+French words. Installing a French voice in Windows Settings → Time & Language →
+Speech fixes it; nothing in the app can.
 
-#### Key Features:
-- Simplified, child-friendly language
-- Colorful, engaging narrative style
-- Verse illustrations included (img field with image IDs)
-- Both English and French versions have identical structure for easy comparison
+### Picture-book layout
 
----
+The kids editions render one verse per line with larger, more widely spaced
+type and illustrations as full-width plates (tap to enlarge). The ordinary
+versions keep the flowing prose column exactly as before.
 
-### 3. **Illustration Support** ✅
-**Status**: Implemented  
-**Files Created/Modified**:
+## Illustrations
 
-#### Extended Verse Type:
-- `src/renderer/src/services/bibleService.ts`:
-  - Added optional `img?: string` field to `Verse` type
-  - Allows verses to reference illustration IDs
+`src/renderer/src/assets/illustrations/*.svg`, resolved by an eager build-time
+glob in `VerseText.tsx`.
 
-#### Modified Components:
-- `src/renderer/src/components/bible/VerseText.tsx`:
-  - Added `expandedImage` state for modal expansion
-  - Added clickable illustration thumbnails next to verses
-  - Implemented modal for full-size illustration viewing
-  - Created `IllustrationImage` helper component that:
-    - Dynamically loads SVG illustrations from assets
-    - Falls back to placeholder SVG if illustration not found
-    - Shows illustration ID and "Coming soon" message for missing illustrations
+They contain **no text**, because one file serves both languages — the first
+set had English captions baked in, which were wrong in the French edition. A
+test enforces this.
 
-#### New Illustration Assets Created:
-- `src/renderer/src/assets/illustrations/genesis-1-1.svg` - Creation story opening
-- `src/renderer/src/assets/illustrations/genesis-1-3.svg` - Let there be light
-- `src/renderer/src/assets/illustrations/matthew-1-angel.svg` - Angel Gabriel visits Mary
+## Bugs found and fixed along the way
 
-#### Illustration Rendering:
-- **Thumbnails**: 80px × 60px max, displayed inline next to verse text
-- **Modal**: Full-screen expandable view with close button
-- **Responsive**: Click thumbnail to expand, click anywhere on overlay to close
-- **Placeholder**: Shows illustration ID for missing images with "Coming soon..." message
+All four of these compiled, typechecked and built cleanly. Only running the app
+or writing an asset-level test caught them.
 
----
+1. **`getBook`'s `import.meta.glob` did not list the kids directories**, so
+   every kids book threw `Missing asset` on open. The glob is static; a missing
+   directory fails only at runtime. This shipped in v1.51.0.
+2. **Indexes advertised all 66 books** against three real files.
+3. **Indexes carried the adult chapter counts**, offering empty chapters.
+4. **A version switch onto a book the new version lacks blanked the reader.**
+   `getChapter` threw, `Promise.all` rejected, `setPages` never ran, and
+   nothing appeared in the console. Now the reader falls back to a book the
+   version has, and each chapter fetch settles independently.
 
-## How to Use the Kids Bible
+## Tests
 
-### Accessing Kids Bible Versions:
-1. Open the Bible reader
-2. Look for version selector (typically shows "WEB", "LSG", etc.)
-3. Select "Kids Bible (English)" for WEB-KIDS
-4. Select "Bible Enfants (Français)" for LSG-KIDS
+`src/renderer/src/assets/bible/kids-assets.test.ts` guards the failure modes
+that are invisible to the compiler:
 
-### Listening in French:
-1. Open LSG version
-2. Click the "Listen" button on any verse
-3. System automatically selects French voice
-4. Text is read aloud in French
+- every indexed book has a file; every stated chapter count is real
+- no empty chapters or verses; verses numbered from 1 without gaps
+- every referenced illustration exists on disk
+- EN and FR carry the same books, chapters, verses and pictures
+- no chapter numbered beyond the canonical book
+- no text inside any illustration
+- no orphan illustrations
 
-### Viewing Illustrations:
-1. Open a verse with an illustration (Genesis, Matthew, John in Kids versions)
-2. Click the small illustration thumbnail next to the verse
-3. Click the image again or click the close button (X) to close the modal
+## Verification
 
----
+`npm run typecheck` clean · `npm test` 909 passing across 60 files ·
+`npm run build` clean.
 
-## File Structure
+In the running app: Genesis, the Noah sequence and John 19–20 all render with
+their plates (16 images on one spread, 0 broken); switching to a kids edition
+while on Psalms lands on Genesis with text instead of a blank spread.
 
-```
-src/renderer/src/
-├── assets/
-│   ├── bible/
-│   │   ├── web-kids/
-│   │   │   ├── index.json
-│   │   │   ├── genesis.json
-│   │   │   ├── matthew.json
-│   │   │   └── john.json
-│   │   ├── lsg-kids/
-│   │   │   ├── index.json
-│   │   │   ├── genesis.json
-│   │   │   ├── matthew.json
-│   │   │   └── john.json
-│   ├── illustrations/
-│   │   ├── genesis-1-1.svg
-│   │   ├── genesis-1-3.svg
-│   │   └── matthew-1-angel.svg
-│   └── ...
-├── components/
-│   └── bible/
-│       ├── VerseText.tsx (modified)
-│       └── ...
-├── services/
-│   └── bibleService.ts (modified)
-└── ...
-```
+## Not done yet
 
----
-
-## Build Status
-
-✅ **Verified for the v1.51.0 release**
-- `npm run typecheck`: clean
-- `npm test`: 892/892 tests across 59 files pass
-- `npm run build`: succeeds
-
-Four defects were found by adding tests for the kids versions and fixed before
-release. All four built and typechecked cleanly, so only the tests caught them:
-1. `TRANSLATIONS` assertion in `bibleService.test.ts` still expected two versions.
-2. The `import.meta.glob` in `getBook` did not include the kids directories, so
-   **every** kids book threw "Missing asset" on open.
-3. The kids indexes listed all 66 books while only three assets exist — 63 dead
-   entries in the book picker.
-4. The kids indexes carried the adult chapter counts (Genesis 50 vs the
-   retelling's 10), so the chapter picker offered empty chapters.
-
----
-
-## Future Enhancements
-
-1. **Add more Kids Bible books**:
-   - Luke, Mark (other Gospels)
-   - 1 Samuel (David & Goliath story)
-   - Jonah (classic kids story)
-   - Other Old Testament narratives
-
-2. **Create professional illustrations**:
-   - Replace placeholder SVGs with high-quality artwork
-   - Hire illustrator for children's Bible art
-   - Create consistent visual style
-
-3. **Interactive features**:
-   - Narrated audio for kids versions
-   - Animated illustrations
-   - Interactive Bible stories for children
-
-4. **Localization**:
-   - Add Spanish, German, Japanese kids versions
-   - Adapt illustrations for cultural preferences
-
-5. **Enhanced listen support**:
-   - Integration with professional TTS services (ElevenLabs, Azure Neural)
-   - Kids-friendly voice options
-   - Story sound effects and background music
-
----
-
-## Testing Checklist
-
-- [ ] Load WEB-KIDS version - verify Genesis, Matthew, John display correctly
-- [ ] Load LSG-KIDS version - verify French text displays
-- [ ] Click Listen button on LSG version - verify French audio (if system has French voice)
-- [ ] Click illustration thumbnails - verify modal opens
-- [ ] Click close button on modal - verify closes
-- [ ] Search for verses in kids versions
-- [ ] Highlight and note verses in kids versions
-- [ ] Check that adult versions still work unchanged
-
----
-
-## Implementation Notes
-
-- The French listen feature was already implemented - just needed to verify it works
-- Verse illustrations are optional (verses without `img` field still display normally)
-- Placeholder illustrations show for missing image assets
-- All changes are backward compatible
-- SVG illustrations load dynamically using Vite's glob import feature
-
+- Only three books. Luke, Jonah, Daniel and 1 Samuel are the obvious next ones
+  for children.
+- The retellings and the artwork are original work in this repository, not a
+  licensed children's translation or commissioned illustration.

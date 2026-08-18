@@ -246,6 +246,19 @@ export default function BiblePage() {
   const book = getBooks().find(b => b.id === bookId)
   const lastChapter = book?.chapters ?? 1
 
+  // Not every version carries every book — the kids editions are abridged. On
+  // switching to one while reading a book it does not have, `getChapter` below
+  // throws, `Promise.all` rejects, and the reader is left staring at a blank
+  // spread with nothing in the console to explain it. Land on a book the new
+  // version actually has instead.
+  useEffect(() => {
+    if (book || bookId === COVER_OPTION) return
+    const available = getBooks()
+    if (!available.length) return
+    setBookId(available[0].id)
+    setChapter(1)
+  }, [book, bookId, bibleSettings.translation])
+
   // The base of the currently settled (or settling) spread — see
   // `toSpreadBase`. Everything that positions the spread or the turning leaf
   // reads from this, not from `chapter` directly.
@@ -260,7 +273,12 @@ export default function BiblePage() {
     // shows what the turn will reveal — `base+3` forward and `base-2` back.
     const wanted = [spreadBase - 2, spreadBase - 1, spreadBase, spreadBase + 1, spreadBase + 2, spreadBase + 3]
       .filter(c => c >= 1 && c <= lastChapter)
-    Promise.all(wanted.map(async c => [c, await getChapter(bookId, c)] as const))
+    // One unreadable chapter must not blank the whole spread: settle each
+    // fetch on its own so a single rejection cannot take the others with it.
+    Promise.all(wanted.map(async c => {
+      try { return [c, await getChapter(bookId, c)] as const }
+      catch { return [c, [] as Verse[]] as const }
+    }))
       .then(entries => { if (!cancelled) setPages({ book: bookId, chapters: Object.fromEntries(entries) }) })
     return () => { cancelled = true }
     // `translation` is a dependency even though it is not read here: getChapter

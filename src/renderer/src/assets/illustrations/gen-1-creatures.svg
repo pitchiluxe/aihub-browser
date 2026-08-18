@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fc4e8"/><stop offset="1" stop-color="#d9edf7"/></linearGradient></defs>
+<rect width="640" height="400" rx="18" fill="#0b1020"/>
+<g clip-path="url(#rnd)"><rect width="640" height="400" fill="url(#sky)"/><path d="M90 80 q14 -12 28 0 q14 -12 28 0" stroke="#4a3b2a" stroke-width="3" fill="none" opacity="0.65"/>
+   <path d="M420 60 q14 -12 28 0 q14 -12 28 0" stroke="#4a3b2a" stroke-width="3" fill="none" opacity="0.65"/>
+   <rect y="200" width="640" height="200" fill="#5aa9d6"/>
+   <path d="M0 210 Q80 196 160 210 T320 210 T480 210 T640 210 L640 200 L0 200 Z" fill="#eaf6fb" opacity="0.5"/>
+   <g transform="translate(180,300)"><ellipse rx="42" ry="22" fill="#f6b073"/>
+     <path d="M38 0 L62 -18 L62 18 Z" fill="#f6b073"/><circle cx="-18" cy="-6" r="4" fill="#4a3b2a"/></g>
+   <g transform="translate(430,340) scale(0.7)"><ellipse rx="42" ry="22" fill="#d8a04f"/>
+     <path d="M38 0 L62 -18 L62 18 Z" fill="#d8a04f"/><circle cx="-18" cy="-6" r="4" fill="#4a3b2a"/></g></g>
+<clipPath id="rnd"><rect width="640" height="400" rx="18"/></clipPath>
+</svg>

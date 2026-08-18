@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f4d70"/><stop offset="1" stop-color="#7d8fae"/></linearGradient></defs>
+<rect width="640" height="400" rx="18" fill="#0b1020"/>
+<g clip-path="url(#rnd)"><rect width="640" height="400" fill="url(#sky)"/><g opacity="0.5" stroke="#eaf6fb" stroke-width="3" stroke-linecap="round">
+     <path d="M80 30 L64 96"/><path d="M240 16 L224 84"/><path d="M420 34 L404 100"/><path d="M540 12 L524 80"/>
+   </g>
+   <rect y="240" width="640" height="160" fill="#3f86b5"/>
+   <path d="M0 250 Q70 210 150 250 T300 250 T450 250 T640 250 L640 244 L0 244 Z" fill="#5aa9d6"/><g transform="translate(320,250) scale(0.85)">
+  <path d="M-46 0 L46 0 L32 22 L-32 22 Z" fill="#9b6438"/>
+  <path d="M-46 0 L46 0 L44 5 L-44 5 Z" fill="#7a4c29"/>
+  <rect x="-2" y="-46" width="4" height="46" fill="#7a4c29"/>
+  <path d="M2 -44 L34 -8 L2 -8 Z" fill="#fdfcf7" opacity="0.95"/>
+</g></g>
+<clipPath id="rnd"><rect width="640" height="400" rx="18"/></clipPath>
+</svg>

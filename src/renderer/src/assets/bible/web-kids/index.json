@@ -6,21 +6,24 @@
       "name": "Genesis",
       "testament": "OT",
       "slug": "genesis",
-      "chapters": 10
+      "chapters": 11,
+      "enName": "Genesis"
     },
     {
       "id": "MAT",
       "name": "Matthew",
       "testament": "NT",
       "slug": "matthew",
-      "chapters": 16
+      "chapters": 8,
+      "enName": "Matthew"
     },
     {
       "id": "JHN",
       "name": "John",
       "testament": "NT",
       "slug": "john",
-      "chapters": 21
+      "chapters": 21,
+      "enName": "John"
     }
   ]
 }

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c8ddec"/><stop offset="1" stop-color="#eef5fa"/></linearGradient></defs>
+<rect width="640" height="400" rx="18" fill="#0b1020"/>
+<g clip-path="url(#rnd)"><rect width="640" height="400" fill="url(#sky)"/><path d="M0 354 Q 128 326 268.8 340 T 512 346 T 640 330 L 640 400 L0 400 Z" fill="#c9a06a"/><g transform="translate(320,340)">
+     <rect x="-96" y="-60" width="192" height="60" fill="#a86f38"/>
+     <rect x="-78" y="-116" width="156" height="56" fill="#c98f4e"/>
+     <rect x="-60" y="-168" width="120" height="52" fill="#a86f38"/>
+     <rect x="-42" y="-214" width="84" height="46" fill="#c98f4e"/>
+     <rect x="-26" y="-252" width="52" height="38" fill="#a86f38"/>
+   </g></g>
+<clipPath id="rnd"><rect width="640" height="400" rx="18"/></clipPath>
+</svg>
