@@ -1,15 +1,17 @@
 import webIndex from '../assets/bible/index.json'
 import lsgIndex from '../assets/bible/lsg/index.json'
+import webKidsIndex from '../assets/bible/web-kids/index.json'
+import lsgKidsIndex from '../assets/bible/lsg-kids/index.json'
 import { loadBibleSettings, saveBibleSettings, onBibleSettingsChange } from './bibleSettings'
 
-export type Verse = { v: number; t: string }
+export type Verse = { v: number; t: string; img?: string }
 /** English name of the same book, when the translation is not in English. */
 export type BookMeta = {
   id: string; name: string; testament: 'OT' | 'NT'; slug: string; chapters: number; enName?: string
 }
 export type Book = { id: string; name: string; chapters: Verse[][] }
 
-export type TranslationId = 'WEB' | 'LSG'
+export type TranslationId = 'WEB' | 'LSG' | 'WEB-KIDS' | 'LSG-KIDS'
 
 export interface TranslationMeta {
   id: TranslationId
@@ -20,11 +22,15 @@ export interface TranslationMeta {
   language: string
   /** BCP 47, for `lang` attributes and speech synthesis. */
   locale: string
+  /** Whether this is a kids-friendly version. */
+  isKids?: boolean
 }
 
 export const TRANSLATIONS: TranslationMeta[] = [
   { id: 'WEB', name: 'World English Bible', short: 'WEB', language: 'English',  locale: 'en' },
   { id: 'LSG', name: 'Louis Segond 1910',   short: 'LSG', language: 'Français', locale: 'fr' },
+  { id: 'WEB-KIDS', name: 'Kids Bible (English)', short: 'WEB-K', language: 'English', locale: 'en', isKids: true },
+  { id: 'LSG-KIDS', name: 'Bible Enfants (Français)', short: 'LSG-K', language: 'Français', locale: 'fr', isKids: true },
 ]
 
 // Both indexes are a few KB of book names and chapter counts, so they are
@@ -32,15 +38,19 @@ export const TRANSLATIONS: TranslationMeta[] = [
 const INDEXES: Record<TranslationId, { books: BookMeta[]; dir: string }> = {
   WEB: { books: webIndex.books as BookMeta[], dir: '' },
   LSG: { books: lsgIndex.books as BookMeta[], dir: 'lsg/' },
+  'WEB-KIDS': { books: webKidsIndex.books as BookMeta[], dir: 'web-kids/' },
+  'LSG-KIDS': { books: lsgKidsIndex.books as BookMeta[], dir: 'lsg-kids/' },
 }
 
 const BY_ID: Record<TranslationId, Map<string, BookMeta>> = {
   WEB: new Map(INDEXES.WEB.books.map(b => [b.id, b])),
   LSG: new Map(INDEXES.LSG.books.map(b => [b.id, b])),
+  'WEB-KIDS': new Map(INDEXES['WEB-KIDS'].books.map(b => [b.id, b])),
+  'LSG-KIDS': new Map(INDEXES['LSG-KIDS'].books.map(b => [b.id, b])),
 }
 
 const isTranslation = (v: unknown): v is TranslationId =>
-  v === 'WEB' || v === 'LSG'
+  v === 'WEB' || v === 'LSG' || v === 'WEB-KIDS' || v === 'LSG-KIDS'
 
 // ── Which version is open ──────────────────────────────────────────────────
 //

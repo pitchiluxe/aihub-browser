@@ -1,0 +1,41 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Night sky -->
+  <rect width="400" height="300" fill="#001a4d"/>
+
+  <!-- Stars -->
+  <circle cx="50" cy="30" r="2" fill="white"/>
+  <circle cx="120" cy="20" r="2" fill="white"/>
+  <circle cx="200" cy="15" r="2" fill="white"/>
+  <circle cx="300" cy="25" r="2" fill="white"/>
+  <circle cx="350" cy="40" r="2" fill="white"/>
+  <circle cx="100" cy="80" r="1.5" fill="white"/>
+  <circle cx="250" cy="70" r="1.5" fill="white"/>
+
+  <!-- Angel glow -->
+  <defs>
+    <radialGradient id="angelGlow" cx="50%" cy="30%">
+      <stop offset="0%" style="stop-color:#ffff99;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#001a4d;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  <circle cx="200" cy="80" r="90" fill="url(#angelGlow)"/>
+
+  <!-- Angel figure (simple) -->
+  <!-- Head -->
+  <circle cx="200" cy="60" r="15" fill="#f4a460"/>
+  <!-- Body -->
+  <ellipse cx="200" cy="90" rx="12" ry="20" fill="#fffacd"/>
+  <!-- Wings -->
+  <ellipse cx="185" cy="85" rx="8" ry="25" fill="#fff8dc" opacity="0.9"/>
+  <ellipse cx="215" cy="85" rx="8" ry="25" fill="#fff8dc" opacity="0.9"/>
+  <!-- Halo -->
+  <circle cx="200" cy="45" r="20" fill="none" stroke="#ffff99" stroke-width="2"/>
+
+  <!-- Text -->
+  <text x="200" y="250" text-anchor="middle" font-family="serif" font-size="18" font-weight="bold" fill="#fff9e6">
+    The Angel Gabriel
+  </text>
+  <text x="200" y="275" text-anchor="middle" font-family="serif" font-size="14" fill="#ffe4b5">
+    brings good news to Mary
+  </text>
+</svg>
