@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  getBooks, getChapter, refKey, parseRef, formatRef, getBookMeta, bookListOptions,
-  getTranslation, TRANSLATIONS, COVER_OPTION,
+  getBook, getBooks, getChapter, refKey, parseRef, formatRef, getBookMeta, bookListOptions,
+  getTranslation, getTranslationMeta, TRANSLATIONS, COVER_OPTION,
 } from './bibleService'
 
 describe('bibleService references', () => {
@@ -45,8 +45,35 @@ describe('bibleService data', () => {
 // specified, and a test that mutated it would leak into whatever ran next.
 describe('bibleService translations', () => {
   it('offers English and French, defaulting to English', () => {
-    expect(TRANSLATIONS.map(t => t.id)).toEqual(['WEB', 'LSG'])
+    expect(TRANSLATIONS.map(t => t.id)).toEqual(['WEB', 'LSG', 'WEB-KIDS', 'LSG-KIDS'])
     expect(getTranslation()).toBe('WEB')
+  })
+
+  it('marks the kids versions, and only those, as kids editions', () => {
+    // The reader keys its child-friendly presentation off this flag, so a
+    // version quietly losing it would silently downgrade the experience.
+    expect(TRANSLATIONS.filter(t => t.isKids).map(t => t.id)).toEqual(['WEB-KIDS', 'LSG-KIDS'])
+  })
+
+  it('reads the kids versions in the language of the edition', () => {
+    // What the Listen button hands to speech synthesis. An English voice
+    // reading French is unintelligible, so this is load-bearing.
+    expect(getTranslationMeta('WEB-KIDS').locale).toBe('en')
+    expect(getTranslationMeta('LSG-KIDS').locale).toBe('fr')
+    expect(getTranslationMeta('LSG').locale).toBe('fr')
+  })
+
+  it('only lists kids books that actually have text behind them', async () => {
+    // The kids editions are abridged: the index must not offer a book whose
+    // asset is missing, because opening it throws rather than showing a page.
+    for (const id of ['WEB-KIDS', 'LSG-KIDS'] as const) {
+      const books = getBooks(id)
+      expect(books.length).toBeGreaterThan(0)
+      for (const b of books) {
+        const chapters = (await getBook(b.id, id)).chapters
+        expect(chapters.length).toBe(b.chapters)
+      }
+    }
   })
 
   it('loads the French text under the same book ids', async () => {

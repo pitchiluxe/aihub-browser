@@ -49,6 +49,12 @@ The listen button already supports French audio when the LSG (Louis Segond 1910)
 - `src/renderer/src/assets/bible/web-kids/john.json` - John (simplified English)
 - `src/renderer/src/assets/bible/lsg-kids/john.json` - Jean (simplified French)
 
+#### Scope — the kids editions are abridged:
+Each kids version contains **three books only** (Genesis, Matthew, John), retold
+rather than translated. Their `index.json` lists exactly those three, with the
+chapter count of the retelling — not the full 66-book canon, and not the adult
+chapter counts. The book picker therefore offers only books that open.
+
 #### Key Features:
 - Simplified, child-friendly language
 - Colorful, engaging narrative style
@@ -126,10 +132,10 @@ src/renderer/src/
 │   │   │   ├── genesis.json
 │   │   │   ├── matthew.json
 │   │   │   └── john.json
-│   │   └── illustrations/
-│   │       ├── genesis-1-1.svg
-│   │       ├── genesis-1-3.svg
-│   │       └── matthew-1-angel.svg
+│   ├── illustrations/
+│   │   ├── genesis-1-1.svg
+│   │   ├── genesis-1-3.svg
+│   │   └── matthew-1-angel.svg
 │   └── ...
 ├── components/
 │   └── bible/
@@ -144,11 +150,20 @@ src/renderer/src/
 
 ## Build Status
 
-✅ **Build Successful**
-- TypeScript compilation: OK
-- All new translations registered
-- Illustration assets bundled
-- No breaking changes to existing functionality
+✅ **Verified for the v1.51.0 release**
+- `npm run typecheck`: clean
+- `npm test`: 892/892 tests across 59 files pass
+- `npm run build`: succeeds
+
+Four defects were found by adding tests for the kids versions and fixed before
+release. All four built and typechecked cleanly, so only the tests caught them:
+1. `TRANSLATIONS` assertion in `bibleService.test.ts` still expected two versions.
+2. The `import.meta.glob` in `getBook` did not include the kids directories, so
+   **every** kids book threw "Missing asset" on open.
+3. The kids indexes listed all 66 books while only three assets exist — 63 dead
+   entries in the book picker.
+4. The kids indexes carried the adult chapter counts (Genesis 50 vs the
+   retelling's 10), so the chapter picker offered empty chapters.
 
 ---
 

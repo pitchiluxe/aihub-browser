@@ -146,7 +146,16 @@ export async function getBook(id: string, translation: TranslationId = active): 
 
   // Vite resolves these globs at build time, so every book of every version is
   // a separate lazily fetched chunk rather than one 10MB import.
-  const modules = import.meta.glob(['../assets/bible/*.json', '../assets/bible/lsg/*.json'])
+  //
+  // Every version's directory must appear here. The glob is static — a version
+  // whose directory is missing from it compiles and builds perfectly happily,
+  // then throws "Missing asset" on the first book the reader opens.
+  const modules = import.meta.glob([
+    '../assets/bible/*.json',
+    '../assets/bible/lsg/*.json',
+    '../assets/bible/web-kids/*.json',
+    '../assets/bible/lsg-kids/*.json',
+  ])
   const loader = modules[`../assets/bible/${INDEXES[translation].dir}${meta.slug}.json`]
   if (!loader) throw new Error(`Missing asset for ${id} (${translation})`)
 
