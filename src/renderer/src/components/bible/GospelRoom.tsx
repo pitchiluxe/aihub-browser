@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  ChevronRight, Clock, ExternalLink, Loader2, Music, Play, Search,
-  Shuffle, WifiOff, X,
+  ArrowLeft, BookOpen, Bookmark, ChevronRight, Clock, ExternalLink, GraduationCap, Loader2,
+  Menu as MenuIcon, Music, Play, Search, Share2, Shuffle, Sparkles, WifiOff, X,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
@@ -61,11 +61,37 @@ function shuffleSeeded<T>(items: T[], seed: number): T[] {
   return out
 }
 
-interface Props { open: boolean; onClose: () => void }
+/** Everywhere the reader can go from inside the room. */
+export type GospelDestination = 'reader' | 'search' | 'saved' | 'graph' | 'study' | 'ask'
 
-export default function GospelRoom({ open, onClose }: Props) {
+const DESTINATIONS: { id: GospelDestination; label: string; icon: React.ReactNode }[] = [
+  { id: 'reader', label: 'Back to the reading', icon: <BookOpen size={14} /> },
+  { id: 'search', label: 'Search the Bible',    icon: <Search size={14} /> },
+  { id: 'saved',  label: 'Saved verses',        icon: <Bookmark size={14} /> },
+  { id: 'graph',  label: 'Verse constellation', icon: <Share2 size={14} /> },
+  { id: 'study',  label: 'Bible Study',         icon: <GraduationCap size={14} /> },
+  { id: 'ask',    label: 'Ask about a verse',   icon: <Sparkles size={14} /> },
+]
+
+interface Props {
+  open: boolean
+  onClose: () => void
+  /**
+   * Leave the room for somewhere in particular. Without it the room still
+   * closes cleanly — the menu is simply not offered.
+   */
+  onNavigate?: (destination: GospelDestination) => void
+}
+
+export default function GospelRoom({ open, onClose, onNavigate }: Props) {
   const addTab = useBrowserStore(s => s.addTab)
   const [shelf, setShelf]       = useState(0)
+  // The way out. The room is a full-screen overlay over the reader, and the
+  // listing is long enough to scroll the header off the top — which left the
+  // only exit somewhere above the fold. The header is now pinned and carries
+  // both a plain "Bible" button and this menu.
+  const [menuOpen, setMenuOpen]  = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const [search, setSearch]     = useState('')
   const [videos, setVideos]     = useState<GospelVideo[]>([])
   const [loading, setLoading]   = useState(false)
@@ -122,13 +148,37 @@ export default function GospelRoom({ open, onClose }: Props) {
 
   useEffect(() => { if (open) load(SHELVES[shelf].query) }, [open, shelf, nonce, load])
 
-  // Escape closes it, like every other overlay in the reader.
+  // Escape closes it, like every other overlay in the reader — but an open
+  // menu is what it dismisses first, so the key never skips a layer.
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (menuOpen) setMenuOpen(false)
+      else onClose()
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open, onClose, menuOpen])
+
+  // Clicking anywhere else puts the menu away.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [menuOpen])
+
+  // A room that is closed has no menu open in it.
+  useEffect(() => { if (!open) setMenuOpen(false) }, [open])
+
+  const leaveTo = useCallback((destination: GospelDestination) => {
+    setMenuOpen(false)
+    if (onNavigate) onNavigate(destination)
+    else onClose()
+  }, [onNavigate, onClose])
 
   // Nothing should keep singing behind a closed door.
   useEffect(() => { if (!open) setPlaying(null) }, [open])
@@ -164,8 +214,19 @@ export default function GospelRoom({ open, onClose }: Props) {
       style={{ background: 'rgba(6,4,9,0.94)', backdropFilter: 'blur(14px)' }}>
     <div className="mx-auto w-full max-w-6xl px-6 py-7 pb-10">
 
-      {/* ── The marquee ── */}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
+      {/* ── The marquee ──
+          Pinned to the top of the overlay: the listing is three columns of
+          thumbnails deep, and a way out that scrolls off the screen is not a
+          way out. The negative margins let the bar span the page gutters so
+          the cards pass underneath it rather than beside it. */}
+      <div className="sticky top-0 z-20 -mx-6 -mt-7 mb-5 flex flex-wrap items-center gap-3 px-6 pb-3 pt-7"
+        style={{ background: 'rgba(6,4,9,0.97)', backdropFilter: 'blur(14px)', borderBottom: '1px solid var(--ds-border-sm)' }}>
+        <button onClick={() => leaveTo('reader')}
+          title="Back to the Bible"
+          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-bold transition-all"
+          style={{ background: 'rgba(207,111,126,0.18)', border: '1px solid rgba(207,111,126,0.40)', color: '#f0a5b0' }}>
+          <ArrowLeft size={14} /> Bible
+        </button>
         <div className="flex h-10 w-10 items-center justify-center rounded-xl"
           style={{ background: 'linear-gradient(135deg, rgba(207,111,126,0.30), rgba(230,200,110,0.18))', border: '1px solid rgba(207,111,126,0.35)' }}>
           <Music size={18} style={{ color: '#f0a5b0' }} />
@@ -184,6 +245,42 @@ export default function GospelRoom({ open, onClose }: Props) {
             style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
             {loading ? <Loader2 size={13} className="animate-spin" /> : <Shuffle size={13} />} Shuffle
           </button>
+
+          {onNavigate && (
+            <div className="relative" ref={menuRef}>
+              <button onClick={() => setMenuOpen(o => !o)}
+                title="Go somewhere else in the Bible"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all"
+                style={menuOpen
+                  ? { background: 'rgba(207,111,126,0.20)', border: '1px solid rgba(207,111,126,0.42)', color: '#f0a5b0' }
+                  : { background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
+                <MenuIcon size={13} /> Go to
+              </button>
+              <AnimatePresence>
+                {menuOpen && (
+                  <motion.div
+                    role="menu"
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.14 }}
+                    className="absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-xl p-1"
+                    style={{ background: 'rgba(12,9,17,0.98)', border: '1px solid var(--ds-border-sm)', boxShadow: '0 24px 60px rgba(0,0,0,0.55)' }}>
+                    {DESTINATIONS.map(d => (
+                      <button key={d.id} role="menuitem" onClick={() => leaveTo(d.id)}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium transition-colors hover:bg-white/[0.07]"
+                        style={{ color: 'rgb(var(--ds-text-3))' }}>
+                        <span style={{ color: '#f0a5b0' }}>{d.icon}</span> {d.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
           <button onClick={onClose} title="Back to the Bible"
             className="flex h-8 w-8 items-center justify-center rounded-lg"
             style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)' }}>

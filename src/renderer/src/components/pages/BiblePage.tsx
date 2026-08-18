@@ -761,7 +761,21 @@ export default function BiblePage() {
 
       <VerseSearch open={searchOpen} onClose={() => setSearchOpen(false)} onGoto={gotoRef} />
 
-      <GospelRoom open={gospelOpen} onClose={() => setGospelOpen(false)} />
+      {/* The room is a full-screen overlay, so every way out of it goes through
+          here: it closes first, then whatever the reader asked for opens on the
+          spread they left. */}
+      <GospelRoom
+        open={gospelOpen}
+        onClose={() => setGospelOpen(false)}
+        onNavigate={dest => {
+          setGospelOpen(false)
+          if (dest === 'search') setSearchOpen(true)
+          else if (dest === 'saved') setSavedOpen(true)
+          else if (dest === 'graph') setGraphOpen(true)
+          else if (dest === 'ask') setAiOpen(true)
+          else if (dest === 'study') useBrowserStore.getState().focusOrOpenPage('aihub://study', 'study')
+        }}
+      />
 
       <VerseGraph
         open={graphOpen}
