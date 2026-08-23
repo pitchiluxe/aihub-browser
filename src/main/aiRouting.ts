@@ -39,9 +39,41 @@ export type FallbackReason =
   | 'openrouter_failed'
 
 /** Why OpenRouter refused — each one needs a different action from the user. */
-export type OpenRouterFailureKind = 'credits' | 'rate_limited' | 'unavailable' | 'error'
+export type OpenRouterFailureKind = 'credits' | 'rate_limited' | 'restricted' | 'unavailable' | 'error'
 
 export interface OpenRouterFailure { kind: OpenRouterFailureKind; message?: string }
+
+/** How many candidates each per-model refusal blocked, and what OpenRouter
+ *  said the first time it gave that refusal. */
+export interface OpenRouterSkipCounts {
+  credits: number
+  rateLimited: number
+  restricted: number
+  creditsDetail?: string
+  rateDetail?: string
+  restrictedDetail?: string
+}
+
+/**
+ * Turn a chain's tally of per-model refusals into the one cause to report.
+ *
+ * Whichever refusal blocked the most candidates is the one the user has to act
+ * on: a run of ten free models can come back as eight 429s, one 402 and one
+ * 403, and reporting any of the singletons sends the user to fix something
+ * that was never the obstacle.
+ *
+ * Ties resolve to rate limiting first — it is the transient cause and costs
+ * the user nothing but time — then to restriction, then to credits. Credits
+ * goes last on purpose: telling someone to buy credits they already have, or
+ * do not need, is the most expensive way to be wrong.
+ */
+export function summarizeOpenRouterSkips(s: OpenRouterSkipCounts): OpenRouterFailure {
+  const max = Math.max(s.credits, s.rateLimited, s.restricted)
+  if (max === 0) return { kind: 'unavailable' }
+  if (s.rateLimited === max) return { kind: 'rate_limited', message: s.rateDetail || undefined }
+  if (s.restricted  === max) return { kind: 'restricted',   message: s.restrictedDetail || undefined }
+  return { kind: 'credits', message: s.creditsDetail || undefined }
+}
 
 export interface OllamaHealth {
   available: boolean
@@ -110,6 +142,11 @@ function openRouterMessage(f: OpenRouterFailure): string {
       return `OpenRouter could not process the request because the selected model requires available credits or the account has reached its applicable limits.${said}\n\nTry selecting an OpenRouter free model (Settings → AI → Model Filter → Free), or use "OpenRouter Free Auto".`
     case 'rate_limited':
       return `OpenRouter rate-limited the request (HTTP 429). Free models share a limited daily pool per account.${said}\n\nWait for the limit to reset, or pick a model that isn't rate-limited.`
+    case 'restricted':
+      // OpenRouter gates some free models to applications it has approved.
+      // Nothing the user buys or waits for changes it — the only fix is a
+      // different model, so say that instead of quoting a billing hint.
+      return `Every OpenRouter model tried is restricted to approved applications and will not serve this app.${said}\n\nPick a different model in Settings → AI — "OpenRouter Free Auto" avoids the gated ones.`
     case 'unavailable':
       return `The selected OpenRouter model is unavailable${f.message ? ` (${f.message})` : ''}. Pick another model in Settings → AI.`
     default:

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { routeGenerate, type RoutingSettings, type RouterDeps, type OllamaHealth } from './aiRouting'
+import { routeGenerate, summarizeOpenRouterSkips, type RoutingSettings, type RouterDeps, type OllamaHealth } from './aiRouting'
 
 const DEFAULTS: RoutingSettings = {
   primaryProvider: 'ollama',
@@ -328,5 +328,38 @@ describe('routing metadata', () => {
       fallbackReason: 'ollama_unavailable',
     })
     expect(r.ok && r.notice).toMatch(/fallback/i)
+  })
+})
+
+describe('summarizeOpenRouterSkips', () => {
+  const none = { credits: 0, rateLimited: 0, restricted: 0 }
+
+  it('reports unavailable when nothing was actually refused', () => {
+    expect(summarizeOpenRouterSkips(none)).toEqual({ kind: 'unavailable' })
+  })
+
+  // The real shape of a bad run, measured on a live account: a mix, where the
+  // majority is the thing the user has to act on.
+  it('reports whichever refusal blocked the most candidates', () => {
+    expect(summarizeOpenRouterSkips({ ...none, rateLimited: 8, credits: 1, restricted: 1 }).kind)
+      .toBe('rate_limited')
+    expect(summarizeOpenRouterSkips({ ...none, restricted: 6, credits: 2 }).kind)
+      .toBe('restricted')
+    expect(summarizeOpenRouterSkips({ ...none, credits: 5, rateLimited: 1 }).kind)
+      .toBe('credits')
+  })
+
+  it('breaks ties toward the cheapest thing to be wrong about', () => {
+    expect(summarizeOpenRouterSkips({ ...none, rateLimited: 3, credits: 3 }).kind).toBe('rate_limited')
+    expect(summarizeOpenRouterSkips({ ...none, restricted: 3, credits: 3 }).kind).toBe('restricted')
+  })
+
+  it('quotes the detail belonging to the reported kind, not another kind', () => {
+    const out = summarizeOpenRouterSkips({
+      credits: 1, rateLimited: 0, restricted: 4,
+      creditsDetail: 'this account never purchased credits',
+      restrictedDetail: 'only available on agentic harnesses',
+    })
+    expect(out).toEqual({ kind: 'restricted', message: 'only available on agentic harnesses' })
   })
 })

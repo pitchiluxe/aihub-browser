@@ -10,12 +10,16 @@ import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
 import { initAutoUpdater } from './updater'
-import { pickAgentModel, orderFreeModels } from './modelRouting'
+import { pickAgentModel, orderFreeModels, suggestFasterModel } from './modelRouting'
 import {
   normalizeModels, filterModels, modelExists as catalogHasModel,
+  classifyOpenRouterStatus,
   OPENROUTER_FREE_AUTO, type CatalogModel, type ModelFilter,
 } from './openRouterCatalog'
-import { routeGenerate, type RoutingSettings, type OpenRouterFailure } from './aiRouting'
+import {
+  routeGenerate, summarizeOpenRouterSkips,
+  type RoutingSettings, type OpenRouterFailure,
+} from './aiRouting'
 import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
 import { createSessionManager, type SessionTab } from './sessions'
 import axios from 'axios'
@@ -439,7 +443,10 @@ function ollamaChatStream(
       req.destroy()
       reject(new Error(streamStarted
         ? 'timeout — Ollama stopped responding mid-generation'
-        : `timeout — Ollama took over ${Math.round(firstTokenTimeoutMs / 1000)}s to start replying (the model is still loading or the prompt is too large for this machine). Try a smaller model in Settings → AI.`))
+        // No advice here — the caller knows what is installed and appends a
+        // named model. "Try a smaller model" is not an instruction when the
+        // user has eight of them.
+        : `timeout — Ollama took over ${Math.round(firstTokenTimeoutMs / 1000)}s to start replying. Ollama is running; the model just cannot process a prompt this size here in time. Without a usable GPU it is prompt processing, not generation, that runs out of budget — the model produces nothing at all rather than answering slowly.`))
     })
     req.write(body)
     req.end()
@@ -3993,7 +4000,10 @@ function stripThinkTags(s: string): string {
 // happened to come back first, so a run headlined "rate-limited" could quote a
 // 402's "this account never purchased credits" — a quote that contradicts its
 // own headline is worse than no quote at all.
-const orSkip = { credits: 0, rateLimited: 0, creditsDetail: '', rateDetail: '' }
+const orSkip = {
+  credits: 0, rateLimited: 0, restricted: 0,
+  creditsDetail: '', rateDetail: '', restrictedDetail: '',
+}
 
 /** Pull `error.message` out of an OpenRouter error body, if it has one. */
 function orErrorDetail(body: string): string {
@@ -4027,17 +4037,26 @@ async function openRouterChat(
       const raw = choice?.message?.content || ''
       return stripThinkTags(raw) || null
     }
-    // 404 = model not found on this account, 429 = rate-limited,
-    // 402 = this model needs credits the account doesn't have — all three are
-    // per-model problems, so try the next candidate (a free model may work)
-    // instead of failing the whole request.
-    if (status === 402) { orSkip.credits++;     orSkip.creditsDetail ||= orErrorDetail(body); return null }
-    if (status === 429) { orSkip.rateLimited++; orSkip.rateDetail    ||= orErrorDetail(body); return null }
-    if (status === 404) return null
+    // Per-model refusals (retired, no credits, rate-limited, gated to
+    // approved apps) say nothing about the next candidate, so they skip to it.
+    // Only an account-wide or server failure stops the chain. The mapping is
+    // in openRouterCatalog so it can be tested without a socket.
+    const attempt = classifyOpenRouterStatus(status)
+    if (attempt.kind === 'skip') {
+      switch (attempt.reason) {
+        case 'credits':      orSkip.credits++;     orSkip.creditsDetail    ||= orErrorDetail(body); break
+        case 'rate_limited': orSkip.rateLimited++; orSkip.rateDetail       ||= orErrorDetail(body); break
+        case 'restricted':   orSkip.restricted++;  orSkip.restrictedDetail ||= orErrorDetail(body); break
+        case 'missing':      break
+      }
+      return null
+    }
     // 401 = bad key, 5xx = server error — stop chain immediately
     throw new Error(`HTTP ${status}: ${body.slice(0, 200)}`)
   } catch (e: any) {
-    if (/^HTTP (404|429|402)/.test(e.message || '')) return null
+    // withNetRetry can surface the status as a thrown Error instead; the same
+    // per-model statuses have to skip here too, or the chain dies anyway.
+    if (/^HTTP (402|403|404|429)/.test(e.message || '')) return null
     throw e
   }
 }
@@ -4152,6 +4171,17 @@ async function runAiRequest(
           } catch (e: any) {
             const msg = e?.message || String(e)
             lastError = `${msg} (model: ${attempt})`
+            // A timeout is a measurement, not a mystery: this machine cannot
+            // serve a model that size at this prompt length. Name the model
+            // the user should switch to, or say plainly that no installed
+            // model is small enough — either is actionable, "unavailable" is
+            // not.
+            if (/timeout/i.test(msg)) {
+              const faster = suggestFasterModel(probe.info || [], attempt)
+              lastError += faster
+                ? `\n\n${faster} is installed and smaller — switch to it in Settings → AI.`
+                : '\n\nNo smaller model is installed. Pull a lighter one (ollama pull llama3.2:3b) or use a shorter prompt.'
+            }
             if (/timeout/i.test(msg) && attempt !== model) {
               slowModels.add(attempt)
               console.warn(`[aihub] ${attempt} timed out on this machine — falling back to ${model} and not routing to it again`)
@@ -4170,8 +4200,10 @@ async function runAiRequest(
       async generate(model: string) {
         orSkip.credits = 0
         orSkip.rateLimited = 0
+        orSkip.restricted = 0
         orSkip.creditsDetail = ''
         orSkip.rateDetail = ''
+        orSkip.restrictedDetail = ''
         // The chosen model leads, then the live-verified free chain behind it.
         // A single 429 on a shared free model shouldn't end the request when
         // another free model would answer (§32).
@@ -4198,13 +4230,9 @@ async function runAiRequest(
         // has to act on. Ties go to rate limiting: it is the transient cause,
         // and telling someone to buy credits they may already have is worse
         // than telling them to wait.
-        const failure: OpenRouterFailure =
-          hardError ? { kind: 'error', message: hardError }
-          : (orSkip.credits || orSkip.rateLimited)
-            ? (orSkip.rateLimited >= orSkip.credits
-                ? { kind: 'rate_limited', message: orSkip.rateDetail || undefined }
-                : { kind: 'credits',      message: orSkip.creditsDetail || undefined })
-            : { kind: 'unavailable' }
+        const failure: OpenRouterFailure = hardError
+          ? { kind: 'error', message: hardError }
+          : summarizeOpenRouterSkips(orSkip)
         return { ok: false as const, failure }
       },
     },

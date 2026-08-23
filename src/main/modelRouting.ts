@@ -141,3 +141,39 @@ function stableSortReasoningLast(ids: string[]): string[] {
   const reasoning = ids.filter(isReasoningModel)
   return [...plain, ...reasoning]
 }
+
+// ── Recovering from a model this machine cannot serve ──────────────────────
+
+/**
+ * The best installed model that is strictly smaller than one that just timed
+ * out, or null when nothing smaller is installed.
+ *
+ * A first-token timeout is not a mystery to be reported as an outage. It is a
+ * measurement: this machine cannot process a prompt of that size for a model
+ * of that size within the budget. On a box with no usable GPU that ceiling is
+ * hard — measured on an Intel UHD machine, a 7B model evaluates a prompt at
+ * about 11 tokens/sec, so a 2,000-token page blows a 120-second budget before
+ * emitting a single byte, every time.
+ *
+ * The user can act on that immediately, but only if told which model to switch
+ * to. "Try a smaller model" is not an instruction when eight are installed.
+ *
+ * Largest-below wins rather than smallest-overall: the point is to get under
+ * the machine's ceiling while giving up as little quality as possible. Cloud
+ * entries are excluded — they are not slow for this reason and switching to
+ * one trades a speed problem for an account problem.
+ */
+export function suggestFasterModel(models: ModelInfo[], timedOut: string): string | null {
+  const failed = models.find(m => m.name === timedOut)
+  // Unknown size means no basis for calling anything else "smaller".
+  if (!failed || !failed.params) return null
+
+  const smaller = models.filter(m =>
+    !m.cloud && m.params > 0 && m.params < failed.params && m.name !== timedOut)
+  if (!smaller.length) return null
+
+  return [...smaller].sort((a, b) => {
+    if (b.params !== a.params) return b.params - a.params
+    return familyScore(a.name) - familyScore(b.name)
+  })[0].name
+}

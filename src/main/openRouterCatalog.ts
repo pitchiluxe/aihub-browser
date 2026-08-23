@@ -221,3 +221,40 @@ export function describeModel(m: CatalogModel): string {
   if (m.deprecated) bits.push('DEPRECATED')
   return bits.join(' · ')
 }
+
+// ── Per-attempt status classification ──────────────────────────────────────
+
+export type OrSkipReason = 'credits' | 'rate_limited' | 'missing' | 'restricted'
+
+export type OrAttempt =
+  | { kind: 'ok' }
+  | { kind: 'skip'; reason: OrSkipReason }
+  | { kind: 'fatal' }
+
+/**
+ * What one candidate's HTTP status means for the rest of the fallback chain.
+ *
+ * The only distinction that matters here is per-model versus per-account. A
+ * model can refuse for reasons that say nothing about the next candidate: it
+ * was retired (404), the account has no credits for that particular model
+ * (402), the shared free pool is exhausted (429), or OpenRouter gates it to
+ * approved applications (403). Every one of those should move to the next
+ * model. Only a bad key or a server fault means the whole chain would fail
+ * the same way, and only those stop it.
+ *
+ * 403 used to fall through to the fatal branch. That is how a single gated
+ * model — "thinkingmachines/inkling-small:free is only available on agentic
+ * harnesses" — ended an eighteen-model chain on its first attempt and left the
+ * user reading "AI providers are currently unavailable" while seventeen
+ * working free models sat untried behind it.
+ */
+export function classifyOpenRouterStatus(status: number): OrAttempt {
+  if (status >= 200 && status < 300) return { kind: 'ok' }
+  switch (status) {
+    case 402: return { kind: 'skip', reason: 'credits' }
+    case 403: return { kind: 'skip', reason: 'restricted' }
+    case 404: return { kind: 'skip', reason: 'missing' }
+    case 429: return { kind: 'skip', reason: 'rate_limited' }
+    default:  return { kind: 'fatal' }
+  }
+}

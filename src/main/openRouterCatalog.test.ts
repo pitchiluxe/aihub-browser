@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   normalizeModels, filterModels, filterByCapability, isFreeModel,
   modelExists, formatPricePerMillion, formatContext, describeModel,
-  OPENROUTER_FREE_AUTO,
+  OPENROUTER_FREE_AUTO, classifyOpenRouterStatus,
 } from './openRouterCatalog'
 
 // Shaped like a real `GET /models` payload: prices are decimal STRINGS, and
@@ -206,5 +206,34 @@ describe('display helpers', () => {
       .toBe('FREE · Context: 131K · Tools · Reasoning')
     expect(describeModel(models.find(m => m.id === 'anthropic/claude-sonnet-4')!))
       .toBe('PAID · Context: 200K · Tools · Vision · In $3.00/1M · Out $15.00/1M')
+  })
+})
+
+describe('classifyOpenRouterStatus', () => {
+  it('treats 2xx as a usable answer', () => {
+    expect(classifyOpenRouterStatus(200)).toEqual({ kind: 'ok' })
+    expect(classifyOpenRouterStatus(201)).toEqual({ kind: 'ok' })
+  })
+
+  // The regression this function exists for: a model gated to approved apps
+  // returns 403, which used to be classified as fatal and ended the chain on
+  // its first candidate.
+  it('skips a model gated to approved apps rather than ending the chain', () => {
+    expect(classifyOpenRouterStatus(403)).toEqual({ kind: 'skip', reason: 'restricted' })
+  })
+
+  it('skips the other per-model refusals', () => {
+    expect(classifyOpenRouterStatus(402)).toEqual({ kind: 'skip', reason: 'credits' })
+    expect(classifyOpenRouterStatus(404)).toEqual({ kind: 'skip', reason: 'missing' })
+    expect(classifyOpenRouterStatus(429)).toEqual({ kind: 'skip', reason: 'rate_limited' })
+  })
+
+  // A bad key or a broken upstream fails identically for every candidate, so
+  // trying the remaining seventeen is pure latency.
+  it('stops the chain on account-wide and server failures', () => {
+    expect(classifyOpenRouterStatus(401)).toEqual({ kind: 'fatal' })
+    expect(classifyOpenRouterStatus(400)).toEqual({ kind: 'fatal' })
+    expect(classifyOpenRouterStatus(500)).toEqual({ kind: 'fatal' })
+    expect(classifyOpenRouterStatus(503)).toEqual({ kind: 'fatal' })
   })
 })
