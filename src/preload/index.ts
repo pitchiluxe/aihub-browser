@@ -157,6 +157,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
     status: () => ipcRenderer.invoke('ollama:status'),
     pull:   (m:string) => ipcRenderer.invoke('ollama:pull', m),
   },
+  community: {
+    status:   ()                        => ipcRenderer.invoke('community:status'),
+    channels: ()                        => ipcRenderer.invoke('community:channels'),
+    join:     (handle: string)          => ipcRenderer.invoke('community:join', handle),
+    messages: (channel: string)         => ipcRenderer.invoke('community:messages', channel),
+    post:     (input: any)              => ipcRenderer.invoke('community:post', input),
+    react:    (id: string, r: string)   => ipcRenderer.invoke('community:react', id, r),
+    block:    (id: string, on: boolean) => ipcRenderer.invoke('community:block', id, on),
+    report:   (id: string, why: string) => ipcRenderer.invoke('community:report', id, why),
+    resetIdentity: ()                   => ipcRenderer.invoke('community:resetIdentity'),
+    exportKey:     ()                   => ipcRenderer.invoke('community:exportKey'),
+    importKey:     (v: string)          => ipcRenderer.invoke('community:importKey', v),
+    // Push, not polling: the same subscription shape works unchanged once a
+    // server is the thing emitting these rather than the local store.
+    onMessage: (cb: (p: any) => void) => {
+      const handler = (_e: any, p: any) => cb(p)
+      ipcRenderer.on('community:message', handler)
+      return () => ipcRenderer.removeListener('community:message', handler)
+    },
+    onStatus: (cb: (p: any) => void) => {
+      const handler = (_e: any, p: any) => cb(p)
+      ipcRenderer.on('community:status', handler)
+      return () => ipcRenderer.removeListener('community:status', handler)
+    },
+    onRefresh: (cb: () => void) => {
+      const handler = () => cb()
+      ipcRenderer.on('community:refresh', handler)
+      return () => ipcRenderer.removeListener('community:refresh', handler)
+    },
+  },
   brain: {
     getRecommendations:    () => ipcRenderer.invoke('brain:getRecommendations'),
     getProfile:            () => ipcRenderer.invoke('brain:getProfile'),

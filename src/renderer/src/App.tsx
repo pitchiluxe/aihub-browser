@@ -25,6 +25,9 @@ const RewindPage     = lazy(() => import('./components/pages/RewindPage'))
 const WatchPage      = lazy(() => import('./components/pages/WatchPage'))
 const BiblePage      = lazy(() => import('./components/pages/BiblePage'))
 const BibleStudyPage = lazy(() => import('./components/pages/BibleStudyPage'))
+const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
+
+import type { PageType } from '../../shared/pageTypes'
 
 // Overlays that are closed at startup. Each already refused to render until
 // its open flag flipped, so gating the MOUNT on the same flag changes nothing
@@ -190,7 +193,7 @@ export default function App() {
   }, [activeTabId, navigate])
 
   // ── Special pages ──────────────────────────────────────────────────────────
-  const openSpecialPage = useCallback((pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch' | 'bible' | 'study') => {
+  const openSpecialPage = useCallback((pageType: PageType) => {
     useBrowserStore.getState().addTab(`aihub://${pageType}`, pageType)
   }, [])
 
@@ -924,6 +927,7 @@ export default function App() {
                     {tab.pageType === 'watch'      && <WatchPage />}
                     {tab.pageType === 'bible'      && <BiblePage />}
                     {tab.pageType === 'study'      && <BibleStudyPage />}
+                    {tab.pageType === 'community'  && <CommunityPage />}
                   </Suspense>
                 </div>
               )

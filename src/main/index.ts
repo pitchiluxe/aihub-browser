@@ -9,6 +9,7 @@ import fs from 'fs'
 import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
+import { registerCommunityIpc } from './community'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel } from './modelRouting'
 import {
@@ -2211,6 +2212,7 @@ ipcMain.handle('window:setOpacity', (e, opacity: number) => {
 })
 
 registerGoogleIpc(safelySend)
+registerCommunityIpc()
 
 // ── IPC: Tab content views (BrowserView) ────────────────────────────────────
 ipcMain.handle('tabview:create', (e, tabId: string, url: string, containerId?: string | null) =>

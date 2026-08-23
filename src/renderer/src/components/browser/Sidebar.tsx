@@ -1,20 +1,21 @@
 import React, { memo, useEffect, useState } from 'react'
 import {
   Home, History, Download, Settings, Plus, Sparkles,
-  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing, BookMarked, GraduationCap,
+  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing, BookMarked, GraduationCap, Users,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
+import type { PageType } from '../../../../shared/pageTypes'
 
 interface Props {
   onNavigate: (url: string) => void
-  onOpenPage: (pageType: 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch' | 'bible' | 'study') => void
+  onOpenPage: (pageType: PageType) => void
 }
 
 interface NavItem {
   icon: React.ElementType
   label: string
-  page: null | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch' | 'bible' | 'study'
+  page: PageType | null
   type: string
   accent?: string
 }
@@ -28,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: BellRing,     label: 'Watch & Ping', page: 'watch',        type: 'watch',      accent: '#f472b6' },
   { icon: BookMarked,   label: 'Bible',        page: 'bible',        type: 'bible',      accent: '#fbbf24' },
   { icon: GraduationCap, label: 'Bible Study', page: 'study',        type: 'study',      accent: '#e6c86e' },
+  { icon: Users,        label: 'Community',    page: 'community',    type: 'community',  accent: '#34d399' },
   { icon: History,      label: 'History',      page: 'history',      type: 'history'    },
   { icon: Download,     label: 'Downloads',    page: 'downloads',    type: 'downloads'  },
   { icon: Puzzle,       label: 'Extensions',   page: 'extensions',   type: 'extensions', accent: '#fb923c' },

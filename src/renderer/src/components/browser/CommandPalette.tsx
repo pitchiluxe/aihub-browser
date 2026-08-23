@@ -9,7 +9,8 @@ import {
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
-type PageType = 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind' | 'watch' | 'bible' | 'study'
+import type { PageType } from '../../../../shared/pageTypes'
+export type { PageType }
 
 interface Cmd {
   id: string
