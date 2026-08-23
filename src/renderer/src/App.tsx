@@ -796,7 +796,12 @@ export default function App() {
 
         case 'did-stop-loading': {
           const { title, url } = payload
-          const favicon = url ? `https://www.google.com/s2/favicons?domain=${url}&sz=32` : ''
+          // Was a hot-link to Google's favicon service, stamped onto the tab
+          // and into history. Every miss became a console 404, and the value
+          // was keyed on the full URL so it never matched between two pages of
+          // the same site. Icons now come from the main process on demand; the
+          // tab keeps whatever real favicon Electron reported, or nothing.
+          const favicon = ''
           if (title) store.updateTab(tabId, { title })
           if (url)   store.updateTab(tabId, { url })
           if (favicon) store.updateTab(tabId, { favicon })

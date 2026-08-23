@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Search, Trash2, ExternalLink, Clock, X } from 'lucide-react'
 import { HistoryItem } from '../../store/browserStore'
+import Favicon from '../common/Favicon'
 
 interface Props { onNavigate: (url: string) => void }
 
@@ -108,7 +109,7 @@ export default function HistoryPage({ onNavigate }: Props) {
                     className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-aihub-card/60 group cursor-pointer"
                     onClick={() => onNavigate(item.url)}
                   >
-                    <img src={`https://www.google.com/s2/favicons?domain=${item.url}&sz=16`} className="w-4 h-4 rounded shrink-0" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                    <Favicon url={item.url} size={16} className="w-4 h-4 rounded shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-aihub-text truncate">{item.title || item.url}</div>
                       <div className="text-xs text-aihub-muted truncate">{item.url}</div>

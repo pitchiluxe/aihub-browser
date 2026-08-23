@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Search, Globe } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBrowserStore } from '../../store/browserStore'
+import Favicon from '../common/Favicon'
 
 const ENGINES = [
   { id: 'google', label: 'Google', url: (q: string) => `https://www.google.com/search?q=${encodeURIComponent(q)}` },
@@ -134,11 +135,7 @@ export default function SearchBar({ onNavigate }: Props) {
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-aihub-accent/10 transition-colors text-left no-drag"
               >
                 <div className="w-6 h-6 rounded-md overflow-hidden shrink-0 bg-aihub-surface flex items-center justify-center">
-                  <img
-                    src={`https://www.google.com/s2/favicons?domain=${b.url}&sz=32`}
-                    className="w-4 h-4"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                  />
+                  <Favicon url={b.url} size={16} className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm text-aihub-text truncate">{b.title}</div>

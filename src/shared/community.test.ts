@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateHandle, handleSuffix, displayName, containsInvisible } from './communityHandle'
+import { validateHandle, handleKey, containsInvisible, joinBlocker } from './communityHandle'
 import { avatarSvg, avatarDataUri } from './communityAvatar'
 import { CHANNELS, channelBySlug } from './community'
 
@@ -86,20 +86,28 @@ describe('validateHandle', () => {
   })
 })
 
-describe('displayName', () => {
-  it('appends a short stable suffix so two Graces are distinguishable', () => {
-    const a = displayName('Grace', 'a3f1b2c4-0000-0000-0000-000000000000')
-    const b = displayName('Grace', '9d7e5f10-0000-0000-0000-000000000000')
-    expect(a).not.toBe(b)
-    expect(a).toBe('Grace·a3f1')
+describe('handleKey', () => {
+  // Uniqueness that only compares raw strings is uniqueness in the database
+  // and confusion in the room.
+  it('treats case differences as the same name', () => {
+    expect(handleKey('Grace')).toBe(handleKey('grace'))
+    expect(handleKey('GRACE')).toBe(handleKey('Grace'))
   })
 
-  it('falls back to the bare handle when there is no id yet', () => {
-    expect(displayName('Grace', '')).toBe('Grace')
+  it('treats width and spacing differences as the same name', () => {
+    expect(handleKey('Ｇｒａｃｅ')).toBe(handleKey('Grace'))
+    expect(handleKey('  Grace   Mwangi ')).toBe(handleKey('Grace Mwangi'))
   })
 
-  it('is stable across calls', () => {
-    expect(handleSuffix('a3f1b2c4-dead-beef')).toBe(handleSuffix('a3f1b2c4-dead-beef'))
+  it('keeps genuinely different names apart', () => {
+    expect(handleKey('Grace')).not.toBe(handleKey('Gracie'))
+  })
+
+  // Documented gap rather than a claim of safety: a Cyrillic lookalike gets a
+  // different key, and reporting covers it until confusable folding lands.
+  it('does NOT yet fold cross-script lookalikes', () => {
+    const cyrillicA = String.fromCharCode(0x0430)
+    expect(handleKey('Gr' + cyrillicA + 'ce')).not.toBe(handleKey('Grace'))
   })
 })
 
@@ -171,5 +179,38 @@ describe('CHANNELS', () => {
   it('resolves by slug and returns undefined for an unknown one', () => {
     expect(channelBySlug('bible-study')?.name).toBe('Bible Study')
     expect(channelBySlug('nope')).toBeUndefined()
+  })
+})
+
+describe('joinBlocker', () => {
+  // The regression: an empty field behind a placeholder that read like a real
+  // name, so the form looked finished and the button looked broken.
+  it('asks for a name when the field is empty', () => {
+    expect(joinBlocker('', true)).toMatch(/Type a name/)
+    expect(joinBlocker('   ', true)).toMatch(/Type a name/)
+  })
+
+  it('asks for a different name when the one typed is rejected', () => {
+    expect(joinBlocker('ab', true)).toMatch(/different name/)
+    expect(joinBlocker('admin', true)).toMatch(/different name/)
+  })
+
+  it('asks for the checkbox once the name is fine', () => {
+    expect(joinBlocker('Grace', false)).toMatch(/Tick the box/)
+  })
+
+  it('clears once both are satisfied', () => {
+    expect(joinBlocker('Grace', true)).toBeNull()
+  })
+
+  // Whenever the button is disabled there must be a sentence saying why —
+  // that is the actual invariant, not any one of the messages above.
+  it('always explains itself when it blocks', () => {
+    for (const handle of ['', '  ', 'ab', 'admin', 'Grace']) {
+      for (const accepted of [true, false]) {
+        const out = joinBlocker(handle, accepted)
+        if (out !== null) expect(out.length).toBeGreaterThan(0)
+      }
+    }
   })
 })

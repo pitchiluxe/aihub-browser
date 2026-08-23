@@ -35,6 +35,41 @@ export function emptyState(): CommunityState {
   return { members: {}, messages: [], blocks: {}, reports: [] }
 }
 
+/**
+ * The member holding a handle, if anyone does.
+ *
+ * `exceptId` lets a member keep their own name when they change something else
+ * about it — renaming "Grace" to "grace" must not collide with themselves.
+ */
+export function memberByHandle(
+  state: CommunityState, key: string, exceptId?: string,
+): Member | undefined {
+  return Object.values(state.members)
+    .find(m => m.handleKey === key && m.id !== exceptId)
+}
+
+export function isHandleTaken(state: CommunityState, key: string, exceptId?: string): boolean {
+  return !!memberByHandle(state, key, exceptId)
+}
+
+/**
+ * Names to offer when the one someone wants is gone.
+ *
+ * Numeric suffixes, because they are the suggestion people already understand
+ * from every other signup form, and because anything cleverer produces names
+ * the user did not ask for and will not recognise as theirs.
+ */
+export function suggestHandles(
+  state: CommunityState, wanted: string, count = 3,
+): string[] {
+  const out: string[] = []
+  for (let n = 2; out.length < count && n < 100; n++) {
+    const candidate = `${wanted}${n}`
+    if (!isHandleTaken(state, candidate.toLowerCase())) out.push(candidate)
+  }
+  return out
+}
+
 // ── Trust ──────────────────────────────────────────────────────────────────
 
 /**

@@ -26,7 +26,9 @@ export async function addBookmarkWithAI(
   const bookmark = await window.electronAPI.bookmarks.add({
     url: normalizedUrl,
     title: shortenBookmarkName(title, normalizedUrl),
-    favicon: `https://www.google.com/s2/favicons?domain=${normalizedUrl}&sz=64`,
+    // Resolved on demand by the main process and cached there; storing a
+    // remote URL here is what put a 404 behind every iconless bookmark.
+    favicon: '',
     category,
     color,
   })

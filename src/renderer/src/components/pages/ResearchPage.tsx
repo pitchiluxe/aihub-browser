@@ -4,6 +4,7 @@ import { FlaskConical, Loader2, Sparkles, ExternalLink, FileText, Download, Refr
 import { useBrowserStore } from '../../store/browserStore'
 import { cleanNarration } from '../../services/agentTools'
 import Markdown from '../ai/Markdown'
+import Favicon from '../common/Favicon'
 
 interface Props { onNavigate?: (url: string) => void }
 
@@ -134,8 +135,7 @@ export default function ResearchPage({ onNavigate }: Props) {
                 <div className="space-y-1.5">
                   {extraUrls.map(u => (
                     <div key={u} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)' }}>
-                      <img src={`https://www.google.com/s2/favicons?domain=${u}&sz=16`} className="w-3.5 h-3.5 rounded shrink-0"
-                        onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <Favicon url={u} size={14} className="w-3.5 h-3.5 rounded shrink-0" />
                       <span className="flex-1 text-xs text-slate-500 truncate">{u.replace(/^https?:\/\//, '').slice(0, 30)}</span>
                       <button onClick={() => removeExtra(u)} className="shrink-0 text-slate-700 hover:text-red-400 transition-colors">
                         <X size={10} />
@@ -274,8 +274,7 @@ function SourceRow({ url, title, onNavigate }: { url: string; title: string; onN
       style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(56,189,248,0.18)' }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-glass-sm)' }}>
-      <img src={`https://www.google.com/s2/favicons?domain=${url}&sz=16`} className="w-3.5 h-3.5 rounded shrink-0"
-        onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+      <Favicon url={url} size={14} className="w-3.5 h-3.5 rounded shrink-0" />
       <span className="flex-1 text-xs text-slate-500 truncate">{title.slice(0, 28)}</span>
       {onNavigate && (
         <button onClick={() => onNavigate(url)}

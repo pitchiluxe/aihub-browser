@@ -660,7 +660,8 @@ export async function executeAction(action: ToolAction, ctx: ToolContext): Promi
             color = cat.color
           } catch { category = 'Tools' }
         }
-        const favicon = `https://www.google.com/s2/favicons?domain=${action.url}&sz=32`
+        // See bookmarkService: icons are resolved at render time, not stored.
+        const favicon = ''
         const saved = await window.electronAPI.bookmarks.add({
           url: action.url, title: action.title, favicon, category, color,
         })

@@ -215,6 +215,49 @@ describe('community IPC', () => {
     expect(status.member.id).toBe(first.status.member.id)
   })
 
+  describe('unique handles', () => {
+    it('reports a free name as available', async () => {
+      const out = await invoke('community:handleAvailable', 'Grace')
+      expect(out).toMatchObject({ ok: true, available: true })
+    })
+
+    it('reports a taken name and offers alternatives', async () => {
+      await invoke('community:join', 'Grace')
+      // A second device asking about the same name. This one has its own
+      // identity, so the "except me" allowance does not apply.
+      const state = JSON.parse(fs.readFileSync(join(userDataDir, 'community-data.json'), 'utf8'))
+      const otherId = 'someone-else'
+      state.members[otherId] = {
+        id: otherId, handle: 'Mercy', handleKey: 'mercy',
+        avatarSeed: otherId, createdAt: Date.now(),
+      }
+      fs.writeFileSync(join(userDataDir, 'community-data.json'), JSON.stringify(state), 'utf8')
+
+      handlers.clear()
+      vi.resetModules()
+      const { registerCommunityIpc } = await import('./index')
+      registerCommunityIpc()
+
+      const out = await invoke('community:handleAvailable', 'Mercy')
+      expect(out.available).toBe(false)
+      expect(out.suggestions).toContain('Mercy2')
+    })
+
+    it('lets a member keep their own name across a re-join', async () => {
+      await invoke('community:join', 'Grace')
+      // Same device, same name: this must not collide with itself.
+      const again = await invoke('community:join', 'Grace')
+      expect(again.ok).toBe(true)
+      expect((await invoke('community:handleAvailable', 'grace')).available).toBe(true)
+    })
+
+    it('stores the folded key alongside the display name', async () => {
+      const out = await invoke('community:join', 'Grace Mwangi')
+      expect(out.status.member.handle).toBe('Grace Mwangi')
+      expect(out.status.member.handleKey).toBe('grace mwangi')
+    })
+  })
+
   it('rejects a corrupt identity key without throwing', async () => {
     const out = await invoke('community:importKey', 'not-a-key')
     expect(out.ok).toBe(false)

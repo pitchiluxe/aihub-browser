@@ -100,6 +100,9 @@ export function channelBySlug(slug: string): ChannelDef | undefined {
 export interface Member {
   id: string
   handle: string
+  /** Case- and width-folded handle. Unique across the community; see
+   *  handleKey() for what "the same name" means and what it misses. */
+  handleKey: string
   /** Stable input to the generated avatar. Never an uploaded image. */
   avatarSeed: string
   createdAt: number

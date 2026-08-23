@@ -154,7 +154,7 @@ Respond with ONLY valid JSON array, no explanation:
     return recs.slice(0, 6).map(r => ({
       ...r,
       score: Math.random() * 0.3 + 0.7,
-      favicon: `https://www.google.com/s2/favicons?domain=${r.url}&sz=64`,
+      favicon: '',
     }))
   } catch {
     return getDefaultRecommendations()
@@ -176,11 +176,11 @@ export function getStoredRecommendations(): Recommendation[] {
 // ── Default recommendations (before enough browsing data) ─────────────────
 function getDefaultRecommendations(): Recommendation[] {
   return [
-    { url: 'https://perplexity.ai', title: 'Perplexity AI', reason: 'AI-powered search engine', category: 'AI', score: 0.95, favicon: 'https://www.google.com/s2/favicons?domain=perplexity.ai&sz=64' },
-    { url: 'https://github.com', title: 'GitHub', reason: 'World\'s largest code repository', category: 'Development', score: 0.90, favicon: 'https://www.google.com/s2/favicons?domain=github.com&sz=64' },
-    { url: 'https://notion.so', title: 'Notion', reason: 'All-in-one workspace for notes', category: 'Productivity', score: 0.88, favicon: 'https://www.google.com/s2/favicons?domain=notion.so&sz=64' },
-    { url: 'https://figma.com', title: 'Figma', reason: 'Collaborative design tool', category: 'Design', score: 0.85, favicon: 'https://www.google.com/s2/favicons?domain=figma.com&sz=64' },
-    { url: 'https://openai.com', title: 'OpenAI', reason: 'Leading AI research lab', category: 'AI', score: 0.84, favicon: 'https://www.google.com/s2/favicons?domain=openai.com&sz=64' },
-    { url: 'https://vercel.com', title: 'Vercel', reason: 'Deploy web apps instantly', category: 'Development', score: 0.82, favicon: 'https://www.google.com/s2/favicons?domain=vercel.com&sz=64' },
+    { url: 'https://perplexity.ai', title: 'Perplexity AI', reason: 'AI-powered search engine', category: 'AI', score: 0.95, favicon: '' },
+    { url: 'https://github.com', title: 'GitHub', reason: 'World\'s largest code repository', category: 'Development', score: 0.90, favicon: '' },
+    { url: 'https://notion.so', title: 'Notion', reason: 'All-in-one workspace for notes', category: 'Productivity', score: 0.88, favicon: '' },
+    { url: 'https://figma.com', title: 'Figma', reason: 'Collaborative design tool', category: 'Design', score: 0.85, favicon: '' },
+    { url: 'https://openai.com', title: 'OpenAI', reason: 'Leading AI research lab', category: 'AI', score: 0.84, favicon: '' },
+    { url: 'https://vercel.com', title: 'Vercel', reason: 'Deploy web apps instantly', category: 'Development', score: 0.82, favicon: '' },
   ]
 }

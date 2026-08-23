@@ -4,7 +4,7 @@ import {
   Send, Users, Flag, EyeOff, HandHeart, AlertTriangle, KeyRound, Loader2,
 } from 'lucide-react'
 import { CHANNELS, type ChannelDef, type Message, type MessageKind } from '../../../../shared/community'
-import { validateHandle, displayName } from '../../../../shared/communityHandle'
+import { validateHandle, joinBlocker } from '../../../../shared/communityHandle'
 import { avatarDataUri } from '../../../../shared/communityAvatar'
 
 /**
@@ -127,7 +127,27 @@ function Onboarding({ onJoined }: { onJoined: (s: any) => void }) {
   const api = (window as any).electronAPI?.community
 
   const check = validateHandle(handle)
-  const canJoin = check.ok && accepted && !busy
+  const blocker = joinBlocker(handle, accepted)
+  // null = not asked yet. Names are unique, so the answer has to come from the
+  // main process; asking on every keystroke would be one IPC round trip per
+  // character, so it waits for a pause in typing.
+  const [taken, setTaken] = useState<boolean | null>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const canJoin = !blocker && taken === false && !busy
+
+  useEffect(() => {
+    if (!api || !check.ok) { setTaken(null); setSuggestions([]); return }
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const out = await api.handleAvailable(handle)
+        if (cancelled) return
+        setTaken(out?.ok ? !out.available : null)
+        setSuggestions(out?.suggestions || [])
+      } catch { if (!cancelled) setTaken(null) }
+    }, 250)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [api, handle, check.ok])
 
   const join = async () => {
     setBusy(true); setError('')
@@ -184,22 +204,48 @@ function Onboarding({ onJoined }: { onJoined: (s: any) => void }) {
             value={handle}
             onChange={e => setHandle(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && canJoin) void join() }}
-            placeholder="Grace"
+            // The placeholder used to read "Grace", which looks exactly like a
+            // filled-in field. People saw a name, a ticked box and a dead
+            // button, and had no way to tell the field was empty.
+            placeholder="Type a name…"
+            autoFocus
             maxLength={40}
             className="flex-1 px-3 py-2 rounded-lg outline-none"
             style={{
               background: 'rgb(var(--ds-surface))', color: 'rgb(var(--ds-text))',
-              border: '1px solid rgb(var(--ds-border))',
+              border: `1px solid ${handle && !check.ok ? '#f8717188' : 'rgb(var(--ds-border))'}`,
             }}
           />
         </div>
         {handle && !check.ok && (
           <div style={{ color: '#f87171', fontSize: 12, marginTop: 6 }}>{check.error}</div>
         )}
-        {check.ok && (
-          <div style={{ color: 'rgb(var(--ds-muted))', fontSize: 12, marginTop: 6 }}>
-            Shown as <strong>{check.value}</strong> — others with the same name are
-            told apart by a short code after it.
+        {check.ok && taken === false && (
+          <div style={{ color: '#34d399', fontSize: 12, marginTop: 6 }}>
+            <strong>{check.value}</strong> is available.
+          </div>
+        )}
+        {check.ok && taken === true && (
+          <div style={{ color: '#f87171', fontSize: 12, marginTop: 6 }}>
+            <strong>{check.value}</strong> is taken.
+            {suggestions.length > 0 && (
+              <>
+                {' '}Try{' '}
+                {suggestions.map((s, i) => (
+                  <React.Fragment key={s}>
+                    {i > 0 && ', '}
+                    <button
+                      onClick={() => setHandle(s)}
+                      style={{
+                        color: '#34d399', textDecoration: 'underline',
+                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                        font: 'inherit',
+                      }}>{s}</button>
+                  </React.Fragment>
+                ))}
+                .
+              </>
+            )}
           </div>
         )}
 
@@ -221,11 +267,22 @@ function Onboarding({ onJoined }: { onJoined: (s: any) => void }) {
             background: canJoin ? '#34d399' : 'rgb(var(--ds-surface))',
             color: canJoin ? '#04231a' : 'rgb(var(--ds-muted))',
             cursor: canJoin ? 'pointer' : 'not-allowed',
-            border: '1px solid rgb(var(--ds-border))',
+            // A disabled button needs to still look like a button. Flat text on
+            // the page background reads as broken rather than as "not yet".
+            border: `1px solid ${canJoin ? '#34d399' : 'rgb(var(--ds-border))'}`,
+            opacity: canJoin ? 1 : 0.75,
           }}
         >
           {busy ? 'Joining…' : 'Join the community'}
         </button>
+
+        {/* Never leave a disabled control unexplained: say which step is
+            outstanding, in the order the user would fix them. */}
+        {!canJoin && !busy && (
+          <div style={{ fontSize: 12, color: 'rgb(var(--ds-muted))', marginTop: 8, textAlign: 'center' }}>
+            {blocker || (taken === true ? 'That name is taken — pick another.' : 'Checking that name…')}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -320,7 +377,7 @@ function MemberCard({ me, status }: { me: any; status: any }) {
              style={{ borderRadius: 9, flexShrink: 0 }} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {displayName(me.handle, me.id)}
+            {me.handle}
           </div>
           <div style={{ fontSize: 10.5, color: 'rgb(var(--ds-muted))' }}>
             {status.established ? 'Established member' : 'New member — slow mode'}
@@ -403,7 +460,7 @@ function MessageRow({ message, me, api, onChanged }: {
       <div style={{ minWidth: 0, flex: 1 }}>
         <div className="flex items-baseline gap-2">
           <span style={{ fontSize: 13, fontWeight: 650 }}>
-            {message.anonymous && !mine ? 'Anonymous' : displayName(message.authorHandle, message.authorId)}
+            {message.anonymous && !mine ? 'Anonymous' : message.authorHandle}
           </span>
           <span style={{ fontSize: 10.5, color: 'rgb(var(--ds-muted))' }}>
             {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

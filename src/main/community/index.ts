@@ -2,11 +2,11 @@ import crypto from 'crypto'
 import { join } from 'path'
 import { app, ipcMain, safeStorage, BrowserWindow } from 'electron'
 import { createManagedJsonStore } from '../jsonStore'
-import { validateHandle } from '../../shared/communityHandle'
+import { validateHandle, handleKey } from '../../shared/communityHandle'
 import { CHANNELS, type Member } from '../../shared/community'
 import {
   emptyState, postMessage, visibleMessages, forViewer, toggleReaction,
-  setBlocked, reportMessage, cooldownFor, isEstablished,
+  setBlocked, reportMessage, cooldownFor, isEstablished, isHandleTaken, suggestHandles,
   type CommunityState, type PostInput,
 } from './store'
 import {
@@ -157,6 +157,19 @@ export function registerCommunityIpc(): void {
     const handle = validateHandle(String(rawHandle ?? ''))
     if (!handle.ok) return { ok: false, error: handle.error }
 
+    // Handles are unique. Checked before any key is generated, so a rejected
+    // name leaves nothing behind — and `exceptId` lets an existing member
+    // re-join under a different capitalisation of the name they already hold.
+    const key = handleKey(handle.value)
+    const mine = identityStore.get()?.memberId || undefined
+    if (isHandleTaken(dataStore.get(), key, mine)) {
+      return {
+        ok: false,
+        error: 'That name is taken.',
+        suggestions: suggestHandles(dataStore.get(), handle.value),
+      }
+    }
+
     // Reuse an existing key if there is one: a failed registration must not
     // cost the user their identity, and a second attempt must be the same
     // member rather than a new one.
@@ -179,12 +192,14 @@ export function registerCommunityIpc(): void {
     const member: Member = dataStore.get().members[memberId] || {
       id: memberId,
       handle: handle.value,
+      handleKey: key,
       // Seeded from the id, so the avatar is stable for the life of the
       // member and identical on every machine that renders it.
       avatarSeed: memberId,
       createdAt: Date.now(),
     }
     member.handle = handle.value
+    member.handleKey = key
 
     dataStore.update(s => { s.members[memberId] = member })
     identityStore.update(i => { if (i) { i.memberId = memberId; i.handle = handle.value } })
@@ -192,13 +207,32 @@ export function registerCommunityIpc(): void {
     // Proves the key works end to end before the UI claims success — a key
     // that cannot sign is a broken identity, and better found now than at the
     // first post.
-    const key = privateKey()
-    if (!key) return { ok: false, error: 'This device could not unlock its identity key.' }
-    signEnvelope(key, { action: 'join', memberId })
+    const signingKey = privateKey()
+    if (!signingKey) return { ok: false, error: 'This device could not unlock its identity key.' }
+    signEnvelope(signingKey, { action: 'join', memberId })
 
     persistNow()
     broadcast('community:status', currentStatus())
     return { ok: true, status: currentStatus() }
+  })
+
+  /**
+   * Is this name free? Asked while the user types, so "taken" appears next to
+   * the field instead of after they commit to a name and press Join.
+   */
+  ipcMain.handle('community:handleAvailable', async (_e, rawHandle: string) => {
+    const { identityStore, dataStore } = stores()
+    const handle = validateHandle(String(rawHandle ?? ''))
+    if (!handle.ok) return { ok: false, available: false, error: handle.error }
+
+    const key = handleKey(handle.value)
+    const mine = identityStore.get()?.memberId || undefined
+    const taken = isHandleTaken(dataStore.get(), key, mine)
+    return {
+      ok: true,
+      available: !taken,
+      ...(taken ? { suggestions: suggestHandles(dataStore.get(), handle.value) } : {}),
+    }
   })
 
   ipcMain.handle('community:messages', async (_e, channel: string) => {
@@ -221,8 +255,8 @@ export function registerCommunityIpc(): void {
     // Signed even locally: the signature is what the server will verify, and a
     // path that only gets exercised once the backend lands is a path that
     // breaks when it does.
-    const key = privateKey()
-    if (key) signEnvelope(key, { action: 'post', messageId: result.message.id })
+    const signingKey = privateKey()
+    if (signingKey) signEnvelope(signingKey, { action: 'post', messageId: result.message.id })
 
     dataStore.update(() => {})   // mark dirty; state was mutated in place
     broadcast('community:message', { channel: input.channel, message: forViewer(result.message, '') })
@@ -278,13 +312,13 @@ export function registerCommunityIpc(): void {
   /** Export the key so an identity survives a reinstall or moves machines.
    *  User-initiated only, and never broadcast. */
   ipcMain.handle('community:exportKey', async () => {
-    const key = privateKey()
+    const signingKey = privateKey()
     const identity = stores().identityStore.get()
-    if (!key || !identity) return { ok: false, error: 'No identity on this device yet.' }
+    if (!signingKey || !identity) return { ok: false, error: 'No identity on this device yet.' }
     return {
       ok: true,
       value: Buffer.from(JSON.stringify({
-        v: 1, privateKey: key, publicKey: identity.publicKey,
+        v: 1, privateKey: signingKey, publicKey: identity.publicKey,
         memberId: identity.memberId, handle: identity.handle,
       }), 'utf8').toString('base64'),
     }
@@ -312,6 +346,7 @@ export function registerCommunityIpc(): void {
           s.members[parsed.memberId] ||= {
             id: String(parsed.memberId),
             handle: String(parsed.handle || 'Member'),
+            handleKey: handleKey(String(parsed.handle || 'Member')),
             avatarSeed: String(parsed.memberId),
             createdAt: Date.now(),
           }

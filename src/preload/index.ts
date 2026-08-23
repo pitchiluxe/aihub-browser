@@ -153,6 +153,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setCustom:   (domains: string[]) => ipcRenderer.invoke('adblock:setCustom', domains),
     countForTab: (wcId: number) => ipcRenderer.invoke('adblock:countForTab', wcId),
   },
+  favicon: {
+    get:     (url: string)    => ipcRenderer.invoke('favicon:get', url),
+    getMany: (urls: string[]) => ipcRenderer.invoke('favicon:getMany', urls),
+  },
   ollama: {
     status: () => ipcRenderer.invoke('ollama:status'),
     pull:   (m:string) => ipcRenderer.invoke('ollama:pull', m),
@@ -161,6 +165,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     status:   ()                        => ipcRenderer.invoke('community:status'),
     channels: ()                        => ipcRenderer.invoke('community:channels'),
     join:     (handle: string)          => ipcRenderer.invoke('community:join', handle),
+    handleAvailable: (handle: string)   => ipcRenderer.invoke('community:handleAvailable', handle),
     messages: (channel: string)         => ipcRenderer.invoke('community:messages', channel),
     post:     (input: any)              => ipcRenderer.invoke('community:post', input),
     react:    (id: string, r: string)   => ipcRenderer.invoke('community:react', id, r),

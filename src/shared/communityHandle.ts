@@ -3,10 +3,15 @@ import { MAX_HANDLE_CHARS, MIN_HANDLE_CHARS } from './community'
 /**
  * Display-name rules for the community.
  *
- * Uniqueness is deliberately NOT required. Two people may both be "Grace";
- * they are told apart by a short id suffix in the UI. Telling someone their own
- * name is taken is a bad first interaction, and in a faith community it is a
- * common one — several Graces is the expected case, not the edge case.
+ * Handles are UNIQUE across the community. An earlier version allowed repeats
+ * and separated them with a short id suffix; unique names were chosen instead,
+ * so a name identifies exactly one person and nobody has to read a hex code to
+ * know who they are talking to.
+ *
+ * The cost is a worse first interaction for common names — several Graces is
+ * the expected case here, not the edge case — so the "taken" message has to
+ * suggest rather than scold, and availability is checked while typing instead
+ * of at submit.
  *
  * What IS enforced is impersonation and rendering safety. The characters
  * rejected below are the standard tools for making one name look like another:
@@ -83,17 +88,39 @@ export function validateHandle(raw: string): HandleResult {
 }
 
 /**
- * The short suffix that separates two members with the same handle.
+ * Why the Join button is not available yet, or null when it is.
  *
- * Four characters of the member id, which is plenty inside one room and short
- * enough to read as part of a name rather than as a serial number.
+ * Exists as a function rather than a chain of ternaries in the component
+ * because the first version shipped a disabled button with no explanation: the
+ * name field's placeholder read like a filled-in value, so the form looked
+ * complete and the button looked broken. A disabled control that cannot say
+ * what it is waiting for is a bug, and this is the piece a test can hold.
  */
-export function handleSuffix(memberId: string): string {
-  return String(memberId ?? '').replace(/-/g, '').slice(0, 4).toLowerCase()
+export function joinBlocker(handle: string, accepted: boolean): string | null {
+  if (!String(handle ?? '').trim()) return 'Type a name above to continue.'
+  if (!validateHandle(handle).ok) return 'Choose a different name to continue.'
+  if (!accepted) return 'Tick the box above to continue.'
+  return null
 }
 
-/** How a member is addressed in the UI: "Grace.a3f1". */
-export function displayName(handle: string, memberId: string): string {
-  const suffix = handleSuffix(memberId)
-  return suffix ? `${handle}·${suffix}` : handle
+/**
+ * The key two handles are compared on to decide whether they are "the same".
+ *
+ * Comparing the raw strings would let "Grace", "grace" and "GRACE" all coexist,
+ * which is uniqueness in the database and confusion in the room. NFKC also
+ * folds full-width and compatibility forms, so the width of the characters
+ * cannot be used to clone a name either.
+ *
+ * What this does NOT catch is cross-script homoglyphs — Cyrillic "а" renders
+ * identically to Latin "a" and produces a different key. Full confusable
+ * folding needs the Unicode confusables table and belongs with server-side
+ * registration; until then that gap is covered by reporting and banning, not
+ * by this function. Better to state the limit than to imply it is airtight.
+ */
+export function handleKey(handle: string): string {
+  return String(handle ?? '')
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
 }

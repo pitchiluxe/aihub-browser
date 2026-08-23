@@ -7,6 +7,7 @@ import { Search, X, ZoomIn, ZoomOut, ChevronLeft, Maximize2, Play, Square, Cross
 import { Bookmark } from '../../store/browserStore'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { isBookmarkProtected } from '../../services/bookmarkService'
+import Favicon from '../common/Favicon'
 // The node look is shared with the Bible verse graph so the two read as one
 // product; only the motion below belongs to this graph.
 import {
@@ -1109,11 +1110,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
             {(() => {
               const internal = getInternalBookmarkIcon(selNode.bookmark.url)
               return internal ? <internal.Icon size={22} /> : (
-                <img
-                  src={`https://www.google.com/s2/favicons?domain=${selNode.bookmark.url}&sz=32`}
-                  className="w-5 h-5"
-                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-                />
+                <Favicon url={selNode.bookmark.url} size={20} />
               )
             })()}
           </div>

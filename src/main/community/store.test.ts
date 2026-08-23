@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest'
 import {
   emptyState, postMessage, visibleMessages, forViewer, toggleReaction,
   setBlocked, reportMessage, isEstablished, cooldownFor,
+  isHandleTaken, memberByHandle, suggestHandles,
   ESTABLISHED_AFTER_MS, ESTABLISHED_AFTER_MESSAGES, AUTO_HIDE_REPORTS,
   type CommunityState,
 } from './store'
 import { MEMBER_COOLDOWN_MS, NEW_MEMBER_COOLDOWN_MS, type Member } from '../../shared/community'
+import { handleKey } from '../../shared/communityHandle'
 
 const NOW = 1_700_000_000_000
 const DAY = 24 * 60 * 60 * 1000
@@ -14,7 +16,11 @@ let counter = 0
 const newId = () => `id-${++counter}`
 
 function member(id: string, over: Partial<Member> = {}): Member {
-  return { id, handle: `user-${id}`, avatarSeed: id, createdAt: NOW - 2 * DAY, ...over }
+  const handle = over.handle ?? `user-${id}`
+  return {
+    id, handle, handleKey: handleKey(handle), avatarSeed: id,
+    createdAt: NOW - 2 * DAY, ...over,
+  }
 }
 
 function stateWith(...members: Member[]): CommunityState {
@@ -264,5 +270,44 @@ describe('reports', () => {
   it('reports nothing for a message that does not exist', () => {
     const s = stateWith(member('a'))
     expect(reportMessage(s, 'missing', 'a', 'x', NOW, newId).ok).toBe(false)
+  })
+})
+
+describe('handle uniqueness', () => {
+  it('finds the member holding a name and reports it taken', () => {
+    const s = stateWith(member('a', { handle: 'Grace' }))
+    expect(memberByHandle(s, handleKey('Grace'))?.id).toBe('a')
+    expect(isHandleTaken(s, handleKey('Grace'))).toBe(true)
+    expect(isHandleTaken(s, handleKey('Gracie'))).toBe(false)
+  })
+
+  it('matches regardless of case or width', () => {
+    const s = stateWith(member('a', { handle: 'Grace' }))
+    expect(isHandleTaken(s, handleKey('grace'))).toBe(true)
+    expect(isHandleTaken(s, handleKey('GRACE'))).toBe(true)
+    expect(isHandleTaken(s, handleKey('Ｇｒａｃｅ'))).toBe(true)
+  })
+
+  // Otherwise a member could not re-save their own profile, or change their
+  // own name's capitalisation, without colliding with themselves.
+  it('does not count a member as blocking their own name', () => {
+    const s = stateWith(member('a', { handle: 'Grace' }))
+    expect(isHandleTaken(s, handleKey('grace'), 'a')).toBe(false)
+    expect(isHandleTaken(s, handleKey('grace'), 'someone-else')).toBe(true)
+  })
+
+  it('suggests free alternatives when a name is gone', () => {
+    const s = stateWith(member('a', { handle: 'Grace' }))
+    const out = suggestHandles(s, 'Grace')
+    expect(out).toEqual(['Grace2', 'Grace3', 'Grace4'])
+  })
+
+  it('skips suggestions that are themselves taken', () => {
+    const s = stateWith(
+      member('a', { handle: 'Grace' }),
+      member('b', { handle: 'Grace2' }),
+      member('c', { handle: 'Grace3' }),
+    )
+    expect(suggestHandles(s, 'Grace', 2)).toEqual(['Grace4', 'Grace5'])
   })
 })

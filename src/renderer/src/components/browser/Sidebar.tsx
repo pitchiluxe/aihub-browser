@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
+import Favicon from '../common/Favicon'
 import type { PageType } from '../../../../shared/pageTypes'
 
 interface Props {
@@ -214,11 +215,7 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
               display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
               border: `1px solid ${bm.color || 'rgb(var(--ds-accent) / 0.2)'}30`,
             }}>
-              <img
-                src={`https://www.google.com/s2/favicons?domain=${bm.url}&sz=16`}
-                style={{ width: 11, height: 11, objectFit: 'contain' }}
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-              />
+              <Favicon url={bm.url} size={11} style={{ objectFit: 'contain', borderRadius: 3 }} />
             </div>
             <span style={{ flex: 1, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {bm.title}

@@ -15,6 +15,7 @@ import { useTheme } from '../../hooks/useTheme'
 import { getHoliday, holidayThemeEnabled } from '../../services/holidayService'
 import HolidayLayer from './HolidayLayer'
 import FocusWidget from './FocusWidget'
+import Favicon from '../common/Favicon'
 
 // Code-split: the sphere pulls in d3 (~100KB+) — load it only when opened
 const BookmarkSphere = React.lazy(() => import('./BookmarkSphere'))
@@ -574,22 +575,13 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
           boxShadow: `0 4px 20px ${tint}18, inset 0 1px 0 rgba(255,255,255,0.08)`,
         }}
       >
+        {/* Favicon renders a generated letter tile when there is no real icon.
+            The previous fallback hid a broken <img> and appended a letter span
+            by hand — which only ran after the 404 had already been logged. */}
         {internal ? (
           <internal.Icon size={30} />
         ) : (
-          <img
-            src={`https://www.google.com/s2/favicons?domain=${bm.url}&sz=48`}
-            className="w-8 h-8 object-contain"
-            onError={e => {
-              const t = e.target as HTMLImageElement
-              t.style.display = 'none'
-              const p = t.parentElement!
-              const span = document.createElement('span')
-              span.textContent = bm.title.charAt(0)
-              span.style.cssText = 'font-size:26px;line-height:1'
-              p.appendChild(span)
-            }}
-          />
+          <Favicon url={bm.url} size={32} className="w-8 h-8 object-contain" />
         )}
         <div className="absolute inset-0 rounded-[17px] bg-white/0 group-hover:bg-white/[0.05] transition-all duration-200" />
       </button>
@@ -651,8 +643,7 @@ function RecCard({ rec, index, isLight, onNavigate }: { rec: Recommendation; ind
         el.style.boxShadow = isLight ? '0 2px 10px rgba(0,0,0,0.05)' : '0 2px 14px rgba(0,0,0,0.3)'
       }}
     >
-      <img src={rec.favicon} className="w-7 h-7 rounded-xl shrink-0 mt-0.5"
-        onError={e => { (e.target as HTMLImageElement).src = `https://www.google.com/s2/favicons?domain=${rec.url}&sz=32` }} />
+      <Favicon url={rec.url} size={28} className="w-7 h-7 rounded-xl shrink-0 mt-0.5" />
       <div className="min-w-0">
         <div className={`text-xs font-semibold truncate transition-colors group-hover:text-blue-500 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{rec.title}</div>
         <div className={`text-[10px] truncate mt-0.5 ${isLight ? 'text-slate-400' : 'text-slate-600'}`}>{rec.reason}</div>
@@ -717,8 +708,7 @@ const RecentActivity = memo(function RecentActivity({ isLight, onNavigate }: { i
                   ;(e.currentTarget as HTMLElement).style.borderColor = ''
                 }}
               >
-                <img src={`https://www.google.com/s2/favicons?domain=${h.url}&sz=16`} className="w-3.5 h-3.5 rounded shrink-0"
-                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                <Favicon url={h.url} size={14} className="w-3.5 h-3.5 rounded shrink-0" />
                 <span className={`text-xs truncate ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>
                   {h.title || (() => { try { return new URL(h.url).hostname.replace('www.', '') } catch { return h.url } })()}
                 </span>
