@@ -1,8 +1,8 @@
 # Community — Slice 1: Identity & Shell
 
 **Date:** 2026-08-23
-**Status:** Approved design, ready for implementation plan
-**Slice:** 1 of 5 (see *Roadmap* at the end)
+**Status:** SHIPPED in v1.53.0 — see *What actually shipped* below
+**Slice:** 1 and 2 of 5 (see *Roadmap* at the end)
 
 ---
 
@@ -12,7 +12,9 @@ Give AIHub Browser a Community section: rooms where users of the app meet and
 talk. Slice 1 builds the foundation everything else stands on — an anonymous but
 enforceable identity, the sidebar entry, the page shell, and the channel rail.
 
-Slice 1 does **not** send or display messages. That is Slice 2.
+Slice 1 did **not** originally include messages. They were pulled forward and
+shipped together in v1.53.0; the sections below are marked where the delivered
+build differs from this design.
 
 ## Why this is different from every feature shipped so far
 
@@ -50,9 +52,25 @@ requirements in Slice 4, not as polish.
 
 ### Release gate
 
-Slice 1 is not released on its own. A build containing Community must also
-contain Slice 2, or the sidebar entry leads to a room that cannot be used. Slice
-1 is verified by tests and by manual run, not by shipping.
+Slice 1 was not released on its own — a sidebar entry leading to a room that
+cannot be used is worse than no entry. Slices 1 and 2 shipped together as
+v1.53.0.
+
+## What actually shipped in v1.53.0
+
+Differences from the design above, all deliberate:
+
+| Design said | Shipped as | Why |
+|---|---|---|
+| Handles not unique, disambiguated by a `·a3f1` suffix | **Handles are unique**, folded on case and width; taken names offer numbered alternatives | Product decision: a name should identify one person without reading a hex code |
+| Bible Study the only active channel | **All seven channels active** — Bible Study, Developers & AI, Cybersecurity, Traders, Sports, Entertainment, Jobs | A channel costs one array entry; how many to *open* is a runtime decision, not a build one |
+| Supabase backend | **Local-only preview.** Messages persist to `community-data.json` in `userData` and reach nobody else; the UI says so on the onboarding screen and above the composer | Supabase is not provisioned yet. The store is pure functions over a state object, so the rules become RLS policies unchanged |
+| Slice 1 excludes messages | Messages, composer, reactions, verse cards, prayer wall, blocking and reporting all shipped | See release gate above |
+
+Not yet shipped from this design: the Edge Functions, the JWT exchange, the
+nonce table, and anything that requires a server. The Ed25519 keypair, the
+signing envelope and `safeStorage` handling are all in place and are what the
+server will authenticate against when it exists.
 
 ---
 
@@ -201,10 +219,17 @@ server as the actual gate):
 - Rejects a server-side profanity and impersonation list (`admin`, `moderator`,
   `aihub`, `support` and variants)
 
-**Uniqueness is not required.** Two people may both be "Grace". They are
-distinguished in the UI by a four-character suffix derived from the member id,
-rendered in a dimmer color: `Grace·a3f1`. Requiring global uniqueness in a faith
-community means telling people their own name is taken.
+**Uniqueness IS required** (changed after this design was approved; shipped in
+v1.53.0). A handle identifies exactly one member. Comparison folds case and
+Unicode width via `handleKey()`, so "Grace", "grace" and a full-width spelling
+are one name. Cross-script homoglyphs are a documented gap covered by reporting,
+not by folding.
+
+When a name is taken the UI says so while the user types and offers numbered
+alternatives to click. The original reasoning for allowing duplicates, kept
+because the tradeoff is real: requiring global uniqueness in a faith
+community means telling people their own name is taken — which is now what
+happens, softened by suggesting alternatives rather than only refusing.
 
 **Avatars** are generated, never uploaded: `avatarFor(memberId)` is a pure
 function returning an SVG identicon derived from the id. Same id always yields
