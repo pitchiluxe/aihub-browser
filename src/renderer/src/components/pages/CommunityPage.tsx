@@ -2,10 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   BookMarked, Code2, Shield, CandlestickChart, Trophy, Clapperboard, Briefcase,
   Send, Users, Flag, EyeOff, HandHeart, AlertTriangle, KeyRound, Loader2,
+  ShieldAlert, ScrollText, UserCog,
 } from 'lucide-react'
 import { CHANNELS, type ChannelDef, type Message, type MessageKind } from '../../../../shared/community'
 import { validateHandle, joinBlocker } from '../../../../shared/communityHandle'
 import { avatarDataUri } from '../../../../shared/communityAvatar'
+import ModerationPanel from '../community/ModerationPanel'
+import AccountPanel from '../community/AccountPanel'
 
 /**
  * The Community room.
@@ -25,6 +28,11 @@ type Status = any   // shaped by main; narrowed at the use sites below
 
 export default function CommunityPage() {
   const [status, setStatus] = useState<Status | null>(null)
+  // Which pane the rail is pointing at. Channels are the default; the other
+  // three are destinations rather than rooms, so they live beside the channel
+  // rather than inside it.
+  const [view, setView] = useState<'channel' | 'moderation' | 'guidelines' | 'account'>('channel')
+  const [isModerator, setIsModerator] = useState(false)
   const [channel, setChannel] = useState<ChannelDef>(CHANNELS[0])
   const [messages, setMessages] = useState<Message[]>([])
   const [draft, setDraft] = useState('')
@@ -49,6 +57,15 @@ export default function CommunityPage() {
   }, [api])
 
   useEffect(() => { void loadMessages(channel.slug) }, [channel.slug, loadMessages])
+
+  // Whether to offer the queue at all. The answer is advisory: main authorises
+  // every moderation call again regardless of what this says.
+  useEffect(() => {
+    if (!api) return
+    api.moderatorStatus()
+      .then((r: any) => setIsModerator(!!r?.isModerator))
+      .catch(() => setIsModerator(false))
+  }, [api, status])
 
   useEffect(() => {
     if (!api) return
@@ -90,9 +107,24 @@ export default function CommunityPage() {
 
   return (
     <div className="h-full flex" style={{ background: 'rgb(var(--ds-bg))', color: 'rgb(var(--ds-text))' }}>
-      <ChannelRail active={channel} onPick={setChannel} me={me} status={status} />
+      <ChannelRail
+        active={channel}
+        onPick={c => { setChannel(c); setView('channel') }}
+        me={me} status={status}
+        view={view} setView={setView}
+        isModerator={isModerator}
+      />
 
       <div className="flex-1 flex flex-col min-w-0">
+        {view === 'moderation' && <ModerationPanel />}
+        {view === 'guidelines' && <GuidelinesPanel />}
+        {view === 'account' && (
+          <AccountPanel
+            me={me}
+            onGone={() => { setView('channel'); api.status().then(setStatus).catch(() => {}) }}
+          />
+        )}
+        {view === 'channel' && <>
         <ChannelHeader channel={channel} status={status} />
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4" style={{ scrollBehavior: 'smooth' }}>
@@ -112,6 +144,7 @@ export default function CommunityPage() {
               anonymous={anonymous} setAnonymous={setAnonymous}
               error={error} sending={sending} onSend={send}
             />}
+        </>}
       </div>
     </div>
   )
@@ -322,8 +355,9 @@ function LocalPreviewBanner() {
 
 // ── Rail ───────────────────────────────────────────────────────────────────
 
-function ChannelRail({ active, onPick, me, status }: {
+function ChannelRail({ active, onPick, me, status, view, setView, isModerator }: {
   active: ChannelDef; onPick: (c: ChannelDef) => void; me: any; status: any
+  view: string; setView: (v: any) => void; isModerator: boolean
 }) {
   return (
     <div className="h-full flex flex-col shrink-0"
@@ -362,9 +396,88 @@ function ChannelRail({ active, onPick, me, status }: {
             </button>
           )
         })}
+
+        {/* Destinations rather than rooms. Separated by a rule so the channel
+            list still reads as one list. */}
+        <div style={{ height: 1, margin: '10px 4px', background: 'rgb(var(--ds-border))' }} />
+
+        <RailLink on={view === 'guidelines'} onClick={() => setView('guidelines')}
+          icon={<ScrollText size={15} />} accent="#94a3b8">Guidelines</RailLink>
+        <RailLink on={view === 'account'} onClick={() => setView('account')}
+          icon={<UserCog size={15} />} accent="#38bdf8">Your identity</RailLink>
+        {isModerator && (
+          <RailLink on={view === 'moderation'} onClick={() => setView('moderation')}
+            icon={<ShieldAlert size={15} />} accent="#f87171">Reports</RailLink>
+        )}
       </div>
 
       <MemberCard me={me} status={status} />
+    </div>
+  )
+}
+
+function RailLink({ on, icon, accent, children, ...rest }: {
+  on: boolean; icon: React.ReactNode; accent: string; children: React.ReactNode
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button {...rest} className="w-full text-left"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px',
+        marginBottom: 2, borderRadius: 8, cursor: 'pointer',
+        background: on ? `${accent}18` : 'transparent',
+        border: `1px solid ${on ? `${accent}35` : 'transparent'}`,
+        color: on ? accent : 'rgb(var(--ds-muted))',
+      }}>
+      {icon}
+      <span style={{ fontSize: 13, fontWeight: on ? 600 : 400 }}>{children}</span>
+    </button>
+  )
+}
+
+/**
+ * The rules, kept somewhere permanent.
+ *
+ * They are shown once at onboarding, which is exactly when nobody reads them.
+ * A reported member is owed a place to see what they agreed to.
+ */
+function GuidelinesPanel() {
+  return (
+    <div className="flex-1 overflow-y-auto" style={{ padding: '18px 22px', maxWidth: 620 }}>
+      <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Community guidelines</h2>
+      <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, marginBottom: 16 }}>
+        These are the rules you agreed to when you joined.
+      </p>
+
+      <Rule>
+        <strong>Text only.</strong> Nothing can be uploaded into the community — no files,
+        no images, no attachments, ever. Anything shared here is typed here, inside the
+        browser.
+      </Rule>
+      <Rule>
+        <strong>Posts are public and lasting.</strong> Anyone in the room can read what you
+        write. Prayer requests can be posted anonymously, but they are still public.
+      </Rule>
+      <Rule>
+        <strong>Be decent.</strong> Harassment, spam and impersonation get you removed.
+        Every message has a report button.
+      </Rule>
+
+      <h3 style={{ fontSize: 14, fontWeight: 700, margin: '22px 0 8px' }}>What happens when
+        something is reported</h3>
+      <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, lineHeight: 1.65 }}>
+        One report puts a message in front of a moderator. Three from different people hide
+        it from the room straight away, before anyone has looked at it — hidden, not deleted,
+        so a pile-on cannot destroy anything on its own. A moderator then keeps it, removes
+        it, or removes it and bans whoever posted it. A banned member can still read the
+        rooms; they cannot post.
+      </p>
+
+      <h3 style={{ fontSize: 14, fontWeight: 700, margin: '22px 0 8px' }}>New accounts</h3>
+      <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, lineHeight: 1.65 }}>
+        For the first day a new name posts once every thirty seconds and cannot post links.
+        Both limits lift once the account has some history. This is not about you — it is
+        what makes a ban cost something.
+      </p>
     </div>
   )
 }

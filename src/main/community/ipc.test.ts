@@ -258,6 +258,186 @@ describe('community IPC', () => {
     })
   })
 
+  describe('moderation', () => {
+    const dataPath = () => join(userDataDir, 'community-data.json')
+    /**
+     * The store writes on a debounce, so reading the file straight after an
+     * IPC call sees the state from before it. Flush first -- and resolve
+     * jsonStore from the live module graph, because vi.resetModules() hands
+     * the reloaded ./index a fresh registry that a stale import cannot reach.
+     */
+    const readData = async () => {
+      const { flushAllJsonStores } = await import('../jsonStore')
+      flushAllJsonStores()
+      return JSON.parse(fs.readFileSync(dataPath(), 'utf8'))
+    }
+    const writeData = (d: unknown) => fs.writeFileSync(dataPath(), JSON.stringify(d), 'utf8')
+
+    /** Reload the module so it re-reads state we edited underneath it. */
+    async function reload() {
+      handlers.clear()
+      vi.resetModules()
+      const { registerCommunityIpc } = await import('./index')
+      registerCommunityIpc()
+    }
+
+    /** Join, then grant this install's member the moderator flag. */
+    async function joinAsModerator() {
+      const out = await invoke('community:join', 'Grace')
+      const id = out.status.member.id
+      const data = await readData()
+      data.members[id].isAdmin = true
+      writeData(data)
+      await reload()
+      return id
+    }
+
+    /** A second member with one message, reported to the hide threshold. */
+    async function plantReportedMessage(authorId = 'other') {
+      const data = await readData()
+      data.members[authorId] = {
+        id: authorId, handle: 'Loud', handleKey: 'loud',
+        avatarSeed: authorId, createdAt: Date.now() - 10_000,
+      }
+      data.messages.push({
+        id: 'msg-1', channel: 'sports', authorId, authorHandle: 'Loud',
+        authorSeed: authorId, kind: 'text', body: 'contested', createdAt: Date.now(),
+      })
+      data.reports = [
+        { id: 'r1', messageId: 'msg-1', reporterId: 'x', reason: 'a', createdAt: Date.now() },
+        { id: 'r2', messageId: 'msg-1', reporterId: 'y', reason: 'b', createdAt: Date.now() },
+      ]
+      writeData(data)
+      await reload()
+    }
+
+    // Local-only, this install is the whole community, so the person who
+    // joins owns it. Otherwise the Reports queue can never be opened by
+    // anyone and the Report button leads nowhere.
+    it('makes the first member of an install its moderator', async () => {
+      await invoke('community:join', 'Grace')
+      expect(await invoke('community:moderatorStatus')).toMatchObject({ isModerator: true })
+    })
+
+    it('does not hand moderation to everyone who joins afterwards', async () => {
+      await invoke('community:join', 'Grace')
+      const data = await readData()
+      // A second member arriving into state that already has an owner.
+      data.members['later'] = {
+        id: 'later', handle: 'Later', handleKey: 'later',
+        avatarSeed: 'later', createdAt: Date.now(),
+      }
+      writeData(data)
+      await reload()
+      expect((await readData()).members['later'].isAdmin).toBeUndefined()
+    })
+
+    it('recognises a moderator', async () => {
+      await joinAsModerator()
+      expect(await invoke('community:moderatorStatus')).toMatchObject({ isModerator: true })
+    })
+
+    // The renderer decides which buttons to draw. It does not decide who may
+    // press them, so the gate has to hold when the call arrives anyway.
+    it('refuses the queue and every action to a non-moderator', async () => {
+      const out = await invoke('community:join', 'Grace')
+      const me = out.status.member.id
+      await plantReportedMessage()
+
+      // The first joiner owns a local install, so take the flag away to get a
+      // genuine ordinary member. Without this the test would assert nothing:
+      // the caller would be a moderator and the calls would rightly succeed.
+      const stripped = await readData()
+      delete stripped.members[me].isAdmin
+      writeData(stripped)
+      await reload()
+      expect((await invoke('community:moderatorStatus')).isModerator).toBe(false)
+
+      expect((await invoke('community:reports')).ok).toBe(false)
+      expect((await invoke('community:resolveReport', { messageId: 'msg-1', action: 'remove' })).ok)
+        .toBe(false)
+      expect((await invoke('community:setBanned', { memberId: 'other', banned: true })).ok)
+        .toBe(false)
+
+      const data = await readData()
+      expect(data.messages[0].deletedAt).toBeUndefined()
+      expect(data.members['other'].bannedAt).toBeUndefined()
+    })
+
+    it('gives a moderator the queue, worst first', async () => {
+      await joinAsModerator()
+      await plantReportedMessage()
+      const out = await invoke('community:reports')
+      expect(out.ok).toBe(true)
+      expect(out.queue).toHaveLength(1)
+      expect(out.queue[0].count).toBe(2)
+      expect(out.queue[0].message.id).toBe('msg-1')
+    })
+
+    it('keeps a message and clears it from the queue', async () => {
+      await joinAsModerator()
+      await plantReportedMessage()
+      expect((await invoke('community:resolveReport', { messageId: 'msg-1', action: 'keep' })).ok)
+        .toBe(true)
+      expect((await invoke('community:reports')).queue).toHaveLength(0)
+      expect((await readData()).messages[0].deletedAt).toBeUndefined()
+    })
+
+    it('removes a message and bans on request', async () => {
+      await joinAsModerator()
+      await plantReportedMessage()
+      expect((await invoke('community:resolveReport',
+        { messageId: 'msg-1', action: 'ban', reason: 'harassment' })).ok).toBe(true)
+
+      const data = await readData()
+      expect(data.messages[0].deletedAt).toBeTruthy()
+      expect(data.members['other'].bannedAt).toBeTruthy()
+      expect(data.members['other'].banReason).toBe('harassment')
+    })
+
+    it('unbans', async () => {
+      const me = await joinAsModerator()
+      await plantReportedMessage()
+      await invoke('community:setBanned', { memberId: 'other', banned: true, reason: 'spam' })
+      expect((await readData()).members['other'].bannedAt).toBeTruthy()
+      await invoke('community:setBanned', { memberId: 'other', banned: false })
+      expect((await readData()).members['other'].bannedAt).toBeUndefined()
+      expect(me).toBeTruthy()
+    })
+
+    it('will not let a moderator ban themselves', async () => {
+      const me = await joinAsModerator()
+      const out = await invoke('community:setBanned', { memberId: me, banned: true })
+      expect(out.ok).toBe(false)
+      expect((await readData()).members[me].bannedAt).toBeUndefined()
+    })
+  })
+
+  describe('delete my data', () => {
+    it('erases the member, their posts, and the device identity', async () => {
+      const out = await invoke('community:join', 'Grace')
+      const id = out.status.member.id
+      await invoke('community:post', { channel: 'sports', kind: 'text', body: 'hello' })
+
+      const deleted = await invoke('community:deleteMyData')
+      expect(deleted.ok).toBe(true)
+      expect(deleted.removed.messages).toBe(1)
+
+      const { flushAllJsonStores } = await import('../jsonStore')
+      flushAllJsonStores()
+      const data = JSON.parse(fs.readFileSync(join(userDataDir, 'community-data.json'), 'utf8'))
+      expect(data.members[id]).toBeUndefined()
+      expect(data.messages).toHaveLength(0)
+
+      // Back to onboarding: the key is gone, so there is no identity to resume.
+      expect((await invoke('community:status')).state).toBe('unregistered')
+    })
+
+    it('refuses when there is nothing to delete', async () => {
+      expect((await invoke('community:deleteMyData')).ok).toBe(false)
+    })
+  })
+
   it('rejects a corrupt identity key without throwing', async () => {
     const out = await invoke('community:importKey', 'not-a-key')
     expect(out.ok).toBe(false)

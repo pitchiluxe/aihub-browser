@@ -109,6 +109,9 @@ export interface Member {
   /** Set by a moderator; a banned member can read but not post. */
   bannedAt?: number
   banReason?: string
+  /** May review reports, hide messages and ban members. Server-issued once
+   *  there is a server; locally it is the owner of this install's own data. */
+  isAdmin?: boolean
 }
 
 /**
@@ -144,7 +147,17 @@ export interface Message {
   createdAt: number
   /** Member ids who reacted, by reaction. 'pray' is the only one so far. */
   reactions?: Record<string, string[]>
+  /**
+   * Withheld from the room pending moderator review, usually by the report
+   * threshold. Distinct from deletedAt on purpose: hiding is provisional and
+   * reversible, deletion is the moderator's verdict. Folding both into one
+   * field left a moderator unable to tell an accusation from a decision, and
+   * unable to put back something the room had merely piled onto.
+   */
+  hiddenAt?: number
   deletedAt?: number
+  /** Who removed it, when a moderator did. Absent for an author's own delete. */
+  deletedBy?: string
 }
 
 // ── Limits ─────────────────────────────────────────────────────────────────

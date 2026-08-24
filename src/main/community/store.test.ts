@@ -3,6 +3,7 @@ import {
   emptyState, postMessage, visibleMessages, forViewer, toggleReaction,
   setBlocked, reportMessage, isEstablished, cooldownFor,
   isHandleTaken, memberByHandle, suggestHandles,
+  canModerate, openReports, resolveReports, setBanned, deleteMessage, eraseMember,
   ESTABLISHED_AFTER_MS, ESTABLISHED_AFTER_MESSAGES, AUTO_HIDE_REPORTS,
   type CommunityState,
 } from './store'
@@ -253,7 +254,10 @@ describe('reports', () => {
       expect(reportMessage(s, id, `reporter-${i}`, 'abuse', NOW, newId).hidden).toBe(false)
     }
     expect(reportMessage(s, id, `reporter-${AUTO_HIDE_REPORTS}`, 'abuse', NOW, newId).hidden).toBe(true)
-    expect(s.messages[0].deletedAt).toBeTruthy()
+    // Hidden, not deleted: the threshold is an accusation, not a verdict, and
+    // a moderator has to be able to put it back.
+    expect(s.messages[0].hiddenAt).toBeTruthy()
+    expect(s.messages[0].deletedAt).toBeUndefined()
   })
 
   // Otherwise one determined person can hide anything they dislike.
@@ -309,5 +313,191 @@ describe('handle uniqueness', () => {
       member('c', { handle: 'Grace3' }),
     )
     expect(suggestHandles(s, 'Grace', 2)).toEqual(['Grace4', 'Grace5'])
+  })
+})
+
+
+describe('moderation', () => {
+  /** A room with one moderator, one ordinary member, and one posted message. */
+  function room() {
+    const s = stateWith(
+      member('mod', { isAdmin: true }),
+      member('a'),
+      member('b'),
+      member('c'),
+    )
+    postMessage(s, { memberId: 'a', channel: 'sports', kind: 'text', body: 'contested' }, NOW, newId)
+    return { s, messageId: s.messages[0].id }
+  }
+
+  function reportBy(s: CommunityState, messageId: string, who: string[]) {
+    for (const id of who) reportMessage(s, messageId, id, 'abuse', NOW, newId)
+  }
+
+  it('only lets admins moderate', () => {
+    const { s } = room()
+    expect(canModerate(s, 'mod')).toBe(true)
+    expect(canModerate(s, 'a')).toBe(false)
+    expect(canModerate(s, 'nobody')).toBe(false)
+  })
+
+  // The bug this replaced: auto-hide wrote deletedAt, so a pile-on and a
+  // moderator's verdict were indistinguishable and neither was reversible.
+  it('hides on the report threshold without deleting', () => {
+    const { s, messageId } = room()
+    reportBy(s, messageId, ['b', 'c', 'mod'])
+    const message = s.messages[0]
+    expect(message.hiddenAt).toBeTruthy()
+    expect(message.deletedAt).toBeUndefined()
+    expect(visibleMessages(s, 'sports', 'b')).toHaveLength(0)
+  })
+
+  it('puts a wrongly-reported message back with keep', () => {
+    const { s, messageId } = room()
+    reportBy(s, messageId, ['b', 'c', 'mod'])
+    expect(resolveReports(s, messageId, 'keep', 'mod', NOW).ok).toBe(true)
+
+    expect(s.messages[0].hiddenAt).toBeUndefined()
+    expect(s.messages[0].deletedAt).toBeUndefined()
+    expect(visibleMessages(s, 'sports', 'b')).toHaveLength(1)
+    expect(openReports(s)).toHaveLength(0)
+  })
+
+  it('removes a message without banning its author', () => {
+    const { s, messageId } = room()
+    reportBy(s, messageId, ['b'])
+    expect(resolveReports(s, messageId, 'remove', 'mod', NOW).ok).toBe(true)
+
+    expect(s.messages[0].deletedAt).toBeTruthy()
+    expect(s.messages[0].deletedBy).toBe('mod')
+    expect(s.members['a'].bannedAt).toBeUndefined()
+  })
+
+  it('bans the author and quotes the reason', () => {
+    const { s, messageId } = room()
+    reportBy(s, messageId, ['b'])
+    resolveReports(s, messageId, 'ban', 'mod', NOW, 'harassment')
+
+    expect(s.members['a'].bannedAt).toBe(NOW)
+    expect(s.members['a'].banReason).toBe('harassment')
+    const blocked = postMessage(s, { memberId: 'a', channel: 'sports', kind: 'text', body: 'again' },
+      NOW + 60_000, newId)
+    expect(blocked.ok).toBe(false)
+  })
+
+  it('refuses to act for a non-moderator', () => {
+    const { s, messageId } = room()
+    reportBy(s, messageId, ['b'])
+    expect(resolveReports(s, messageId, 'remove', 'b', NOW).ok).toBe(false)
+    expect(setBanned(s, 'b', 'a', true, 'because', NOW).ok).toBe(false)
+    expect(s.messages[0].deletedAt).toBeUndefined()
+    expect(s.members['a'].bannedAt).toBeUndefined()
+  })
+
+  it('will not let a moderator ban themselves out of the room', () => {
+    const { s } = room()
+    expect(setBanned(s, 'mod', 'mod', true, 'oops', NOW).ok).toBe(false)
+    expect(s.members['mod'].bannedAt).toBeUndefined()
+  })
+
+  it('resolves the reports so a decision is not re-litigated', () => {
+    const { s, messageId } = room()
+    reportBy(s, messageId, ['b', 'c'])
+    expect(openReports(s)).toHaveLength(1)
+    resolveReports(s, messageId, 'keep', 'mod', NOW)
+    expect(openReports(s)).toHaveLength(0)
+    expect(s.reports.every(r => r.resolvedAt && r.resolution === 'keep')).toBe(true)
+  })
+
+  it('unbans', () => {
+    const { s } = room()
+    setBanned(s, 'mod', 'a', true, 'spam', NOW)
+    expect(s.members['a'].bannedAt).toBeTruthy()
+    setBanned(s, 'mod', 'a', false, '', NOW)
+    expect(s.members['a'].bannedAt).toBeUndefined()
+    expect(s.members['a'].banReason).toBeUndefined()
+  })
+
+  it('queues the most-reported message first', () => {
+    const { s } = room()
+    postMessage(s, { memberId: 'b', channel: 'sports', kind: 'text', body: 'second' }, NOW + 1, newId)
+    const [first, second] = s.messages
+    reportMessage(s, first.id, 'c', 'x', NOW, newId)
+    reportBy(s, second.id, ['a', 'c', 'mod'])
+
+    const queue = openReports(s)
+    expect(queue[0].message.id).toBe(second.id)
+    expect(queue[0].count).toBe(3)
+    expect(queue[1].count).toBe(1)
+  })
+})
+
+describe('deleting', () => {
+  it('lets an author remove their own message', () => {
+    const s = stateWith(member('a'))
+    postMessage(s, { memberId: 'a', channel: 'sports', kind: 'text', body: 'mine' }, NOW, newId)
+    expect(deleteMessage(s, s.messages[0].id, 'a', NOW).ok).toBe(true)
+    expect(s.messages[0].deletedAt).toBeTruthy()
+    // No deletedBy: this was the author, not a moderator acting on them.
+    expect(s.messages[0].deletedBy).toBeUndefined()
+  })
+
+  it('refuses to let one member delete another', () => {
+    const s = stateWith(member('a'), member('b'))
+    postMessage(s, { memberId: 'a', channel: 'sports', kind: 'text', body: 'mine' }, NOW, newId)
+    expect(deleteMessage(s, s.messages[0].id, 'b', NOW).ok).toBe(false)
+    expect(s.messages[0].deletedAt).toBeUndefined()
+  })
+})
+
+describe('erasing a member (delete my data)', () => {
+  function populated() {
+    const s = stateWith(member('a'), member('b', { isAdmin: true }))
+    postMessage(s, { memberId: 'a', channel: 'sports', kind: 'text', body: 'mine one' }, NOW, newId)
+    postMessage(s, { memberId: 'b', channel: 'sports', kind: 'text', body: 'theirs' }, NOW, newId)
+    postMessage(s, { memberId: 'a', channel: 'sports', kind: 'text', body: 'mine two' },
+      NOW + NEW_MEMBER_COOLDOWN_MS + 1, newId)
+    const theirs = s.messages.find(m => m.authorId === 'b')!
+    toggleReaction(s, theirs.id, 'a', 'pray')
+    reportMessage(s, theirs.id, 'a', 'rude', NOW, newId)
+    setBlocked(s, 'b', 'a', true)
+    return s
+  }
+
+  it('removes the member, their messages, their reactions and their reports', () => {
+    const s = populated()
+    const removed = eraseMember(s, 'a')
+
+    expect(removed.messages).toBe(2)
+    expect(removed.reactions).toBe(1)
+    expect(removed.reports).toBe(1)
+    expect(s.members['a']).toBeUndefined()
+    expect(s.messages.some(m => m.authorId === 'a')).toBe(false)
+    expect(s.reports.some(r => r.reporterId === 'a')).toBe(false)
+  })
+
+  it('leaves everyone else intact', () => {
+    const s = populated()
+    eraseMember(s, 'a')
+    expect(s.members['b']).toBeDefined()
+    expect(s.messages).toHaveLength(1)
+    expect(s.messages[0].authorId).toBe('b')
+  })
+
+  it('clears them out of other people block lists', () => {
+    const s = populated()
+    eraseMember(s, 'a')
+    expect(s.blocks['b'] || []).not.toContain('a')
+  })
+
+  // Reports pointing at messages that no longer exist would render as empty
+  // rows in the moderator's queue forever.
+  it('leaves no orphaned reports behind', () => {
+    const s = stateWith(member('a'), member('b'))
+    postMessage(s, { memberId: 'a', channel: 'sports', kind: 'text', body: 'gone soon' }, NOW, newId)
+    reportMessage(s, s.messages[0].id, 'b', 'x', NOW, newId)
+    eraseMember(s, 'a')
+    expect(s.reports).toHaveLength(0)
+    expect(openReports(s)).toHaveLength(0)
   })
 })

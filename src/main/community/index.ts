@@ -7,6 +7,8 @@ import { CHANNELS, type Member } from '../../shared/community'
 import {
   emptyState, postMessage, visibleMessages, forViewer, toggleReaction,
   setBlocked, reportMessage, cooldownFor, isEstablished, isHandleTaken, suggestHandles,
+  canModerate, openReports, resolveReports, setBanned, deleteMessage, eraseMember,
+  type ModerationAction,
   type CommunityState, type PostInput,
 } from './store'
 import {
@@ -201,6 +203,22 @@ export function registerCommunityIpc(): void {
     member.handle = handle.value
     member.handleKey = key
 
+    // Who moderates a local-only community?
+    //
+    // While there is no server, this file IS the community: every install
+    // holds its own private copy, so the person sitting here is the only one
+    // who could review anything in it. The first member on an install
+    // therefore owns it. Without this the Reports queue exists but nobody can
+    // ever open it, and the Report button goes nowhere — which is worse than
+    // having no report button, because it promises moderation that cannot
+    // happen.
+    //
+    // Once the server exists, isAdmin arrives from it and this block goes: a
+    // real community's moderators are not decided by who installed first.
+    if (!Object.values(dataStore.get().members).some(m => m.isAdmin)) {
+      member.isAdmin = true
+    }
+
     dataStore.update(s => { s.members[memberId] = member })
     identityStore.update(i => { if (i) { i.memberId = memberId; i.handle = handle.value } })
 
@@ -301,6 +319,95 @@ export function registerCommunityIpc(): void {
    * there is a separate operation, and claiming otherwise would be a promise
    * the app cannot keep.
    */
+  // -- Moderation ------------------------------------------------------------
+  //
+  // Every handler below re-reads who the caller is from the identity store and
+  // asks the store whether that member may moderate. The renderer's opinion is
+  // never consulted: it decides which buttons to draw, not who may press them.
+
+  /** Who am I, and may I moderate? Drives whether the panel appears at all. */
+  ipcMain.handle('community:moderatorStatus', async () => {
+    const { identityStore, dataStore } = stores()
+    const memberId = identityStore.get()?.memberId
+    if (!memberId) return { ok: true, isModerator: false }
+    return { ok: true, isModerator: canModerate(dataStore.get(), memberId) }
+  })
+
+  ipcMain.handle('community:reports', async () => {
+    const { identityStore, dataStore } = stores()
+    const memberId = identityStore.get()?.memberId
+    if (!memberId || !canModerate(dataStore.get(), memberId)) {
+      return { ok: false, error: 'Not a moderator.', queue: [] }
+    }
+    return { ok: true, queue: openReports(dataStore.get()) }
+  })
+
+  ipcMain.handle('community:resolveReport', async (
+    _e, args: { messageId: string; action: ModerationAction; reason?: string },
+  ) => {
+    const { identityStore, dataStore } = stores()
+    const memberId = identityStore.get()?.memberId
+    if (!memberId) return { ok: false, error: 'No identity on this device yet.' }
+
+    let result: { ok: boolean; error?: string } = { ok: false, error: 'Unknown action.' }
+    dataStore.update(state => {
+      result = resolveReports(
+        state, String(args?.messageId || ''), args?.action as ModerationAction,
+        memberId, Date.now(), String(args?.reason || ''))
+    })
+    if (result.ok) broadcast('community:refresh', null)
+    return result
+  })
+
+  ipcMain.handle('community:setBanned', async (
+    _e, args: { memberId: string; banned: boolean; reason?: string },
+  ) => {
+    const { identityStore, dataStore } = stores()
+    const me = identityStore.get()?.memberId
+    if (!me) return { ok: false, error: 'No identity on this device yet.' }
+
+    let result: { ok: boolean; error?: string } = { ok: false, error: 'Unknown member.' }
+    dataStore.update(state => {
+      result = setBanned(
+        state, me, String(args?.memberId || ''), !!args?.banned,
+        String(args?.reason || ''), Date.now())
+    })
+    if (result.ok) broadcast('community:refresh', null)
+    return result
+  })
+
+  ipcMain.handle('community:deleteMessage', async (_e, messageId: string) => {
+    const { identityStore, dataStore } = stores()
+    const me = identityStore.get()?.memberId
+    if (!me) return { ok: false, error: 'No identity on this device yet.' }
+
+    let result: { ok: boolean; error?: string } = { ok: false, error: 'Unknown message.' }
+    dataStore.update(state => {
+      result = deleteMessage(state, String(messageId || ''), me, Date.now())
+    })
+    if (result.ok) broadcast('community:refresh', null)
+    return result
+  })
+
+  /**
+   * Delete my data. Erases the member and everything they wrote, then drops
+   * the device key so the next visit starts from onboarding.
+   *
+   * Reports the counts back rather than a bare success: a screen that claims
+   * deletion without saying how much invites the question it should answer.
+   */
+  ipcMain.handle('community:deleteMyData', async () => {
+    const { identityStore, dataStore } = stores()
+    const memberId = identityStore.get()?.memberId
+    if (!memberId) return { ok: false, error: 'Nothing to delete on this device.' }
+
+    let removed = { messages: 0, reactions: 0, reports: 0 }
+    dataStore.update(state => { removed = eraseMember(state, memberId) })
+    identityStore.set(null)
+    broadcast('community:refresh', null)
+    return { ok: true, removed }
+  })
+
   ipcMain.handle('community:resetIdentity', async () => {
     const { identityStore } = stores()
     identityStore.set(null)

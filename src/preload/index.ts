@@ -166,6 +166,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     channels: ()                        => ipcRenderer.invoke('community:channels'),
     join:     (handle: string)          => ipcRenderer.invoke('community:join', handle),
     handleAvailable: (handle: string)   => ipcRenderer.invoke('community:handleAvailable', handle),
+    moderatorStatus: ()                 => ipcRenderer.invoke('community:moderatorStatus'),
+    reports:  ()                        => ipcRenderer.invoke('community:reports'),
+    resolveReport: (args: { messageId: string; action: string; reason?: string }) =>
+      ipcRenderer.invoke('community:resolveReport', args),
+    setBanned: (args: { memberId: string; banned: boolean; reason?: string }) =>
+      ipcRenderer.invoke('community:setBanned', args),
+    deleteMessage: (messageId: string)  => ipcRenderer.invoke('community:deleteMessage', messageId),
+    deleteMyData: ()                    => ipcRenderer.invoke('community:deleteMyData'),
     messages: (channel: string)         => ipcRenderer.invoke('community:messages', channel),
     post:     (input: any)              => ipcRenderer.invoke('community:post', input),
     react:    (id: string, r: string)   => ipcRenderer.invoke('community:react', id, r),
