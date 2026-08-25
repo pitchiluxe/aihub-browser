@@ -1,4 +1,4 @@
-import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, webContents as electronWebContents } from 'electron'
+import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, desktopCapturer, webContents as electronWebContents } from 'electron'
 import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname, basename } from 'path'
 import zlib from 'zlib'
 import http from 'http'
@@ -9,7 +9,8 @@ import fs from 'fs'
 import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
-import { registerCommunityIpc } from './community'
+import { registerCommunityIpc, releaseCommunityWindow } from './community'
+import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
 import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel } from './modelRouting'
@@ -73,6 +74,12 @@ try { dns.setDefaultResultOrder('ipv4first') } catch {}
 // Must run before app.whenReady() — setting after has no effect on Chromium.
 const APP_DIR = join(os.homedir(), '.aihub-browser')
 app.setPath('userData', APP_DIR)
+
+// Community attachments are served over their own scheme. Registering it has
+// to happen here, before app is ready: registerSchemesAsPrivileged is ignored
+// afterwards, and without the privilege Chromium treats every attachment URL
+// as an opaque origin and refuses to render it in an <img>.
+registerAttachmentScheme()
 
 // Point GPU and disk caches to our writable directory so Chromium
 // doesn't fight over temp paths that other processes may have locked.
@@ -1527,11 +1534,17 @@ function createAppWindow(initialUrl?: string): AppWin {
   appWins.set(winId, ctx)
   if (!mainWindow || mainWindow.isDestroyed()) mainWindow = win
 
+  // Captured before 'closed', because webContents is gone by the time it fires.
+  const communityPeerId = win.webContents.id
+
   win.on('closed', () => {
     ctx.views.forEach(v => { try { v.webContents.close() } catch {} })
     ctx.views.clear()
     ctx.activeId = null
     appWins.delete(winId)
+    // Nobody clicks Disconnect before closing a window. Without this the room
+    // keeps them in its roster, holding a peer connection with no one behind it.
+    try { releaseCommunityWindow(communityPeerId) } catch {}
     // Keep mainWindow pointing at a window that still exists
     if (mainWindow === win) {
       const next = appWins.values().next()
@@ -1646,11 +1659,56 @@ app.on('second-instance', (_event, commandLine) => {
   else safelySend('open-in-new-tab', url) // no window yet — first one to load takes it
 })
 
+/**
+ * Let getDisplayMedia() work inside the app.
+ *
+ * Chromium's own screen picker belongs to Chrome, not to embedders, so an
+ * Electron app that does nothing here has getDisplayMedia() reject every call.
+ * The handler below is what makes screen sharing possible at all.
+ *
+ * The renderer asks the user which screen or window first (community:screenSources
+ * feeds that chooser) and passes the chosen id through, so the selection is
+ * still a deliberate human act — this never picks a screen on the user's behalf.
+ * A request with no prior choice is denied rather than defaulted to screen 0,
+ * because silently sharing a whole desktop is the one outcome nobody wants.
+ */
+const pendingScreenShare = new Map<number, string>()
+
+/** The renderer records the user's choice here, then calls getDisplayMedia(). */
+ipcMain.handle('community:screenShareChoice', (e, sourceId: string) => {
+  pendingScreenShare.set(e.sender.id, String(sourceId))
+  return { ok: true }
+})
+
+function registerScreenShareHandler(): void {
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    // Resolve the request back to the exact webContents that made it, so one
+    // window's pending choice can never satisfy another window's request.
+    const asker = request.frame ? electronWebContents.fromFrame(request.frame) : null
+    const sourceId = asker ? pendingScreenShare.get(asker.id) : undefined
+    if (asker) pendingScreenShare.delete(asker.id)
+
+    // No prior choice means no share. Defaulting to the first screen would
+    // silently hand over a whole desktop, which is the one outcome nobody wants.
+    if (!sourceId) return callback(undefined as never)
+
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
+    const source = sources.find(s => s.id === sourceId)
+    if (!source) return callback(undefined as never)
+
+    // 'loopback' shares system audio along with a screen on Windows; it is
+    // ignored where the platform cannot do it rather than failing the share.
+    callback({ video: source, audio: 'loopback' })
+  })
+}
+
 app.whenReady().then(() => {
   // Restore the DNS preference before the first navigation, or the session
   // would resolve its first hostnames in plaintext regardless of the setting.
   try { applyDoh(getData().settings?.dohProvider || 'off') } catch {}
   getData()
+  registerAttachmentProtocol()
+  registerScreenShareHandler()
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
   if (isDev) {
     app.on('browser-window-created', (_, w) => {

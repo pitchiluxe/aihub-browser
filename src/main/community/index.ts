@@ -1,9 +1,11 @@
 import crypto from 'crypto'
 import { join } from 'path'
-import { app, ipcMain, safeStorage, BrowserWindow } from 'electron'
+import { app, ipcMain, safeStorage, BrowserWindow, desktopCapturer } from 'electron'
 import { createManagedJsonStore } from '../jsonStore'
 import { validateHandle, handleKey } from '../../shared/communityHandle'
-import { type Member, type Permission } from '../../shared/community'
+import {
+  type Member, type NotifLevel, type Permission, type PresenceStatus,
+} from '../../shared/community'
 import { migrateState } from '../../shared/communityMigrate'
 import { hasPermission, isOwner, resolvePermissions } from '../../shared/communityPermissions'
 import { status as googleStatus, connect as googleConnect } from '../google/auth'
@@ -19,9 +21,14 @@ import {
   emptyState, postMessage, visibleMessages, forViewer, toggleReaction,
   setBlocked, reportMessage, cooldownFor, isEstablished, isHandleTaken, suggestHandles,
   canModerate, openReports, resolveReports, setBanned, deleteMessage, eraseMember,
+  editMessage, threadReplies,
   type ModerationAction,
   type CommunityState, type PostInput,
 } from './store'
+import { searchCommunity, type SearchOptions } from './search'
+import { saveAttachment } from './attachments'
+import { createPresenceTracker } from './presence'
+import { createSignalingHub } from './signaling'
 import {
   generateKeyPair, sealPrivateKey, openPrivateKey, signEnvelope,
   type StoredIdentity,
@@ -103,6 +110,26 @@ function broadcast(channel: string, payload: unknown) {
     if (!win.isDestroyed()) win.webContents.send(channel, payload)
   }
 }
+
+/** Deliver to exactly one window, addressed by its webContents id. */
+function sendToPeer(peerId: string, channel: string, payload: unknown) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue
+    if (String(win.webContents.id) !== peerId) continue
+    win.webContents.send(channel, payload)
+    return
+  }
+}
+
+/**
+ * Presence and the signaling relay, both runtime-only.
+ *
+ * Neither touches disk. Presence that survives a restart is a lie, and a voice
+ * roster that survives one is worse — it would list people in a call that
+ * stopped existing when the process did.
+ */
+const presence = createPresenceTracker()
+const signaling = createSignalingHub(sendToPeer)
 
 export type CommunityStatus =
   | { state: 'unregistered'; network: 'local'; insecureKeyStorage: boolean }
@@ -297,7 +324,15 @@ export function registerCommunityIpc(): void {
     if (signingKey) signEnvelope(signingKey, { action: 'post', messageId: result.message.id })
 
     dataStore.update(() => {})   // mark dirty; state was mutated in place
-    broadcast('community:message', { channel: input.channel, message: forViewer(result.message, '') })
+
+    // Sending is the clearest possible signal that you have stopped typing.
+    // Waiting for the TTL leaves your name under the composer after the
+    // message it was describing is already on screen.
+    presence.stopTyping(who.id, input.channel)
+
+    const published = forViewer(result.message, '')
+    broadcast('community:message', { channel: input.channel, message: published })
+    broadcast('community:event', { type: 'message.new', channel: input.channel, message: published })
     return { ok: true, message: forViewer(result.message, who.id) }
   })
 
@@ -309,6 +344,9 @@ export function registerCommunityIpc(): void {
     if (!message) return { ok: false, error: 'That message is gone.' }
     dataStore.update(() => {})
     broadcast('community:message', { channel: message.channel, message: forViewer(message, '') })
+    broadcast('community:event', {
+      type: 'reaction', channel: message.channel, message: forViewer(message, ''),
+    })
     return { ok: true, message }
   })
 
@@ -656,4 +694,256 @@ export function registerCommunityIpc(): void {
     const take = Math.min(Math.max(1, Number(limit) || 200), 1000)
     return { ok: true, entries: state.auditLog.slice(-take).reverse() }
   })
+
+  // -- Reading the room ------------------------------------------------------
+
+  /**
+   * Everything the shell needs to draw itself, in one call.
+   *
+   * The alternative was six round trips on every channel switch, each one a
+   * separate chance for the sidebar, the header and the member list to be
+   * showing three different moments.
+   */
+  ipcMain.handle('community:snapshot', async () => {
+    const { identityStore, dataStore } = stores()
+    const memberId = identityStore.get()?.memberId || ''
+    const state = dataStore.get()
+
+    return {
+      ok: true,
+      memberId,
+      channels: activeChannels(state),
+      categories: Object.values(state.categories).sort((a, b) => a.position - b.position),
+      roles: Object.values(state.roles).sort((a, b) => b.position - a.position),
+      memberRoles: state.memberRoles,
+      ownership: state.ownership,
+      isOwner: !!memberId && isOwner(state, memberId),
+      permissions: memberId ? [...resolvePermissions(state, memberId)] : [],
+      members: Object.values(state.members).map(m => ({
+        ...m,
+        // Presence is runtime state, so it is joined on the way out rather
+        // than stored next to the member it describes.
+        presence: presence.statusOf(m.id),
+      })),
+      voice: signaling.occupancy(),
+      reads: state.reads[memberId] ?? {},
+      notifPrefs: state.notifPrefs[memberId] ?? {},
+    }
+  })
+
+  ipcMain.handle('community:thread', async (_e, rootId: string) => {
+    const who = requireMember()
+    const viewerId = 'error' in who ? '' : who.id
+    const state = stores().dataStore.get()
+    const root = state.messages.find(m => m.id === String(rootId) && !m.deletedAt)
+    if (!root) return { ok: false, error: 'That conversation is gone.' }
+    return {
+      ok: true,
+      root: forViewer(root, viewerId),
+      replies: threadReplies(state, String(rootId), viewerId).map(m => forViewer(m, viewerId)),
+    }
+  })
+
+  ipcMain.handle('community:editMessage', async (_e, messageId: string, body: string) => {
+    const who = requireMember()
+    if ('error' in who) return { ok: false, error: who.error }
+
+    const { dataStore } = stores()
+    let result: { ok: boolean; error?: string } = { ok: false, error: 'Unknown message.' }
+    dataStore.update(state => { result = editMessage(state, String(messageId), who.id, String(body ?? ''), Date.now()) })
+    if (result.ok) {
+      const message = dataStore.get().messages.find(m => m.id === String(messageId))
+      if (message) broadcast('community:event', { type: 'message.edit', channel: message.channel, message })
+    }
+    return result
+  })
+
+  ipcMain.handle('community:search', async (_e, query: string, options?: SearchOptions) => {
+    const who = requireMember()
+    const viewerId = 'error' in who ? '' : who.id
+    return { ok: true, ...searchCommunity(stores().dataStore.get(), viewerId, String(query ?? ''), options ?? {}) }
+  })
+
+  /** Older messages, one page at a time. `before` is a message id rather than
+   *  an offset — an offset shifts the moment anyone posts while you scroll. */
+  ipcMain.handle('community:history', async (_e, channel: string, before?: string) => {
+    const who = requireMember()
+    const viewerId = 'error' in who ? '' : who.id
+    const state = stores().dataStore.get()
+    const page = visibleMessages(state, String(channel), viewerId, 50, before ? String(before) : undefined)
+    return {
+      ok: true,
+      messages: page.map(m => forViewer(m, viewerId)),
+      // Told explicitly rather than inferred from a short page, so the scroller
+      // stops asking instead of retrying the same empty query forever.
+      exhausted: page.length < 50,
+    }
+  })
+
+  // -- Unread state and notification preferences -----------------------------
+
+  ipcMain.handle('community:markRead', async (_e, channel: string, at?: number) => {
+    const who = requireMember()
+    if ('error' in who) return { ok: false }
+    const { dataStore } = stores()
+    dataStore.update(state => {
+      const mine = state.reads[who.id] ??= {}
+      const stamp = Number(at) || Date.now()
+      // Never move the marker backwards: switching to an old channel and back
+      // must not un-read what has already been seen.
+      mine[String(channel)] = Math.max(mine[String(channel)] ?? 0, stamp)
+    })
+    return { ok: true }
+  })
+
+  ipcMain.handle('community:unread', async () => {
+    const who = requireMember()
+    if ('error' in who) return { ok: true, unread: {}, mentions: {} }
+    const state = stores().dataStore.get()
+    const reads = state.reads[who.id] ?? {}
+    const unread: Record<string, number> = {}
+    const mentions: Record<string, number> = {}
+
+    for (const message of state.messages) {
+      if (message.deletedAt || message.hiddenAt) continue
+      if (message.authorId === who.id) continue
+      if (message.createdAt <= (reads[message.channel] ?? 0)) continue
+      unread[message.channel] = (unread[message.channel] ?? 0) + 1
+      if (message.mentions?.includes(who.id) || message.mentionsEveryone) {
+        mentions[message.channel] = (mentions[message.channel] ?? 0) + 1
+      }
+    }
+    return { ok: true, unread, mentions }
+  })
+
+  ipcMain.handle('community:setNotifPref', async (_e, channel: string, level: NotifLevel) => {
+    const who = requireMember()
+    if ('error' in who) return { ok: false }
+    const allowed: NotifLevel[] = ['all', 'mentions', 'none']
+    if (!allowed.includes(level)) return { ok: false, error: 'Unknown notification level.' }
+
+    const { dataStore } = stores()
+    dataStore.update(state => { (state.notifPrefs[who.id] ??= {})[String(channel)] = level })
+    return { ok: true }
+  })
+
+  // -- Presence and typing ---------------------------------------------------
+
+  ipcMain.handle('community:heartbeat', async (e, status: PresenceStatus) => {
+    const who = requireMember()
+    if ('error' in who) return { ok: true }
+    presence.heartbeat(String(e.sender.id), who.id, status ?? 'online')
+    broadcast('community:event', { type: 'presence', presence: presence.snapshot() })
+    return { ok: true }
+  })
+
+  ipcMain.handle('community:typing', async (_e, channel: string, typing: boolean) => {
+    const who = requireMember()
+    if ('error' in who) return { ok: true }
+    if (typing) presence.startTyping(who.id, String(channel))
+    else presence.stopTyping(who.id, String(channel))
+    broadcast('community:event', {
+      type: 'typing', channel: String(channel), members: presence.typingIn(String(channel)),
+    })
+    return { ok: true }
+  })
+
+  // -- Attachments -----------------------------------------------------------
+
+  /**
+   * Take bytes from the renderer, decide what they are, and store them.
+   *
+   * The renderer sends contents, never a path. It cannot name the file, cannot
+   * choose the directory, and does not learn where the result landed — it gets
+   * a record back and puts that on a message.
+   */
+  ipcMain.handle('community:uploadAttachment', async (_e, name: string, bytes: Uint8Array) => {
+    const who = requireMember()
+    if ('error' in who) return { ok: false, error: who.error }
+    if (!hasPermission(stores().dataStore.get(), who.id, 'attach_files')) {
+      return { ok: false, error: 'You cannot attach files here.' }
+    }
+    return saveAttachment(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes ?? []), String(name ?? 'file'))
+  })
+
+  // -- Voice, video and screen share ----------------------------------------
+
+  ipcMain.handle('community:voice:join', async (e, channel: string) => {
+    const who = requireMember()
+    if ('error' in who) return { ok: false, error: who.error }
+
+    const state = stores().dataStore.get()
+    const room = state.channels[String(channel)]
+    if (!room || room.type !== 'voice') return { ok: false, error: 'That is not a voice channel.' }
+    if (!hasPermission(state, who.id, 'use_voice', String(channel))) {
+      return { ok: false, error: 'You cannot join voice here.' }
+    }
+
+    const peerId = String(e.sender.id)
+    const peers = signaling.join(peerId, who.id, String(channel))
+    presence.joinVoice(peerId, who.id, String(channel))
+    broadcast('community:event', { type: 'voice.occupancy', occupancy: signaling.occupancy() })
+    return { ok: true, peerId, peers }
+  })
+
+  ipcMain.handle('community:voice:leave', async (e) => {
+    const peerId = String(e.sender.id)
+    signaling.leave(peerId)
+    presence.leaveVoice(peerId)
+    broadcast('community:event', { type: 'voice.occupancy', occupancy: signaling.occupancy() })
+    return { ok: true }
+  })
+
+  ipcMain.handle('community:voice:signal', async (e, toPeerId: string, payload: unknown) => {
+    // `from` is the sender's own id, taken here and never read from payload —
+    // otherwise a peer can put someone else's id on an offer.
+    const delivered = signaling.signal(String(e.sender.id), String(toPeerId), payload)
+    return { ok: delivered }
+  })
+
+  ipcMain.handle('community:voice:state', async (e, patch: Record<string, boolean>) => {
+    signaling.setState(String(e.sender.id), patch ?? {})
+    broadcast('community:event', { type: 'voice.occupancy', occupancy: signaling.occupancy() })
+    return { ok: true }
+  })
+
+  /**
+   * The screens and windows available to share.
+   *
+   * Electron has no native picker — Chrome's is not available to an embedder —
+   * so the app builds its own from this list. Thumbnails are small on purpose:
+   * this is a chooser, not a preview.
+   */
+  ipcMain.handle('community:screenSources', async () => {
+    const who = requireMember()
+    if ('error' in who) return { ok: false, error: who.error, sources: [] }
+    if (!hasPermission(stores().dataStore.get(), who.id, 'screen_share')) {
+      return { ok: false, error: 'You cannot share your screen here.', sources: [] }
+    }
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+    })
+    return {
+      ok: true,
+      sources: sources.map(s => ({
+        id: s.id,
+        name: s.name,
+        thumbnail: s.thumbnail.toDataURL(),
+        isScreen: s.id.startsWith('screen:'),
+      })),
+    }
+  })
+}
+
+/**
+ * Forget a window's presence and drop it out of any call.
+ *
+ * Called from the window's own 'closed' handler. Without it a closed window
+ * stays "online" until its heartbeat expires and, worse, stays in the voice
+ * roster with a peer connection nobody is on the other end of.
+ */
+export function releaseCommunityWindow(windowId: number): void {
+  presence.dropWindow(String(windowId))
+  signaling.dropPeer(String(windowId))
 }
