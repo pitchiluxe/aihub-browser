@@ -91,7 +91,7 @@ export const NEW_CHANNELS: Array<Omit<Channel, 'position'>> = [
   },
   {
     slug: 'networking', name: 'networking', type: 'text',
-    description: 'CCNA, routing, switching and troubleshooting.',
+    description: 'CCNA, Cisco, routing, switching and network troubleshooting.',
     icon: 'Network', accent: '#2dd4bf', extras: ['code'], categoryId: 'technology',
   },
   {
