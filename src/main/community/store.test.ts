@@ -196,8 +196,11 @@ describe('reading', () => {
         kind: 'text', body: `m${i}`, createdAt: NOW + i,
       })
     }
+    // One page, not the whole history. The cap dropped from 200 to 50 when
+    // paging arrived: 200 was "as much as the UI could survive rendering at
+    // once", and 50 is a page you scroll back through.
     const out = visibleMessages(s, 'sports', 'a')
-    expect(out).toHaveLength(200)
+    expect(out).toHaveLength(50)
     // The most recent conversation, not the oldest.
     expect(out[out.length - 1].body).toBe('m249')
   })

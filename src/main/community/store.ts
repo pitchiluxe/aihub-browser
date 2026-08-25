@@ -1,7 +1,12 @@
 import {
-  MAX_BODY_CHARS, MEMBER_COOLDOWN_MS, NEW_MEMBER_COOLDOWN_MS,
-  channelBySlug, type Member, type Message, type MessageKind, type VerseRef,
+  MAX_BODY_CHARS, MAX_ATTACHMENTS_PER_MESSAGE,
+  MEMBER_COOLDOWN_MS, NEW_MEMBER_COOLDOWN_MS,
+  type Attachment, type CommunityState, type Member, type Message, type MessageKind,
+  type ModerationAction, type Report, type VerseRef,
 } from '../../shared/community'
+import { hasPermission } from '../../shared/communityPermissions'
+import { isTimedOut } from './admin'
+import { emptyState } from '../../shared/communityMigrate'
 
 /**
  * AIHub Community — the room's rules, as pure functions over a state object.
@@ -14,33 +19,14 @@ import {
  * has DevTools open.
  */
 
-export interface Report {
-  id: string
-  messageId: string
-  reporterId: string
-  reason: string
-  createdAt: number
-  resolvedAt?: number
-  /** What the moderator decided. Kept after resolution so the queue has a
-   *  history and a banned member can be shown why. */
-  resolution?: ModerationAction
-  resolvedBy?: string
-}
-
-/** A moderator's verdict on a reported message. */
-export type ModerationAction = 'keep' | 'remove' | 'ban'
-
-export interface CommunityState {
-  members: Record<string, Member>
-  messages: Message[]
-  /** blockerId -> member ids they never want to see. */
-  blocks: Record<string, string[]>
-  reports: Report[]
-}
-
-export function emptyState(): CommunityState {
-  return { members: {}, messages: [], blocks: {}, reports: [] }
-}
+/**
+ * The state shape moved to ../../shared/community when the renderer started
+ * needing it — a channel editor cannot be written against a type it is not
+ * allowed to import. Re-exported here so the dozens of existing call sites that
+ * import it from the store keep working.
+ */
+export type { CommunityState, Report, ModerationAction }
+export { emptyState }
 
 /**
  * The member holding a handle, if anyone does.
@@ -117,7 +103,35 @@ export interface PostInput {
   verse?: VerseRef
   language?: string
   anonymous?: boolean
+  /** The message this one answers. Also decides which thread it lands in. */
+  replyToId?: string
+  attachments?: Attachment[]
 }
+
+/**
+ * Who a message names.
+ *
+ * Handles are resolved to ids at post time rather than rendered from the text
+ * later, so someone who changes their handle cannot retroactively become the
+ * target of a mention that was aimed at whoever held the name before them.
+ *
+ * The pattern stops at the characters a handle cannot contain, which is what
+ * lets "@Erick," and "@Erick's" resolve rather than silently missing.
+ */
+const MENTION_RE = /@([\p{L}\p{N}_-]{2,32})/gu
+
+export function parseMentions(state: CommunityState, body: string): string[] {
+  const out = new Set<string>()
+  for (const match of String(body ?? '').matchAll(MENTION_RE)) {
+    const wanted = match[1].toLowerCase()
+    for (const member of Object.values(state.members)) {
+      if (member.handle.toLowerCase() === wanted) { out.add(member.id); break }
+    }
+  }
+  return [...out]
+}
+
+const EVERYONE_RE = /@everyone\b/i
 
 export type PostResult =
   | { ok: true; message: Message }
@@ -143,8 +157,23 @@ export function postMessage(
       : 'You cannot post in this community.' }
   }
 
-  const channel = channelBySlug(input.channel)
+  if (isTimedOut(state, input.memberId, now)) {
+    const until = new Date(member.timeoutUntil!).toLocaleTimeString()
+    return { ok: false, error: member.timeoutReason
+      ? `You are timed out until ${until}: ${member.timeoutReason}`
+      : `You are timed out until ${until}.` }
+  }
+
+  // Channels come from state now, not from a constant, because the owner can
+  // create and archive them. An archived channel is read-only rather than gone,
+  // so its history survives but nothing new lands in it.
+  const channel = state.channels[input.channel]
   if (!channel) return { ok: false, error: 'That channel does not exist.' }
+  if (channel.archivedAt) return { ok: false, error: `${channel.name} is archived.` }
+
+  if (!hasPermission(state, input.memberId, 'send_messages', input.channel)) {
+    return { ok: false, error: `You do not have permission to post in ${channel.name}.` }
+  }
 
   // A channel only accepts the kinds it advertises. Checked here rather than
   // trusted from the composer, which is renderer code.
@@ -152,10 +181,33 @@ export function postMessage(
     return { ok: false, error: `${channel.name} does not accept ${input.kind} posts.` }
   }
 
+  const attachments = input.attachments ?? []
+  if (attachments.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+    return { ok: false, error: `At most ${MAX_ATTACHMENTS_PER_MESSAGE} files per message.` }
+  }
+  if (attachments.length && !hasPermission(state, input.memberId, 'attach_files', input.channel)) {
+    return { ok: false, error: `You cannot attach files in ${channel.name}.` }
+  }
+
   const body = String(input.body ?? '').trim()
-  if (!body) return { ok: false, error: 'Write something first.' }
+  // A picture with no caption is a message. Empty text plus nothing is not.
+  if (!body && !attachments.length) return { ok: false, error: 'Write something first.' }
   if (body.length > MAX_BODY_CHARS) {
     return { ok: false, error: `Too long — ${MAX_BODY_CHARS} characters maximum.` }
+  }
+
+  // A reply must point at a live message in the same room, or the quoted stub
+  // above it renders as a dangling reference to something the reader cannot open.
+  let threadRootId: string | undefined
+  if (input.replyToId) {
+    const parent = state.messages.find(m => m.id === input.replyToId && !m.deletedAt)
+    if (!parent) return { ok: false, error: 'That message is no longer here to reply to.' }
+    if (parent.channel !== input.channel) {
+      return { ok: false, error: 'That message is in another channel.' }
+    }
+    // Replying inside a thread stays in that thread. A thread is a room, not a
+    // tree, and nesting produces conversations nobody can navigate back out of.
+    threadRootId = parent.threadRootId ?? parent.id
   }
 
   const established = isEstablished(state, input.memberId, now)
@@ -176,6 +228,10 @@ export function postMessage(
     }
   }
 
+  const mentions = parseMentions(state, body)
+  const mentionsEveryone = EVERYONE_RE.test(body)
+    && hasPermission(state, input.memberId, 'mention_everyone', input.channel)
+
   const message: Message = {
     id: newId(),
     channel: input.channel,
@@ -187,6 +243,14 @@ export function postMessage(
     kind: input.kind,
     body,
     createdAt: now,
+    ...(input.replyToId ? { replyToId: input.replyToId } : {}),
+    ...(threadRootId ? { threadRootId } : {}),
+    ...(mentions.length ? { mentions } : {}),
+    // Dropped rather than refused for someone who may not use it. Refusing
+    // teaches people to probe the boundary; ignoring costs them nothing and
+    // achieves nothing.
+    ...(mentionsEveryone ? { mentionsEveryone: true } : {}),
+    ...(attachments.length ? { attachments } : {}),
     ...(input.verse ? { verse: input.verse } : {}),
     ...(input.language ? { language: input.language } : {}),
     // Only prayer requests may be anonymous. Anonymity everywhere else removes
@@ -217,14 +281,72 @@ export function visibleMessages(
   state: CommunityState,
   channel: string,
   viewerId: string,
-  limit = 200,
+  limit = 50,
+  beforeId?: string,
 ): Message[] {
   const blocked = new Set(state.blocks[viewerId] || [])
-  const visible = state.messages.filter(m =>
-    m.channel === channel && !m.deletedAt && !m.hiddenAt && !blocked.has(m.authorId))
-  // Trim from the front: a room shows its most recent conversation, and the
-  // rest is fetched by scrolling up.
+  let visible = state.messages.filter(m =>
+    m.channel === channel && !m.deletedAt && !m.hiddenAt && !blocked.has(m.authorId)
+    // Thread replies live in the thread panel. Leaving them inline as well
+    // showed every answer twice and made the thread pointless.
+    && !m.threadRootId)
+
+  // Paging backwards from a cursor, because a chat log is read from its end.
+  // The cursor is a message id rather than an offset: an offset shifts under
+  // you the moment anyone posts while you are scrolling.
+  if (beforeId) {
+    const at = visible.findIndex(m => m.id === beforeId)
+    if (at !== -1) visible = visible.slice(0, at)
+  }
   return visible.slice(-limit)
+}
+
+/** One thread's replies, oldest first. The root is not included — the panel
+ *  already renders it as the header. */
+export function threadReplies(
+  state: CommunityState, rootId: string, viewerId: string,
+): Message[] {
+  const blocked = new Set(state.blocks[viewerId] || [])
+  return state.messages.filter(m =>
+    m.threadRootId === rootId && !m.deletedAt && !m.hiddenAt && !blocked.has(m.authorId))
+}
+
+/** How many replies a thread has, for the "3 replies" affordance under a root. */
+export function threadReplyCount(state: CommunityState, rootId: string): number {
+  return state.messages.filter(m => m.threadRootId === rootId && !m.deletedAt && !m.hiddenAt).length
+}
+
+/**
+ * Rewrite a message's body.
+ *
+ * The author, and nobody else — not a moderator, not the owner. Removing
+ * someone's message is moderation; rewriting it leaves different words standing
+ * under their name, which no permission in this design grants. A moderator who
+ * disagrees with a message can delete it, and the audit log will say they did.
+ *
+ * The previous text is not kept. A chat message is not a document, and storing
+ * every draft of every line would quietly build a permanent record of things
+ * people chose to unsay.
+ */
+export function editMessage(
+  state: CommunityState, messageId: string, actorId: string, body: string, now: number,
+): ModerateResult {
+  const message = state.messages.find(m => m.id === messageId)
+  if (!message || message.deletedAt) return { ok: false, error: 'That message no longer exists.' }
+  if (message.authorId !== actorId) return { ok: false, error: 'You can only edit your own messages.' }
+
+  const clean = String(body ?? '').trim()
+  if (!clean && !(message.attachments?.length)) return { ok: false, error: 'Write something first.' }
+  if (clean.length > MAX_BODY_CHARS) {
+    return { ok: false, error: `Too long — ${MAX_BODY_CHARS} characters maximum.` }
+  }
+
+  message.body = clean
+  message.editedAt = now
+  const mentions = parseMentions(state, clean)
+  if (mentions.length) message.mentions = mentions
+  else delete message.mentions
+  return { ok: true }
 }
 
 /** A prayer request's author is hidden from everyone except the author. */
