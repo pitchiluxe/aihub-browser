@@ -3,7 +3,18 @@ import { join } from 'path'
 import { app, ipcMain, safeStorage, BrowserWindow } from 'electron'
 import { createManagedJsonStore } from '../jsonStore'
 import { validateHandle, handleKey } from '../../shared/communityHandle'
-import { CHANNELS, type Member } from '../../shared/community'
+import { type Member, type Permission } from '../../shared/community'
+import { migrateState } from '../../shared/communityMigrate'
+import { hasPermission, isOwner, resolvePermissions } from '../../shared/communityPermissions'
+import { status as googleStatus, connect as googleConnect } from '../google/auth'
+import {
+  activeChannels, claimOwnership, releaseOwnership,
+  createChannel, updateChannel, deleteChannel, restoreChannel, purgeChannel, reorderChannels,
+  createCategory, updateCategory, deleteCategory,
+  createRole, updateRole, deleteRole, assignRole, revokeRole,
+  timeoutMember,
+  type ChannelOrder, type ChannelEdit, type NewChannel,
+} from './admin'
 import {
   emptyState, postMessage, visibleMessages, forViewer, toggleReaction,
   setBlocked, reportMessage, cooldownFor, isEstablished, isHandleTaken, suggestHandles,
@@ -77,6 +88,10 @@ function stores() {
   if (!dataStore) {
     dataStore = createManagedJsonStore<CommunityState>(
       join(app.getPath('userData'), DATA_FILE), emptyState)
+    // Bring a file written by an older build forward before anything reads it.
+    // Done here rather than at each call site because the store loads lazily,
+    // and a single unmigrated read is enough to crash on a missing collection.
+    dataStore.update(state => { migrateState(state) })
   }
   return { identityStore, dataStore }
 }
@@ -151,7 +166,12 @@ export function registerCommunityIpc(): void {
 
   ipcMain.handle('community:status', async () => currentStatus())
 
-  ipcMain.handle('community:channels', async () => CHANNELS)
+  // Channels come from state now. The constant is a seed the migration applied
+  // once; after that this is whatever the owner has shaped.
+  ipcMain.handle('community:channels', async () => activeChannels(stores().dataStore.get()))
+
+  ipcMain.handle('community:categories', async () =>
+    Object.values(stores().dataStore.get().categories).sort((a, b) => a.position - b.position))
 
   ipcMain.handle('community:join', async (_e, rawHandle: string) => {
     const { identityStore, dataStore } = stores()
@@ -465,5 +485,175 @@ export function registerCommunityIpc(): void {
     } catch {
       return { ok: false, error: 'That is not a valid AIHub identity key.' }
     }
+  })
+
+  // -- Ownership and administration -----------------------------------------
+  //
+  // Everything below is an authorization boundary. The renderer decides which
+  // buttons to draw; these handlers decide what may happen, and they ask the
+  // permission engine themselves rather than trusting anything that arrived
+  // over IPC. Calling one of these straight from DevTools reaches exactly this
+  // code with exactly these checks, which is the whole design.
+
+  /**
+   * Run one administrative mutation, persist it and tell every window.
+   *
+   * A single wrapper so no handler can be added later that forgets to identify
+   * its caller — the member id comes from the identity store on this device,
+   * never from an argument.
+   */
+  const admin = async (
+    run: (state: CommunityState, memberId: string) => { ok: boolean; error?: string },
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const { identityStore, dataStore } = stores()
+    const memberId = identityStore.get()?.memberId
+    if (!memberId) return { ok: false, error: 'Join the community first.' }
+
+    let result: { ok: boolean; error?: string } = { ok: false, error: 'Nothing happened.' }
+    dataStore.update(state => { result = run(state, memberId) })
+    if (result.ok) {
+      persistNow()
+      broadcast('community:refresh', { reason: 'admin' })
+    }
+    return result
+  }
+
+  /** Am I the owner, and if someone is, who? */
+  ipcMain.handle('community:ownership', async () => {
+    const { identityStore, dataStore } = stores()
+    const memberId = identityStore.get()?.memberId || ''
+    const state = dataStore.get()
+    return {
+      ok: true,
+      claimed: !!state.ownership,
+      isOwner: !!memberId && isOwner(state, memberId),
+      // Shown only to say whose ownership this is. It is the owner's own
+      // address on the owner's own machine, not another member's data.
+      email: state.ownership?.email ?? null,
+      googleConnected: googleStatus().connected,
+    }
+  })
+
+  /**
+   * Claim community ownership by proving the owner's email to Google.
+   *
+   * Takes no arguments, deliberately. The address is read from the OAuth token
+   * exchange; there is no code path here that accepts one from the caller,
+   * because an address a caller can supply proves nothing about who they are.
+   */
+  ipcMain.handle('community:claimOwnership', async () => {
+    const who = requireMember()
+    if ('error' in who) return { ok: false, error: who.error }
+
+    let email = googleStatus().connected ? googleStatus().email : null
+    if (!email) {
+      // Base scopes only — openid, email and profile. Claiming ownership must
+      // not quietly ask for a mailbox.
+      const connected = await googleConnect([])
+      if (!connected.ok) return { ok: false, error: connected.error }
+      email = connected.email
+    }
+    if (!email) return { ok: false, error: 'Google did not return an email address.' }
+
+    const verified = email
+    const result = await admin((state, memberId) =>
+      claimOwnership(state, memberId, verified, Date.now(), newId))
+    if (result.ok) broadcast('community:status', currentStatus())
+    return result
+  })
+
+  ipcMain.handle('community:releaseOwnership', async () =>
+    admin((state, memberId) => releaseOwnership(state, memberId, Date.now(), newId)))
+
+  /** What may I do, here and in this channel? Drives the UI, never the rules. */
+  ipcMain.handle('community:permissions', async (_e, channel?: string) => {
+    const { identityStore, dataStore } = stores()
+    const memberId = identityStore.get()?.memberId
+    if (!memberId) return { ok: true, permissions: [] as Permission[] }
+    return {
+      ok: true,
+      permissions: [...resolvePermissions(dataStore.get(), memberId, channel ? String(channel) : undefined)],
+    }
+  })
+
+  // -- Channels --------------------------------------------------------------
+
+  ipcMain.handle('community:createChannel', async (_e, input: NewChannel) =>
+    admin((state, memberId) => createChannel(state, memberId, input ?? ({} as NewChannel), Date.now(), newId)))
+
+  ipcMain.handle('community:updateChannel', async (_e, slug: string, edit: ChannelEdit) =>
+    admin((state, memberId) => updateChannel(state, memberId, String(slug), edit ?? {}, Date.now(), newId)))
+
+  ipcMain.handle('community:deleteChannel', async (_e, slug: string) =>
+    admin((state, memberId) => deleteChannel(state, memberId, String(slug), Date.now(), newId)))
+
+  ipcMain.handle('community:restoreChannel', async (_e, slug: string) =>
+    admin((state, memberId) => restoreChannel(state, memberId, String(slug), Date.now(), newId)))
+
+  ipcMain.handle('community:purgeChannel', async (_e, slug: string, confirmSlug: string) =>
+    admin((state, memberId) =>
+      purgeChannel(state, memberId, String(slug), String(confirmSlug ?? ''), Date.now(), newId)))
+
+  ipcMain.handle('community:reorderChannels', async (_e, order: ChannelOrder[]) =>
+    admin((state, memberId) =>
+      reorderChannels(state, memberId, Array.isArray(order) ? order : [], Date.now(), newId)))
+
+  // -- Categories ------------------------------------------------------------
+
+  ipcMain.handle('community:createCategory', async (_e, name: string) =>
+    admin((state, memberId) => createCategory(state, memberId, String(name ?? ''), Date.now(), newId)))
+
+  ipcMain.handle('community:updateCategory', async (_e, id: string, name: string) =>
+    admin((state, memberId) => updateCategory(state, memberId, String(id), String(name ?? ''), Date.now(), newId)))
+
+  ipcMain.handle('community:deleteCategory', async (_e, id: string) =>
+    admin((state, memberId) => deleteCategory(state, memberId, String(id), Date.now(), newId)))
+
+  // -- Roles -----------------------------------------------------------------
+
+  ipcMain.handle('community:roles', async () =>
+    Object.values(stores().dataStore.get().roles).sort((a, b) => b.position - a.position))
+
+  ipcMain.handle('community:createRole', async (_e, input: { name: string; color?: string; permissions: Permission[] }) =>
+    admin((state, memberId) => createRole(state, memberId, input ?? { name: '', permissions: [] }, Date.now(), newId)))
+
+  ipcMain.handle('community:updateRole', async (_e, id: string, edit: any) =>
+    admin((state, memberId) => updateRole(state, memberId, String(id), edit ?? {}, Date.now(), newId)))
+
+  ipcMain.handle('community:deleteRole', async (_e, id: string) =>
+    admin((state, memberId) => deleteRole(state, memberId, String(id), Date.now(), newId)))
+
+  ipcMain.handle('community:assignRole', async (_e, targetId: string, roleId: string) =>
+    admin((state, memberId) => assignRole(state, memberId, String(targetId), String(roleId), Date.now(), newId)))
+
+  ipcMain.handle('community:revokeRole', async (_e, targetId: string, roleId: string) =>
+    admin((state, memberId) => revokeRole(state, memberId, String(targetId), String(roleId), Date.now(), newId)))
+
+  // -- Member sanctions ------------------------------------------------------
+
+  ipcMain.handle('community:timeoutMember', async (
+    _e, args: { memberId: string; durationMs: number; reason?: string },
+  ) => admin((state, memberId) => timeoutMember(
+    state, memberId, String(args?.memberId ?? ''), Number(args?.durationMs ?? 0),
+    String(args?.reason ?? ''), Date.now(), newId)))
+
+  // -- Audit -----------------------------------------------------------------
+
+  /**
+   * The record of who did what.
+   *
+   * Gated on view_audit_log rather than shown to everyone: it names moderators
+   * and the members they acted on, which is exactly the sort of list that turns
+   * moderation into a target.
+   */
+  ipcMain.handle('community:auditLog', async (_e, limit?: number) => {
+    const { identityStore, dataStore } = stores()
+    const memberId = identityStore.get()?.memberId
+    const state = dataStore.get()
+    if (!memberId || !hasPermission(state, memberId, 'view_audit_log')) {
+      return { ok: false, error: 'You cannot view the audit log.', entries: [] }
+    }
+    const take = Math.min(Math.max(1, Number(limit) || 200), 1000)
+    return { ok: true, entries: state.auditLog.slice(-take).reverse() }
   })
 }
