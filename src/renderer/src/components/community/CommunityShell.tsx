@@ -65,9 +65,15 @@ export default function CommunityShell(props: Props) {
   const voice = useVoiceSession()
   const { api, snapshot, messages, unread, mentions, can, memberById, roleFor } = community
 
+  /**
+   * Direct messages are channels, but they are not in the channel list — they
+   * live in their own. Both have to be searched here or opening a conversation
+   * would leave the shell pointing at nothing and bounce back to #general.
+   */
   const channel = useMemo(
-    () => snapshot.channels.find(c => c.slug === activeSlug),
-    [snapshot.channels, activeSlug],
+    () => snapshot.channels.find(c => c.slug === activeSlug)
+      ?? snapshot.conversations.find(c => c.slug === activeSlug),
+    [snapshot.channels, snapshot.conversations, activeSlug],
   )
 
   // Land somewhere real: 'general' may not exist in an older community, and a
@@ -142,7 +148,7 @@ export default function CommunityShell(props: Props) {
   }, [voice])
 
   const canPost = channel
-    ? channel.type !== 'voice' && can('send_messages')
+    ? channel.type !== 'voice' && (channel.type === 'dm' || can('send_messages'))
     : false
 
   const postDisabledReason = !channel
@@ -161,6 +167,7 @@ export default function CommunityShell(props: Props) {
     : ''
 
   return (
+    <div className="cm-frame">
     <div
       className="cm-shell relative"
       style={shellStyle}
@@ -208,6 +215,8 @@ export default function CommunityShell(props: Props) {
         <ChannelSidebar
           categories={snapshot.categories}
           channels={snapshot.channels}
+          conversations={snapshot.conversations}
+          memberId={snapshot.memberId}
           activeSlug={activeSlug}
           unread={unread}
           mentions={mentions}
@@ -234,7 +243,7 @@ export default function CommunityShell(props: Props) {
           <button
             onClick={() => setDrawerOpen(o => !o)}
             aria-label="Show channels"
-            className="rounded p-1 lg:hidden"
+            className="cm-drawer-toggle rounded p-1"
             style={{ color: 'var(--cm-dim)' }}
           >
             <Menu className="h-5 w-5" />
@@ -368,6 +377,7 @@ export default function CommunityShell(props: Props) {
             roles={snapshot.roles}
             roleFor={roleFor}
             ownerId={snapshot.ownership?.memberId}
+            viewerId={snapshot.memberId}
             canModerate={can('manage_members')}
             canManageRoles={can('manage_roles')}
             memberRoles={snapshot.memberRoles}
@@ -378,6 +388,10 @@ export default function CommunityShell(props: Props) {
               const reason = banned ? window.prompt(`Why is ${member?.handle} being banned?`) ?? '' : ''
               await api?.setBanned({ memberId, banned, reason })
               await community.refresh()
+            }}
+            onMessage={async targetId => {
+              const result = await api?.openDm(targetId)
+              if (result?.ok) { await community.refresh(); setActiveSlug(result.channel.slug) }
             }}
             onAssignRole={async (memberId, roleId) => { await api?.assignRole(memberId, roleId); await community.refresh() }}
             onRevokeRole={async (memberId, roleId) => { await api?.revokeRole(memberId, roleId); await community.refresh() }}
@@ -502,6 +516,7 @@ export default function CommunityShell(props: Props) {
           }}
         />
       )}
+    </div>
     </div>
   )
 }

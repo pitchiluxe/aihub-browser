@@ -19,8 +19,10 @@ interface Props {
   roles: Role[]
   roleFor: (memberId: string) => Role | undefined
   ownerId?: string
+  viewerId: string
   canModerate: boolean
   canManageRoles: boolean
+  onMessage: (memberId: string) => void
   onTimeout: (memberId: string) => void
   onBan: (memberId: string) => void
   onAssignRole: (memberId: string, roleId: string) => void
@@ -30,8 +32,8 @@ interface Props {
 
 export default function MemberList(props: Props) {
   const {
-    members, roles, roleFor, ownerId, canModerate, canManageRoles,
-    onTimeout, onBan, onAssignRole, onRevokeRole, memberRoles,
+    members, roles, roleFor, ownerId, viewerId, canModerate, canManageRoles,
+    onMessage, onTimeout, onBan, onAssignRole, onRevokeRole, memberRoles,
   } = props
 
   const [open, setOpen] = useState<string | null>(null)
@@ -96,9 +98,11 @@ export default function MemberList(props: Props) {
                       roles={roles}
                       held={memberRoles[member.id] ?? []}
                       isOwner={isOwner}
+                      isSelf={member.id === viewerId}
                       canModerate={canModerate}
                       canManageRoles={canManageRoles}
                       onClose={() => setOpen(null)}
+                      onMessage={() => { onMessage(member.id); setOpen(null) }}
                       onTimeout={() => { onTimeout(member.id); setOpen(null) }}
                       onBan={() => { onBan(member.id); setOpen(null) }}
                       onAssignRole={roleId => onAssignRole(member.id, roleId)}
@@ -117,7 +121,7 @@ export default function MemberList(props: Props) {
 
 function ProfileCard({
   member, role, roles, held, isOwner, canModerate, canManageRoles,
-  onClose, onTimeout, onBan, onAssignRole, onRevokeRole,
+  onClose, onMessage, onTimeout, onBan, onAssignRole, onRevokeRole, isSelf,
 }: {
   member: CommunityMember
   role?: Role
@@ -127,6 +131,8 @@ function ProfileCard({
   canModerate: boolean
   canManageRoles: boolean
   onClose: () => void
+  onMessage: () => void
+  isSelf: boolean
   onTimeout: () => void
   onBan: () => void
   onAssignRole: (roleId: string) => void
@@ -184,6 +190,16 @@ function ProfileCard({
           </div>
         )}
       </dl>
+
+      {!isSelf && (
+        <button
+          onClick={onMessage}
+          className="mt-3 w-full rounded-lg py-1.5 text-xs font-medium transition-colors"
+          style={{ background: 'color-mix(in srgb, var(--cm-accent) 16%, transparent)', color: 'var(--cm-accent)' }}
+        >
+          Send a message
+        </button>
+      )}
 
       {canManageRoles && !isOwner && (
         <div className="mt-3 border-t pt-2" style={{ borderColor: 'var(--cm-line)' }}>

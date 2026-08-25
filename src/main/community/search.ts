@@ -1,5 +1,6 @@
 import type { Channel, CommunityState, Member, Message } from '../../shared/community'
 import { forViewer } from './store'
+import { inConversation } from './admin'
 
 /**
  * Search across messages, members and channels.
@@ -65,6 +66,9 @@ export function searchCommunity(
     const message = state.messages[i]
     if (message.deletedAt || message.hiddenAt) continue
     if (blocked.has(message.authorId)) continue
+    // Someone else's direct messages are not searchable, in the same way they
+    // are not readable — the check is the same one the read path uses.
+    if (!inConversation(state, message.channel, viewerId)) continue
     if (options.channel && message.channel !== options.channel) continue
     if (options.authorId && message.authorId !== options.authorId) continue
     if (!matchesAll(message.body, terms)) continue
@@ -82,7 +86,7 @@ export function searchCommunity(
     .slice(0, limit)
 
   const channels = Object.values(state.channels)
-    .filter(c => !c.archivedAt)
+    .filter(c => !c.archivedAt && c.type !== 'dm')
     .filter(c => matchesAll(`${c.name} ${c.description} ${c.topic ?? ''}`, terms))
     .slice(0, limit)
 

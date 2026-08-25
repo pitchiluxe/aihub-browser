@@ -282,7 +282,16 @@ export interface Role {
 
 // ── Channels and categories ────────────────────────────────────────────────
 
-export type ChannelType = 'text' | 'voice' | 'announcement'
+/**
+ * A direct message is a channel too.
+ *
+ * The alternative was a parallel table with its own posting rules, its own
+ * read state and its own moderation story. Making it a channel with a
+ * participant list means edits, replies, threads, reactions, attachments,
+ * search, unread counts and rate limits all work in a DM on the first day,
+ * because they are the same code.
+ */
+export type ChannelType = 'text' | 'voice' | 'announcement' | 'dm'
 
 export interface Category {
   id: string
@@ -313,6 +322,12 @@ export interface Channel {
   archivedAt?: number
   /** roleId -> exceptions in this channel. */
   overrides?: Record<string, PermissionOverride>
+  /**
+   * Present only on `dm` channels: exactly the members who may read or post.
+   * Checked in the main process on every read and every write — a DM that
+   * relied on the UI not to show it would not be private.
+   */
+  participants?: string[]
 }
 
 // ── Ownership, moderation, audit ───────────────────────────────────────────

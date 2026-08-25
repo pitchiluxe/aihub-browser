@@ -4,6 +4,7 @@ import {
 } from 'lucide-react'
 import type { Attachment, Message, Role } from '../../../../shared/community'
 import { Avatar, EmptyRoom, timeOf, dayOf } from './bits'
+import EmojiPicker from './EmojiPicker'
 import type { CommunityMember } from './useCommunity'
 
 /**
@@ -309,6 +310,8 @@ function MessageRow(props: RowProps) {
         </p>
       )}
 
+      <LinkCard body={message.body} />
+
       {!!message.attachments?.length && (
         <div className="mt-1.5 flex flex-wrap gap-2">
           {message.attachments.map(attachment => (
@@ -350,21 +353,32 @@ function MessageRow(props: RowProps) {
         className="absolute right-4 top-0 hidden items-center gap-0.5 rounded-lg px-1 py-0.5 group-hover:flex group-focus-within:flex"
         style={{ background: 'var(--cm-raise)', border: '1px solid var(--cm-line)' }}
       >
-        {pickerOpen && (
-          <div className="flex items-center gap-0.5 pr-1">
-            {QUICK_REACTIONS.map(reaction => (
-              <button
-                key={reaction}
-                onClick={() => { onReact(reaction); setPickerOpen(false) }}
-                className="rounded px-1 text-sm hover:bg-[var(--cm-hover)]"
-                aria-label={`React ${reaction}`}
-              >
-                {reaction}
-              </button>
-            ))}
-          </div>
-        )}
-        <RowAction label="Add reaction" onClick={() => setPickerOpen(o => !o)}><SmilePlus className="h-3.5 w-3.5" /></RowAction>
+        {/* The five people reach for, inline; everything else one click away.
+            A full picker as the only option makes a one-tap 👍 a three-tap 👍. */}
+        <div className="flex items-center gap-0.5 pr-1">
+          {QUICK_REACTIONS.map(reaction => (
+            <button
+              key={reaction}
+              onClick={() => onReact(reaction)}
+              className="rounded px-1 text-sm hover:bg-[var(--cm-hover)]"
+              aria-label={`React ${reaction}`}
+            >
+              {reaction}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <RowAction label="More reactions" onClick={() => setPickerOpen(o => !o)}>
+            <SmilePlus className="h-3.5 w-3.5" />
+          </RowAction>
+          {pickerOpen && (
+            <EmojiPicker
+              align="right"
+              onClose={() => setPickerOpen(false)}
+              onPick={reaction => { onReact(reaction); setPickerOpen(false) }}
+            />
+          )}
+        </div>
         <RowAction label="Reply" onClick={onReply}><CornerUpLeft className="h-3.5 w-3.5" /></RowAction>
         <RowAction label="Reply in thread" onClick={onOpenThread}><MessageSquareText className="h-3.5 w-3.5" /></RowAction>
         <RowAction label="Copy text" onClick={() => void navigator.clipboard.writeText(message.body)}>
@@ -422,6 +436,76 @@ function Body({ text, memberById }: { text: string; memberById: Map<string, Comm
         return <span key={index} className="cm-chip">{part}</span>
       })}
     </>
+  )
+}
+
+/**
+ * A card for the first link in a message.
+ *
+ * Fetched when the message renders, not when it arrives, and only for the first
+ * URL. Asking for a preview tells that site someone is reading a conversation
+ * containing its address, so the number of those requests should be the
+ * smallest number that still makes links useful.
+ *
+ * A link with no card stays a plain link. A blank card is worse than none — it
+ * takes space and says less than the URL it replaced.
+ */
+function LinkCard({ body }: { body: string }) {
+  const [preview, setPreview] = useState<any>(null)
+
+  const url = useMemo(() => {
+    const match = /https?:\/\/[^\s<>"')]+/i.exec(body || '')
+    return match ? match[0].replace(/[.,;:!?]+$/, '') : ''
+  }, [body])
+
+  useEffect(() => {
+    if (!url) { setPreview(null); return }
+    let cancelled = false
+    const api = (window as any).electronAPI?.community
+    api?.linkPreview(url)
+      .then((result: any) => { if (!cancelled) setPreview(result) })
+      .catch(() => { /* a link that will not preview is still a link */ })
+    return () => { cancelled = true }
+  }, [url])
+
+  if (!preview) return null
+
+  return (
+    <a
+      href={preview.url}
+      target="_blank"
+      rel="noreferrer"
+      className="mt-1.5 flex max-w-md gap-3 overflow-hidden rounded-lg p-2.5 transition-colors hover:bg-[var(--cm-hover)]"
+      style={{
+        background: 'var(--cm-raise)',
+        borderLeft: '3px solid var(--cm-accent)',
+        border: '1px solid var(--cm-line)',
+        borderLeftWidth: 3,
+        borderLeftColor: 'var(--cm-accent)',
+      }}
+    >
+      <span className="min-w-0 flex-1">
+        {preview.siteName && (
+          <span className="block truncate text-[11px]" style={{ color: 'var(--cm-faint)' }}>
+            {preview.siteName}
+          </span>
+        )}
+        {preview.title && (
+          <span className="block truncate text-sm font-medium" style={{ color: 'var(--cm-accent)' }}>
+            {preview.title}
+          </span>
+        )}
+        {preview.description && (
+          <span className="mt-0.5 line-clamp-2 block text-xs leading-relaxed" style={{ color: 'var(--cm-dim)' }}>
+            {preview.description}
+          </span>
+        )}
+      </span>
+      {preview.image && (
+        <img src={preview.image} alt="" loading="lazy"
+             className="h-16 w-16 shrink-0 rounded object-cover" style={{ background: 'var(--cm-void)' }} />
+      )}
+    </a>
   )
 }
 

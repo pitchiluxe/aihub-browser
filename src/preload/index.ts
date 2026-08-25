@@ -213,6 +213,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     search:    (query: string, options?: any) =>
       ipcRenderer.invoke('community:search', query, options),
 
+    // ── Direct messages and link previews ──────────────────────────────────
+    openDm:    (memberId: string)       => ipcRenderer.invoke('community:openDm', memberId),
+    directMessages: ()                  => ipcRenderer.invoke('community:directMessages'),
+    linkPreview: (url: string)          => ipcRenderer.invoke('community:linkPreview', url),
+
     // ── Unread and notifications ───────────────────────────────────────────
     markRead:  (channel: string, at?: number) => ipcRenderer.invoke('community:markRead', channel, at),
     unread:    ()                       => ipcRenderer.invoke('community:unread'),

@@ -28,6 +28,7 @@ export interface Snapshot {
   permissions: Permission[]
   members: CommunityMember[]
   voice: Record<string, Array<{ peerId: string; memberId: string; muted: boolean; camera: boolean; sharing: boolean }>>
+  conversations: Channel[]
   reads: Record<string, number>
   notifPrefs: Record<string, NotifLevel>
 }
@@ -35,7 +36,7 @@ export interface Snapshot {
 const EMPTY: Snapshot = {
   memberId: '', channels: [], categories: [], roles: [], memberRoles: {},
   ownership: null, isOwner: false, permissions: [], members: [],
-  voice: {}, reads: {}, notifPrefs: {},
+  voice: {}, reads: {}, notifPrefs: {}, conversations: [],
 }
 
 const IDLE_AFTER_MS = 5 * 60_000
@@ -60,8 +61,10 @@ export function useCommunity(activeSlug: string) {
   const refresh = useCallback(async () => {
     if (!api) return
     try {
-      const [snap, counts] = await Promise.all([api.snapshot(), api.unread()])
-      if (snap?.ok) setSnapshot(snap)
+      const [snap, counts, dms] = await Promise.all([
+        api.snapshot(), api.unread(), api.directMessages(),
+      ])
+      if (snap?.ok) setSnapshot({ ...snap, conversations: dms?.conversations ?? [] })
       if (counts?.ok) { setUnread(counts.unread ?? {}); setMentions(counts.mentions ?? {}) }
     } catch { /* keep whatever is on screen; an empty shell is worse */ }
   }, [api])

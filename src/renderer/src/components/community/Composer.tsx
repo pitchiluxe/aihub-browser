@@ -3,6 +3,7 @@ import { Paperclip, Send, Smile, X, CornerUpLeft, Loader2, AlertCircle } from 'l
 import type { Attachment, Message } from '../../../../shared/community'
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '../../../../shared/community'
 import { Avatar } from './bits'
+import EmojiPicker from './EmojiPicker'
 import type { CommunityMember } from './useCommunity'
 
 /**
@@ -14,11 +15,6 @@ import type { CommunityMember } from './useCommunity'
  * a toast that has already gone, and typing notifies once rather than on every
  * keystroke.
  */
-
-const EMOJI = [
-  '👍', '🙏', '🎉', '🔥', '👀', '😀', '😂', '😍', '🤔', '😅',
-  '🙌', '💡', '✅', '❌', '⚡', '🚀', '💻', '📈', '🐛', '☕',
-]
 
 interface Pending {
   key: string
@@ -326,21 +322,20 @@ export default function Composer(props: Props) {
               <Smile className="h-4.5 w-4.5" />
             </button>
             {emojiOpen && (
-              <div
-                className="absolute bottom-full right-0 z-20 mb-2 grid w-56 grid-cols-5 gap-1 rounded-lg p-2"
-                style={{ background: 'var(--cm-raise)', border: '1px solid var(--cm-line)', boxShadow: '0 8px 32px rgb(0 0 0 / .45)' }}
-              >
-                {EMOJI.map(emoji => (
-                  <button
-                    key={emoji}
-                    onClick={() => { setDraft(d => d + emoji); setEmojiOpen(false); input.current?.focus() }}
-                    className="rounded p-1 text-lg hover:bg-[var(--cm-hover)]"
-                    aria-label={`Insert ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
+              <EmojiPicker
+                onClose={() => setEmojiOpen(false)}
+                onPick={emoji => {
+                  // Inserted at the caret rather than appended, so picking an
+                  // emoji mid-sentence does not drop it at the end.
+                  const node = input.current
+                  const at = node?.selectionStart ?? draft.length
+                  setDraft(d => d.slice(0, at) + emoji + d.slice(at))
+                  requestAnimationFrame(() => {
+                    node?.focus()
+                    node?.setSelectionRange(at + emoji.length, at + emoji.length)
+                  })
+                }}
+              />
             )}
           </div>
 

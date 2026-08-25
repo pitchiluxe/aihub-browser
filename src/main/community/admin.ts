@@ -123,10 +123,96 @@ export function slugify(name: string): string {
     .slice(0, 40)
 }
 
+// ── Direct messages ────────────────────────────────────────────────────────
+
+/**
+ * The key for a conversation between two people.
+ *
+ * Both ids, sorted, so whichever side opens it first lands on the same channel.
+ * Deriving the key rather than storing a lookup means "do we already have a
+ * conversation?" is answered without scanning, and two people cannot end up
+ * with two half-full copies of the same thread.
+ */
+export function dmSlug(a: string, b: string): string {
+  return `dm.${[a, b].sort().join('.')}`
+}
+
+/**
+ * Open — or reopen — a direct conversation.
+ *
+ * Needs no permission. A DM is the most ordinary thing two members can do, and
+ * gating it would make it the most privileged. What it does need is both people
+ * to exist and neither to be banned.
+ */
+export function openDirectMessage(
+  state: CommunityState, memberId: string, otherId: string, now: number, newId: () => string,
+): AdminResult<{ channel: Channel }> {
+  const me = state.members[memberId]
+  const them = state.members[otherId]
+  if (!me) return fail('Join the community first.')
+  if (!them) return fail('No such member.')
+  if (memberId === otherId) return fail('You cannot message yourself.')
+  if (me.bannedAt) return fail('You cannot start conversations.')
+  if (them.bannedAt) return fail('That member has been removed from the community.')
+
+  const slug = dmSlug(memberId, otherId)
+  const existing = state.channels[slug]
+  if (existing) return { ok: true, channel: existing }
+
+  const channel: Channel = {
+    slug,
+    // Named per viewer by directMessagesFor; this is only the stored fallback.
+    name: 'Direct message',
+    description: '',
+    icon: 'MessageSquare',
+    accent: '#94a3b8',
+    extras: [],
+    // Not filed under a real category: a DM is not a room in the community and
+    // must never appear in the channel list beside one.
+    categoryId: 'dm',
+    position: 0,
+    type: 'dm',
+    participants: [memberId, otherId].sort(),
+  }
+  state.channels[slug] = channel
+
+  audit(state, memberId, 'channel.created', 'channel', slug, now, newId, { dm: true })
+  return { ok: true, channel }
+}
+
+/** May this member read and write in this channel? Only meaningful for DMs. */
+export function inConversation(state: CommunityState, slug: string, memberId: string): boolean {
+  const channel = state.channels[slug]
+  if (!channel || channel.type !== 'dm') return true
+  return !!channel.participants?.includes(memberId)
+}
+
+/** One member's conversations, newest first, each named after the other person. */
+export function directMessagesFor(state: CommunityState, memberId: string): Channel[] {
+  const lastAt = new Map<string, number>()
+  for (const message of state.messages) {
+    if (!message.channel.startsWith('dm.')) continue
+    const at = lastAt.get(message.channel) ?? 0
+    if (message.createdAt > at) lastAt.set(message.channel, message.createdAt)
+  }
+
+  return Object.values(state.channels)
+    .filter(c => c.type === 'dm' && c.participants?.includes(memberId) && !c.archivedAt)
+    .map(channel => {
+      const otherId = channel.participants!.find(id => id !== memberId) ?? memberId
+      const other = state.members[otherId]
+      return { ...channel, name: other?.handle ?? 'Unknown member' }
+    })
+    .sort((a, b) => (lastAt.get(b.slug) ?? 0) - (lastAt.get(a.slug) ?? 0)
+      || a.name.localeCompare(b.name))
+}
+
 /** Channels the sidebar should show: everything not archived, in rail order. */
 export function activeChannels(state: CommunityState): Channel[] {
   return Object.values(state.channels)
-    .filter(c => !c.archivedAt)
+    // Direct messages have their own list. Filed among the public rooms they
+    // would read as rooms, which is the one thing they must never look like.
+    .filter(c => !c.archivedAt && c.type !== 'dm')
     .sort((a, b) => {
       const ca = state.categories[a.categoryId]?.position ?? 999
       const cb = state.categories[b.categoryId]?.position ?? 999

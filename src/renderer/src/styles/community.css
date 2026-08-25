@@ -58,6 +58,24 @@ body.light-mode .cm-shell {
 
 /* ── Structure ─────────────────────────────────────────────────────────── */
 
+/**
+ * The shell measures itself, not the window.
+ *
+ * The browser's own navigation sidebar sits to the left of this page and can be
+ * open or closed, so the width the workspace actually gets is the viewport minus
+ * whatever that is doing. Media queries could not see that: at a 900px window
+ * with the app sidebar open the community had barely 680px and still drew four
+ * columns, and at phone width it drew a rail and a sliver.
+ *
+ * A container query asks the right question — how much room do *I* have — and
+ * gets the same answer whether the window shrank or the sidebar opened.
+ */
+.cm-frame {
+  height: 100%;
+  container-type: inline-size;
+  container-name: cmshell;
+}
+
 .cm-shell {
   display: grid;
   grid-template-columns: 68px 248px minmax(0, 1fr) 232px;
@@ -74,7 +92,7 @@ body.light-mode .cm-shell {
 
 /* Member list folds away first — it is the pane you can reconstruct from the
    conversation itself. The sidebar goes next, into a drawer. */
-@media (max-width: 1200px) {
+@container cmshell (max-width: 1200px) {
   .cm-shell { grid-template-columns: 68px 248px minmax(0, 1fr); }
   .cm-aside { display: none; }
   .cm-dock  { grid-column: 2 / 4; }
@@ -83,7 +101,7 @@ body.light-mode .cm-shell {
   .cm-shell[data-members='open'] .cm-dock  { grid-column: 2 / 5; }
 }
 
-@media (max-width: 900px) {
+@container cmshell (max-width: 900px) {
   .cm-shell,
   .cm-shell[data-members='open'] { grid-template-columns: 56px minmax(0, 1fr); }
   .cm-main { grid-column: 2; }
@@ -102,12 +120,21 @@ body.light-mode .cm-shell {
     box-shadow: 0 0 40px rgb(0 0 0 / 0.5);
   }
   .cm-shell[data-drawer='open'] .cm-sidebar { transform: translateX(0); }
+
+  /* The control that opens the drawer has to appear on exactly the layout that
+     has a drawer. A viewport breakpoint here would disagree with the container
+     query above the moment the app's own sidebar opened — leaving a hidden
+     channel list and no way to reach it. */
+  .cm-shell .cm-drawer-toggle { display: inline-flex; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .cm-sidebar { transition: none; }
   .cm-speaking { animation: none; }
 }
+
+/* Hidden until the container is narrow enough to need it; see the drawer rule. */
+.cm-drawer-toggle { display: none; }
 
 /* ── Channel rows ──────────────────────────────────────────────────────── */
 

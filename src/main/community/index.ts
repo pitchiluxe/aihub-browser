@@ -1,10 +1,10 @@
 import crypto from 'crypto'
 import { join } from 'path'
-import { app, ipcMain, safeStorage, BrowserWindow, desktopCapturer } from 'electron'
+import { app, ipcMain, safeStorage, BrowserWindow, desktopCapturer, Notification } from 'electron'
 import { createManagedJsonStore } from '../jsonStore'
 import { validateHandle, handleKey } from '../../shared/communityHandle'
 import {
-  type Member, type NotifLevel, type Permission, type PresenceStatus,
+  type Member, type Message, type NotifLevel, type Permission, type PresenceStatus,
 } from '../../shared/community'
 import { migrateState } from '../../shared/communityMigrate'
 import { hasPermission, isOwner, resolvePermissions } from '../../shared/communityPermissions'
@@ -14,7 +14,7 @@ import {
   createChannel, updateChannel, deleteChannel, restoreChannel, purgeChannel, reorderChannels,
   createCategory, updateCategory, deleteCategory,
   createRole, updateRole, deleteRole, assignRole, revokeRole,
-  timeoutMember,
+  timeoutMember, openDirectMessage, directMessagesFor,
   type ChannelOrder, type ChannelEdit, type NewChannel,
 } from './admin'
 import {
@@ -29,6 +29,7 @@ import { searchCommunity, type SearchOptions } from './search'
 import { saveAttachment } from './attachments'
 import { createPresenceTracker } from './presence'
 import { createSignalingHub } from './signaling'
+import { linkPreview } from './linkPreview'
 import {
   generateKeyPair, sealPrivateKey, openPrivateKey, signEnvelope,
   type StoredIdentity,
@@ -130,6 +131,54 @@ function sendToPeer(peerId: string, channel: string, payload: unknown) {
  */
 const presence = createPresenceTracker()
 const signaling = createSignalingHub(sendToPeer)
+
+/**
+ * Raise a desktop notification for a message, if this member asked for one.
+ *
+ * Three gates, in the order that costs least. Never for your own message.
+ * Never while a window of the app is focused — you are already looking at it,
+ * and a notification for something on screen is noise that teaches people to
+ * ignore the next one. And then the member's own preference for that channel:
+ * everything, only when named, or nothing at all.
+ *
+ * Direct messages count as a mention. Someone writing to you personally is the
+ * clearest case there is of "this was meant for you".
+ */
+function notifyFor(message: Message): void {
+  const { identityStore, dataStore } = stores()
+  const me = identityStore.get()?.memberId
+  if (!me || message.authorId === me) return
+  if (BrowserWindow.getAllWindows().some(w => !w.isDestroyed() && w.isFocused())) return
+  if (!Notification.isSupported()) return
+
+  const state = dataStore.get()
+  const channel = state.channels[message.channel]
+  if (!channel) return
+
+  const level: NotifLevel = state.notifPrefs[me]?.[message.channel]
+    ?? (channel.type === 'announcement' ? 'all' : 'mentions')
+  if (level === 'none') return
+
+  const named = message.mentions?.includes(me)
+    || message.mentionsEveryone
+    || channel.type === 'dm'
+  if (level === 'mentions' && !named) return
+
+  const where = channel.type === 'dm' ? message.authorHandle : `#${channel.name}`
+  const notification = new Notification({
+    title: channel.type === 'dm' ? `${message.authorHandle}` : `${message.authorHandle} in ${where}`,
+    body: (message.body || 'Sent an attachment').slice(0, 200),
+    silent: level !== 'all' ? false : true,
+  })
+  notification.on('click', () => {
+    const win = BrowserWindow.getAllWindows().find(w => !w.isDestroyed())
+    if (!win) return
+    if (win.isMinimized()) win.restore()
+    win.focus()
+    win.webContents.send('community:event', { type: 'navigate', channel: message.channel })
+  })
+  notification.show()
+}
 
 export type CommunityStatus =
   | { state: 'unregistered'; network: 'local'; insecureKeyStorage: boolean }
@@ -333,6 +382,7 @@ export function registerCommunityIpc(): void {
     const published = forViewer(result.message, '')
     broadcast('community:message', { channel: input.channel, message: published })
     broadcast('community:event', { type: 'message.new', channel: input.channel, message: published })
+    notifyFor(result.message)
     return { ok: true, message: forViewer(result.message, who.id) }
   })
 
@@ -825,6 +875,43 @@ export function registerCommunityIpc(): void {
     const { dataStore } = stores()
     dataStore.update(state => { (state.notifPrefs[who.id] ??= {})[String(channel)] = level })
     return { ok: true }
+  })
+
+  // -- Direct messages -------------------------------------------------------
+
+  ipcMain.handle('community:openDm', async (_e, otherId: string) => {
+    const who = requireMember()
+    if ('error' in who) return { ok: false, error: who.error }
+
+    const { dataStore } = stores()
+    let result: any = { ok: false, error: 'Could not open that conversation.' }
+    dataStore.update(state => {
+      result = openDirectMessage(state, who.id, String(otherId), Date.now(), newId)
+    })
+    if (result.ok) { persistNow(); broadcast('community:refresh', { reason: 'dm' }) }
+    return result
+  })
+
+  ipcMain.handle('community:directMessages', async () => {
+    const who = requireMember()
+    if ('error' in who) return { ok: true, conversations: [] }
+    return { ok: true, conversations: directMessagesFor(stores().dataStore.get(), who.id) }
+  })
+
+  // -- Link previews ---------------------------------------------------------
+
+  /**
+   * Fetch a link's card.
+   *
+   * Asked for by the renderer per URL, not fetched eagerly when a message
+   * arrives: requesting a preview tells that site someone is looking at a
+   * conversation containing its address, and the smallest number of those
+   * requests is the right number.
+   */
+  ipcMain.handle('community:linkPreview', async (_e, url: string) => {
+    const who = requireMember()
+    if ('error' in who) return null
+    return linkPreview(String(url ?? ''))
   })
 
   // -- Presence and typing ---------------------------------------------------

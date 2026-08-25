@@ -5,7 +5,7 @@ import {
   type ModerationAction, type Report, type VerseRef,
 } from '../../shared/community'
 import { hasPermission } from '../../shared/communityPermissions'
-import { isTimedOut } from './admin'
+import { isTimedOut, inConversation } from './admin'
 import { emptyState } from '../../shared/communityMigrate'
 
 /**
@@ -171,6 +171,13 @@ export function postMessage(
   if (!channel) return { ok: false, error: 'That channel does not exist.' }
   if (channel.archivedAt) return { ok: false, error: `${channel.name} is archived.` }
 
+  // A direct message is readable and writable by exactly two people, and the
+  // check lives here rather than in the UI — a DM that depended on a component
+  // not rendering it would not be private.
+  if (!inConversation(state, input.channel, input.memberId)) {
+    return { ok: false, error: 'That conversation is not yours.' }
+  }
+
   if (!hasPermission(state, input.memberId, 'send_messages', input.channel)) {
     return { ok: false, error: `You do not have permission to post in ${channel.name}.` }
   }
@@ -284,6 +291,10 @@ export function visibleMessages(
   limit = 50,
   beforeId?: string,
 ): Message[] {
+  // Nothing, not a filtered list: a non-participant should not be able to learn
+  // that a conversation has messages in it, let alone how many.
+  if (!inConversation(state, channel, viewerId)) return []
+
   const blocked = new Set(state.blocks[viewerId] || [])
   let visible = state.messages.filter(m =>
     m.channel === channel && !m.deletedAt && !m.hiddenAt && !blocked.has(m.authorId)
@@ -308,7 +319,8 @@ export function threadReplies(
 ): Message[] {
   const blocked = new Set(state.blocks[viewerId] || [])
   return state.messages.filter(m =>
-    m.threadRootId === rootId && !m.deletedAt && !m.hiddenAt && !blocked.has(m.authorId))
+    m.threadRootId === rootId && !m.deletedAt && !m.hiddenAt && !blocked.has(m.authorId)
+    && inConversation(state, m.channel, viewerId))
 }
 
 /** How many replies a thread has, for the "3 replies" affordance under a root. */

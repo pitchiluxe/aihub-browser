@@ -15,6 +15,9 @@ import type { CommunityMember } from './useCommunity'
 interface Props {
   categories: Category[]
   channels: Channel[]
+  /** Direct conversations this member is part of, newest first. */
+  conversations: Channel[]
+  memberId: string
   activeSlug: string
   unread: Record<string, number>
   mentions: Record<string, number>
@@ -29,7 +32,7 @@ interface Props {
 }
 
 export default function ChannelSidebar({
-  categories, channels, activeSlug, unread, mentions, voice, memberById,
+  categories, channels, conversations, memberId, activeSlug, unread, mentions, voice, memberById,
   canManage, onSelect, onJoinVoice, onCreateChannel, onEditChannel, onOpenSettings,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -59,6 +62,44 @@ export default function ChannelSidebar({
       </header>
 
       <div className="flex flex-col gap-4 px-2 py-3">
+        {/* Conversations sit above the rooms, not inside them: a DM is not a
+            place in the community, it is a thread with one person. */}
+        {conversations.length > 0 && (
+          <section>
+            <h2 className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--cm-faint)' }}>
+              Direct messages
+            </h2>
+            <ul className="flex flex-col gap-0.5">
+              {conversations.map(conversation => {
+                const otherId = conversation.participants?.find(id => id !== memberId)
+                const other = otherId ? memberById.get(otherId) : undefined
+                const count = unread[conversation.slug] ?? 0
+                return (
+                  <li key={conversation.slug}>
+                    <button
+                      onClick={() => onSelect(conversation.slug)}
+                      className="cm-channel"
+                      data-active={conversation.slug === activeSlug}
+                      data-unread={count > 0}
+                    >
+                      <Avatar seed={other?.avatarSeed ?? conversation.slug} size={20}
+                              presence={other?.presence} />
+                      <span className="flex-1 truncate">{conversation.name}</span>
+                      {count > 0 && (
+                        <span className="rounded-full px-1.5 text-[10px] font-bold leading-4 text-white"
+                              style={{ background: 'var(--cm-danger)' }}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
+
         {categories.map(category => {
           const inCategory = channels.filter(c => c.categoryId === category.id)
           if (!inCategory.length && !canManage) return null
