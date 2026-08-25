@@ -234,6 +234,9 @@ function MessageRow(props: RowProps) {
 
   return (
     <article
+      // The anchor a search result jumps to. Without it, clicking a hit opened
+      // the right channel and left the reader at the bottom of it.
+      id={`cm-msg-${message.id}`}
       className="cm-msg group py-0.5"
       data-grouped={grouped}
       data-mentioned={mentioned}

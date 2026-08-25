@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Hash, Menu, Search, Users, Bell, BellOff, BellRing, ShieldAlert,
+  Hash, Menu, Search, Users, Bell, BellOff, BellRing, ShieldAlert, AlertCircle,
   UserCog, ScrollText, Megaphone, Loader2,
 } from 'lucide-react'
 import type { Attachment, Channel, Message, NotifLevel } from '../../../../shared/community'
@@ -386,6 +386,30 @@ export default function CommunityShell(props: Props) {
       </div>
 
       {/* ── Voice dock ───────────────────────────────────────────────────── */}
+      {/*
+        A join that fails has to say so. Rendering the dock only once connected
+        meant that a refused microphone, a channel you may not enter, or a
+        connection that never came up all looked identical to clicking nothing
+        at all — the user presses Join and the interface does not react.
+      */}
+      {!voice.channel && (voice.error || voice.connection === 'connecting') && (
+        <div className="cm-dock flex items-center gap-3 px-4 py-2.5" role="status"
+             style={{ borderTop: '1px solid var(--cm-line)' }}>
+          {voice.connection === 'connecting'
+            ? <Loader2 className="h-4 w-4 animate-spin" style={{ color: 'var(--cm-dim)' }} />
+            : <AlertCircle className="h-4 w-4 shrink-0" style={{ color: 'var(--cm-danger)' }} />}
+          <p className="flex-1 text-xs" style={{ color: voice.error ? 'var(--cm-danger)' : 'var(--cm-dim)' }}>
+            {voice.error?.message ?? 'Connecting to voice…'}
+          </p>
+          {voice.error && (
+            <button onClick={() => voice.setError(null)} className="text-xs underline"
+                    style={{ color: 'var(--cm-dim)' }}>
+              Dismiss
+            </button>
+          )}
+        </div>
+      )}
+
       {voice.channel && (
         <div className="cm-dock">
           <VoiceDock
