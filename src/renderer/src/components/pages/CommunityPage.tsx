@@ -1,53 +1,29 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  BookMarked, Code2, Shield, CandlestickChart, Trophy, Clapperboard, Briefcase,
-  Send, Users, Flag, EyeOff, HandHeart, AlertTriangle, KeyRound, Loader2,
-  ShieldAlert, ScrollText, UserCog,
-} from 'lucide-react'
-import { CHANNELS, type ChannelDef, type Message, type MessageKind } from '../../../../shared/community'
+import React, { useCallback, useEffect, useState } from 'react'
+import { Users, AlertTriangle, Loader2, ArrowLeft } from 'lucide-react'
 import { validateHandle, joinBlocker } from '../../../../shared/communityHandle'
 import { avatarDataUri } from '../../../../shared/communityAvatar'
 import ModerationPanel from '../community/ModerationPanel'
 import AccountPanel from '../community/AccountPanel'
+import CommunityShell from '../community/CommunityShell'
 
 /**
- * The Community room.
+ * The Community page.
  *
- * Three panes: channels on the left, the conversation in the middle, the
- * composer underneath. Everything that decides whether a post is allowed lives
- * in the main process — this file renders the answer and never second-guesses
- * it, which is why a rejected post shows the server's sentence rather than one
- * invented here.
+ * This file owns the two things that sit outside the workspace: joining, and
+ * the panels that are destinations rather than rooms (moderation queue,
+ * guidelines, your own account). Everything else — channels, messages, members,
+ * voice — lives in CommunityShell.
  */
 
-const ICONS: Record<string, React.ElementType> = {
-  BookMarked, Code2, Shield, CandlestickChart, Trophy, Clapperboard, Briefcase,
-}
-
 type Status = any   // shaped by main; narrowed at the use sites below
+type View = 'workspace' | 'moderation' | 'guidelines' | 'account'
 
 export default function CommunityPage() {
   const [status, setStatus] = useState<Status | null>(null)
-  // Which pane the rail is pointing at. Channels are the default; the other
-  // three are destinations rather than rooms, so they live beside the channel
-  // rather than inside it.
-  const [view, setView] = useState<'channel' | 'moderation' | 'guidelines' | 'account'>('channel')
+  const [view, setView] = useState<View>('workspace')
   const [isModerator, setIsModerator] = useState(false)
-  const [channel, setChannel] = useState<ChannelDef>(CHANNELS[0])
-  const [messages, setMessages] = useState<Message[]>([])
-  const [draft, setDraft] = useState('')
-  const [kind, setKind] = useState<MessageKind>('text')
-  const [anonymous, setAnonymous] = useState(false)
-  const [error, setError] = useState('')
-  const [sending, setSending] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   const api = (window as any).electronAPI?.community
-
-  const loadMessages = useCallback(async (slug: string) => {
-    if (!api) return
-    try { setMessages(await api.messages(slug)) } catch { /* room stays as-is */ }
-  }, [api])
 
   useEffect(() => {
     if (!api) return
@@ -56,10 +32,8 @@ export default function CommunityPage() {
     return () => offStatus?.()
   }, [api])
 
-  useEffect(() => { void loadMessages(channel.slug) }, [channel.slug, loadMessages])
-
-  // Whether to offer the queue at all. The answer is advisory: main authorises
-  // every moderation call again regardless of what this says.
+  // Whether to offer the queue at all. Advisory only: main authorises every
+  // moderation call again regardless of what this says.
   useEffect(() => {
     if (!api) return
     api.moderatorStatus()
@@ -67,85 +41,44 @@ export default function CommunityPage() {
       .catch(() => setIsModerator(false))
   }, [api, status])
 
-  useEffect(() => {
-    if (!api) return
-    // Reload rather than splicing the pushed message in: the pushed copy is
-    // the anonymized one, and only main knows whether this viewer is the
-    // author who should still see their own name on it.
-    const offMessage = api.onMessage((p: any) => {
-      if (p?.channel === channel.slug) void loadMessages(channel.slug)
-    })
-    const offRefresh = api.onRefresh(() => void loadMessages(channel.slug))
-    return () => { offMessage?.(); offRefresh?.() }
-  }, [api, channel.slug, loadMessages])
-
-  // Pin to the newest message, the way every chat room behaves.
-  useEffect(() => {
-    const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [messages])
-
-  const send = useCallback(async () => {
-    if (!api || !draft.trim() || sending) return
-    setSending(true); setError('')
-    try {
-      const out = await api.post({ channel: channel.slug, kind, body: draft, anonymous })
-      if (out?.ok) { setDraft(''); setKind('text'); setAnonymous(false); void loadMessages(channel.slug) }
-      else setError(out?.error || 'That did not send.')
-    } catch (e: any) {
-      setError(e?.message || 'That did not send.')
-    } finally { setSending(false) }
-  }, [api, draft, kind, anonymous, channel.slug, sending, loadMessages])
+  const backToWorkspace = useCallback(() => setView('workspace'), [])
 
   if (!api) return <Centered>Community is unavailable in this build.</Centered>
   if (!status) return <Centered><Loader2 size={18} className="animate-spin" /> Loading…</Centered>
-  if (status.state === 'unregistered') {
-    return <Onboarding onJoined={setStatus} />
-  }
+  if (status.state === 'unregistered') return <Onboarding onJoined={setStatus} />
 
-  const me = status.member
-
-  return (
-    <div className="h-full flex" style={{ background: 'rgb(var(--ds-bg))', color: 'rgb(var(--ds-text))' }}>
-      <ChannelRail
-        active={channel}
-        onPick={c => { setChannel(c); setView('channel') }}
-        me={me} status={status}
-        view={view} setView={setView}
-        isModerator={isModerator}
-      />
-
-      <div className="flex-1 flex flex-col min-w-0">
+  if (view !== 'workspace') {
+    return (
+      <div className="flex h-full flex-col"
+           style={{ background: 'rgb(var(--ds-bg))', color: 'rgb(var(--ds-text))' }}>
+        <button
+          onClick={backToWorkspace}
+          className="flex items-center gap-2 px-5 py-3 text-sm"
+          style={{ color: 'rgb(var(--ds-muted))', borderBottom: '1px solid rgb(var(--ds-border))' }}
+        >
+          <ArrowLeft size={15} /> Back to the community
+        </button>
         {view === 'moderation' && <ModerationPanel />}
         {view === 'guidelines' && <GuidelinesPanel />}
         {view === 'account' && (
           <AccountPanel
-            me={me}
-            onGone={() => { setView('channel'); api.status().then(setStatus).catch(() => {}) }}
+            me={status.member}
+            onGone={() => { backToWorkspace(); api.status().then(setStatus).catch(() => {}) }}
           />
         )}
-        {view === 'channel' && <>
-        <ChannelHeader channel={channel} status={status} />
-
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4" style={{ scrollBehavior: 'smooth' }}>
-          {messages.length === 0
-            ? <EmptyRoom channel={channel} />
-            : messages.map(m => (
-                <MessageRow key={m.id} message={m} me={me} api={api}
-                  onChanged={() => void loadMessages(channel.slug)} />
-              ))}
-        </div>
-
-        {status.state === 'banned'
-          ? <BannedNotice reason={me.banReason} />
-          : <Composer
-              channel={channel} draft={draft} setDraft={setDraft}
-              kind={kind} setKind={setKind}
-              anonymous={anonymous} setAnonymous={setAnonymous}
-              error={error} sending={sending} onSend={send}
-            />}
-        </>}
       </div>
+    )
+  }
+
+  return (
+    <div className="h-full">
+      {status.state === 'banned' && <BannedNotice reason={status.member?.banReason} />}
+      <CommunityShell
+        isModerator={isModerator}
+        onOpenModeration={() => setView('moderation')}
+        onOpenAccount={() => setView('account')}
+        onOpenGuidelines={() => setView('guidelines')}
+      />
     </div>
   )
 }
@@ -205,22 +138,23 @@ function Onboarding({ onJoined }: { onJoined: (s: any) => void }) {
         </div>
 
         <p style={{ color: 'rgb(var(--ds-muted))', lineHeight: 1.6, marginBottom: 18 }}>
-          Rooms for Bible study, developers, cybersecurity, traders, sport,
-          entertainment and jobs. You post under a name you choose — no email,
-          no password, no account anywhere else.
+          Rooms for AI, technology, cloud, networking, Bible study, trading and
+          the rest. Text channels, voice channels, screen sharing. You post under
+          a name you choose — no email, no password, no account anywhere else.
         </p>
 
         <LocalPreviewBanner />
 
         <Rule>
-          <strong>Text only.</strong> Nothing can be uploaded into the community —
-          no files, no images, no attachments, ever. Anything you share is typed
-          here, inside the browser.
-        </Rule>
-        <Rule>
           <strong>Posts are public and lasting.</strong> Anyone in the room can
           read what you write. Prayer requests can be posted anonymously, but
           they are still public.
+        </Rule>
+        <Rule>
+          <strong>Files stay on this computer.</strong> Images, video and PDFs
+          can be attached. They are checked by their actual contents rather than
+          their name, and stored in your own profile folder — nothing is uploaded
+          anywhere.
         </Rule>
         <Rule>
           <strong>Be decent.</strong> Harassment, spam and impersonation get you
@@ -335,6 +269,10 @@ function Rule({ children }: { children: React.ReactNode }) {
  * There is no server yet. Saying so is not optional: someone who believes they
  * are talking to a room full of people, and is not, has been lied to by the
  * product.
+ *
+ * Voice and video are the one exception worth naming, because they genuinely
+ * work — between windows of this app on this machine and, usually, across a
+ * local network. What they cannot do yet is reach the internet.
  */
 function LocalPreviewBanner() {
   return (
@@ -346,100 +284,17 @@ function LocalPreviewBanner() {
       <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
       <span>
         <strong>Local preview.</strong> The community server is not connected yet,
-        so messages you post stay on this computer and nobody else can see them.
-        Your name and identity key carry over when it goes live.
+        so messages you post stay on this computer and nobody on the internet can
+        see them. Voice, video and screen sharing do work — between windows here
+        and across your own network. Your name and identity key carry over when
+        the server goes live.
       </span>
     </div>
   )
 }
 
-// ── Rail ───────────────────────────────────────────────────────────────────
+// ── Guidelines ─────────────────────────────────────────────────────────────
 
-function ChannelRail({ active, onPick, me, status, view, setView, isModerator }: {
-  active: ChannelDef; onPick: (c: ChannelDef) => void; me: any; status: any
-  view: string; setView: (v: any) => void; isModerator: boolean
-}) {
-  return (
-    <div className="h-full flex flex-col shrink-0"
-         style={{ width: 236, borderRight: '1px solid rgb(var(--ds-border))', background: 'rgb(var(--ds-surface))' }}>
-      <div style={{ padding: '14px 14px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Users size={16} style={{ color: '#34d399' }} />
-        <span style={{ fontWeight: 700, fontSize: 14 }}>Community</span>
-      </div>
-
-      <div style={{ padding: '0 10px 10px' }}>
-        <div style={{
-          fontSize: 10.5, lineHeight: 1.45, color: '#fcd34d', padding: '6px 8px',
-          borderRadius: 6, background: 'rgba(251,191,36,0.10)',
-          border: '1px solid rgba(251,191,36,0.25)',
-        }}>
-          Local preview — not connected to other people yet.
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto" style={{ padding: '0 8px' }}>
-        {CHANNELS.map(c => {
-          const Icon = ICONS[c.icon] || Users
-          const on = c.slug === active.slug
-          return (
-            <button key={c.slug} onClick={() => onPick(c)}
-              className="w-full text-left"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px',
-                marginBottom: 2, borderRadius: 8, cursor: 'pointer',
-                background: on ? `${c.accent}18` : 'transparent',
-                border: `1px solid ${on ? `${c.accent}35` : 'transparent'}`,
-                color: on ? c.accent : 'rgb(var(--ds-text))',
-              }}>
-              <Icon size={15} style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 13, fontWeight: on ? 600 : 400 }}>{c.name}</span>
-            </button>
-          )
-        })}
-
-        {/* Destinations rather than rooms. Separated by a rule so the channel
-            list still reads as one list. */}
-        <div style={{ height: 1, margin: '10px 4px', background: 'rgb(var(--ds-border))' }} />
-
-        <RailLink on={view === 'guidelines'} onClick={() => setView('guidelines')}
-          icon={<ScrollText size={15} />} accent="#94a3b8">Guidelines</RailLink>
-        <RailLink on={view === 'account'} onClick={() => setView('account')}
-          icon={<UserCog size={15} />} accent="#38bdf8">Your identity</RailLink>
-        {isModerator && (
-          <RailLink on={view === 'moderation'} onClick={() => setView('moderation')}
-            icon={<ShieldAlert size={15} />} accent="#f87171">Reports</RailLink>
-        )}
-      </div>
-
-      <MemberCard me={me} status={status} />
-    </div>
-  )
-}
-
-function RailLink({ on, icon, accent, children, ...rest }: {
-  on: boolean; icon: React.ReactNode; accent: string; children: React.ReactNode
-} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button {...rest} className="w-full text-left"
-      style={{
-        display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px',
-        marginBottom: 2, borderRadius: 8, cursor: 'pointer',
-        background: on ? `${accent}18` : 'transparent',
-        border: `1px solid ${on ? `${accent}35` : 'transparent'}`,
-        color: on ? accent : 'rgb(var(--ds-muted))',
-      }}>
-      {icon}
-      <span style={{ fontSize: 13, fontWeight: on ? 600 : 400 }}>{children}</span>
-    </button>
-  )
-}
-
-/**
- * The rules, kept somewhere permanent.
- *
- * They are shown once at onboarding, which is exactly when nobody reads them.
- * A reported member is owed a place to see what they agreed to.
- */
 function GuidelinesPanel() {
   return (
     <div className="flex-1 overflow-y-auto" style={{ padding: '18px 22px', maxWidth: 620 }}>
@@ -449,13 +304,13 @@ function GuidelinesPanel() {
       </p>
 
       <Rule>
-        <strong>Text only.</strong> Nothing can be uploaded into the community — no files,
-        no images, no attachments, ever. Anything shared here is typed here, inside the
-        browser.
-      </Rule>
-      <Rule>
         <strong>Posts are public and lasting.</strong> Anyone in the room can read what you
         write. Prayer requests can be posted anonymously, but they are still public.
+      </Rule>
+      <Rule>
+        <strong>Files stay on this computer.</strong> Images, video and PDFs can be attached.
+        Every file is identified by its actual contents rather than its name, images are
+        re-encoded so location data is stripped, and nothing is uploaded anywhere.
       </Rule>
       <Rule>
         <strong>Be decent.</strong> Harassment, spam and impersonation get you removed.
@@ -472,6 +327,21 @@ function GuidelinesPanel() {
         rooms; they cannot post.
       </p>
 
+      <h3 style={{ fontSize: 14, fontWeight: 700, margin: '22px 0 8px' }}>Timeouts and bans</h3>
+      <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, lineHeight: 1.65 }}>
+        A timeout is the proportionate answer to a bad afternoon: you keep reading, you stop
+        posting, and it lifts by itself. A ban is the answer to something worse. Both are
+        recorded in the audit log with who did it and when.
+      </p>
+
+      <h3 style={{ fontSize: 14, fontWeight: 700, margin: '22px 0 8px' }}>Who runs the community</h3>
+      <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, lineHeight: 1.65 }}>
+        Channels, categories and roles are managed by the community owner, and by nobody
+        else. Ownership is not a setting that can be switched on — it is bound to a verified
+        Google account, checked by the main process on every request. Moderators can remove
+        messages and sanction members; they cannot reshape the community.
+      </p>
+
       <h3 style={{ fontSize: 14, fontWeight: 700, margin: '22px 0 8px' }}>New accounts</h3>
       <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, lineHeight: 1.65 }}>
         For the first day a new name posts once every thirty seconds and cannot post links.
@@ -482,290 +352,12 @@ function GuidelinesPanel() {
   )
 }
 
-function MemberCard({ me, status }: { me: any; status: any }) {
-  return (
-    <div style={{ borderTop: '1px solid rgb(var(--ds-border))', padding: '10px 12px' }}>
-      <div className="flex items-center gap-2">
-        <img src={avatarDataUri(me.avatarSeed, 30)} width={30} height={30} alt=""
-             style={{ borderRadius: 9, flexShrink: 0 }} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {me.handle}
-          </div>
-          <div style={{ fontSize: 10.5, color: 'rgb(var(--ds-muted))' }}>
-            {status.established ? 'Established member' : 'New member — slow mode'}
-          </div>
-        </div>
-      </div>
-      {status.insecureKeyStorage && (
-        <div className="flex gap-1.5 items-start" style={{
-          marginTop: 8, fontSize: 10.5, lineHeight: 1.4, color: '#fca5a5',
-        }}>
-          <KeyRound size={12} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>This system has no keychain, so your identity key is stored unencrypted.</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Conversation ───────────────────────────────────────────────────────────
-
-function ChannelHeader({ channel, status }: { channel: ChannelDef; status: any }) {
-  const Icon = ICONS[channel.icon] || Users
-  return (
-    <div style={{
-      padding: '12px 20px', borderBottom: '1px solid rgb(var(--ds-border))',
-      display: 'flex', alignItems: 'center', gap: 10,
-    }}>
-      <Icon size={17} style={{ color: channel.accent }} />
-      <div>
-        <div style={{ fontWeight: 650, fontSize: 14.5 }}>{channel.name}</div>
-        <div style={{ fontSize: 11.5, color: 'rgb(var(--ds-muted))' }}>{channel.description}</div>
-      </div>
-      {!status.established && (
-        <div style={{
-          marginLeft: 'auto', fontSize: 11, color: 'rgb(var(--ds-muted))',
-          border: '1px solid rgb(var(--ds-border))', borderRadius: 6, padding: '3px 8px',
-        }}>
-          New member: one post every {Math.round(status.cooldownMs / 1000)}s, no links yet
-        </div>
-      )}
-    </div>
-  )
-}
-
-function EmptyRoom({ channel }: { channel: ChannelDef }) {
-  const Icon = ICONS[channel.icon] || Users
-  return (
-    <div className="h-full flex flex-col items-center justify-center text-center" style={{ gap: 10 }}>
-      <Icon size={34} style={{ color: channel.accent, opacity: 0.55 }} />
-      <div style={{ fontWeight: 600 }}>Nothing here yet</div>
-      <div style={{ fontSize: 13, color: 'rgb(var(--ds-muted))', maxWidth: 380, lineHeight: 1.55 }}>
-        {channel.description} Be the first to say something.
-      </div>
-    </div>
-  )
-}
-
-function MessageRow({ message, me, api, onChanged }: {
-  message: Message; me: any; api: any; onChanged: () => void
-}) {
-  const [busy, setBusy] = useState(false)
-  const mine = message.authorId === me.id
-  const prayers = message.reactions?.pray?.length || 0
-  const iPrayed = !!message.reactions?.pray?.includes(me.id)
-
-  const act = async (fn: () => Promise<any>) => {
-    setBusy(true)
-    try { await fn(); onChanged() } finally { setBusy(false) }
-  }
-
-  const report = () => act(async () => {
-    const why = window.prompt('Why are you reporting this message?')
-    if (why) await api.report(message.id, why)
-  })
-
-  return (
-    <div className="group flex gap-3" style={{ padding: '7px 0' }}>
-      <img src={avatarDataUri(message.authorSeed, 34)} width={34} height={34} alt=""
-           style={{ borderRadius: 10, flexShrink: 0 }} />
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div className="flex items-baseline gap-2">
-          <span style={{ fontSize: 13, fontWeight: 650 }}>
-            {message.anonymous && !mine ? 'Anonymous' : message.authorHandle}
-          </span>
-          <span style={{ fontSize: 10.5, color: 'rgb(var(--ds-muted))' }}>
-            {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-          {message.kind !== 'text' && <KindTag kind={message.kind} />}
-
-          <span className="ml-auto opacity-0 group-hover:opacity-100 flex gap-1" style={{ transition: 'opacity .15s' }}>
-            {!mine && (
-              <>
-                <IconBtn title="Report" onClick={report} disabled={busy}><Flag size={12} /></IconBtn>
-                <IconBtn title="Block this person" disabled={busy}
-                  onClick={() => act(() => api.block(message.authorId, true))}><EyeOff size={12} /></IconBtn>
-              </>
-            )}
-          </span>
-        </div>
-
-        <MessageBody message={message} />
-
-        {message.kind === 'prayer' && (
-          <button
-            onClick={() => act(() => api.react(message.id, 'pray'))}
-            disabled={busy}
-            style={{
-              marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6,
-              fontSize: 11.5, padding: '3px 9px', borderRadius: 999, cursor: 'pointer',
-              background: iPrayed ? 'rgba(251,191,36,0.16)' : 'rgb(var(--ds-surface))',
-              border: `1px solid ${iPrayed ? 'rgba(251,191,36,0.4)' : 'rgb(var(--ds-border))'}`,
-              color: iPrayed ? '#fbbf24' : 'rgb(var(--ds-muted))',
-            }}>
-            <HandHeart size={12} />
-            {prayers > 0 ? `${prayers} praying` : 'I am praying'}
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function MessageBody({ message }: { message: Message }) {
-  if (message.kind === 'verse') {
-    return (
-      <div style={{
-        marginTop: 4, padding: '9px 12px', borderRadius: 9,
-        background: 'rgba(251,191,36,0.07)', borderLeft: '3px solid #fbbf24',
-      }}>
-        <div style={{ fontSize: 13.5, lineHeight: 1.6, fontStyle: 'italic' }}>{message.body}</div>
-        {message.verse && (
-          <div style={{ fontSize: 11.5, color: '#fbbf24', marginTop: 5 }}>
-            {message.verse.book} {message.verse.chapter}:{message.verse.verse}
-            {message.verse.endVerse ? `-${message.verse.endVerse}` : ''}
-            {' · '}{message.verse.translation.toUpperCase()}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  if (message.kind === 'code') {
-    // Rendered as text in a <pre>, never evaluated. Nothing in the community
-    // executes, and nothing arrives as a file.
-    return (
-      <pre style={{
-        marginTop: 4, padding: '9px 12px', borderRadius: 9, overflowX: 'auto',
-        background: 'rgb(var(--ds-bg))', border: '1px solid rgb(var(--ds-border))',
-        fontSize: 12.5, lineHeight: 1.5,
-      }}><code>{message.body}</code></pre>
-    )
-  }
-
-  return <div style={{ fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{message.body}</div>
-}
-
-function KindTag({ kind }: { kind: MessageKind }) {
-  const label = kind === 'prayer' ? 'Prayer request'
-    : kind === 'verse' ? 'Verse'
-    : kind === 'testimony' ? 'Testimony'
-    : 'Code'
-  return (
-    <span style={{
-      fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.05em',
-      padding: '1px 6px', borderRadius: 5, color: 'rgb(var(--ds-muted))',
-      border: '1px solid rgb(var(--ds-border))',
-    }}>{label}</span>
-  )
-}
-
-function IconBtn({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button {...rest} style={{
-      padding: 4, borderRadius: 6, cursor: 'pointer',
-      color: 'rgb(var(--ds-muted))', background: 'transparent', border: 'none',
-    }}>{children}</button>
-  )
-}
-
-// ── Composer ───────────────────────────────────────────────────────────────
-
-function Composer(props: {
-  channel: ChannelDef
-  draft: string; setDraft: (v: string) => void
-  kind: MessageKind; setKind: (k: MessageKind) => void
-  anonymous: boolean; setAnonymous: (v: boolean) => void
-  error: string; sending: boolean; onSend: () => void
-}) {
-  const { channel, draft, setDraft, kind, setKind, anonymous, setAnonymous, error, sending, onSend } = props
-
-  return (
-    <div style={{ borderTop: '1px solid rgb(var(--ds-border))', padding: '10px 16px 12px' }}>
-      {/* Built from the channel's own list, so a room never shows a button for
-          something the main process would reject. */}
-      {channel.extras.length > 0 && (
-        <div className="flex gap-1.5 mb-2">
-          <KindChip on={kind === 'text'} onClick={() => setKind('text')} accent={channel.accent}>Message</KindChip>
-          {channel.extras.map(k => (
-            <KindChip key={k} on={kind === k} onClick={() => setKind(k)} accent={channel.accent}>
-              {k === 'verse' ? 'Verse' : k === 'prayer' ? 'Prayer request'
-                : k === 'testimony' ? 'Testimony' : 'Code'}
-            </KindChip>
-          ))}
-        </div>
-      )}
-
-      {kind === 'prayer' && (
-        <label className="flex items-center gap-2 mb-2" style={{ fontSize: 11.5, color: 'rgb(var(--ds-muted))', cursor: 'pointer' }}>
-          <input type="checkbox" checked={anonymous} onChange={e => setAnonymous(e.target.checked)} />
-          Post without my name (still visible to everyone in the room)
-        </label>
-      )}
-
-      <div className="flex gap-2 items-end">
-        <textarea
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => {
-            // Enter sends, Shift+Enter breaks the line — the convention every
-            // chat app has trained people into.
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend() }
-          }}
-          rows={kind === 'code' || kind === 'testimony' ? 4 : 2}
-          maxLength={4000}
-          placeholder={
-            kind === 'prayer' ? 'What would you like prayer for?'
-            : kind === 'verse' ? 'Type the verse, then say what it means to you'
-            : kind === 'code' ? 'Paste code here — it is shown as text and never run'
-            : `Message ${channel.name}`
-          }
-          className="flex-1 px-3 py-2 rounded-lg outline-none resize-none"
-          style={{
-            background: 'rgb(var(--ds-surface))', color: 'rgb(var(--ds-text))',
-            border: '1px solid rgb(var(--ds-border))', fontSize: 13.5, lineHeight: 1.5,
-          }}
-        />
-        <button
-          onClick={onSend}
-          disabled={!draft.trim() || sending}
-          style={{
-            padding: '9px 12px', borderRadius: 9, cursor: draft.trim() ? 'pointer' : 'not-allowed',
-            background: draft.trim() ? channel.accent : 'rgb(var(--ds-surface))',
-            color: draft.trim() ? '#08160f' : 'rgb(var(--ds-muted))',
-            border: '1px solid rgb(var(--ds-border))',
-          }}>
-          {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-        </button>
-      </div>
-
-      {error && <div style={{ color: '#f87171', fontSize: 12, marginTop: 6 }}>{error}</div>}
-      <div style={{ fontSize: 10.5, color: 'rgb(var(--ds-muted))', marginTop: 6 }}>
-        Text only — nothing can be uploaded here. Enter sends, Shift+Enter for a new line.
-      </div>
-    </div>
-  )
-}
-
-function KindChip({ on, accent, children, ...rest }: {
-  on: boolean; accent: string; children: React.ReactNode
-} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button {...rest} style={{
-      fontSize: 11.5, padding: '3px 10px', borderRadius: 999, cursor: 'pointer',
-      background: on ? `${accent}1e` : 'transparent',
-      border: `1px solid ${on ? `${accent}45` : 'rgb(var(--ds-border))'}`,
-      color: on ? accent : 'rgb(var(--ds-muted))',
-    }}>{children}</button>
-  )
-}
-
 function BannedNotice({ reason }: { reason?: string }) {
   return (
     <div style={{
-      borderTop: '1px solid rgb(var(--ds-border))', padding: '14px 18px',
+      borderBottom: '1px solid rgb(var(--ds-border))', padding: '10px 18px',
       color: '#fca5a5', fontSize: 13, lineHeight: 1.55,
+      background: 'rgba(248,113,113,0.08)',
     }}>
       You can read the community but not post{reason ? `: ${reason}` : '.'}
     </div>
