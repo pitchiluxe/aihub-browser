@@ -44,7 +44,7 @@ export async function addBookmarkWithAI(
 // UNDELETABLE_BOOKMARK_URLS there, which is the authority). Mirrored here only
 // so the UI can hide the remove affordance instead of offering a button that
 // silently does nothing.
-const UNDELETABLE_BOOKMARK_URLS = ['aihub://bible']
+const UNDELETABLE_BOOKMARK_URLS = ['aihub://community', 'aihub://bible']
 
 export function isBookmarkProtected(url?: string): boolean {
   return !!url && UNDELETABLE_BOOKMARK_URLS.includes(url)

@@ -121,6 +121,7 @@ const DL_FILE     = join(APP_DIR, 'downloads.json')
 const AGENTS_FILE = join(APP_DIR, 'agents.json')
 
 const DEFAULT_BOOKMARKS = [
+  { id: 'bm-c',  url: 'aihub://community',                              title: 'Community',        favicon: '', category: 'Social',        addedAt: 0, color: '#34d399' },
   { id: 'bm-b',  url: 'aihub://bible',                                  title: 'Bible',            favicon: '', category: 'Reading',       addedAt: 0, color: '#DC2626' },
   { id: 'bm-m',  url: 'aihub://mail',                                   title: 'Mail',             favicon: '', category: 'Productivity',  addedAt: 0, color: '#EA4335' },
   { id: 'bm-g',  url: 'https://www.google.com',                        title: 'Google',           favicon: '', category: 'Search',        addedAt: 0, color: '#4285F4' },
@@ -135,12 +136,13 @@ const DEFAULT_BOOKMARKS = [
 // data.json replaces the whole bookmark list, so installs that predate a new
 // pinned default would never see it — seed it once per id and record that in
 // `seededBookmarks`, so a bookmark the user later deletes stays deleted.
-const PINNED_DEFAULT_IDS = ['bm-b', 'bm-m']
+const PINNED_DEFAULT_IDS = ['bm-c', 'bm-b', 'bm-m']
 
-// Permanent bookmarks: the home grid always keeps a way into the reader, so the
-// Bible tile can't be removed. Matched on url, not id, so a copy the user added
-// by hand is protected too and the seeding above stays consistent with it.
-const UNDELETABLE_BOOKMARK_URLS = ['aihub://bible']
+// Permanent bookmarks: the home grid always keeps a way into the reader and into
+// the Community lounge, so those two tiles can't be removed. Matched on url, not
+// id, so a copy the user added by hand is protected too and the seeding above
+// stays consistent with it.
+const UNDELETABLE_BOOKMARK_URLS = ['aihub://community', 'aihub://bible']
 
 function seedPinnedBookmarks(d: any): boolean {
   const seeded: string[] = Array.isArray(d.seededBookmarks) ? d.seededBookmarks : []
