@@ -1,8 +1,10 @@
 import React from 'react'
 import {
   Mic, MicOff, Headphones, VolumeX, Video, VideoOff,
-  MonitorUp, MonitorX, PhoneOff, Loader2, AlertCircle,
+  MonitorUp, MonitorX, PhoneOff, Loader2, AlertCircle, Bell, BellOff,
 } from 'lucide-react'
+import { useVoiceSounds, useMuteSound } from './useVoiceSounds'
+import { soundsEnabled, setSoundsEnabled } from './voiceSounds'
 import { Avatar } from './bits'
 import type { CommunityMember } from './useCommunity'
 import type { VoicePeer, VoiceError } from './useVoiceSession'
@@ -54,6 +56,20 @@ export default function VoiceDock(props: Props) {
     canVideo, canShare, onToggleMute, onToggleDeafen, onToggleCamera,
     onStartShare, onStopShare, onLeave, onDismissError,
   } = props
+
+  // Arrivals and departures are announced by a chime, so you can tell who came
+  // and went while looking at something else — which is the whole point of a
+  // voice room.
+  const live = connection === 'live'
+  useVoiceSounds({ live, peerIds: peers.map(p => p.peerId), selfPeerId })
+  useMuteSound(muted, live)
+
+  const [chimes, setChimes] = React.useState(soundsEnabled)
+  const toggleChimes = () => {
+    const next = !chimes
+    setChimes(next)
+    setSoundsEnabled(next)
+  }
 
   const statusText = {
     idle: 'Not connected',
@@ -126,6 +142,17 @@ export default function VoiceDock(props: Props) {
               {sharing ? <MonitorX className="h-4 w-4" /> : <MonitorUp className="h-4 w-4" />}
             </DockButton>
           )}
+
+          <button
+            onClick={toggleChimes}
+            title={chimes ? 'Mute join and leave sounds' : 'Play join and leave sounds'}
+            aria-label={chimes ? 'Mute join and leave sounds' : 'Play join and leave sounds'}
+            aria-pressed={chimes}
+            className="rounded-lg p-2 transition-colors"
+            style={{ color: chimes ? 'var(--cm-ink)' : 'var(--cm-faint)' }}
+          >
+            {chimes ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+          </button>
 
           <button
             onClick={onLeave}
