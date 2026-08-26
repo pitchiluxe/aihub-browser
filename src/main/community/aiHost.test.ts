@@ -12,7 +12,7 @@ const NOW = 1_700_000_000_000
 const HOUR = 60 * 60 * 1000
 
 const ready = {
-  memberId: 'me', isAdmin: true, ollamaReady: true, enabled: true,
+  memberId: 'me', isAdmin: true, ollamaReady: true, hasModel: true, enabled: true,
 }
 
 const msg = (over: Partial<Message>): Message => ({
@@ -46,8 +46,17 @@ describe('who may speak for the community', () => {
   it('reports the switch before the things behind it', () => {
     // Off is off. Telling somebody to install Ollama when they simply have the
     // feature disabled sends them to fix the wrong thing.
-    expect(hostBlocker({ memberId: null, isAdmin: false, ollamaReady: false, enabled: false }))
-      .toMatch(/switched off/i)
+    expect(hostBlocker({
+      memberId: null, isAdmin: false, ollamaReady: false, hasModel: false, enabled: false,
+    })).toMatch(/switched off/i)
+  })
+
+  // Ollama can be running with six models pulled and the guide pointed at
+  // none of them. Every request then returns null, so a panel that says
+  // "Listening" is describing something that cannot write a word.
+  it('does not run with no model chosen, and says so', () => {
+    expect(shouldHost({ ...ready, hasModel: false })).toBe(false)
+    expect(hostBlocker({ ...ready, hasModel: false })).toMatch(/choose a model/i)
   })
 })
 

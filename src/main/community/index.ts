@@ -601,6 +601,7 @@ function guideDeps(ollamaIsReady: boolean): GuideDeps {
       memberId: me,
       isAdmin: !!(me && dataStore.get().members[me]?.isAdmin),
       ollamaReady: ollamaIsReady,
+      hasModel: !!guide().get().model,
       enabled: guide().get().enabled,
     }),
   }

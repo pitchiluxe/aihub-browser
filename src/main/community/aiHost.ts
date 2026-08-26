@@ -25,13 +25,22 @@ export interface HostContext {
   isAdmin: boolean
   /** Is Ollama reachable right now, with at least one model installed? */
   ollamaReady: boolean
+  /**
+   * Has a model actually been chosen?
+   *
+   * Distinct from ollamaReady on purpose. Ollama can be running with six
+   * models pulled while the guide has been pointed at none of them, and in
+   * that state every request returns null — so the panel was reporting
+   * "Listening" for something that could never write a word.
+   */
+  hasModel: boolean
   /** Has the owner switched the guide on? Off by default — an AI that starts
    *  posting to a community without being asked is not a feature. */
   enabled: boolean
 }
 
 export function shouldHost(ctx: HostContext): boolean {
-  return !!ctx.memberId && ctx.isAdmin && ctx.ollamaReady && ctx.enabled
+  return !!ctx.memberId && ctx.isAdmin && ctx.ollamaReady && ctx.hasModel && ctx.enabled
 }
 
 /** Why the guide is not running, phrased for the settings screen. */
@@ -40,6 +49,7 @@ export function hostBlocker(ctx: HostContext): string | null {
   if (!ctx.memberId) return 'Join the community first.'
   if (!ctx.isAdmin) return 'Only the community owner runs the guide.'
   if (!ctx.ollamaReady) return 'Ollama is not running, or has no models installed.'
+  if (!ctx.hasModel) return 'Choose a model for the guide to write with.'
   return null
 }
 
