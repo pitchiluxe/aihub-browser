@@ -16,7 +16,13 @@
  * halo people mistake for eye strain.
  */
 
-.cm-shell {
+/* `.cm-portal` carries the same tokens for anything rendered through a portal.
+   A popover has to escape the workspace's overflow to avoid being clipped,
+   but document.body is outside this selector — so every var() in it resolved
+   to nothing and the card came out transparent, with the conversation legible
+   straight through it. Same variables, no layout. */
+.cm-shell,
+.cm-portal {
   --cm-void:   #090d12;
   --cm-shell:  #0f151c;
   --cm-stage:  #141b24;

@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react'
-import { ShieldBan, Clock, X, UserMinus, Crown } from 'lucide-react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { ShieldBan, Clock, X, UserMinus, Crown, Bot } from 'lucide-react'
 import type { Role } from '../../../../shared/community'
 import { Avatar, PRESENCE_LABEL, PRESENCE_COLOR } from './bits'
+import { isBot, BOT_BIO } from '../../../../shared/communityBot'
 import type { CommunityMember } from './useCommunity'
 
 /**
@@ -64,7 +66,8 @@ export default function MemberList(props: Props) {
               const isOwner = member.id === ownerId
 
               return (
-                <li key={member.id} className="relative">
+                <MemberRow key={member.id}>
+                  {rowRef => (<>
                   <button
                     onClick={() => setOpen(open === member.id ? null : member.id)}
                     aria-expanded={open === member.id}
@@ -107,9 +110,11 @@ export default function MemberList(props: Props) {
                       onBan={() => { onBan(member.id); setOpen(null) }}
                       onAssignRole={roleId => onAssignRole(member.id, roleId)}
                       onRevokeRole={roleId => onRevokeRole(member.id, roleId)}
+                      anchor={rowRef}
                     />
                   )}
-                </li>
+                  </>)}
+                </MemberRow>
               )
             })}
           </ul>
@@ -119,9 +124,28 @@ export default function MemberList(props: Props) {
   )
 }
 
+/**
+ * One member's row.
+ *
+ * Exists only to own a ref. The profile card is rendered through a portal so
+ * the member list's overflow cannot clip it, and a portalled card has no idea
+ * where its row is — this is what tells it. A ref cannot be created inside the
+ * map callback without breaking the rules of hooks, so the row is a component.
+ */
+function MemberRow({ children }: {
+  children: React.ReactNode | ((ref: React.RefObject<HTMLLIElement>) => React.ReactNode)
+}) {
+  const ref = useRef<HTMLLIElement>(null)
+  return (
+    <li ref={ref} className="relative">
+      {typeof children === 'function' ? children(ref) : children}
+    </li>
+  )
+}
+
 function ProfileCard({
   member, role, roles, held, isOwner, canModerate, canManageRoles,
-  onClose, onMessage, onTimeout, onBan, onAssignRole, onRevokeRole, isSelf,
+  onClose, onMessage, onTimeout, onBan, onAssignRole, onRevokeRole, isSelf, anchor,
 }: {
   member: CommunityMember
   role?: Role
@@ -133,6 +157,8 @@ function ProfileCard({
   onClose: () => void
   onMessage: () => void
   isSelf: boolean
+  /** The row this card belongs to, so it can be placed against it. */
+  anchor: React.RefObject<HTMLLIElement>
   onTimeout: () => void
   onBan: () => void
   onAssignRole: (roleId: string) => void
@@ -142,10 +168,75 @@ function ProfileCard({
   // email, so it is deliberately absent from this list.
   const assignable = roles.filter(r => r.id !== 'owner')
 
-  return (
+  const card = useRef<HTMLDivElement>(null)
+  const [at, setAt] = useState({ top: 0, left: 0, ready: false })
+
+  /**
+   * Place the card against its row, then pull it back inside the window.
+   *
+   * It used to be absolutely positioned inside the member list — a narrow
+   * scrolling column pinned to the right edge of the app — so the list's own
+   * overflow sliced the card in half and what survived sat under the window
+   * edge. A portal escapes that box; this puts it somewhere sensible.
+   *
+   * Measured after mount rather than guessed, because the height depends on
+   * what the card is showing: a bio, a role picker and the moderation row are
+   * each optional, and a fixed offset would hang half of them off the bottom.
+   */
+  useLayoutEffect(() => {
+    const node = card.current
+    const row = anchor?.current
+    if (!node || !row) return
+
+    const GAP = 8
+    const EDGE = 12
+    const box = node.getBoundingClientRect()
+    const from = row.getBoundingClientRect()
+
+    // Prefer sitting to the LEFT of the member list, where there is room —
+    // the list hugs the right edge, so opening rightwards has nowhere to go.
+    let left = from.left - box.width - GAP
+    if (left < EDGE) left = Math.min(from.right + GAP, window.innerWidth - box.width - EDGE)
+    left = Math.max(EDGE, Math.min(left, window.innerWidth - box.width - EDGE))
+
+    // Top-aligned with the row, lifted only as far as needed to fit.
+    let top = from.top
+    if (top + box.height > window.innerHeight - EDGE) {
+      top = window.innerHeight - box.height - EDGE
+    }
+    top = Math.max(EDGE, top)
+
+    setAt({ top, left, ready: true })
+  }, [anchor, member.id, member.bio, canModerate, canManageRoles, held.length])
+
+  // Escape closes it, the same as the X. A dialog that can only be dismissed
+  // by finding a small button is a dialog people leave open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const bot = isBot(member.id)
+
+  return createPortal((
+    <div className="cm-portal">
     <div
-      className="absolute right-2 top-full z-30 mt-1 w-64 rounded-xl p-3"
-      style={{ background: 'var(--cm-raise)', border: '1px solid var(--cm-line)', boxShadow: '0 12px 40px rgb(0 0 0 / .5)' }}
+      ref={card}
+      className="fixed z-50 w-64 rounded-xl p-3"
+      style={{
+        top: at.top, left: at.left,
+        // Opaque on purpose. The card sits over a live conversation, and
+        // anything showing through makes the text on top unreadable — a
+        // profile you have to read past the room is worse than no profile.
+        background: 'var(--cm-raise)',
+        opacity: 1,
+        border: '1px solid var(--cm-line)',
+        boxShadow: '0 18px 52px rgb(0 0 0 / .72), 0 0 0 1px rgb(0 0 0 / .35)',
+        // Hidden for the single frame between mounting and measuring, so the
+        // card never appears at 0,0 and jump to where it belongs.
+        visibility: at.ready ? 'visible' : 'hidden',
+      }}
       role="dialog"
       aria-label={`${member.handle}'s profile`}
     >
@@ -168,7 +259,14 @@ function ProfileCard({
         </div>
       </div>
 
-      {member.bio && (
+      {bot && (
+        <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed"
+           style={{ color: 'var(--cm-dim)' }}>
+          <Bot className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: '#33d6c8' }} />
+          <span>{BOT_BIO}</span>
+        </p>
+      )}
+      {!bot && member.bio && (
         <p className="mt-2 text-xs leading-relaxed" style={{ color: 'var(--cm-dim)' }}>{member.bio}</p>
       )}
 
@@ -191,7 +289,9 @@ function ProfileCard({
         )}
       </dl>
 
-      {!isSelf && (
+      {/* No direct message to the guide: it does not read one, and offering
+          the button promises a conversation that cannot happen. */}
+      {!isSelf && !bot && (
         <button
           onClick={onMessage}
           className="mt-3 w-full rounded-lg py-1.5 text-xs font-medium transition-colors"
@@ -201,7 +301,7 @@ function ProfileCard({
         </button>
       )}
 
-      {canManageRoles && !isOwner && (
+      {canManageRoles && !isOwner && !bot && (
         <div className="mt-3 border-t pt-2" style={{ borderColor: 'var(--cm-line)' }}>
           <p className="pb-1 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--cm-faint)' }}>
             Roles
@@ -229,7 +329,7 @@ function ProfileCard({
         </div>
       )}
 
-      {canModerate && !isOwner && (
+      {canModerate && !isOwner && !bot && (
         <div className="mt-3 flex gap-2 border-t pt-2" style={{ borderColor: 'var(--cm-line)' }}>
           <button onClick={onTimeout}
                   className="flex flex-1 items-center justify-center gap-1 rounded-lg py-1.5 text-xs transition-colors hover:bg-[var(--cm-hover)]"
@@ -244,5 +344,6 @@ function ProfileCard({
         </div>
       )}
     </div>
-  )
+    </div>
+  ), document.body)
 }

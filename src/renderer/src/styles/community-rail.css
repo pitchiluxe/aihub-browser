@@ -1,0 +1,147 @@
+/* ══ The rail ═════════════════════════════════════════════════════════════
+   The strip of icons down the left of the Community workspace.
+
+   It was a column of bare glyphs: no shape, no hit target you could see, and
+   nothing marking which one you were on — so it read as a list of symbols
+   rather than as navigation. Each one is now a real target with a resting
+   state, and the active one is marked by a pill against the edge, which is
+   the convention people already know from every chat app they have used.
+
+   The tooltip is drawn here rather than left to the browser's `title`,
+   because the native one appears about a second late, in the wrong place,
+   and cannot be styled — a long enough pause that people click the wrong
+   icon instead of waiting to find out what it is. */
+
+/* ── The button ─────────────────────────────────────────────────────── */
+
+.cm-rail-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 16px;
+  color: var(--cm-dim);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    border-radius 200ms cubic-bezier(.2,.8,.3,1),
+    background    180ms ease,
+    color         180ms ease,
+    transform     180ms cubic-bezier(.2,.8,.3,1);
+}
+
+/* Squircle to rounded-square on hover: the shape change is what makes the
+   icon feel like a button before the colour has had time to register. */
+.cm-rail-btn:hover {
+  border-radius: 13px;
+  background: var(--cm-hover);
+  color: var(--cm-ink);
+}
+.cm-rail-btn:active { transform: scale(0.94); }
+.cm-rail-btn:focus-visible {
+  outline: 2px solid var(--cm-accent);
+  outline-offset: 2px;
+}
+
+.cm-rail-btn[data-active='true'] {
+  border-radius: 13px;
+  color: var(--cm-accent);
+  background: color-mix(in srgb, var(--cm-accent) 15%, transparent);
+}
+
+/* The marker: a pill against the left edge, growing out of nothing. Height
+   carries the state — short for hover, tall for selected — so hovering a
+   different icon never looks like you have already switched to it. */
+.cm-rail-btn::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  width: 4px;
+  height: 0;
+  border-radius: 0 4px 4px 0;
+  background: var(--cm-ink);
+  transition: height 200ms cubic-bezier(.2,.8,.3,1), background 200ms ease;
+}
+.cm-rail-btn:hover::before { height: 12px; }
+.cm-rail-btn[data-active='true']::before {
+  height: 22px;
+  background: var(--cm-accent);
+}
+
+/* ── The tooltip ────────────────────────────────────────────────────── */
+
+.cm-rail-tip {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--cm-ink);
+  background: var(--cm-raise);
+  border: 1px solid var(--cm-line);
+  box-shadow: 0 8px 24px rgb(0 0 0 / .45);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 60;
+  transition: opacity 140ms ease, transform 140ms cubic-bezier(.2,.8,.3,1);
+}
+.cm-rail-btn:hover .cm-rail-tip,
+.cm-rail-btn:focus-visible .cm-rail-tip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* The little nib pointing back at the icon. */
+.cm-rail-tip::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translateY(-50%) rotate(45deg);
+  background: var(--cm-raise);
+  border-left: 1px solid var(--cm-line);
+  border-bottom: 1px solid var(--cm-line);
+}
+
+/* ── The community badge at the top ─────────────────────────────────── */
+
+.cm-rail-home {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 16px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--cm-accent);
+  background:
+    linear-gradient(150deg, color-mix(in srgb, var(--cm-accent) 26%, transparent), transparent 70%),
+    var(--cm-stage);
+  border: 1px solid color-mix(in srgb, var(--cm-accent) 28%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .05);
+}
+
+.cm-rail-sep {
+  width: 26px;
+  height: 1px;
+  flex-shrink: 0;
+  margin: 4px 0;
+  background: linear-gradient(90deg, transparent, var(--cm-line), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-rail-btn, .cm-rail-btn::before, .cm-rail-tip { transition: none; }
+  .cm-rail-btn:active { transform: none; }
+}

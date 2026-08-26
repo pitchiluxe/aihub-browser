@@ -281,6 +281,7 @@
       <a href="#rewind">Rewind</a>
       <a href="#watch">Watch &amp; Ping</a>
       <a href="#bible">Bible</a>
+      <a href="#community">Community</a>
       <a href="#focus">Focus &amp; sleep</a>
       <a href="#handoff">Device handoff</a>
       <div class="rail-grp">Knowledge</div>
@@ -956,6 +957,59 @@
       </section>
 
       <!-- FOCUS & SLEEP -->
+      <section id="community">
+        <div class="sec-head"><span class="node" style="background:#33d6c8"></span><h2>Community</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Rooms inside the browser where people using AIHub meet and talk — text channels, voice channels, and screen sharing, under a name you pick, with no email and no password anywhere.</p>
+        <div class="body-col">
+          <p>Open <strong>Community</strong> from the sidebar. The first time, you are asked for one thing: a name. There is no email field, no password, no account to recover — this machine generates a key, that key <em>is</em> your membership, and nothing else about you is stored.</p>
+
+          <h3 style="margin-top:26px">Choosing a name</h3>
+          <p>Names are unique across the whole community, so the field checks availability as you type. The avatar beside it is generated from the name itself — you cannot upload a picture, and nobody else can either. If the name you want is gone, the field offers alternatives you can click.</p>
+          <div class="note">Uniqueness ignores capitals and character width, so <em>Grace</em>, <em>grace</em> and <em>GRACE</em> are one name, not three. That is deliberate: a room where two people can both be "Grace" is a room where you cannot tell who said what.</div>
+
+          <h3 style="margin-top:26px">The rooms</h3>
+          <p>Channels are grouped down the left-hand side. Every text room opens with a short message saying what belongs there and asking something you can answer, so you never arrive at a blank screen.</p>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4>Community</h4><p><strong>general</strong> for anything without a room of its own, <strong>support</strong> for things that are broken, <strong>random</strong> for the rest.</p></div>
+            <div class="feat"><h4>Technology</h4><p><strong>Developers &amp; AI</strong>, <strong>Cybersecurity</strong>, <strong>ai</strong>, <strong>technology</strong>, <strong>cloud</strong> and <strong>networking</strong>.</p></div>
+            <div class="feat"><h4>Interests</h4><p><strong>Bible Study</strong>, <strong>Traders</strong>, <strong>Sports</strong>, <strong>Entertainment</strong> and <strong>Jobs</strong>.</p></div>
+            <div class="feat"><h4>Voice</h4><p><strong>Lounge</strong> and <strong>Workshop</strong> — talk, video, and share a screen.</p></div>
+          </div>
+
+          <h3 style="margin-top:26px">Talking</h3>
+          <p><kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a new line. Reply to a message to quote it, or open it as a thread when a side conversation deserves its own space. Reactions, mentions and direct messages all work as you would expect.</p>
+          <p>Some rooms accept more than plain text. Bible Study takes <strong>verses</strong> shared straight from the Bible reader — they arrive as a card anyone can open and read in full — along with <strong>prayer requests</strong> and <strong>testimony</strong>. The developer rooms take <strong>code</strong>, syntax highlighted, and never executed by anyone who reads it.</p>
+          <div class="note">A prayer request can be posted anonymously: your name is hidden from the room, though the request itself is still public. Nothing in a community room is private.</div>
+
+          <h3 style="margin-top:26px">Voice rooms</h3>
+          <p>Click <strong>Lounge</strong> or <strong>Workshop</strong> to drop in. A dock appears along the bottom with your microphone, headphones, camera and screen share.</p>
+          <p>The room makes a small sound when somebody arrives or leaves — two notes rising for an arrival, falling for a departure — so you can tell who came and went while you are looking at something else. The bell in the dock turns that off, and the choice is remembered on this machine.</p>
+
+          <h3 style="margin-top:26px">Files</h3>
+          <p>Images, video and PDFs can be attached to a message. They are checked by their actual contents rather than by their file name, and they are stored in your own profile folder — nothing is uploaded to a server anywhere.</p>
+
+          <h3 style="margin-top:26px">Keeping the rooms civil</h3>
+          <p>Every message has a <strong>Report</strong> button. Reports go to a queue the community owner reviews, and enough reports on one message hides it pending that review. Blocking somebody hides everything they have said, including what they said before you blocked them, and it is reversible — nothing is destroyed.</p>
+          <p>Owners get more: timing somebody out for an afternoon, banning them outright, removing a message, and a role system for handing out moderator powers.</p>
+
+          <h3 style="margin-top:26px">The community guide</h3>
+          <p>The guide is an optional AI that runs on the <strong>community owner's machine only</strong>, through <strong>Ollama</strong>. It is switched off until the owner turns it on, and it does exactly two things:</p>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4>It writes into quiet rooms</h4><p>When a channel has had nothing in it for hours, the guide posts one short thing to talk about — at most twice a day, and never while a conversation is happening.</p></div>
+            <div class="feat"><h4>It reports, it never removes</h4><p>It reads new messages and files anything concerning into the moderation queue with its reasoning attached. It cannot hide, delete or ban. A person decides.</p></div>
+          </div>
+          <p>It has no internet access: everything it writes comes from the model's own knowledge and the room's recent messages, so it cannot bring an article, a link or a statistic in from outside. Every message it writes carries an <strong>AI</strong> badge beside the name, every time.</p>
+          <div class="note">Because the guide runs on one machine through that machine's Ollama, it needs a model chosen in its panel before it will do anything. If it says it is not running, the panel names the reason.</div>
+
+          <h3 style="margin-top:26px">On this computer, or shared</h3>
+          <p>Out of the box the community is <strong>local</strong>: everything you post stays on your machine and nobody else can see it, which the banner at the top says plainly. It becomes a real shared community when a backend is connected — a Supabase project, entered once in the setup panel — at which point your name, your key and everything already written carry over.</p>
+
+          <h3 style="margin-top:26px">Your identity, and leaving</h3>
+          <p><strong>Your account</strong> in the rail holds the key this machine generated. Export it and import it on another computer and the same name and history follow you; anyone holding that text can post as you, so treat it like a password.</p>
+          <p>The same panel has <strong>Delete everything</strong>, which is a real deletion behind a typed confirmation: your name, every message you posted, every reaction you left and every report you filed, then the key itself. It cannot be undone and nothing is kept.</p>
+        </div>
+      </section>
+
       <section id="focus">
         <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Focus sessions &amp; tab sleeping</h2><span class="sec-line"></span></div>
         <div class="body-col">

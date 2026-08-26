@@ -7,6 +7,7 @@ import type { Attachment, Channel, Message, NotifLevel } from '../../../../share
 import { extensionFor } from '../../../../shared/fileTypes'
 import { useCommunity } from './useCommunity'
 import { useVoice } from './useVoice'
+import '../../styles/community-rail.css'
 import ChannelSidebar from './ChannelSidebar'
 import MessageList from './MessageList'
 import Composer from './Composer'
@@ -236,14 +237,8 @@ export default function CommunityShell(props: Props) {
     >
       {/* ── Rail ─────────────────────────────────────────────────────────── */}
       <div className="cm-rail flex flex-col items-center gap-2 py-3">
-        <div
-          className="flex h-11 w-11 items-center justify-center rounded-2xl text-lg font-bold"
-          style={{ background: 'color-mix(in srgb, var(--cm-accent) 20%, transparent)', color: 'var(--cm-accent)' }}
-          title="AIHub Community"
-        >
-          A
-        </div>
-        <span className="my-1 h-px w-7" style={{ background: 'var(--cm-line)' }} />
+        <div className="cm-rail-home" title="AIHub Community">A</div>
+        <span className="cm-rail-sep" />
 
         <RailButton label="Channels" active={rightPanel === 'none'} onClick={() => setRightPanel('none')}>
           <Hash className="h-5 w-5" />
@@ -631,18 +626,18 @@ export default function CommunityShell(props: Props) {
 function RailButton({
   label, active, onClick, children,
 }: { label: string; active?: boolean; onClick: () => void; children: React.ReactNode }) {
+  // No `title`: the native tooltip appears about a second late and cannot be
+  // styled, which is long enough that people click the wrong icon rather than
+  // wait to find out what it is. The label below replaces it.
   return (
     <button
       onClick={onClick}
-      title={label}
       aria-label={label}
-      className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors hover:bg-[var(--cm-hover)]"
-      style={{
-        color: active ? 'var(--cm-accent)' : 'var(--cm-dim)',
-        background: active ? 'color-mix(in srgb, var(--cm-accent) 14%, transparent)' : undefined,
-      }}
+      data-active={active ? 'true' : 'false'}
+      className="cm-rail-btn"
     >
       {children}
+      <span className="cm-rail-tip" aria-hidden="true">{label}</span>
     </button>
   )
 }
