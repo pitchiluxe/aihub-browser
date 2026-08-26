@@ -29,6 +29,11 @@ import {
 } from './store'
 import { searchCommunity, type SearchOptions } from './search'
 import { saveAttachment } from './attachments'
+import { messageToRow } from './sync'
+import { createOllamaAsk } from './ollamaAsk'
+import { ensureBotAndWelcome, runGuideCycle, reviewMessage, type GuideDeps } from './aiGuide'
+import { hostBlocker, shouldHost } from './aiHost'
+import { BOT_MEMBER_ID } from '../../shared/communityBot'
 import { createPresenceTracker } from './presence'
 import { createSignalingHub } from './signaling'
 import { linkPreview } from './linkPreview'
@@ -524,8 +529,108 @@ function requireMember(): { id: string } | { error: string } {
   return { id: status.member.id }
 }
 
+/**
+ * The guide.
+ *
+ * Off until the owner turns it on: an AI that begins posting into somebody's
+ * community without being asked is not a feature. Everything it is allowed to
+ * do is decided in aiHost/aiModerator; this is only the plumbing.
+ */
+const GUIDE_SETTINGS_FILE = 'community-guide.json'
+interface GuideSettings { enabled: boolean; model: string }
+
+let guideStore: ReturnType<typeof createManagedJsonStore<GuideSettings>>
+let guideTimer: ReturnType<typeof setInterval> | null = null
+
+function guide() {
+  if (!guideStore) {
+    guideStore = createManagedJsonStore<GuideSettings>(
+      join(app.getPath('userData'), GUIDE_SETTINGS_FILE),
+      () => ({ enabled: false, model: '' }),
+    )
+  }
+  return guideStore
+}
+
+/** Installed models, so the settings panel can say what it could run. */
+async function ollamaModels(): Promise<string[]> {
+  try {
+    const response = await fetch('http://127.0.0.1:11434/api/tags')
+    if (!response.ok) return []
+    const data = await response.json() as { models?: { name?: string }[] }
+    return (data.models ?? []).map(m => String(m?.name ?? '')).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+let ollamaReadyCache = { at: 0, ready: false }
+async function ollamaReady(): Promise<boolean> {
+  // Probing on every message would put a socket open in front of every post.
+  if (Date.now() - ollamaReadyCache.at < 60_000) return ollamaReadyCache.ready
+  const ready = (await ollamaModels()).length > 0
+  ollamaReadyCache = { at: Date.now(), ready }
+  return ready
+}
+
+const ask = createOllamaAsk({
+  base: () => 'http://127.0.0.1:11434',
+  model: () => guide().get().model,
+})
+
+function guideDeps(ollamaIsReady: boolean): GuideDeps {
+  const { identityStore, dataStore } = stores()
+  const me = identityStore.get()?.memberId ?? null
+  return {
+    readState: () => dataStore.get(),
+    updateState: mutate => { dataStore.update(state => { mutate(state) }) },
+    ask,
+    newId,
+    publish: message => {
+      const published = forViewer(message, '')
+      broadcast('community:message', { channel: message.channel, message: published })
+      broadcast('community:event', { type: 'message.new', channel: message.channel, message: published })
+      replication?.push('aihub_messages', messageToRow(message, Date.now()))
+    },
+    file: (messageId, reason) => {
+      reportMessage(dataStore.get(), messageId, BOT_MEMBER_ID, reason, Date.now(), newId)
+      dataStore.update(() => {})
+      broadcast('community:event', { type: 'report.new', messageId })
+    },
+    context: () => ({
+      memberId: me,
+      isAdmin: !!(me && dataStore.get().members[me]?.isAdmin),
+      ollamaReady: ollamaIsReady,
+      enabled: guide().get().enabled,
+    }),
+  }
+}
+
+/** One pass over the rooms. Failures are swallowed: the guide is a background
+ *  courtesy and must never take the Community tab down with it. */
+async function guideTick(): Promise<void> {
+  try {
+    const deps = guideDeps(await ollamaReady())
+    if (!shouldHost(deps.context())) return
+    await runGuideCycle(deps)
+  } catch { /* try again next cycle */ }
+}
+
 export function registerCommunityIpc(): void {
   stores()
+  guide()
+
+  // Every room opens with something to read. Cheap, idempotent, and the single
+  // most effective defence against the empty-room problem: a newcomer who
+  // opens Community to seventeen blank channels does not come back.
+  try {
+    ensureBotAndWelcome(guideDeps(false))
+  } catch { /* a missing welcome must never stop Community loading */ }
+
+  // Hourly, not on a short timer: the guide only speaks into a room that has
+  // been quiet for hours, so anything faster is just a wasted model load.
+  guideTimer ||= setInterval(() => { void guideTick() }, 60 * 60 * 1000)
+  setTimeout(() => { void guideTick() }, 90_000)
 
   // Connect on launch if this device has been set up. Deliberately not awaited:
   // a slow or unreachable project must not hold the Community tab hostage, and
@@ -827,7 +932,49 @@ export function registerCommunityIpc(): void {
     broadcast('community:message', { channel: input.channel, message: published })
     broadcast('community:event', { type: 'message.new', channel: input.channel, message: published })
     notifyFor(result.message)
+
+    // The guide reads the room. Deliberately not awaited — a local model can
+    // take a minute, and nobody should watch their own message hang while an
+    // AI thinks about it. It files a report; it never removes anything.
+    void (async () => {
+      try {
+        await reviewMessage(guideDeps(await ollamaReady()), result.message)
+      } catch { /* a moderation miss is not worth an error to the user */ }
+    })()
+
     return { ok: true, message: forViewer(result.message, who.id) }
+  })
+
+  /** What the guide is doing, and why it is not doing it. */
+  ipcMain.handle('community:guide:status', async () => {
+    const models = await ollamaModels()
+    const settings = guide().get()
+    const deps = guideDeps(models.length > 0)
+    return {
+      ok: true,
+      enabled: settings.enabled,
+      model: settings.model,
+      models,
+      running: shouldHost(deps.context()),
+      blocker: hostBlocker(deps.context()),
+    }
+  })
+
+  ipcMain.handle('community:guide:set', async (_e, input: { enabled?: boolean; model?: string }) => {
+    const who = requireMember()
+    if ('error' in who) return { ok: false, error: who.error }
+    // Only the owner runs the guide, so only the owner may configure it.
+    const { dataStore } = stores()
+    if (!dataStore.get().members[who.id]?.isAdmin) {
+      return { ok: false, error: 'Only the community owner runs the guide.' }
+    }
+
+    guide().update(settings => {
+      if (typeof input?.enabled === 'boolean') settings.enabled = input.enabled
+      if (typeof input?.model === 'string') settings.model = input.model
+    })
+    if (guide().get().enabled) setTimeout(() => { void guideTick() }, 1_000)
+    return { ok: true, ...guide().get() }
   })
 
   ipcMain.handle('community:react', async (_e, messageId: string, reaction: string) => {

@@ -166,6 +166,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     channels: ()                        => ipcRenderer.invoke('community:channels'),
     join:     (handle: string)          => ipcRenderer.invoke('community:join', handle),
     handleAvailable: (handle: string)   => ipcRenderer.invoke('community:handleAvailable', handle),
+    guide: {
+      status: ()          => ipcRenderer.invoke('community:guide:status'),
+      set:    (i: any)    => ipcRenderer.invoke('community:guide:set', i),
+    },
     moderatorStatus: ()                 => ipcRenderer.invoke('community:moderatorStatus'),
     reports:  ()                        => ipcRenderer.invoke('community:reports'),
     resolveReport: (args: { messageId: string; action: string; reason?: string }) =>

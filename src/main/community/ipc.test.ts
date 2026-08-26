@@ -121,9 +121,12 @@ describe('community IPC', () => {
     expect(posted.ok).toBe(true)
 
     const messages = await invoke('community:messages', 'bible-study')
-    expect(messages).toHaveLength(1)
-    expect(messages[0].body).toBe('Peace to you')
-    expect(messages[0].authorHandle).toBe('Grace')
+    // The room opens with a welcome from the guide, so count what Grace wrote
+    // rather than what the channel holds.
+    const mine = messages.filter((m: any) => m.authorHandle === 'Grace')
+    expect(mine).toHaveLength(1)
+    expect(mine[0].body).toBe('Peace to you')
+    expect(messages.some((m: any) => m.isWelcome)).toBe(true)
   })
 
   it('pushes the new message to open windows instead of making them poll', async () => {
@@ -183,7 +186,8 @@ describe('community IPC', () => {
     const status = await invoke('community:status')
     expect(status.state).toBe('ready')
     expect(status.member.id).toBe(first.status.member.id)
-    expect(await invoke('community:messages', 'bible-study')).toHaveLength(1)
+    expect((await invoke('community:messages', 'bible-study'))
+      .filter((m: any) => !m.isWelcome)).toHaveLength(1)
   })
 
   it('exports and re-imports an identity, keeping the same member', async () => {
@@ -380,8 +384,12 @@ describe('community IPC', () => {
       expect((await invoke('community:resolveReport', { messageId: 'msg-1', action: 'keep' })).ok)
         .toBe(true)
       expect((await invoke('community:reports')).queue).toHaveLength(0)
-      expect((await readData()).messages[0].deletedAt).toBeUndefined()
+      expect(planted(await readData()).deletedAt).toBeUndefined()
     })
+
+    /** The reported message, by id. Never by index: every channel opens with
+     *  a welcome from the guide, so index 0 is not the message under test. */
+    const planted = (data: any) => data.messages.find((m: any) => m.id === 'msg-1')
 
     it('removes a message and bans on request', async () => {
       await joinAsModerator()
@@ -390,7 +398,7 @@ describe('community IPC', () => {
         { messageId: 'msg-1', action: 'ban', reason: 'harassment' })).ok).toBe(true)
 
       const data = await readData()
-      expect(data.messages[0].deletedAt).toBeTruthy()
+      expect(planted(data).deletedAt).toBeTruthy()
       expect(data.members['other'].bannedAt).toBeTruthy()
       expect(data.members['other'].banReason).toBe('harassment')
     })
@@ -427,7 +435,10 @@ describe('community IPC', () => {
       flushAllJsonStores()
       const data = JSON.parse(fs.readFileSync(join(userDataDir, 'community-data.json'), 'utf8'))
       expect(data.members[id]).toBeUndefined()
-      expect(data.messages).toHaveLength(0)
+      expect(data.messages.filter((m: any) => m.authorId === id)).toHaveLength(0)
+      // The guide's welcomes belong to the community, not to the member who
+      // left — erasing them would empty every room for everyone else.
+      expect(data.messages.every((m: any) => m.isWelcome)).toBe(true)
 
       // Back to onboarding: the key is gone, so there is no identity to resume.
       expect((await invoke('community:status')).state).toBe('unregistered')
@@ -464,10 +475,12 @@ describe('community IPC', () => {
     const posted = await invoke('community:post', {
       channel: 'sports', kind: 'text', body: 'mine',
     })
-    expect(await invoke('community:messages', 'sports')).toHaveLength(1)
+    const own = async () => (await invoke('community:messages', 'sports'))
+      .filter((m: any) => !m.isWelcome)
+    expect(await own()).toHaveLength(1)
 
     const out = await invoke('community:block', posted.message.authorId, true)
     expect(out.ok).toBe(true)
-    expect(await invoke('community:messages', 'sports')).toHaveLength(1)
+    expect(await own()).toHaveLength(1)
   })
 })

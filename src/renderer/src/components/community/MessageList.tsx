@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { isBot } from '../../../../shared/communityBot'
 import {
   CornerUpLeft, MessageSquareText, Pencil, Trash2, Copy, Flag, SmilePlus, Check, X,
 } from 'lucide-react'
@@ -262,6 +263,18 @@ function MessageRow(props: RowProps) {
           <span className="text-sm font-semibold" style={{ color: role?.color ?? 'var(--cm-ink)' }}>
             {message.authorHandle}
           </span>
+          {/* Anything written by a model says so, every time, next to the name.
+              A guide that reads as a member is a guide people argue with and
+              take advice from — the label is not decoration. */}
+          {isBot(message.authorId) && (
+            <span
+              className="rounded px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
+              style={{ background: '#33d6c822', color: '#33d6c8' }}
+              title="Written by the community guide, running on the owner’s machine"
+            >
+              AI
+            </span>
+          )}
           {role && role.id !== 'member' && (
             <span
               className="rounded px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"

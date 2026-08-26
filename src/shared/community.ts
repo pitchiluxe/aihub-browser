@@ -121,6 +121,15 @@ export interface Member {
   /** May review reports, hide messages and ban members. Server-issued once
    *  there is a server; locally it is the owner of this install's own data. */
   isAdmin?: boolean
+  /**
+   * The community's own voice, not a person.
+   *
+   * One fixed id shared by every install (see communityBot), because the
+   * guide's messages replicate like anyone else's — if each device minted its
+   * own bot id the room would fill with several identical guides talking at
+   * once. Only the owner's machine ever writes as it.
+   */
+  isBot?: boolean
 }
 
 /**
@@ -187,6 +196,15 @@ export interface Message {
   deletedAt?: number
   /** Who removed it, when a moderator did. Absent for an author's own delete. */
   deletedBy?: string
+  /**
+   * The room's opening message, written once when the channel is seeded.
+   *
+   * Marked so the seeder recognises its own work on a later launch and does
+   * not post a second one. Keying off "written by the guide" alone would stop
+   * the guide ever posting again; keying off a flag stored somewhere else
+   * would drift out of step with the messages it claims to describe.
+   */
+  isWelcome?: boolean
 }
 
 // ── Limits ─────────────────────────────────────────────────────────────────
