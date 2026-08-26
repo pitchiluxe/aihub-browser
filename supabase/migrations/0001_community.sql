@@ -37,7 +37,14 @@ create table if not exists public.aihub_members (
 );
 
 create table if not exists public.aihub_categories (
-  id         uuid primary key,
+  -- Text, not uuid. Categories are authored as stable slugs in
+  -- shared/communityChannels.ts ('announcements', 'technology', ...), the same
+  -- way channels are, and a channel points at one by that slug. Declaring this
+  -- uuid meant the first sync attempt died on
+  --   invalid input syntax for type uuid: "announcements"
+  -- and, because the push queue retries forever, the whole replication stream
+  -- stalled behind it — no messages, no members, no visible cause.
+  id         text primary key,
   updated_at bigint not null,
   doc        jsonb not null
 );

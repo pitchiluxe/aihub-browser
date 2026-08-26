@@ -62,6 +62,30 @@ export interface SafeStorageLike {
   decryptString(sealed: Buffer): string
 }
 
+/**
+ * A plain-HTTP URL that never leaves this machine.
+ *
+ * Requiring https is right for every real project — an anon key crossing the
+ * network in clear text is an anon key anyone on the path can lift. But
+ * `supabase start` serves the local stack over http on loopback and cannot be
+ * told otherwise, so the rule as written made it impossible to run the
+ * community against a real database without deploying one first. That is how
+ * schema bugs reach production: the only way to try the thing is in front of
+ * users.
+ *
+ * Loopback is exempt because the traffic is not on a network at all. Anything
+ * else, including a LAN address, still needs TLS.
+ */
+function isLoopback(url: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(url)
+    if (protocol !== 'http:') return false
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1'
+  } catch {
+    return false
+  }
+}
+
 export function validateBackendConfig(input: unknown): ConfigResult {
   const raw = (input ?? {}) as Partial<BackendConfig>
 
@@ -70,7 +94,7 @@ export function validateBackendConfig(input: unknown): ConfigResult {
   // fix here than to explain later.
   const url = String(raw.url ?? '').trim().replace(/\/+$/, '')
   if (!url) return { ok: false, error: 'The project URL is required.' }
-  if (!url.startsWith('https://')) {
+  if (!url.startsWith('https://') && !isLoopback(url)) {
     return { ok: false, error: 'The project URL must start with https://.' }
   }
 

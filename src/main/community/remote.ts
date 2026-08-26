@@ -1,3 +1,4 @@
+import WebSocket from 'ws'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { BackendConfig } from './backendConfig'
 
@@ -49,7 +50,16 @@ export async function connectRemote(config: BackendConfig): Promise<ConnectResul
       // The default is 10 events/second, which a busy voice room signalling ICE
       // candidates will exceed, and the excess is dropped rather than queued —
       // a dropped candidate is a call that never connects.
-      realtime: { params: { eventsPerSecond: 30 } },
+      //
+      // `transport` is not optional here. This runs in Electron's main process,
+      // which is Node, and Node only gained a global WebSocket in 22 — Electron
+      // 34 ships Node 20. Without it realtime-js refuses to connect with
+      // "Node.js detected but native WebSocket not found", and the failure is
+      // quiet in the worst way: config validates, the client constructs, the UI
+      // reports itself configured, and every message is written to the local
+      // replica and pushed nowhere. Two machines sat in the same room, each
+      // seeing only itself, with no error on screen.
+      realtime: { params: { eventsPerSecond: 30 }, transport: WebSocket as never },
     })
   } catch (error) {
     return { error: `That project URL could not be used: ${messageOf(error)}` }

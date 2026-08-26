@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Users, AlertTriangle, Loader2, ArrowLeft } from 'lucide-react'
 import { validateHandle, joinBlocker } from '../../../../shared/communityHandle'
 import { avatarDataUri } from '../../../../shared/communityAvatar'
+import '../../styles/community-welcome.css'
 import ModerationPanel from '../community/ModerationPanel'
 import AccountPanel from '../community/AccountPanel'
 import CommunityShell from '../community/CommunityShell'
@@ -128,141 +129,125 @@ function Onboarding({ onJoined }: { onJoined: (s: any) => void }) {
   // Preview the avatar from the typed name, so the choice feels like a choice.
   const previewSeed = check.ok ? check.value : 'preview'
 
+  // What the well is doing, which is real state rather than decoration: it
+  // ripples only while a name is genuinely in flight to the main process.
+  const wellState = !check.ok ? 'idle'
+    : taken === null ? 'checking'
+    : taken ? 'taken' : 'ok'
+
   return (
-    <div className="h-full overflow-y-auto flex items-center justify-center p-8"
-         style={{ background: 'rgb(var(--ds-bg))', color: 'rgb(var(--ds-text))' }}>
-      <div style={{ maxWidth: 520, width: '100%' }}>
-        <div className="flex items-center gap-3 mb-4">
-          <Users size={26} style={{ color: '#34d399' }} />
-          <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>Community</h1>
-        </div>
-
-        <p style={{ color: 'rgb(var(--ds-muted))', lineHeight: 1.6, marginBottom: 18 }}>
-          Rooms for AI, technology, cloud, networking, Bible study, trading and
-          the rest. Text channels, voice channels, screen sharing. You post under
-          a name you choose — no email, no password, no account anywhere else.
-        </p>
-
-        <LocalPreviewBanner />
-
-        <Rule>
-          <strong>Posts are public and lasting.</strong> Anyone in the room can
-          read what you write. Prayer requests can be posted anonymously, but
-          they are still public.
-        </Rule>
-        <Rule>
-          <strong>Files stay on this computer.</strong> Images, video and PDFs
-          can be attached. They are checked by their actual contents rather than
-          their name, and stored in your own profile folder — nothing is uploaded
-          anywhere.
-        </Rule>
-        <Rule>
-          <strong>Be decent.</strong> Harassment, spam and impersonation get you
-          removed. Every message has a report button.
-        </Rule>
-
-        <label style={{ display: 'block', fontSize: 12, color: 'rgb(var(--ds-muted))', margin: '18px 0 6px' }}>
-          Your name in the community
-        </label>
-        <div className="flex items-center gap-3">
-          <img src={avatarDataUri(previewSeed, 44)} width={44} height={44}
-               alt="" style={{ borderRadius: 12, flexShrink: 0 }} />
-          <input
-            value={handle}
-            onChange={e => setHandle(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && canJoin) void join() }}
-            // The placeholder used to read "Grace", which looks exactly like a
-            // filled-in field. People saw a name, a ticked box and a dead
-            // button, and had no way to tell the field was empty.
-            placeholder="Type a name…"
-            autoFocus
-            maxLength={40}
-            className="flex-1 px-3 py-2 rounded-lg outline-none"
-            style={{
-              background: 'rgb(var(--ds-surface))', color: 'rgb(var(--ds-text))',
-              border: `1px solid ${handle && !check.ok ? '#f8717188' : 'rgb(var(--ds-border))'}`,
-            }}
-          />
-        </div>
-        {handle && !check.ok && (
-          <div style={{ color: '#f87171', fontSize: 12, marginTop: 6 }}>{check.error}</div>
-        )}
-        {check.ok && taken === false && (
-          <div style={{ color: '#34d399', fontSize: 12, marginTop: 6 }}>
-            <strong>{check.value}</strong> is available.
+    <div className="cw h-full overflow-y-auto flex justify-center px-8">
+      <div className="cw-center" style={{ maxWidth: 540, width: '100%' }}>
+        <div className="cw-pane">
+          <div className="flex items-center gap-2.5">
+            <Users size={15} style={{ color: 'var(--cw-aqua)' }} />
+            <span className="cw-eyebrow">AIHub Community</span>
           </div>
-        )}
-        {check.ok && taken === true && (
-          <div style={{ color: '#f87171', fontSize: 12, marginTop: 6 }}>
-            <strong>{check.value}</strong> is taken.
-            {suggestions.length > 0 && (
-              <>
-                {' '}Try{' '}
-                {suggestions.map((s, i) => (
-                  <React.Fragment key={s}>
-                    {i > 0 && ', '}
-                    <button
-                      onClick={() => setHandle(s)}
-                      style={{
-                        color: '#34d399', textDecoration: 'underline',
-                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                        font: 'inherit',
-                      }}>{s}</button>
-                  </React.Fragment>
-                ))}
-                .
-              </>
+          <h1 className="cw-title">Find your <strong>room</strong>.</h1>
+
+          <p className="cw-lede">
+            Rooms for AI, technology, cloud, networking, Bible study, trading and
+            the rest. Text channels, voice channels, screen sharing. You post under
+            a name you choose — no email, no password, no account anywhere else.
+          </p>
+
+          <div style={{ marginTop: 18 }}><LocalPreviewBanner /></div>
+
+          <div style={{ marginTop: 18 }}>
+            <Rule>
+              <strong>Posts are public and lasting.</strong> Anyone in the room can
+              read what you write. Prayer requests can be posted anonymously, but
+              they are still public.
+            </Rule>
+            <Rule>
+              <strong>Files stay on this computer.</strong> Images, video and PDFs
+              can be attached. They are checked by their actual contents rather than
+              their name, and stored in your own profile folder — nothing is uploaded
+              anywhere.
+            </Rule>
+            <Rule>
+              <strong>Be decent.</strong> Harassment, spam and impersonation get you
+              removed. Every message has a report button.
+            </Rule>
+          </div>
+
+          <label className="cw-label">Your name in the community</label>
+          <div className="flex items-center gap-3">
+            {/* The signature. The avatar sits in a lit basin and the surface
+                ripples while the name is being checked — motion tied to state,
+                so it reports rather than decorates. */}
+            <div className="cw-well" data-state={wellState}>
+              <img src={avatarDataUri(previewSeed, 40)} width={40} height={40} alt="" />
+            </div>
+            <input
+              value={handle}
+              onChange={e => setHandle(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && canJoin) void join() }}
+              // The placeholder used to read "Grace", which looks exactly like a
+              // filled-in field. People saw a name, a ticked box and a dead
+              // button, and had no way to tell the field was empty.
+              placeholder="Type a name…"
+              autoFocus
+              maxLength={40}
+              className="cw-field"
+              data-invalid={!!handle && !check.ok}
+            />
+          </div>
+
+          <div style={{ minHeight: 18, marginTop: 8 }}>
+            {handle && !check.ok && <span className="cw-note cw-bad">{check.error}</span>}
+            {check.ok && taken === false && (
+              <span className="cw-note cw-ok"><strong>{check.value}</strong> is available.</span>
+            )}
+            {check.ok && taken === true && (
+              <span className="cw-note cw-bad">
+                <strong>{check.value}</strong> is taken.
+                {suggestions.length > 0 && (
+                  <>
+                    {' '}Try{' '}
+                    {suggestions.map((s, i) => (
+                      <React.Fragment key={s}>
+                        {i > 0 && ', '}
+                        <button className="cw-link" onClick={() => setHandle(s)}>{s}</button>
+                      </React.Fragment>
+                    ))}
+                    .
+                  </>
+                )}
+              </span>
             )}
           </div>
-        )}
 
-        <label className="flex items-start gap-2 mt-4" style={{ cursor: 'pointer' }}>
-          <input type="checkbox" checked={accepted} onChange={e => setAccepted(e.target.checked)}
-                 style={{ marginTop: 3 }} />
-          <span style={{ fontSize: 13, color: 'rgb(var(--ds-muted))' }}>
-            I have read the three rules above and agree to them.
-          </span>
-        </label>
+          <label className="cw-agree">
+            <input type="checkbox" checked={accepted} onChange={e => setAccepted(e.target.checked)} />
+            <span>I have read the three rules above and agree to them.</span>
+          </label>
 
-        {error && <div style={{ color: '#f87171', fontSize: 13, marginTop: 12 }}>{error}</div>}
+          {error && <div className="cw-note cw-bad" style={{ marginTop: 12 }}>{error}</div>}
 
-        <button
-          onClick={join}
-          disabled={!canJoin}
-          className="mt-5 w-full py-2.5 rounded-lg font-medium"
-          style={{
-            background: canJoin ? '#34d399' : 'rgb(var(--ds-surface))',
-            color: canJoin ? '#04231a' : 'rgb(var(--ds-muted))',
-            cursor: canJoin ? 'pointer' : 'not-allowed',
-            // A disabled button needs to still look like a button. Flat text on
-            // the page background reads as broken rather than as "not yet".
-            border: `1px solid ${canJoin ? '#34d399' : 'rgb(var(--ds-border))'}`,
-            opacity: canJoin ? 1 : 0.75,
-          }}
-        >
-          {busy ? 'Joining…' : 'Join the community'}
-        </button>
+          <button onClick={join} disabled={!canJoin} className="cw-join">
+            {busy ? 'Joining…' : 'Join the community'}
+          </button>
 
-        {/* Never leave a disabled control unexplained: say which step is
-            outstanding, in the order the user would fix them. */}
-        {!canJoin && !busy && (
-          <div style={{ fontSize: 12, color: 'rgb(var(--ds-muted))', marginTop: 8, textAlign: 'center' }}>
-            {blocker || (taken === true ? 'That name is taken — pick another.' : 'Checking that name…')}
-          </div>
-        )}
+          {/* Never leave a disabled control unexplained: say which step is
+              outstanding, in the order the user would fix them. */}
+          {!canJoin && !busy && (
+            <div className="cw-note" style={{ marginTop: 10, textAlign: 'center' }}>
+              {blocker || (taken === true ? 'That name is taken — pick another.' : 'Checking that name…')}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
 function Rule({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{
-      fontSize: 13, lineHeight: 1.55, color: 'rgb(var(--ds-muted))',
-      padding: '8px 12px', marginBottom: 6, borderRadius: 8,
-      background: 'rgb(var(--ds-surface))', border: '1px solid rgb(var(--ds-border))',
-    }}>{children}</div>
-  )
+  // A facet of crystal: light sweeps across it as the pointer passes. The
+  // sweep is a one-shot on hover rather than a loop — three cards pulsing
+  // away on their own would pull attention off the well, which is the one
+  // thing on this screen that is meant to hold it.
+  return <div className="cw-rule">{children}</div>
 }
 
 /**

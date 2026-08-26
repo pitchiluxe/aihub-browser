@@ -341,6 +341,11 @@ async function connectBackend(): Promise<{ ok: true } | { ok: false; error: stri
     updateState: mutate => { data.update(state => { mutate(state) }) },
     broadcast,
     persist: () => data.flush(),
+    // Null until somebody joins. Replication uses it to avoid queueing writes
+    // to the room's structure that row level security will refuse — an
+    // unregistered device has no member row, so Postgres cannot see it as a
+    // moderator, and the refused write would stall the queue behind it.
+    localMemberId: () => identityStore.get()?.memberId ?? null,
   })
 
   try {

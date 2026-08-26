@@ -162,3 +162,37 @@ describe('seal and load', () => {
     expect(loadBackendConfig(garbage, 'anything')).toBe(null)
   })
 })
+
+describe('loopback URLs', () => {
+  const base = { anonKey: 'anon-key-value' }
+
+  // `supabase start` serves http on loopback and cannot be told otherwise, so
+  // an https-only rule means the schema can only ever be tried in production.
+  it('accepts a local stack over plain http', () => {
+    for (const url of [
+      'http://127.0.0.1:54421',
+      'http://localhost:54421',
+      'http://[::1]:54421',
+    ]) {
+      const out = validateBackendConfig({ ...base, url })
+      expect(out.ok, url).toBe(true)
+    }
+  })
+
+  // The exemption is loopback, not "http". A LAN address is on a network.
+  it('still refuses plain http anywhere else', () => {
+    for (const url of [
+      'http://192.168.1.10:54421',
+      'http://community.example.com',
+      'http://10.0.0.5',
+      'http://127.0.0.1.evil.com',
+    ]) {
+      const out = validateBackendConfig({ ...base, url })
+      expect(out.ok, url).toBe(false)
+    }
+  })
+
+  it('still accepts https everywhere', () => {
+    expect(validateBackendConfig({ ...base, url: 'https://abc.supabase.co' }).ok).toBe(true)
+  })
+})

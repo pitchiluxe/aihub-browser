@@ -21,8 +21,24 @@ interface Harness {
   failNext: { value: boolean }
 }
 
-function harness(): Harness {
+/**
+ * The id this device's member has in the harness.
+ *
+ * Replication refuses to queue writes row level security would reject, and
+ * that judgement needs to know who this device is. A harness with no identity
+ * models a device where nobody has joined yet — which is a real state, but not
+ * the one most of these tests are about.
+ */
+const ME = 'me-1'
+
+function harness(opts: { admin?: boolean; anonymous?: boolean } = {}): Harness {
   const state = emptyState()
+  if (!opts.anonymous) {
+    state.members[ME] = {
+      id: ME, handle: 'me', handleKey: 'me', avatarSeed: ME, createdAt: NOW,
+      ...(opts.admin === false ? {} : { isAdmin: true }),
+    } as never
+  }
   const broadcast = vi.fn()
   const upserts: { table: string; rows: unknown[] }[] = []
   const deletes: { table: string; id: unknown }[] = []
@@ -59,6 +75,7 @@ function harness(): Harness {
     readState: () => state,
     updateState: mutate => { mutate(state) },
     broadcast,
+    localMemberId: () => (opts.anonymous ? null : ME),
     now: () => clock.now,
   })
 
@@ -343,5 +360,66 @@ describe('seed', () => {
     expect(tables).toContain('aihub_members')
     expect(tables).toContain('aihub_messages')
     expect(tables.indexOf('aihub_members')).toBeLessThan(tables.indexOf('aihub_messages'))
+  })
+})
+
+describe('never queues a write the server would refuse', () => {
+  /**
+   * Each of these cost a real debugging session against a live database. The
+   * push queue retries forever and drains in table order, so ONE impossible
+   * row stalls every message behind it — and the app went on reporting itself
+   * connected while two machines in the same room each saw only themselves.
+   */
+
+  it('does not push the room structure before anybody has joined', async () => {
+    const h = harness({ anonymous: true })
+    h.state.categories = { announcements: { id: 'announcements', name: 'Announcements', position: 0 } } as never
+    h.replication.reconcile()
+    await h.replication.flush?.()
+    expect(h.upserts.flatMap(u => u.table)).not.toContain('aihub_categories')
+  })
+
+  it('does not push a member row belonging to somebody else', async () => {
+    const h = harness({ admin: false })
+    h.state.members['someone-else'] = {
+      id: 'someone-else', handle: 'other', handleKey: 'other',
+      avatarSeed: 'x', createdAt: NOW,
+    } as never
+    h.replication.reconcile()
+    await h.replication.flush?.()
+    const pushedMembers = h.upserts
+      .filter(u => u.table === 'aihub_members')
+      .flatMap(u => u.rows as { id: string }[])
+      .map(r => r.id)
+    expect(pushedMembers).not.toContain('someone-else')
+  })
+
+  it('still pushes this device\u2019s own member row', async () => {
+    const h = harness({ admin: false })
+    h.replication.reconcile()
+    await h.replication.flush?.()
+    const pushedMembers = h.upserts
+      .filter(u => u.table === 'aihub_members')
+      .flatMap(u => u.rows as { id: string }[])
+      .map(r => r.id)
+    expect(pushedMembers).toContain(ME)
+  })
+
+  // "open a dm" is the one carve-out in the channel policy, so it is the one
+  // structural write an ordinary member is allowed to make.
+  it('lets an ordinary member open a direct message', async () => {
+    const h = harness({ admin: false })
+    h.state.channels = { 'dm-1': { slug: 'dm-1', type: 'dm', name: 'dm' } } as never
+    h.replication.reconcile()
+    await h.replication.flush?.()
+    expect(h.upserts.flatMap(u => u.table)).toContain('aihub_channels')
+  })
+
+  it('lets a moderator manage the structure', async () => {
+    const h = harness({ admin: true })
+    h.state.categories = { technology: { id: 'technology', name: 'Technology', position: 1 } } as never
+    h.replication.reconcile()
+    await h.replication.flush?.()
+    expect(h.upserts.flatMap(u => u.table)).toContain('aihub_categories')
   })
 })
