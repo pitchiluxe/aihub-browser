@@ -266,15 +266,33 @@ function Rule({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * There is no server yet. Saying so is not optional: someone who believes they
- * are talking to a room full of people, and is not, has been lied to by the
- * product.
+ * Whether there is a server is now a question, not a given.
  *
- * Voice and video are the one exception worth naming, because they genuinely
- * work — between windows of this app on this machine and, usually, across a
- * local network. What they cannot do yet is reach the internet.
+ * Saying which is not optional: someone who believes they are talking to a room
+ * full of people, and is not, has been lied to by the product — and that was
+ * exactly the complaint. The reverse is just as bad, so once a backend is
+ * connected this says nothing rather than warning about a limitation that has
+ * been lifted.
+ *
+ * Reads the backend directly rather than taking a prop, because it renders on
+ * the onboarding screen, before there is a member or a status object to hang it
+ * off.
  */
 function LocalPreviewBanner() {
+  const [network, setNetwork] = useState<'local' | 'connecting' | 'remote' | 'error'>('local')
+
+  useEffect(() => {
+    const api = (window as any).electronAPI?.community
+    let alive = true
+    api?.backend?.get?.()
+      .then((b: any) => { if (alive && b) setNetwork(b.network) })
+      .catch(() => {})
+    const off = api?.onBackendStatus?.((b: any) => setNetwork(b.network))
+    return () => { alive = false; off?.() }
+  }, [])
+
+  if (network === 'remote') return null
+
   return (
     <div className="flex gap-2 items-start" style={{
       fontSize: 12.5, lineHeight: 1.5, padding: '10px 12px', marginBottom: 14,
@@ -283,11 +301,11 @@ function LocalPreviewBanner() {
     }}>
       <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
       <span>
-        <strong>Local preview.</strong> The community server is not connected yet,
-        so messages you post stay on this computer and nobody on the internet can
-        see them. Voice, video and screen sharing do work — between windows here
-        and across your own network. Your name and identity key carry over when
-        the server goes live.
+        <strong>This computer only.</strong> No community backend is connected, so
+        messages you post stay on this computer and nobody else can see them — not
+        even someone running AIHub beside you. Voice, video and screen sharing
+        work between windows here. Join anyway: your name and identity key carry
+        over, and connecting a backend later brings this history with it.
       </span>
     </div>
   )

@@ -9,7 +9,7 @@ import fs from 'fs'
 import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
-import { registerCommunityIpc, releaseCommunityWindow } from './community'
+import { registerCommunityIpc, releaseCommunityWindow, shutdownCommunityBackend } from './community'
 import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
 import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
@@ -1724,7 +1724,16 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 // quitting inside that window would drop the last few navigations or download
 // rows. Flush synchronously here — 'before-quit' still runs on the main thread
 // with the process alive, which an async write would not survive.
-app.on('before-quit', () => { flushAllJsonStores() })
+app.on('before-quit', () => {
+  flushAllJsonStores()
+  // The community's push queue lives in memory too, and a message sitting in it
+  // when the app closes has been written to this disk and to nobody else's.
+  // Fired without awaiting for the same reason the flush above is synchronous:
+  // 'before-quit' will not wait for a promise, so this is a best effort that
+  // usually wins the race against process exit, backed by the queue's own
+  // retry on next launch when it does not.
+  void shutdownCommunityBackend()
+})
 
 // Network service crashes and restarts automatically — this is non-fatal.
 // Without this handler Electron 28+ may surface it as an unhandled event.

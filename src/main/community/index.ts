@@ -1,10 +1,12 @@
 import crypto from 'crypto'
 import { join } from 'path'
-import { app, ipcMain, safeStorage, BrowserWindow, desktopCapturer, Notification } from 'electron'
+import { readFile } from 'fs/promises'
+import { app, ipcMain, safeStorage, BrowserWindow, desktopCapturer, Notification, dialog } from 'electron'
 import { createManagedJsonStore } from '../jsonStore'
 import { validateHandle, handleKey } from '../../shared/communityHandle'
 import {
-  type Member, type Message, type NotifLevel, type Permission, type PresenceStatus,
+  type Member, type Message, type NotifLevel, type Permission,
+  type Presence, type PresenceStatus,
 } from '../../shared/community'
 import { migrateState } from '../../shared/communityMigrate'
 import { hasPermission, isOwner, resolvePermissions } from '../../shared/communityPermissions'
@@ -34,6 +36,19 @@ import {
   generateKeyPair, sealPrivateKey, openPrivateKey, signEnvelope,
   type StoredIdentity,
 } from './identity'
+import {
+  loadBackendConfig, sealBackendConfig, validateBackendConfig,
+  type BackendConfig, type LiveKitConfig,
+} from './backendConfig'
+import { connectRemote } from './remote'
+import { mintVoiceToken } from './livekit'
+import { backendFromEnv, refusedKeysIn } from './envImport'
+import { createReplication, type Replication } from './replication'
+import { createRemotePresence, mergePresence, type RemotePresence } from './remotePresence'
+import {
+  createRemoteSignaling, compositePeerId, windowOf, isLocalPeer,
+  type RemoteSignaling,
+} from './remoteSignaling'
 
 /**
  * AIHub Community — main-process wiring.
@@ -44,23 +59,42 @@ import {
  * not consulted.
  *
  * ── On the backend ────────────────────────────────────────────────────────
- * The room is currently LOCAL. Messages are stored on this machine and seen
- * only on this machine — there is no server yet, so no two users can see each
- * other. Everything above this line is written the way it will be written
- * against Supabase: identity is a real signed keypair, the posting rules are
- * the ones that become row-level security policies, and the transport is the
- * only piece that changes.
+ * The room is local until a Supabase project is configured, and genuinely
+ * shared once one is. That prediction — "the transport is the only piece that
+ * changes" — held: the rules in ./store, the permission checks and every one of
+ * the handlers below are unchanged. What was added is a replica layer
+ * (./replication) that pushes local writes up and folds remote writes down
+ * through the same broadcast() the renderer already listens to.
  *
- * `status()` reports `network: 'local'` and the UI says so plainly. Letting
- * someone believe they are talking to a community that cannot hear them would
- * be the worst possible version of this feature.
+ * `status()` reports network as local, connecting, remote or error, and the UI
+ * says which. Letting someone believe they are talking to a community that
+ * cannot hear them is the worst possible version of this feature, and was
+ * exactly the bug: five machines, five private rooms, one member each.
  */
 
 const IDENTITY_FILE = 'community-identity.json'
 const DATA_FILE = 'community-data.json'
+const BACKEND_FILE = 'community-backend.json'
+
+/**
+ * What this device remembers about the backend.
+ *
+ * `sealed` is the encrypted BackendConfig; see backendConfig.ts. `deviceId` is
+ * minted once and lives here rather than in the identity file because it
+ * describes the *machine*, not the member — exporting and importing an identity
+ * key onto a second computer must not carry the first computer's peer ids with
+ * it, or the two would collide in exactly the way composite peer ids exist to
+ * prevent.
+ */
+interface BackendRecord {
+  sealed: string | null
+  deviceId: string
+  insecure: boolean
+}
 
 let identityStore: ReturnType<typeof createManagedJsonStore<StoredIdentity | null>>
 let dataStore: ReturnType<typeof createManagedJsonStore<CommunityState>>
+let backendStore: ReturnType<typeof createManagedJsonStore<BackendRecord>>
 
 const newId = () => crypto.randomUUID()
 
@@ -94,14 +128,50 @@ function stores() {
       join(app.getPath('userData'), IDENTITY_FILE), () => null, { pretty: true })
   }
   if (!dataStore) {
-    dataStore = createManagedJsonStore<CommunityState>(
+    const raw = createManagedJsonStore<CommunityState>(
       join(app.getPath('userData'), DATA_FILE), emptyState)
+
+    /**
+     * One hook, and the reason there is not a `replication.push()` in twenty
+     * handlers.
+     *
+     * Every mutating path in this file — and in admin.ts, and in store.ts —
+     * already ends with `dataStore.update()` to mark the state dirty for the
+     * disk writer. Marking it dirty for the *network* writer in the same place
+     * means a handler cannot be written that persists locally and silently
+     * fails to replicate. The diff in reconcile() works out what changed.
+     */
+    dataStore = {
+      ...raw,
+      set(next: CommunityState) { raw.set(next); replicateSoon() },
+      update(fn: (current: CommunityState) => CommunityState | void) {
+        raw.update(fn)
+        replicateSoon()
+      },
+    }
     // Bring a file written by an older build forward before anything reads it.
     // Done here rather than at each call site because the store loads lazily,
     // and a single unmigrated read is enough to crash on a missing collection.
     dataStore.update(state => { migrateState(state) })
   }
-  return { identityStore, dataStore }
+  if (!backendStore) {
+    backendStore = createManagedJsonStore<BackendRecord>(
+      join(app.getPath('userData'), BACKEND_FILE),
+      () => ({ sealed: null, deviceId: crypto.randomUUID(), insecure: false }),
+      { pretty: true },
+    )
+    // A record written before deviceId existed, or hand-edited, must still get
+    // one — every voice peer id on this machine is built from it.
+    if (!backendStore.get().deviceId) {
+      backendStore.update(record => { record.deviceId = crypto.randomUUID() })
+    }
+  }
+  return { identityStore, dataStore, backendStore }
+}
+
+/** This machine's id. Stable across restarts, distinct from the member id. */
+function deviceId(): string {
+  return stores().backendStore.get().deviceId
 }
 
 /** Broadcast to every window, so a second window updates without polling and
@@ -112,11 +182,18 @@ function broadcast(channel: string, payload: unknown) {
   }
 }
 
-/** Deliver to exactly one window, addressed by its webContents id. */
+/**
+ * Deliver to exactly one window of this process.
+ *
+ * Peer ids are `${deviceId}:${webContentsId}` now, so the window half is
+ * extracted rather than compared whole. A bare id with no colon still matches,
+ * which keeps the in-process hub's own tests meaningful.
+ */
 function sendToPeer(peerId: string, channel: string, payload: unknown) {
+  const local = windowOf(peerId)
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue
-    if (String(win.webContents.id) !== peerId) continue
+    if (String(win.webContents.id) !== local) continue
     win.webContents.send(channel, payload)
     return
   }
@@ -131,6 +208,195 @@ function sendToPeer(peerId: string, channel: string, payload: unknown) {
  */
 const presence = createPresenceTracker()
 const signaling = createSignalingHub(sendToPeer)
+
+// ── The backend ────────────────────────────────────────────────────────────
+
+/**
+ * Everything that makes this community bigger than this computer.
+ *
+ * All four are null until a backend is configured, and every call site uses
+ * `?.` — which is the whole offline story. With no Supabase project the app
+ * behaves exactly as it did before this file learned the word "remote": local
+ * rules, local state, local windows. Nothing becomes a dead button.
+ */
+let replication: Replication | null = null
+let remotePresence: RemotePresence | null = null
+let remoteSignaling: RemoteSignaling | null = null
+let network: 'local' | 'connecting' | 'remote' | 'error' = 'local'
+let networkError: string | null = null
+
+/** Read the sealed credentials, if this device has any. */
+function backendConfig(): BackendConfig | null {
+  return loadBackendConfig(safeStorage, stores().backendStore.get().sealed)
+}
+
+/**
+ * Replicate whatever just changed.
+ *
+ * Called from one place — a wrapper around the data store — rather than from
+ * each of the twenty-odd mutating handlers. See replication.reconcile() for why
+ * the per-handler version was rejected: it is correct only until somebody adds
+ * a handler and forgets, and forgetting is silent.
+ *
+ * Debounced to a microtask so a handler that calls update() three times costs
+ * one diff.
+ */
+let reconcileQueued = false
+function replicateSoon(): void {
+  if (!replication || reconcileQueued) return
+  reconcileQueued = true
+  queueMicrotask(() => {
+    reconcileQueued = false
+    try { replication?.reconcile() } catch { /* the queue retries on its own */ }
+  })
+}
+
+/** Local windows and every other device, as one roster. */
+function mergedPresence(): Presence[] {
+  const local = presence.snapshot()
+  const remote = remotePresence?.remoteEntries() ?? []
+  if (!remote.length) return local
+
+  const merged = mergePresence(local, remote)
+  const voiceOf = new Map<string, string | undefined>()
+  for (const entry of local) voiceOf.set(entry.memberId, entry.voiceChannel)
+  for (const entry of remote) if (entry.voiceChannel) voiceOf.set(entry.memberId, entry.voiceChannel)
+
+  return Object.entries(merged).map(([memberId, status]) => ({
+    memberId,
+    status,
+    updatedAt: Date.now(),
+    ...(voiceOf.get(memberId) ? { voiceChannel: voiceOf.get(memberId)! } : {}),
+  }))
+}
+
+/** Who is typing in a channel, on this machine or any other. */
+function typingHere(channel: string): string[] {
+  const local = presence.typingIn(channel)
+  const remote = remotePresence?.typingIn(channel) ?? []
+  return [...new Set([...local, ...remote])]
+}
+
+function announcePresence(): void {
+  broadcast('community:event', { type: 'presence', presence: mergedPresence() })
+}
+
+function announceVoice(): void {
+  const local = signaling.occupancy()
+  const occupancy = remoteSignaling ? remoteSignaling.occupancy() : local
+  broadcast('community:event', { type: 'voice.occupancy', occupancy })
+}
+
+function backendStatus(): { network: typeof network; error: string | null } {
+  // The push queue can fail while the socket is fine. Either counts as degraded
+  // — a message sitting in a retry queue has not reached anybody.
+  if (replication && replication.status() === 'error') {
+    return { network: 'error', error: replication.lastError() ?? networkError }
+  }
+  return { network, error: networkError }
+}
+
+/** The two network fields every status carries, in one place so they cannot
+ *  drift between the registered and unregistered branches. */
+function backendStatusFields(): { network: CommunityNetwork; networkError: string | null } {
+  const current = backendStatus()
+  return { network: current.network, networkError: current.error }
+}
+
+function announceBackend(): void {
+  broadcast('community:backend', backendStatus())
+  broadcast('community:status', currentStatus())
+}
+
+/**
+ * Bring the community online, or say why it could not.
+ *
+ * Idempotent: calling it while already connected tears the old connection down
+ * first, which is what "Save" in the settings panel does after the URL changes.
+ */
+async function connectBackend(): Promise<{ ok: true } | { ok: false; error: string }> {
+  await disconnectBackend()
+
+  const config = backendConfig()
+  if (!config) { network = 'local'; networkError = null; announceBackend(); return { ok: true } }
+
+  network = 'connecting'
+  networkError = null
+  announceBackend()
+
+  const connected = await connectRemote(config)
+  if ('error' in connected) {
+    network = 'error'
+    networkError = connected.error
+    announceBackend()
+    return { ok: false, error: connected.error }
+  }
+
+  const { client, authUid } = connected
+  const { dataStore: data } = stores()
+
+  replication = createReplication({
+    client,
+    readState: () => data.get(),
+    updateState: mutate => { data.update(state => { mutate(state) }) },
+    broadcast,
+    persist: () => data.flush(),
+  })
+
+  try {
+    await replication.start()
+  } catch (failure) {
+    replication = null
+    network = 'error'
+    networkError = failure instanceof Error ? failure.message : String(failure)
+    announceBackend()
+    return { ok: false, error: networkError }
+  }
+
+  // Bind this member row to the session that will be writing it, or every
+  // policy comparing auth_uid to auth.uid() refuses this device's own updates.
+  const me = identityStore.get()?.memberId
+  if (me) {
+    data.update(state => {
+      const member = state.members[me]
+      if (member) (member as Member & { authUid?: string }).authUid = authUid
+    })
+  }
+
+  // Whatever this machine had locally goes up. On the first device that seeds
+  // the room; on the fifth it is a no-op, because the backfill already put
+  // those exact rows into the baseline.
+  replication.reconcile()
+
+  remotePresence = createRemotePresence({
+    client, deviceId: deviceId(), onChange: announcePresence,
+  })
+  remoteSignaling = createRemoteSignaling({
+    client, deviceId: deviceId(), deliver: sendToPeer, onRoster: announceVoice,
+  })
+
+  network = 'remote'
+  networkError = null
+  announceBackend()
+  return { ok: true }
+}
+
+async function disconnectBackend(): Promise<void> {
+  await remotePresence?.stop().catch(() => {})
+  await remoteSignaling?.stop().catch(() => {})
+  await replication?.stop().catch(() => {})
+  replication = null
+  remotePresence = null
+  remoteSignaling = null
+  network = 'local'
+  networkError = null
+}
+
+/** Flush anything still queued. Called from the app's before-quit path. */
+export async function shutdownCommunityBackend(): Promise<void> {
+  await replication?.flush().catch(() => {})
+  await disconnectBackend()
+}
 
 /**
  * Raise a desktop notification for a message, if this member asked for one.
@@ -180,11 +446,27 @@ function notifyFor(message: Message): void {
   notification.show()
 }
 
+/**
+ * `network` stopped being the constant 'local'.
+ *
+ * It said 'local' unconditionally, and the UI dutifully reported that the room
+ * was on this computer only — which was true, and is now a question with four
+ * answers. A banner that keeps saying "local" while five people are talking is
+ * as wrong as the one that said "connected" when nobody could hear you.
+ */
+export type CommunityNetwork = 'local' | 'connecting' | 'remote' | 'error'
+
 export type CommunityStatus =
-  | { state: 'unregistered'; network: 'local'; insecureKeyStorage: boolean }
+  | {
+      state: 'unregistered'
+      network: CommunityNetwork
+      networkError: string | null
+      insecureKeyStorage: boolean
+    }
   | {
       state: 'ready' | 'banned'
-      network: 'local'
+      network: CommunityNetwork
+      networkError: string | null
       member: Member
       insecureKeyStorage: boolean
       established: boolean
@@ -197,19 +479,19 @@ function currentStatus(): CommunityStatus {
   const insecure = !!identity?.insecureStorage
 
   if (!identity?.memberId) {
-    return { state: 'unregistered', network: 'local', insecureKeyStorage: insecure }
+    return { state: 'unregistered', ...backendStatusFields(), insecureKeyStorage: insecure }
   }
   const state = dataStore.get()
   const member = state.members[identity.memberId]
   if (!member) {
     // The key outlived its member row — treat it as not yet registered rather
     // than crashing on a missing lookup.
-    return { state: 'unregistered', network: 'local', insecureKeyStorage: insecure }
+    return { state: 'unregistered', ...backendStatusFields(), insecureKeyStorage: insecure }
   }
   const now = Date.now()
   return {
     state: member.bannedAt ? 'banned' : 'ready',
-    network: 'local',
+    ...backendStatusFields(),
     member,
     insecureKeyStorage: insecure,
     established: isEstablished(state, member.id, now),
@@ -240,7 +522,164 @@ function requireMember(): { id: string } | { error: string } {
 export function registerCommunityIpc(): void {
   stores()
 
+  // Connect on launch if this device has been set up. Deliberately not awaited:
+  // a slow or unreachable project must not hold the Community tab hostage, and
+  // every handler below works against local state while it is still connecting.
+  void connectBackend()
+
   ipcMain.handle('community:status', async () => currentStatus())
+
+  // -- The backend -----------------------------------------------------------
+
+  /**
+   * What is configured, and how it is going.
+   *
+   * The anon key is deliberately NOT returned. The panel shows "configured" and
+   * offers a replace field, the same as every other credential in this app —
+   * a settings screen that hands a secret back to the renderer has widened the
+   * blast radius of any bug in the renderer for no benefit at all.
+   */
+  ipcMain.handle('community:backend:get', async () => {
+    const record = stores().backendStore.get()
+    const config = backendConfig()
+    return {
+      configured: !!config,
+      url: config?.url ?? '',
+      iceServers: config?.iceServers ?? [],
+      insecureStorage: record.insecure,
+      // URL and key are shown so the panel can confirm which project is in
+      // use. The secret is not returned at any point — see livekit.ts.
+      livekit: config?.livekit
+        ? { configured: true, url: config.livekit.url, apiKey: config.livekit.apiKey }
+        : { configured: false, url: '', apiKey: '' },
+      ...backendStatus(),
+    }
+  })
+
+  ipcMain.handle('community:backend:set', async (_e, input: unknown) => {
+    const incoming = (input ?? {}) as Partial<BackendConfig>
+    const existing = backendConfig()
+
+    // An empty key on a configured device means "keep the one you have", so
+    // editing the ICE servers does not force the user to paste the key again.
+    const incomingLive = (incoming.livekit ?? null) as Partial<LiveKitConfig> | null
+    const liveUrl = incomingLive?.url ?? existing?.livekit?.url ?? ''
+    const liveKeyId = incomingLive?.apiKey ?? existing?.livekit?.apiKey ?? ''
+    // Same rule as the anon key: blank means "keep the one you have", so
+    // changing the LiveKit URL does not force the secret to be pasted again.
+    const liveSecret = String(incomingLive?.apiSecret ?? '').trim()
+      || existing?.livekit?.apiSecret || ''
+
+    const merged = {
+      url: incoming.url ?? existing?.url ?? '',
+      anonKey: String(incoming.anonKey ?? '').trim() || existing?.anonKey || '',
+      iceServers: incoming.iceServers ?? existing?.iceServers ?? [],
+      livekit: (liveUrl || liveKeyId || liveSecret)
+        ? { url: liveUrl, apiKey: liveKeyId, apiSecret: liveSecret }
+        : null,
+    }
+
+    const validated = validateBackendConfig(merged)
+    if (!validated.ok) return { ok: false, error: validated.error }
+
+    const sealed = sealBackendConfig(safeStorage, validated.config)
+    stores().backendStore.update(record => {
+      record.sealed = sealed.value
+      record.insecure = sealed.insecure
+    })
+    stores().backendStore.flush()
+
+    const connected = await connectBackend()
+    if (!connected.ok) return connected
+
+    // First device in wins the seeding. On every later device this is a no-op:
+    // the backfill has already put those exact rows into the diff baseline.
+    replication?.reconcile()
+    return { ok: true, insecureStorage: sealed.insecure }
+  })
+
+  ipcMain.handle('community:backend:clear', async () => {
+    await disconnectBackend()
+    stores().backendStore.update(record => { record.sealed = null; record.insecure = false })
+    stores().backendStore.flush()
+    announceBackend()
+    return { ok: true }
+  })
+
+  /** Retry after a failure, without making the user re-enter anything. */
+  ipcMain.handle('community:backend:reconnect', async () => connectBackend())
+
+  /**
+   * Import credentials from a .env file the user picks.
+   *
+   * Five devices times five fields is twenty-five hand-copied values, two of
+   * them a JWT and a signing secret. Those fail in the least helpful way when a
+   * character is dropped — the app connects, reads succeed, and writes are
+   * silently refused — so removing the transcription removes a whole class of
+   * support question.
+   *
+   * The values are read here, sealed, and never returned. What goes back to the
+   * renderer is the list of variable *names* that were used, which is enough to
+   * confirm the right file was picked and discloses nothing.
+   */
+  ipcMain.handle('community:backend:importEnv', async () => {
+    const window = BrowserWindow.getAllWindows().find(w => !w.isDestroyed())
+    const picked = await dialog.showOpenDialog(window!, {
+      title: 'Choose a .env file',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Environment files', extensions: ['env', 'local', 'txt'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    })
+    if (picked.canceled || !picked.filePaths[0]) return { ok: false, cancelled: true }
+
+    let text: string
+    try {
+      text = await readFile(picked.filePaths[0], 'utf8')
+    } catch (failure) {
+      return { ok: false, error: `That file could not be read: ${failure instanceof Error ? failure.message : String(failure)}` }
+    }
+
+    const imported = backendFromEnv(text)
+    const refused = refusedKeysIn(text)
+
+    if (!imported.config.url || !imported.config.anonKey) {
+      return {
+        ok: false,
+        error: `No Supabase project found in that file. Looked for ${imported.missing.join(', ')}.`,
+        missing: imported.missing,
+        refused,
+      }
+    }
+
+    const existing = backendConfig()
+    const validated = validateBackendConfig({
+      ...imported.config,
+      iceServers: existing?.iceServers ?? [],
+    })
+    if (!validated.ok) return { ok: false, error: validated.error, refused }
+
+    const sealed = sealBackendConfig(safeStorage, validated.config)
+    stores().backendStore.update(record => {
+      record.sealed = sealed.value
+      record.insecure = sealed.insecure
+    })
+    stores().backendStore.flush()
+
+    const connected = await connectBackend()
+    if (!connected.ok) return { ...connected, found: imported.found, refused }
+
+    replication?.reconcile()
+    return {
+      ok: true,
+      // Names only. Never the values, not even truncated.
+      found: imported.found,
+      missing: imported.missing,
+      refused,
+      insecureStorage: sealed.insecure,
+    }
+  })
 
   // Channels come from state now. The constant is a seed the migration applied
   // once; after that this is whatever the owner has shaped.
@@ -920,7 +1359,10 @@ export function registerCommunityIpc(): void {
     const who = requireMember()
     if ('error' in who) return { ok: true }
     presence.heartbeat(String(e.sender.id), who.id, status ?? 'online')
-    broadcast('community:event', { type: 'presence', presence: presence.snapshot() })
+    // Announce to the other devices before telling this one who is here, so
+    // the roster it renders already includes this heartbeat.
+    await remotePresence?.track(who.id, status ?? 'online').catch(() => {})
+    announcePresence()
     return { ok: true }
   })
 
@@ -929,8 +1371,9 @@ export function registerCommunityIpc(): void {
     if ('error' in who) return { ok: true }
     if (typing) presence.startTyping(who.id, String(channel))
     else presence.stopTyping(who.id, String(channel))
+    await remotePresence?.typing(who.id, String(channel), !!typing).catch(() => {})
     broadcast('community:event', {
-      type: 'typing', channel: String(channel), members: presence.typingIn(String(channel)),
+      type: 'typing', channel: String(channel), members: typingHere(String(channel)),
     })
     return { ok: true }
   })
@@ -966,31 +1409,99 @@ export function registerCommunityIpc(): void {
       return { ok: false, error: 'You cannot join voice here.' }
     }
 
-    const peerId = String(e.sender.id)
-    const peers = signaling.join(peerId, who.id, String(channel))
-    presence.joinVoice(peerId, who.id, String(channel))
-    broadcast('community:event', { type: 'voice.occupancy', occupancy: signaling.occupancy() })
-    return { ok: true, peerId, peers }
+    // Composite, not the bare webContents id: every Electron process numbers
+    // its first window 1, so five machines would produce five peers called "1"
+    // and each would answer the others' offers as if they were its own.
+    const peerId = compositePeerId(deviceId(), e.sender.id)
+    const localPeers = signaling.join(peerId, who.id, String(channel))
+    presence.joinVoice(String(e.sender.id), who.id, String(channel))
+    await remotePresence?.track(who.id, 'online', String(channel)).catch(() => {})
+
+    const remotePeers = await remoteSignaling?.join(peerId, who.id, String(channel)) ?? []
+    announceVoice()
+    // The arriving peer offers to everyone already present — on this machine
+    // and on every other one. If both sides offered on sight, every pair would
+    // negotiate twice and glare.
+    return { ok: true, peerId, peers: [...localPeers, ...remotePeers] }
+  })
+
+  /**
+   * A LiveKit join token, if this device has a LiveKit project configured.
+   *
+   * Returns `{ ok: true, livekit: null }` when it does not, and the renderer
+   * falls back to the direct peer mesh between windows. That is the difference
+   * between "no voice" and "voice that does not leave this machine", and the
+   * caller has to be able to tell them apart.
+   *
+   * Permission is checked here and not only in the renderer: a token is a
+   * capability, and minting one for somebody who may not speak in a room would
+   * hand them the room regardless of what the UI shows them.
+   */
+  ipcMain.handle('community:voice:token', async (_e, channel: string) => {
+    const who = requireMember()
+    if ('error' in who) return { ok: false, error: who.error }
+
+    const state = stores().dataStore.get()
+    const slug = String(channel ?? '')
+    const room = state.channels[slug]
+    if (!room || room.type !== 'voice') return { ok: false, error: 'That is not a voice channel.' }
+    if (!hasPermission(state, who.id, 'use_voice', slug)) {
+      return { ok: false, error: 'You cannot join voice here.' }
+    }
+
+    const config = backendConfig()
+    if (!config?.livekit) return { ok: true, livekit: null }
+
+    try {
+      const minted = await mintVoiceToken(config.livekit, {
+        memberId: who.id,
+        handle: state.members[who.id]?.handle ?? 'Member',
+        channelSlug: slug,
+      })
+      return { ok: true, livekit: minted }
+    } catch (failure) {
+      return {
+        ok: false,
+        error: `Could not mint a LiveKit token: ${failure instanceof Error ? failure.message : String(failure)}`,
+      }
+    }
   })
 
   ipcMain.handle('community:voice:leave', async (e) => {
-    const peerId = String(e.sender.id)
+    const peerId = compositePeerId(deviceId(), e.sender.id)
     signaling.leave(peerId)
-    presence.leaveVoice(peerId)
-    broadcast('community:event', { type: 'voice.occupancy', occupancy: signaling.occupancy() })
+    presence.leaveVoice(String(e.sender.id))
+    await remoteSignaling?.leave(peerId).catch(() => {})
+    const me = requireMember()
+    if (!('error' in me)) await remotePresence?.track(me.id, 'online').catch(() => {})
+    announceVoice()
     return { ok: true }
   })
 
   ipcMain.handle('community:voice:signal', async (e, toPeerId: string, payload: unknown) => {
     // `from` is the sender's own id, taken here and never read from payload —
     // otherwise a peer can put someone else's id on an offer.
-    const delivered = signaling.signal(String(e.sender.id), String(toPeerId), payload)
+    const from = compositePeerId(deviceId(), e.sender.id)
+    const to = String(toPeerId)
+
+    // A window on this machine is reachable directly. Sending its offer to
+    // Frankfurt and back to reach the window beside it would add a round trip
+    // to every negotiation for nothing.
+    const delivered = isLocalPeer(to, deviceId())
+      ? signaling.signal(from, to, payload)
+      : await remoteSignaling?.signal(from, to, payload) ?? false
+
     return { ok: delivered }
   })
 
   ipcMain.handle('community:voice:state', async (e, patch: Record<string, boolean>) => {
-    signaling.setState(String(e.sender.id), patch ?? {})
-    broadcast('community:event', { type: 'voice.occupancy', occupancy: signaling.occupancy() })
+    const peerId = compositePeerId(deviceId(), e.sender.id)
+    signaling.setState(peerId, patch ?? {})
+    // Mirrored to the other devices too. Without this a camera turning on here
+    // never opens a tile there, which is a large part of why screen share
+    // looked broken rather than merely unshared.
+    await remoteSignaling?.setState(peerId, patch ?? {}).catch(() => {})
+    announceVoice()
     return { ok: true }
   })
 
@@ -1031,6 +1542,12 @@ export function registerCommunityIpc(): void {
  * roster with a peer connection nobody is on the other end of.
  */
 export function releaseCommunityWindow(windowId: number): void {
+  const peerId = compositePeerId(deviceId(), windowId)
   presence.dropWindow(String(windowId))
-  signaling.dropPeer(String(windowId))
+  signaling.dropPeer(peerId)
+  // Tell the other machines too. Without this a closed window stays in their
+  // roster holding a peer connection nobody is on the other end of, showing a
+  // frozen last frame until the socket eventually times out.
+  void remoteSignaling?.leave(peerId).catch(() => {})
+  announceVoice()
 }

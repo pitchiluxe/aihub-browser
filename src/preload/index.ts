@@ -199,6 +199,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('community:refresh', handler)
       return () => ipcRenderer.removeListener('community:refresh', handler)
     },
+    onBackendStatus: (cb: (p: any) => void) => {
+      const handler = (_e: any, p: any) => cb(p)
+      ipcRenderer.on('community:backend', handler)
+      return () => ipcRenderer.removeListener('community:backend', handler)
+    },
+
+    // ── The backend ────────────────────────────────────────────────────────
+    // `get` never returns the anon key. The panel shows that one is configured
+    // and offers to replace it; handing a secret back to the renderer would
+    // widen the blast radius of any renderer bug for no benefit.
+    voiceToken: (channel: string)       => ipcRenderer.invoke('community:voice:token', channel),
+
+    backend: {
+      get:       ()           => ipcRenderer.invoke('community:backend:get'),
+      set:       (input: any) => ipcRenderer.invoke('community:backend:set', input),
+      clear:     ()           => ipcRenderer.invoke('community:backend:clear'),
+      reconnect: ()           => ipcRenderer.invoke('community:backend:reconnect'),
+      // Opens a file picker in the main process. Returns variable NAMES only.
+      importEnv: ()           => ipcRenderer.invoke('community:backend:importEnv'),
+    },
 
     // ── Reading the room ───────────────────────────────────────────────────
     snapshot:  ()                       => ipcRenderer.invoke('community:snapshot'),

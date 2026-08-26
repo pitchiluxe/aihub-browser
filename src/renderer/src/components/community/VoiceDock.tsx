@@ -1,18 +1,23 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React from 'react'
 import {
   Mic, MicOff, Headphones, VolumeX, Video, VideoOff,
-  MonitorUp, MonitorX, PhoneOff, Loader2, AlertCircle, Grid2x2, Maximize2,
+  MonitorUp, MonitorX, PhoneOff, Loader2, AlertCircle,
 } from 'lucide-react'
 import { Avatar } from './bits'
 import type { CommunityMember } from './useCommunity'
 import type { VoicePeer, VoiceError } from './useVoiceSession'
 
 /**
- * The voice dock, and the stage above it.
+ * The voice control dock.
  *
  * The dock is always visible while connected, because the two questions people
  * ask constantly in a call — am I muted, how do I leave — must never be more
  * than one glance and one click away.
+ *
+ * The stage this file used to own now lives in VoiceStage.tsx, mounted in the
+ * main column. Rendering video here meant a shared screen got a 340px strip
+ * beneath the chat; it needs the window. The dock keeps the controls and the
+ * roster of faces, which is all it should ever have had.
  *
  * Connection state is reported honestly. "Connecting" is a real state here, not
  * a spinner that resolves optimistically, and a failure says what would fix it
@@ -24,9 +29,6 @@ interface Props {
   peers: VoicePeer[]
   selfPeerId: string
   memberById: Map<string, CommunityMember>
-  remoteStreams: Record<string, MediaStream>
-  localVideoStream: MediaStream | null
-  screenShareStream: MediaStream | null
   speaking: Record<string, boolean>
   connection: 'idle' | 'connecting' | 'live' | 'failed'
   error: VoiceError | null
@@ -47,16 +49,11 @@ interface Props {
 
 export default function VoiceDock(props: Props) {
   const {
-    channelName, peers, selfPeerId, memberById, remoteStreams, localVideoStream,
-    screenShareStream, speaking, connection, error, muted, deafened, camera, sharing,
+    channelName, peers, selfPeerId, memberById,
+    speaking, connection, error, muted, deafened, camera, sharing,
     canVideo, canShare, onToggleMute, onToggleDeafen, onToggleCamera,
     onStartShare, onStopShare, onLeave, onDismissError,
   } = props
-
-  const [focused, setFocused] = useState<string | null>(null)
-
-  const anyVideo = camera || sharing
-    || peers.some(p => p.peerId !== selfPeerId && (p.camera || p.sharing))
 
   const statusText = {
     idle: 'Not connected',
@@ -67,20 +64,6 @@ export default function VoiceDock(props: Props) {
 
   return (
     <>
-      {anyVideo && (
-        <VoiceStage
-          peers={peers}
-          selfPeerId={selfPeerId}
-          memberById={memberById}
-          remoteStreams={remoteStreams}
-          localVideoStream={localVideoStream}
-          screenShareStream={screenShareStream}
-          speaking={speaking}
-          focused={focused}
-          onFocus={setFocused}
-        />
-      )}
-
       <div
         className="flex flex-wrap items-center gap-3 px-4 py-2.5"
         style={{ borderTop: '1px solid var(--cm-line)' }}
@@ -191,134 +174,5 @@ function DockButton({
     >
       {children}
     </button>
-  )
-}
-
-// ── The stage ──────────────────────────────────────────────────────────────
-
-function VoiceStage({
-  peers, selfPeerId, memberById, remoteStreams, localVideoStream, screenShareStream,
-  speaking, focused, onFocus,
-}: {
-  peers: VoicePeer[]
-  selfPeerId: string
-  memberById: Map<string, CommunityMember>
-  remoteStreams: Record<string, MediaStream>
-  localVideoStream: MediaStream | null
-  screenShareStream: MediaStream | null
-  speaking: Record<string, boolean>
-  focused: string | null
-  onFocus: (peerId: string | null) => void
-}) {
-  // Someone sharing a screen is almost always the thing everyone came to look
-  // at, so it takes the stage unless a person has chosen otherwise.
-  const sharer = peers.find(p => p.sharing)
-  const active = focused ?? sharer?.peerId ?? null
-
-  const tiles = peers.map(peer => ({
-    peer,
-    stream: peer.peerId === selfPeerId
-      ? (peer.sharing ? screenShareStream : localVideoStream)
-      : remoteStreams[peer.peerId] ?? null,
-    isSelf: peer.peerId === selfPeerId,
-  }))
-
-  const focusTile = active ? tiles.find(t => t.peer.peerId === active) : null
-
-  return (
-    <div className="px-4 pb-3" style={{ borderTop: '1px solid var(--cm-line)' }}>
-      <div className="flex items-center justify-between py-2">
-        <p className="text-xs font-medium" style={{ color: 'var(--cm-dim)' }}>
-          {sharer
-            ? `${memberById.get(sharer.memberId)?.handle ?? 'Someone'} is sharing a screen`
-            : 'Video'}
-        </p>
-        <button
-          onClick={() => onFocus(active ? null : tiles[0]?.peer.peerId ?? null)}
-          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors hover:bg-[var(--cm-hover)]"
-          style={{ color: 'var(--cm-dim)' }}
-        >
-          {active ? <><Grid2x2 className="h-3.5 w-3.5" /> Grid</> : <><Maximize2 className="h-3.5 w-3.5" /> Focus</>}
-        </button>
-      </div>
-
-      {focusTile ? (
-        <div className="flex flex-col gap-2">
-          <Tile {...focusTile} speaking={speaking} memberById={memberById} large />
-          <div className="flex gap-2 overflow-x-auto">
-            {tiles.filter(t => t.peer.peerId !== active).map(tile => (
-              <button key={tile.peer.peerId} onClick={() => onFocus(tile.peer.peerId)} className="shrink-0">
-                <Tile {...tile} speaking={speaking} memberById={memberById} small />
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-          {tiles.map(tile => (
-            <button key={tile.peer.peerId} onClick={() => onFocus(tile.peer.peerId)}>
-              <Tile {...tile} speaking={speaking} memberById={memberById} />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Tile({
-  peer, stream, isSelf, speaking, memberById, large, small,
-}: {
-  peer: VoicePeer
-  stream: MediaStream | null
-  isSelf: boolean
-  speaking: Record<string, boolean>
-  memberById: Map<string, CommunityMember>
-  large?: boolean
-  small?: boolean
-}) {
-  const video = useRef<HTMLVideoElement>(null)
-  const member = memberById.get(peer.memberId)
-  const isSpeaking = speaking[isSelf ? 'self' : peer.peerId]
-
-  useEffect(() => {
-    if (video.current && stream) video.current.srcObject = stream
-  }, [stream])
-
-  const height = large ? 340 : small ? 72 : 150
-
-  return (
-    <div
-      className={`relative w-full overflow-hidden rounded-xl ${isSpeaking ? 'cm-speaking' : ''}`}
-      style={{
-        height,
-        background: 'var(--cm-void)',
-        border: `1px solid ${isSpeaking ? 'var(--cm-accent)' : 'var(--cm-line)'}`,
-      }}
-    >
-      {stream && (peer.camera || peer.sharing) ? (
-        <video
-          ref={video}
-          autoPlay
-          playsInline
-          // Never play your own audio back: that is feedback, and it is loud.
-          muted={isSelf}
-          className="h-full w-full"
-          style={{ objectFit: peer.sharing ? 'contain' : 'cover' }}
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center">
-          <Avatar seed={member?.avatarSeed ?? peer.memberId} size={small ? 28 : 56} />
-        </div>
-      )}
-
-      {!small && (
-        <p className="absolute bottom-1.5 left-2 flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]"
-           style={{ background: 'rgb(0 0 0 / .55)', color: '#fff' }}>
-          {peer.muted && <MicOff className="h-3 w-3" />}
-          {member?.handle ?? 'Member'}{isSelf ? ' (you)' : ''}
-        </p>
-      )}
-    </div>
   )
 }

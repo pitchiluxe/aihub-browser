@@ -1,17 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Hash, Menu, Search, Users, Bell, BellOff, BellRing, ShieldAlert, AlertCircle,
-  UserCog, ScrollText, Megaphone, Loader2,
+  UserCog, ScrollText, Megaphone, Loader2, CloudOff,
 } from 'lucide-react'
 import type { Attachment, Channel, Message, NotifLevel } from '../../../../shared/community'
 import { extensionFor } from '../../../../shared/fileTypes'
 import { useCommunity } from './useCommunity'
-import { useVoiceSession } from './useVoiceSession'
+import { useVoice } from './useVoice'
 import ChannelSidebar from './ChannelSidebar'
 import MessageList from './MessageList'
 import Composer from './Composer'
 import MemberList from './MemberList'
 import VoiceDock from './VoiceDock'
+import VoiceStage, { stageIsLive } from './VoiceStage'
+import BackendPanel from './BackendPanel'
 import OwnerTools from './OwnerTools'
 import { ChannelEditor, ScreenPicker, TimeoutDialog } from './dialogs'
 import { SearchPanel, ThreadPanel } from './panels'
@@ -60,9 +62,14 @@ export default function CommunityShell(props: Props) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [timeoutFor, setTimeoutFor] = useState<string | null>(null)
   const [ownership, setOwnership] = useState<{ googleConnected: boolean }>({ googleConnected: false })
+  const [backendOpen, setBackendOpen] = useState(false)
+  const [backend, setBackend] = useState<{
+    network: 'local' | 'connecting' | 'remote' | 'error'
+    error: string | null
+  }>({ network: 'local', error: null })
 
   const community = useCommunity(activeSlug)
-  const voice = useVoiceSession()
+  const voice = useVoice()
   const { api, snapshot, messages, unread, mentions, can, memberById, roleFor } = community
 
   /**
@@ -86,6 +93,23 @@ export default function CommunityShell(props: Props) {
 
   useEffect(() => { api?.ownership().then(setOwnership).catch(() => {}) }, [api, settingsOpen])
 
+  /**
+   * Where the community actually lives, and whether it is reachable.
+   *
+   * Polled once at mount and pushed on every change afterwards. The banner it
+   * feeds is the fix for the quietest part of the original bug: the app was
+   * behaving correctly for a local-only community and never said that it was
+   * one, so five people each concluded their messages were being ignored.
+   */
+  useEffect(() => {
+    let alive = true
+    api?.backend?.get?.()
+      .then((next: any) => { if (alive && next) setBackend({ network: next.network, error: next.error }) })
+      .catch(() => {})
+    const off = api?.onBackendStatus?.((next: any) => setBackend(next))
+    return () => { alive = false; off?.() }
+  }, [api])
+
   const notifLevel: NotifLevel = snapshot.notifPrefs[activeSlug] ?? 'mentions'
 
   /**
@@ -94,6 +118,19 @@ export default function CommunityShell(props: Props) {
    * them to enumerate in CSS.
    */
   const shellStyle = { ['--cm-accent' as string]: channel?.accent ?? '#34d399' }
+
+  /**
+   * When anyone in the room turns on a camera or starts sharing, the stage
+   * takes the main column and the message list steps aside.
+   *
+   * It used to render into the bottom dock, which gave a shared desktop a
+   * 340px letterboxed band beneath the composer — smaller than the chat it was
+   * interrupting. A screen share is the most information-dense thing this app
+   * ever puts on screen; it gets the window. The composer stays mounted below
+   * it, so you can still talk about what you are looking at.
+   */
+  const stageLive = !!voice.channel && stageIsLive(voice.peers)
+
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -157,6 +194,28 @@ export default function CommunityShell(props: Props) {
       ? 'Only the community owner posts announcements.'
       : 'You do not have permission to post here.'
 
+  /** Defined once because it is rendered in two places — under the message
+   *  list, and under the stage when video has taken the column. */
+  const composerNode = (
+    <Composer
+      channelName={channel?.name ?? ''}
+      disabled={!canPost}
+      disabledReason={postDisabledReason}
+      canAttach={can('attach_files')}
+      members={snapshot.members}
+      replyTo={replyTo}
+      onCancelReply={() => setReplyTo(null)}
+      onSend={(body, attachments) => community.post({
+        body,
+        ...(attachments.length ? { attachments } : {}),
+        ...(replyTo ? { replyToId: replyTo.id } : {}),
+      })}
+      onTyping={community.setTyping}
+      upload={(name, bytes) => api.uploadAttachment(name, bytes)}
+      error={community.error}
+    />
+  )
+
   const typingNames = community.typingHere
     .filter(id => id !== snapshot.memberId)
     .map(id => memberById.get(id)?.handle)
@@ -210,6 +269,46 @@ export default function CommunityShell(props: Props) {
         </div>
       </div>
 
+      {/* ── The connection banner ────────────────────────────────────────── */}
+      {/*
+        Shown only when there is something the user needs to know. A working
+        connection gets no banner: "Connected" pinned above every conversation
+        is chrome, and chrome that is always true is chrome nobody reads.
+      */}
+      {backend.network !== 'remote' && (
+        <div
+          className="cm-banner flex items-center gap-2 px-4 py-2"
+          role="status"
+          style={{
+            background: backend.network === 'error'
+              ? 'color-mix(in srgb, var(--cm-danger) 12%, transparent)'
+              : 'color-mix(in srgb, var(--cm-warn) 12%, transparent)',
+            borderBottom: '1px solid var(--cm-line)',
+          }}
+        >
+          {backend.network === 'connecting'
+            ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" style={{ color: 'var(--cm-dim)' }} />
+            : <CloudOff className="h-3.5 w-3.5 shrink-0"
+                        style={{ color: backend.network === 'error' ? 'var(--cm-danger)' : 'var(--cm-warn)' }} />}
+
+          <p className="min-w-0 flex-1 truncate text-xs" style={{ color: 'var(--cm-dim)' }}>
+            {backend.network === 'connecting'
+              ? 'Connecting to the community…'
+              : backend.error
+                ? backend.error
+                : 'This community is on this computer only — nobody else can see your messages.'}
+          </p>
+
+          <button
+            onClick={() => setBackendOpen(true)}
+            className="shrink-0 rounded px-2 py-1 text-xs font-medium hover:bg-[var(--cm-hover)]"
+            style={{ color: 'var(--cm-accent)' }}
+          >
+            {backend.network === 'error' ? 'Fix this' : 'Set up'}
+          </button>
+        </div>
+      )}
+
       {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       <div className="cm-sidebar">
         <ChannelSidebar
@@ -235,7 +334,10 @@ export default function CommunityShell(props: Props) {
       </div>
 
       {/* ── Main ─────────────────────────────────────────────────────────── */}
-      <main className="cm-main flex min-w-0 flex-col">
+      {/* min-h-0 is load-bearing: a grid item defaults to min-height:auto, so
+          without it the stage's flex-1 grows past the row instead of fitting
+          inside it, and the composer is pushed off the bottom of the window. */}
+      <main className="cm-main flex min-h-0 min-w-0 flex-col">
         <header
           className="flex items-center gap-2 px-4 py-3"
           style={{ borderBottom: '1px solid var(--cm-line)' }}
@@ -283,7 +385,17 @@ export default function CommunityShell(props: Props) {
           </HeaderButton>
         </header>
 
-        {channel?.type === 'voice' ? (
+        {stageLive ? (
+          <VoiceStage
+            peers={voice.peers}
+            selfPeerId={voice.peerId}
+            memberById={memberById}
+            remoteStreams={voice.remoteStreams}
+            localVideoStream={voice.localVideoStream}
+            screenShareStream={voice.screenShareStream}
+            speaking={voice.speaking}
+          />
+        ) : channel?.type === 'voice' ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
             <p className="text-sm" style={{ color: 'var(--cm-dim)' }}>
               {channel.name} is a voice channel.
@@ -330,25 +442,13 @@ export default function CommunityShell(props: Props) {
               </p>
             )}
 
-            <Composer
-              channelName={channel?.name ?? ''}
-              disabled={!canPost}
-              disabledReason={postDisabledReason}
-              canAttach={can('attach_files')}
-              members={snapshot.members}
-              replyTo={replyTo}
-              onCancelReply={() => setReplyTo(null)}
-              onSend={(body, attachments) => community.post({
-                body,
-                ...(attachments.length ? { attachments } : {}),
-                ...(replyTo ? { replyToId: replyTo.id } : {}),
-              })}
-              onTyping={community.setTyping}
-              upload={(name, bytes) => api.uploadAttachment(name, bytes)}
-              error={community.error}
-            />
+            {composerNode}
           </>
         )}
+
+        {/* Watching a screen share should not cost you the ability to say
+            something about it, so the composer stays under the stage. */}
+        {stageLive && channel?.type !== 'voice' && composerNode}
       </main>
 
       {/* ── Right column ─────────────────────────────────────────────────── */}
@@ -431,9 +531,6 @@ export default function CommunityShell(props: Props) {
             peers={voice.peers}
             selfPeerId={voice.peerId}
             memberById={memberById}
-            remoteStreams={voice.remoteStreams}
-            localVideoStream={voice.localVideoStream}
-            screenShareStream={voice.screenShareStream}
             speaking={voice.speaking}
             connection={voice.connection}
             error={voice.error}
@@ -455,6 +552,8 @@ export default function CommunityShell(props: Props) {
       )}
 
       {/* ── Dialogs ──────────────────────────────────────────────────────── */}
+      {backendOpen && <BackendPanel onClose={() => setBackendOpen(false)} />}
+
       {editorFor && (
         <ChannelEditor
           channel={editorFor.channel}

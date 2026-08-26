@@ -37,8 +37,30 @@ export type VoiceError =
   | { kind: 'screen'; message: string }
   | { kind: 'connect'; message: string }
 
-/** Empty by design. Host candidates only: loopback and, usually, the LAN. */
-const ICE_SERVERS: RTCIceServer[] = []
+/**
+ * ICE servers, from settings rather than from this line.
+ *
+ * Empty is correct on a LAN — host candidates find each other directly and a
+ * STUN round trip only adds latency to a connection that did not need one. It
+ * stops being correct the moment one device is somewhere else, so the list is
+ * configuration now, and this holds whatever the main process last reported.
+ *
+ * Module-level and mutable on purpose. Holding it in React state would put it
+ * in the dependency list of `peerConnection`, re-creating that callback — and
+ * re-running everything keyed on it — for a value that changes approximately
+ * never. Connections are read at construction time, so a later answer applies
+ * to the next call rather than disturbing one in progress.
+ */
+let ICE_SERVERS: RTCIceServer[] = []
+
+void (async () => {
+  try {
+    const backend = await (window as any).electronAPI?.community?.backend?.get?.()
+    if (Array.isArray(backend?.iceServers)) ICE_SERVERS = backend.iceServers
+  } catch {
+    // No backend configured, or an older preload. Host candidates it is.
+  }
+})()
 
 export function useVoiceSession() {
   const api = (window as any).electronAPI?.community
