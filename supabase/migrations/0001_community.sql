@@ -201,6 +201,12 @@ drop policy if exists "report anything"           on public.aihub_reports;
 drop policy if exists "moderators read reports"   on public.aihub_reports;
 drop policy if exists "moderators resolve reports" on public.aihub_reports;
 
+-- A reporter may file, but may not read the queue back. That asymmetry has a
+-- sharp edge for clients: PostgREST's `Prefer: return=representation` turns an
+-- insert into INSERT ... RETURNING, and the RETURNING is a SELECT the reporter
+-- is not allowed to make — so a perfectly legal report fails with a misleading
+-- "new row violates row-level security policy". Write reports with
+-- return=minimal. supabase-js does this by default unless .select() is chained.
 create policy "report anything" on public.aihub_reports
   for insert to authenticated with check (reporter_id = public.aihub_current_member_id());
 create policy "moderators read reports"    on public.aihub_reports for select to authenticated using (public.aihub_is_moderator());
@@ -269,3 +275,71 @@ alter table public.aihub_categories   replica identity full;
 alter table public.aihub_roles        replica identity full;
 alter table public.aihub_member_roles replica identity full;
 alter table public.aihub_reports      replica identity full;
+
+-- ── Table privileges ───────────────────────────────────────────────────────
+--
+-- Row level security decides WHICH ROWS a role may touch. It does not grant
+-- the right to touch the table at all — that is a separate GRANT, and without
+-- it Postgres refuses before a single policy is consulted.
+--
+-- This was missed the first time and the whole feature was dead against a real
+-- project: every read and every write came back
+--   42501  permission denied for table aihub_members
+-- while the policies above sat there looking correct. Verified against a local
+-- Supabase stack, not assumed — `authenticated` starts with only REFERENCES,
+-- TRIGGER and TRUNCATE, and none of those move data.
+--
+-- The grants are deliberately per-table and per-verb rather than a blanket
+-- GRANT ALL, because the absence of a privilege is itself a control:
+-- aihub_audit_log gets SELECT and INSERT and nothing else, so the append-only
+-- promise made above survives even if somebody later adds a careless policy.
+grant select, insert, update          on public.aihub_members      to authenticated;
+grant select, insert, update, delete  on public.aihub_messages     to authenticated;
+grant select, insert, update, delete  on public.aihub_channels     to authenticated;
+grant select, insert, update, delete  on public.aihub_categories   to authenticated;
+grant select, insert, update, delete  on public.aihub_roles        to authenticated;
+grant select, insert, update, delete  on public.aihub_member_roles to authenticated;
+grant select, insert, update          on public.aihub_reports      to authenticated;
+grant select, insert                  on public.aihub_audit_log    to authenticated;
+grant select, insert                  on public.aihub_ownership    to authenticated;
+
+-- ── The reaction hole ──────────────────────────────────────────────────────
+--
+-- "react to messages" was `for update using (true) with check (true)`, because
+-- adding a reaction means writing a row you do not own. Permissive policies on
+-- the same command are OR'd together, so that one policy silently granted
+-- every authenticated member unrestricted UPDATE on every message — making
+-- "edit own message" and "moderate messages" decorative.
+--
+-- Demonstrated against a live database, not theorised: a second ordinary
+-- member rewrote another member's text, and cleared `hiddenAt` on a message a
+-- moderator had hidden. The comment claimed the real limits lived in store.ts,
+-- but store.ts runs on the attacker's own machine.
+--
+-- It cannot be repaired with a policy. WITH CHECK sees only the incoming row,
+-- so no policy can express "everything except reactions must be unchanged" —
+-- that comparison needs OLD, which only a trigger gets.
+create or replace function public.aihub_guard_message_update() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  -- Moderators and the author keep full control of the row.
+  if public.aihub_is_moderator() then return new; end if;
+  if old.author_id = public.aihub_current_member_id() then return new; end if;
+
+  -- Everyone else may touch reactions and nothing else. Comparing the doc with
+  -- the reactions key removed is the whole rule.
+  if (new.doc - 'reactions') is distinct from (old.doc - 'reactions')
+     or new.id         is distinct from old.id
+     or new.channel    is distinct from old.channel
+     or new.author_id  is distinct from old.author_id
+     or new.created_at is distinct from old.created_at then
+    raise exception 'only reactions may be changed on another member''s message'
+      using errcode = '42501';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists aihub_guard_message_update on public.aihub_messages;
+create trigger aihub_guard_message_update
+  before update on public.aihub_messages
+  for each row execute function public.aihub_guard_message_update();

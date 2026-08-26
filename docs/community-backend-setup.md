@@ -180,3 +180,26 @@ share all work across devices.
 
 **Set up → Disconnect** returns that device to local-only. It does not delete
 anything from Supabase, and reconnecting picks the room back up.
+
+## Verifying the policies actually hold
+
+The schema ships with an adversarial test. It signs in two anonymous members
+and has the second one attempt everything the policies are supposed to stop.
+
+```bash
+npx supabase start && node supabase/tests/rls.mjs
+```
+
+Every line must read `HELD`. It is worth running after any change to
+`0001_community.sql`, because the failure mode is silent: the policies go on
+looking correct while permitting the thing they name.
+
+This is not hypothetical. The first version of the reaction policy read
+`for update using (true) with check (true)` — necessary, because reacting means
+writing a row you do not own. Permissive policies on the same command are OR'd
+together, so that single policy quietly granted every member unrestricted
+UPDATE on every message. Running this test against a live database showed an
+ordinary member rewriting someone else's words and clearing `hiddenAt` on a
+message a moderator had hidden. It is now enforced by a trigger, because
+`WITH CHECK` cannot see the old row and so cannot express "only reactions may
+change".
