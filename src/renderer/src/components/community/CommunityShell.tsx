@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Hash, Menu, Search, Users, Bell, BellOff, BellRing, ShieldAlert, AlertCircle,
-  UserCog, ScrollText, Megaphone, Loader2, CloudOff,
+  UserCog, ScrollText, Megaphone, Loader2, CloudOff, Bot,
 } from 'lucide-react'
 import type { Attachment, Channel, Message, NotifLevel } from '../../../../shared/community'
 import { extensionFor } from '../../../../shared/fileTypes'
@@ -38,6 +38,7 @@ interface Props {
   onOpenModeration: () => void
   onOpenAccount: () => void
   onOpenGuidelines: () => void
+  onOpenGuide: () => void
   isModerator: boolean
 }
 
@@ -46,7 +47,7 @@ function attachmentUrl(attachment: Attachment): string {
 }
 
 export default function CommunityShell(props: Props) {
-  const { onOpenModeration, onOpenAccount, onOpenGuidelines, isModerator } = props
+  const { onOpenModeration, onOpenAccount, onOpenGuidelines, onOpenGuide, isModerator } = props
 
   const [activeSlug, setActiveSlug] = useState('general')
   const [membersOpen, setMembersOpen] = useState(true)
@@ -258,6 +259,13 @@ export default function CommunityShell(props: Props) {
         <RailButton label="Guidelines" onClick={onOpenGuidelines}>
           <ScrollText className="h-5 w-5" />
         </RailButton>
+        {/* Only the owner's machine can run the guide, so only the owner is
+            offered its switch. */}
+        {isModerator && (
+          <RailButton label="AI guide" onClick={onOpenGuide}>
+            <Bot className="h-5 w-5" />
+          </RailButton>
+        )}
 
         <div className="mt-auto flex flex-col items-center gap-2">
           <RailButton label="Community settings" onClick={() => setSettingsOpen(true)}>

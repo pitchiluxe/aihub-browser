@@ -5,6 +5,7 @@ import { avatarDataUri } from '../../../../shared/communityAvatar'
 import '../../styles/community-welcome.css'
 import ModerationPanel from '../community/ModerationPanel'
 import AccountPanel from '../community/AccountPanel'
+import GuidePanel from '../community/GuidePanel'
 import CommunityShell from '../community/CommunityShell'
 
 /**
@@ -17,7 +18,7 @@ import CommunityShell from '../community/CommunityShell'
  */
 
 type Status = any   // shaped by main; narrowed at the use sites below
-type View = 'workspace' | 'moderation' | 'guidelines' | 'account'
+type View = 'workspace' | 'moderation' | 'guidelines' | 'account' | 'guide'
 
 export default function CommunityPage() {
   const [status, setStatus] = useState<Status | null>(null)
@@ -61,6 +62,7 @@ export default function CommunityPage() {
         </button>
         {view === 'moderation' && <ModerationPanel />}
         {view === 'guidelines' && <GuidelinesPanel />}
+        {view === 'guide' && <GuidePanel />}
         {view === 'account' && (
           <AccountPanel
             me={status.member}
@@ -79,6 +81,7 @@ export default function CommunityPage() {
         onOpenModeration={() => setView('moderation')}
         onOpenAccount={() => setView('account')}
         onOpenGuidelines={() => setView('guidelines')}
+        onOpenGuide={() => setView('guide')}
       />
     </div>
   )

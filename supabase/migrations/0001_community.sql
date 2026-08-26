@@ -189,8 +189,17 @@ drop policy if exists "moderate messages"  on public.aihub_messages;
 drop policy if exists "react to messages"  on public.aihub_messages;
 drop policy if exists "delete own message" on public.aihub_messages;
 
+-- Yourself, or the guide if you are the machine running it.
+--
+-- The guide is not a person and has no session of its own: it is one fixed
+-- member id that the community owner's install writes as. Without the second
+-- clause the owner cannot post the thing the guide just wrote, and the push
+-- queue jams on a row Postgres will never accept.
 create policy "post as self" on public.aihub_messages
-  for insert to authenticated with check (author_id = public.aihub_current_member_id());
+  for insert to authenticated with check (
+    author_id = public.aihub_current_member_id()
+    or (author_id = '00000000-0000-4000-8000-000000000b07'::uuid and public.aihub_is_moderator())
+  );
 create policy "edit own message" on public.aihub_messages
   for update to authenticated using (author_id = public.aihub_current_member_id());
 create policy "moderate messages" on public.aihub_messages

@@ -1,14 +1,33 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createReplication, ECHO_TTL_MS } from './replication'
 import { emptyState } from '../../shared/communityMigrate'
+import { BOT_MEMBER_ID } from '../../shared/communityBot'
 import { messageToRow } from './sync'
 import type { CommunityState, Message } from '../../shared/community'
 
 const NOW = 1_700_000_000_000
 
+/**
+ * The id this device's member has in the harness.
+ *
+ * Replication refuses to queue writes row level security would reject, and
+ * that judgement needs to know who this device is. A harness with no identity
+ * models a device where nobody has joined yet — which is a real state, but not
+ * the one most of these tests are about.
+ */
+const ME = 'me-1'
+
+/**
+ * A message this device wrote.
+ *
+ * Authored by ME rather than by a stranger, because "post as self" means a
+ * device may only push its own messages — a fixture authored by someone else
+ * is a message this machine received, and pushing one of those is the bug
+ * these tests exist to prevent.
+ */
 const message = (over: Partial<Message> = {}): Message => ({
-  id: 'm1', channel: 'general', authorId: 'a1', authorHandle: 'ada',
-  authorSeed: 'a1', kind: 'text', body: 'hello', createdAt: NOW, ...over,
+  id: 'm1', channel: 'general', authorId: ME, authorHandle: 'ada',
+  authorSeed: ME, kind: 'text', body: 'hello', createdAt: NOW, ...over,
 })
 
 interface Harness {
@@ -20,16 +39,6 @@ interface Harness {
   clock: { now: number }
   failNext: { value: boolean }
 }
-
-/**
- * The id this device's member has in the harness.
- *
- * Replication refuses to queue writes row level security would reject, and
- * that judgement needs to know who this device is. A harness with no identity
- * models a device where nobody has joined yet — which is a real state, but not
- * the one most of these tests are about.
- */
-const ME = 'me-1'
 
 function harness(opts: { admin?: boolean; anonymous?: boolean } = {}): Harness {
   const state = emptyState()
@@ -421,5 +430,78 @@ describe('never queues a write the server would refuse', () => {
     h.replication.reconcile()
     await h.replication.flush?.()
     expect(h.upserts.flatMap(u => u.table)).toContain('aihub_categories')
+  })
+})
+
+describe('messages: only what this device is entitled to push', () => {
+  const msgRow = (over: Record<string, unknown> = {}) => ({
+    id: 'x1', channel: 'general', author_id: ME, updated_at: NOW,
+    doc: { id: 'x1', channel: 'general', authorId: ME, body: 'hi' },
+    ...over,
+  })
+
+  const pushedMessageIds = (h: Harness) => h.upserts
+    .filter(u => u.table === 'aihub_messages')
+    .flatMap(u => u.rows as { id: string }[])
+    .map(r => r.id)
+
+  it('pushes a message this device wrote', async () => {
+    const h = harness({ admin: false })
+    h.replication.push('aihub_messages', msgRow())
+    await h.replication.flush?.()
+    expect(pushedMessageIds(h)).toContain('x1')
+  })
+
+  /**
+   * The one-way replication bug, in a test.
+   *
+   * Machine A received machine B's message, then offered it back to the
+   * server. The insert policy is "post as self", so Postgres refused it — and
+   * because the queue retries forever and drains in table order, A never
+   * delivered anything of its own again. Messages went B to A and never back.
+   */
+  it('does not offer back a message it merely received', async () => {
+    const h = harness({ admin: false })
+    h.replication.push('aihub_messages', msgRow({
+      id: 'theirs', author_id: 'someone-else',
+      doc: { id: 'theirs', authorId: 'someone-else', body: 'from the other machine' },
+    }))
+    await h.replication.flush?.()
+    expect(pushedMessageIds(h)).not.toContain('theirs')
+  })
+
+  // Seeded identically on every install from a written list, so replicating
+  // them means every machine pushing its own copy of the same rows — all of
+  // which are authored by the guide and refused by "post as self".
+  it('never replicates a welcome message', async () => {
+    const h = harness({ admin: true })
+    h.replication.push('aihub_messages', msgRow({
+      id: 'welcome-1', author_id: BOT_MEMBER_ID,
+      doc: { id: 'welcome-1', authorId: BOT_MEMBER_ID, body: 'welcome', isWelcome: true },
+    }))
+    await h.replication.flush?.()
+    expect(pushedMessageIds(h)).not.toContain('welcome-1')
+  })
+
+  it('lets the owner publish what the guide wrote', async () => {
+    const h = harness({ admin: true })
+    h.replication.push('aihub_messages', msgRow({
+      id: 'guide-1', author_id: BOT_MEMBER_ID,
+      doc: { id: 'guide-1', authorId: BOT_MEMBER_ID, body: 'a discussion starter' },
+    }))
+    await h.replication.flush?.()
+    expect(pushedMessageIds(h)).toContain('guide-1')
+  })
+
+  // Only the owner's machine runs the guide; everyone else would be posting a
+  // second voice under the same name.
+  it('refuses to publish as the guide from a member machine', async () => {
+    const h = harness({ admin: false })
+    h.replication.push('aihub_messages', msgRow({
+      id: 'guide-2', author_id: BOT_MEMBER_ID,
+      doc: { id: 'guide-2', authorId: BOT_MEMBER_ID, body: 'not mine to send' },
+    }))
+    await h.replication.flush?.()
+    expect(pushedMessageIds(h)).not.toContain('guide-2')
   })
 })

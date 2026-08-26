@@ -15,8 +15,19 @@
  * ever writes as the bot. Everyone else's Ollama stays theirs.
  */
 
-/** A nil-prefixed UUID: unmistakably reserved, and valid for a uuid column. */
-export const BOT_MEMBER_ID = '00000000-0000-4000-8000-0000a1hub0b0'
+/**
+ * A nil-prefixed UUID: unmistakably reserved, and — the part that matters —
+ * actually parseable as one.
+ *
+ * The first version read `0000a1hub0b0`, which spells something at the cost of
+ * `h` and `u` not being hex digits. Postgres refused every row that referenced
+ * it with `invalid input syntax for type uuid`, and because the push queue
+ * retries forever and drains in table order, that one bad id stopped every
+ * message on the machine from replicating in either direction.
+ *
+ * `b07` is as close to a joke as a uuid column permits.
+ */
+export const BOT_MEMBER_ID = '00000000-0000-4000-8000-000000000b07'
 
 export const BOT_HANDLE = 'AIHub Guide'
 
