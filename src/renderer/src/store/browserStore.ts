@@ -80,6 +80,10 @@ interface BrowserState {
   // The table exporter is host HTML over the page, same detach requirement.
   isTableExportOpen: boolean
   setTableExportOpen: (v: boolean) => void
+  // The region-capture overlay draws a still of the page and needs the live
+  // view out of the way while it does.
+  isCaptureOverlayOpen: boolean
+  setCaptureOverlayOpen: (v: boolean) => void
   isCmdPaletteOpen: boolean
   setCmdPaletteOpen: (v: boolean) => void
   isCompareOpen: boolean
@@ -390,6 +394,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setDownloadsMenuOpen: (v) => set({ isDownloadsMenuOpen: v }),
   isTableExportOpen: false,
   setTableExportOpen: (v) => set({ isTableExportOpen: v }),
+  isCaptureOverlayOpen: false,
+  setCaptureOverlayOpen: (v) => set({ isCaptureOverlayOpen: v }),
   isCmdPaletteOpen: false,
   setCmdPaletteOpen: (v) => set({ isCmdPaletteOpen: v }),
   isCompareOpen: false,

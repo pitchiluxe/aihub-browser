@@ -1354,12 +1354,26 @@
       <!-- CAPTURE -->
       <section id="capture">
         <div class="sec-head"><span class="node" style="background:var(--emerald)"></span><h2>Screenshots &amp; recording</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">All of the page, or just the part of it you meant. <span class="pill new">new</span></p>
         <div class="body-col">
+          <p>The camera and video icons both ask what you want before they start:</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Choice</th><th>What you get</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Whole page</strong> / <strong>Whole tab</strong></td><td>Everything, as before &mdash; one click and a save dialog</td></tr>
+                <tr><td><strong>Select an area&hellip;</strong></td><td>Drag out a rectangle first; only that part is captured or recorded</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Choosing an area freezes the page and lets you drag on the still. That is deliberate as well as necessary: the frame stops moving the moment you start choosing, so a page that animates or reflows cannot shift under the selection you are making. The size is shown as you drag, and <kbd>Esc</kbd> backs out.</p>
           <ul>
-            <li><strong>Screenshot</strong> — the camera icon captures the visible page and opens a save dialog.</li>
-            <li><strong>Annotated screenshot</strong> — draw first, then hit <em>Save</em> in the annotation toolbar; drawings are composited onto the real pixels.</li>
-            <li><strong>Record</strong> — the video icon records the window with audio and a live timer. Click stop to save as <code>.webm</code>.</li>
+            <li><strong>Screenshots</strong> are cropped exactly &mdash; the still you dragged on is the source.</li>
+            <li><strong>Recordings</strong> keep rolling on the live page; the region you drew is what gets written to the file.</li>
+            <li><strong>Annotated screenshot</strong> &mdash; draw first, then hit <em>Save</em> in the annotation toolbar; drawings are composited onto the real pixels.</li>
+            <li>Recordings save as <code>.webm</code>, with audio and a live timer while they run.</li>
           </ul>
+          <div class="note">If the browser cannot work out where the page sits inside the window &mdash; mid-resize, for instance &mdash; a region recording falls back to the whole tab and says so, rather than writing a video cropped to the wrong place.</div>
         </div>
       </section>
 

@@ -86,7 +86,7 @@ export default function App() {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
-    splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, tabWcIds,
+    splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen, tabWcIds,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
@@ -94,6 +94,7 @@ export default function App() {
     isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen, isCompareOpen: s.isCompareOpen,
     splitTabId: s.splitTabId, isBookmarksMenuOpen: s.isBookmarksMenuOpen,
     isDownloadsMenuOpen: s.isDownloadsMenuOpen, isTableExportOpen: s.isTableExportOpen,
+    isCaptureOverlayOpen: s.isCaptureOverlayOpen,
     tabWcIds: s.tabWcIds,
   })))
 
@@ -771,8 +772,8 @@ export default function App() {
     // Any host-HTML overlay (Add-to-Sphere modal, QR modal) must detach the
     // active tab's BrowserView, which otherwise always paints on top of and
     // steals clicks from our HTML — making the modal look frozen/invisible.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen)
-  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen])
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen || isCaptureOverlayOpen)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen])
 
   // Clear a tab's loading state, but keep the spinner up for a short floor so
   // a load that finished almost instantly still registers as an action. Any

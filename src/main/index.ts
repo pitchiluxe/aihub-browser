@@ -2458,11 +2458,21 @@ ipcMain.handle('tabview:getLayout', (e) => {
     const view = ctx.views.get(id)
     try { return view ? view.getBounds() : null } catch { return null }
   }
+  // The window's own content size travels with the layout because region
+  // recording needs it: the selection is made on the page, the stream is of
+  // the whole window, and mapping between them is a ratio of the two.
+  let windowSize: { width: number; height: number } | null = null
+  try {
+    const [width, height] = ctx.win.getContentSize()
+    windowSize = { width, height }
+  } catch {}
+
   return {
     activeId: ctx.activeId,
     splitId: ctx.splitId,
     ratio: ctx.splitRatio,
     content: ctx.bounds,
+    window: windowSize,
     attached: ctx.win.getBrowserViews().length,
     primary: boundsOf(ctx.activeId),
     secondary: boundsOf(ctx.splitId),
