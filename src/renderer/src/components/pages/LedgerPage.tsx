@@ -44,7 +44,13 @@ export default function LedgerPage() {
     setLoading(true); setError('')
     try {
       const res = await window.electronAPI.gmail.listThreads(buildReceiptQuery(months))
-      const threads: ThreadRow[] = res?.threads || res?.data?.threads || res || []
+      // The bridge answers with a list on success and an error object when the
+      // account is not usable; a truthy non-array must not reach the loop.
+      const threads: ThreadRow[] = Array.isArray(res) ? res
+        : Array.isArray(res?.threads) ? res.threads
+        : Array.isArray(res?.data?.threads) ? res.data.threads
+        : []
+      if (!threads.length && res && !Array.isArray(res) && res.error) throw new Error(res.error)
       setScanned(threads.length)
 
       const found: ReceiptEntry[] = []
