@@ -5,7 +5,7 @@ import {
   Home, FlaskConical, Sparkles, StickyNote, History, Download, Puzzle, Wifi,
   Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft, GitCompare, BellRing,
   Smartphone, Laptop, BookMarked, Layers, Columns2, PictureInPicture2, Camera, CopyMinus,
-  GraduationCap, Archive, Brain, Table, Receipt, Sunrise,
+  GraduationCap, Archive, Brain, Table, Receipt, Sunrise, Flame,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
@@ -104,6 +104,14 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       out.push({ id, label, group: 'Actions', icon, run: () => { run(); close() }, keywords, hint })
 
     act('new-tab', 'New Tab', <Plus size={15} />, () => addTab(), 'open create', 'Ctrl+T')
+    act('burner-tab', 'Open a burner tab', <Flame size={15} />, () => {
+      // The session is created fresh and never written to disk, so closing the
+      // tab takes the cookies with it.
+      window.electronAPI.containers.newBurner()
+        .then((id: string) => addTab('home', 'browser', id))
+        .catch(() => {})
+    }, 'private incognito temporary throwaway session cookies')
+
     act('export-tables', 'Export a table from this page to CSV', <Table size={15} />,
       () => useBrowserStore.getState().setTableExportOpen(true),
       'csv spreadsheet excel sheets table data extract')

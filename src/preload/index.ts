@@ -135,6 +135,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   containers: {
     list:   () => ipcRenderer.invoke('containers:list'),
+    newBurner: () => ipcRenderer.invoke('containers:newBurner'),
     add:    (name: string, color: string) => ipcRenderer.invoke('containers:add', name, color),
     remove: (id: string) => ipcRenderer.invoke('containers:remove', id),
     clear:  (id: string) => ipcRenderer.invoke('containers:clear', id),

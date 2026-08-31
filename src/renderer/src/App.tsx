@@ -420,6 +420,27 @@ export default function App() {
           break
         }
 
+        // Share the passage and its source into the community lounge. Posting
+        // is the user's own click on a menu item; nothing is sent otherwise.
+        case 'share-lounge': {
+          const quoted = (data.selection || '').trim().replace(/\s+/g, ' ')
+          if (!quoted) break
+          ;(async () => {
+            const body = `“${quoted}”
+
+— ${data.title || ''} ${data.url || ''}`.trim()
+            try {
+              const res = await window.electronAPI.community.post({
+                channel: 'general', kind: 'text', body,
+              })
+              flashHandoff(res?.error ? `Couldn't share: ${res.error}` : 'Shared to the Lounge', !res?.error)
+            } catch (e: any) {
+              flashHandoff(`Couldn't share: ${e?.message || e}`, false)
+            }
+          })()
+          break
+        }
+
         case 'ai':
           if (!store.isAIPanelOpen) store.toggleAIPanel()
           if (data.selection) {

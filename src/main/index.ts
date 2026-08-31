@@ -32,7 +32,7 @@ import { splitPanes } from '../shared/splitLayout'
 import { writeNote, describeVault, type NoteKind } from './obsidian'
 import { contentHash, describeChange, containsKeyword } from './watchDiff'
 import {
-  partitionFor, addContainer, removeContainer, DEFAULT_CONTAINERS, type Container,
+  partitionFor, addContainer, removeContainer, DEFAULT_CONTAINERS, newBurnerId, type Container,
 } from './containers'
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
@@ -915,6 +915,9 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       menu.append(new MenuItem({ label: `Search Google for “${short}”`, click: () => sendTo(menuCtx, 'open-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(sel)}`) }))
       menu.append(new MenuItem({ label: 'Save Selection to Obsidian', click: () => { void clipToVault(wc, sel) } }))
       menu.append(new MenuItem({ label: 'Remember This (Recall)', click: () => sendAction('recall-add', { selection: sel, title: (() => { try { return wc.getTitle() } catch { return '' } })() }) }))
+      if (isWebPage) {
+        menu.append(new MenuItem({ label: 'Share to the Lounge', click: () => sendAction('share-lounge', { selection: sel, title: (() => { try { return wc.getTitle() } catch { return '' } })() }) }))
+      }
     }
 
     // ── Link ──
@@ -2402,6 +2405,7 @@ ipcMain.handle('privacy:setDoh', (_e, provider: string) => {
 })
 
 // ── IPC: Site containers ───────────────────────────────────────────────────
+ipcMain.handle('containers:newBurner', () => newBurnerId())
 ipcMain.handle('containers:list', () => {
   const stored = getData().settings?.containers
   return Array.isArray(stored) && stored.length ? stored as Container[] : DEFAULT_CONTAINERS
