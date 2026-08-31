@@ -249,7 +249,7 @@
   <div class="hero">
     <canvas id="constellation" aria-label="Animated knowledge-graph constellation of bookmarks"></canvas>
     <div class="hero-copy">
-      <div class="eyebrow">AIHub Browser · Version 1.5 · Created by Erick Omari</div>
+      <div class="eyebrow">AIHub Browser · __AIHUB_VERSION__ · Created by Erick Omari</div>
       <h1>The browser that thinks with you.</h1>
       <p>Every tab becomes knowledge. Every bookmark becomes a star in your graph. And an AI agent sits behind it all, ready to research, build, and browse on your behalf.</p>
       <button class="hero-btn" id="replay">▶ Replay timelapse</button>
@@ -280,6 +280,16 @@
       <a href="#command">Command palette</a>
       <a href="#rewind">Rewind</a>
       <a href="#watch">Watch &amp; Ping</a>
+      <div class="rail-grp">New in 1.58</div>
+      <a href="#downloads-menu">Downloads menu</a>
+      <a href="#pagevault">Page Vault</a>
+      <a href="#pdf">PDFs</a>
+      <a href="#recall">Recall</a>
+      <a href="#brief">Morning Brief</a>
+      <a href="#ledger">Ledger</a>
+      <a href="#tablecsv">Tables to CSV</a>
+      <a href="#guard">Credential guard</a>
+      <a href="#burner">Burner tabs</a>
       <a href="#bible">Bible</a>
       <a href="#bible-study">Bible Study</a>
       <a href="#community">Community</a>
@@ -888,6 +898,154 @@
             </table>
           </div>
           <div class="note good">Great for restocks, price drops, job boards, ticket queues, permit and status pages — anything that updates on its own schedule, not yours.</div>
+        </div>
+      </section>
+
+      <!-- ══ NEW IN 1.58 ══════════════════════════════════════════════ -->
+
+      <section id="downloads-menu">
+        <div class="sec-head"><span class="node" style="background:#7dd3fc"></span><h2>The downloads menu <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Everything this browser has pulled down, without leaving the page that produced it.</p>
+        <div class="body-col">
+          <p>There is a <strong>download arrow</strong> in the toolbar, sitting between the bookmarks list and the camera. It carries a small badge counting transfers still in flight, and the icon bobs while something is arriving.</p>
+          <p>Click it for the whole history: what the file is, a live progress bar, its size, whether it finished, and how long ago. Anything completed gets <em>Open</em> and a folder button; double-clicking the row opens it too. <em>Clear</em> empties the list without touching the files on disk.</p>
+          <div class="note">The badge only appears when something is actually downloading. A badge that is always lit stops meaning anything.</div>
+          <p>The full <a href="#hist">Downloads page</a> is still there for a long history — this is the glance.</p>
+        </div>
+      </section>
+
+      <section id="pagevault">
+        <div class="sec-head"><span class="node" style="background:#7dd3fc"></span><h2>Page Vault <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A bookmark is a promise the internet does not keep. This is the browser keeping it anyway.</p>
+        <div class="body-col">
+          <p>Pages get rewritten, moved behind a paywall, quietly edited, or deleted outright — and your bookmark is left pointing at a 404. So when you bookmark a page, AIHub also <strong>keeps a copy of it</strong>, as a single file, on your machine.</p>
+          <p>You will usually meet this without going looking for it. When a page fails to load and there is a copy of that exact address, a bar appears above the page:</p>
+          <div class="note good"><strong>This page didn&rsquo;t load — but you kept a copy.</strong> Click <em>Open the copy</em> and the archived page comes back with its layout, images and links intact.</div>
+          <p>Open <strong>Page Vault</strong> in the sidebar to see everything saved. Copies of the same page are grouped together, so a page that changed shows up as more than one row and you can open either. Each row offers <em>Open copy</em>, a folder button to find the file, and a bin to delete it.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+              <tbody>
+                <tr><td>What is saved?</td><td>One <code>.mhtml</code> file per snapshot — the whole page in a single file, under <code>~/.aihub-browser/vault</code></td></tr>
+                <tr><td>When?</td><td>When you bookmark a page. The same page is not re-archived more than once every 12 hours</td></tr>
+                <tr><td>How much space?</td><td>Up to 3 copies per page and 750 MB overall; the oldest are dropped past that</td></tr>
+                <tr><td>Does it slow bookmarking down?</td><td>No — it happens quietly afterwards, and a page that refuses to be saved never turns a bookmark into an error</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Deleting a saved copy does not delete the bookmark, and clearing the vault never touches your sphere.</div>
+        </div>
+      </section>
+
+      <section id="pdf">
+        <div class="sec-head"><span class="node" style="background:#7dd3fc"></span><h2>PDFs <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Papers, invoices, contracts and manuals stay inside the browser now.</p>
+        <div class="body-col">
+          <p>A link to a PDF used to download the file and leave the tab sitting there — the document left the browser, and with it every clever thing AIHub can do to a page. Now <strong>PDFs open in the tab</strong>, with the full reader: page thumbnails, zoom, search and print.</p>
+          <p>More usefully, the assistant can <strong>read them</strong>. Everything that works on a web page works on a PDF, because they all ask for the page&rsquo;s text and the text now arrives:</p>
+          <ul>
+            <li>Ask the AI to summarise or explain the document</li>
+            <li>Read it aloud</li>
+            <li>Clip it to Obsidian</li>
+            <li>Let an agent read it with <code>read_page</code></li>
+          </ul>
+          <div class="note">A scanned PDF is a picture of some words, not words. AIHub will tell you that plainly rather than showing you an empty summary — and it will say so too if a file is encrypted.</div>
+        </div>
+      </section>
+
+      <section id="recall">
+        <div class="sec-head"><span class="node" style="background:#f0abfc"></span><h2>Recall <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Reading two hundred articles and remembering none of them is the normal outcome. This is the fix.</p>
+        <div class="body-col">
+          <p>Select any text on any page, right-click, and choose <strong>Remember This (Recall)</strong>. It joins a review queue and comes back to you on a schedule until you actually know it.</p>
+          <p>Open <strong>Recall</strong> in the sidebar. The card shows the cue and hides the answer until you press <em>Show me</em> — a review that shows you the answer first is just reading with extra steps. Then say whether you knew it:</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Answer</th><th>What happens</th></tr></thead>
+              <tbody>
+                <tr><td><strong>I knew it</strong></td><td>Moves up one box — back in 1, 3, 7, 21 then 60 days</td></tr>
+                <tr><td><strong>Missed it</strong></td><td>Straight back to box 1, and you see it again tomorrow</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The <em>Everything</em> tab lists all of it, best-known first, with the source page one click away. This is the same scheduler the <a href="#bible-study">Bible Lab</a> uses for verses — a highlight and a verse are treated exactly alike.</p>
+          <div class="note good">Highlighting the same passage twice does not reset its schedule. Saying &ldquo;this matters&rdquo; a second time should not cost you the progress you made on it.</div>
+        </div>
+      </section>
+
+      <section id="brief">
+        <div class="sec-head"><span class="node" style="background:#fdba74"></span><h2>Morning Brief <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">One page for everything that happened while you were away.</p>
+        <div class="body-col">
+          <p><a href="#watch">Watch</a> knows which pages changed overnight. Your calendar knows what is coming. Your mailbox knows what is unanswered. <a href="#recall">Recall</a> knows what is due. Each of them needs you to go and look, so in practice none of them get looked at.</p>
+          <p><strong>Morning Brief</strong> in the sidebar puts them on one page, with the calendar first — it is the only part with a deadline attached. Anything happening within the hour is marked; everything else can wait until later in the day. Click any line to go straight there.</p>
+          <div class="note">Sections with nothing in them are left out entirely, and a genuinely quiet morning says so in one line. Anything you have not connected — a calendar, a mailbox — simply contributes nothing instead of turning the page into an error message.</div>
+        </div>
+      </section>
+
+      <section id="ledger">
+        <div class="sec-head"><span class="node" style="background:#86efac"></span><h2>Ledger <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">What you actually spent, assembled from receipts you were already sent.</p>
+        <div class="body-col">
+          <p>Purchase confirmations arrive as email. Their invoices arrive as PDFs in your downloads folder. Nothing ever puts the two together, so working out last month&rsquo;s spending means searching your mail badly and retyping numbers into a spreadsheet.</p>
+          <p>Open <strong>Ledger</strong> in the sidebar, choose a window — last month up to last year — and press <em>Read receipts</em>. AIHub reads purchase mail from your own mailbox and builds the table: date, merchant, amount, currency. It totals each currency separately, flags what looks like a subscription, and exports the whole thing as CSV.</p>
+          <p>If an invoice PDF in your Downloads mentions the same merchant, the row offers a link to open it.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Point</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td>Where the data comes from</td><td>Your Gmail, read on this machine. Connect Google in Settings first</td></tr>
+                <tr><td>Banks and cards</td><td>Never involved. AIHub does not connect to any financial account</td></tr>
+                <tr><td>Rows it is unsure about</td><td>Left out, not guessed at. A wrong number in a ledger is worse than a missing one</td></tr>
+                <tr><td>&ldquo;Recurring&rdquo;</td><td>Three or more charges at a steady amount. A shop whose totals jump around is not a subscription</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">The Ledger is a reading of your receipts, not accounting. Check it against your statement before you rely on it.</div>
+        </div>
+      </section>
+
+      <section id="tablecsv">
+        <div class="sec-head"><span class="node" style="background:#7dd3fc"></span><h2>Tables to CSV <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Stop copying web tables into spreadsheets by hand.</p>
+        <div class="body-col">
+          <p>Press <kbd>Ctrl</kbd>+<kbd>K</kbd> and choose <strong>Export a table from this page to CSV</strong>. AIHub lists every real table on the page — with its name, its size, and its first row so you can tell them apart — and writes the one you pick.</p>
+          <p>It handles the things that make hand-copying wrong:</p>
+          <ul>
+            <li><strong>Merged cells</strong> are expanded, so a header spanning two columns does not shift everything underneath it</li>
+            <li><strong>Invisible spaces</strong> inside numbers are converted, so amounts import as numbers instead of text</li>
+            <li><strong>Layout tables</strong> — the single-column ones older sites use for positioning — are left out of the list</li>
+            <li><strong>Cells that look like formulas</strong> are defused, so opening the file cannot run something the page wrote</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="guard">
+        <div class="sec-head"><span class="node" style="background:#f87171"></span><h2>Credential guard <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A second look before you type a password somewhere you have never typed one.</p>
+        <div class="body-col">
+          <p>Phishing works because a domain that is wrong by one character looks right when you are reading quickly. Blocklists answer that by knowing which sites are bad, which means they are always behind whoever registered a domain this morning.</p>
+          <p>AIHub asks a different question: <em>does this look like one of yours, without being it?</em> It compares the site against the ones you actually use, from your own history. When a page asks for a password and something is off, a bar appears:</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>What you see</th><th>What it means</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Check this address before signing in</strong></td><td>The domain closely resembles a site you really use, or is written in an encoded alphabet</td></tr>
+                <tr><td><strong>First time signing in here</strong></td><td>Nothing suspicious — just a site you have never signed into before</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note good">It never blocks anything, and it never reads, stores or sends what you type. The check is on the address only. On a brand-new profile it stays quiet entirely, because it has no idea yet which sites are yours.</div>
+        </div>
+      </section>
+
+      <section id="burner">
+        <div class="sec-head"><span class="node" style="background:#fb923c"></span><h2>Burner tabs &amp; sharing <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A tab that forgets, and a fast way to pass something to the Lounge.</p>
+        <div class="body-col">
+          <p>Press <kbd>Ctrl</kbd>+<kbd>K</kbd> and choose <strong>Open a burner tab</strong>. It gets a session of its own that is never written to disk: cookies, storage and any sign-in you do inside it exist for as long as the tab does and are gone when you close it. Every burner gets its own session, so two of them cannot see each other.</p>
+          <p>See <a href="#sessions">Sessions &amp; containers</a> for the persistent version — containers keep their cookies on purpose, so you can be signed into the same site as two different people.</p>
+          <p>Separately: select some text, right-click, and pick <strong>Share to the Lounge</strong> to post the passage and its source into <a href="#community">Community</a>. Nothing is ever posted unless you choose that menu item.</p>
         </div>
       </section>
 
