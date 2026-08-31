@@ -25,6 +25,7 @@ const RewindPage     = lazy(() => import('./components/pages/RewindPage'))
 const WatchPage      = lazy(() => import('./components/pages/WatchPage'))
 const VaultPage      = lazy(() => import('./components/pages/VaultPage'))
 const RecallPage     = lazy(() => import('./components/pages/RecallPage'))
+const LedgerPage     = lazy(() => import('./components/pages/LedgerPage'))
 const BiblePage      = lazy(() => import('./components/pages/BiblePage'))
 const BibleStudyPage = lazy(() => import('./components/pages/BibleStudyPage'))
 const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
@@ -999,6 +1000,7 @@ export default function App() {
                     {tab.pageType === 'watch'      && <WatchPage />}
                     {tab.pageType === 'vault'      && <VaultPage />}
                     {tab.pageType === 'recall'     && <RecallPage onNavigate={navigate} />}
+                    {tab.pageType === 'ledger'     && <LedgerPage />}
                     {tab.pageType === 'bible'      && <BiblePage />}
                     {tab.pageType === 'study'      && <BibleStudyPage />}
                     {tab.pageType === 'community'  && <CommunityPage />}

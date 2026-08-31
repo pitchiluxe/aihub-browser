@@ -5,7 +5,7 @@ import {
   Home, FlaskConical, Sparkles, StickyNote, History, Download, Puzzle, Wifi,
   Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft, GitCompare, BellRing,
   Smartphone, Laptop, BookMarked, Layers, Columns2, PictureInPicture2, Camera, CopyMinus,
-  GraduationCap, Archive, Brain, Table,
+  GraduationCap, Archive, Brain, Table, Receipt,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
@@ -95,7 +95,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     wifi: <Wifi size={15} />, vpn: <Shield size={15} />, mail: <Mail size={15} />,
     manual: <BookOpen size={15} />, settings: <Settings size={15} />,
     bible: <BookMarked size={15} />, study: <GraduationCap size={15} />,
-    vault: <Archive size={15} />, recall: <Brain size={15} />,
+    vault: <Archive size={15} />, recall: <Brain size={15} />, ledger: <Receipt size={15} />,
   }
 
   const commands: Cmd[] = useMemo(() => {
@@ -158,6 +158,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       ['bible', 'Bible — read, highlight and study'], ['study', 'Bible Study — daily verse, courses and memorisation'], ['history', 'History'], ['downloads', 'Downloads'],
       ['vault', 'Page Vault — copies of the pages you bookmarked'],
       ['recall', 'Recall — review what you highlighted'],
+      ['ledger', 'Ledger — what you spent, from your receipts'],
       ['extensions', 'Extensions'], ['wifi', 'Free WiFi'], ['vpn', 'VPN / Proxy'], ['mail', 'Mail'],
       ['manual', 'User Manual'], ['settings', 'Settings'],
     ]
