@@ -38,6 +38,7 @@ import type { PageType } from '../../shared/pageTypes'
 const QRCodeModal    = lazy(() => import('./components/browser/QRCodeModal'))
 const CommandPalette = lazy(() => import('./components/browser/CommandPalette'))
 const CompareModal   = lazy(() => import('./components/browser/CompareModal'))
+const TableExportModal = lazy(() => import('./components/browser/TableExportModal'))
 import AddBookmarkModal from './components/homepage/AddBookmarkModal'
 
 import UpdateNotification from './components/browser/UpdateNotification'
@@ -82,14 +83,14 @@ export default function App() {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
-    splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen,
+    splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
     isAnnotationMode: s.isAnnotationMode, isAddBookmarkOpen: s.isAddBookmarkOpen, isAIPanelOpen: s.isAIPanelOpen,
     isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen, isCompareOpen: s.isCompareOpen,
     splitTabId: s.splitTabId, isBookmarksMenuOpen: s.isBookmarksMenuOpen,
-    isDownloadsMenuOpen: s.isDownloadsMenuOpen,
+    isDownloadsMenuOpen: s.isDownloadsMenuOpen, isTableExportOpen: s.isTableExportOpen,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -741,8 +742,8 @@ export default function App() {
     // Any host-HTML overlay (Add-to-Sphere modal, QR modal) must detach the
     // active tab's BrowserView, which otherwise always paints on top of and
     // steals clicks from our HTML — making the modal look frozen/invisible.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen)
-  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen])
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen])
 
   // Clear a tab's loading state, but keep the spinner up for a short floor so
   // a load that finished almost instantly still registers as an action. Any
@@ -1070,6 +1071,7 @@ export default function App() {
           />
         )}
         {isCompareOpen && <CompareModal />}
+        {isTableExportOpen && <TableExportModal />}
       </Suspense>
 
       {/* Cross-device handoff toast */}

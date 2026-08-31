@@ -5,7 +5,7 @@ import {
   Home, FlaskConical, Sparkles, StickyNote, History, Download, Puzzle, Wifi,
   Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft, GitCompare, BellRing,
   Smartphone, Laptop, BookMarked, Layers, Columns2, PictureInPicture2, Camera, CopyMinus,
-  GraduationCap, Archive, Brain,
+  GraduationCap, Archive, Brain, Table,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
@@ -104,6 +104,9 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       out.push({ id, label, group: 'Actions', icon, run: () => { run(); close() }, keywords, hint })
 
     act('new-tab', 'New Tab', <Plus size={15} />, () => addTab(), 'open create', 'Ctrl+T')
+    act('export-tables', 'Export a table from this page to CSV', <Table size={15} />,
+      () => useBrowserStore.getState().setTableExportOpen(true),
+      'csv spreadsheet excel sheets table data extract')
     act('reopen', 'Reopen Closed Tab', <RotateCcw size={15} />, () => reopenClosedTab(), 'restore undo', 'Ctrl+Shift+T')
     act('ai', 'Toggle AI Assistant', <Bot size={15} />, () => toggleAIPanel(), 'chat agent', 'Ctrl+Shift+A')
     act('sidebar', 'Toggle Sidebar', <PanelLeft size={15} />, () => toggleSidebar())

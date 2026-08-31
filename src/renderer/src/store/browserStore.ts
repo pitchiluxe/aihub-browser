@@ -77,6 +77,9 @@ interface BrowserState {
   // Same for the toolbar downloads panel.
   isDownloadsMenuOpen: boolean
   setDownloadsMenuOpen: (v: boolean) => void
+  // The table exporter is host HTML over the page, same detach requirement.
+  isTableExportOpen: boolean
+  setTableExportOpen: (v: boolean) => void
   isCmdPaletteOpen: boolean
   setCmdPaletteOpen: (v: boolean) => void
   isCompareOpen: boolean
@@ -385,6 +388,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setBookmarksMenuOpen: (v) => set({ isBookmarksMenuOpen: v }),
   isDownloadsMenuOpen: false,
   setDownloadsMenuOpen: (v) => set({ isDownloadsMenuOpen: v }),
+  isTableExportOpen: false,
+  setTableExportOpen: (v) => set({ isTableExportOpen: v }),
   isCmdPaletteOpen: false,
   setCmdPaletteOpen: (v) => set({ isCmdPaletteOpen: v }),
   isCompareOpen: false,
