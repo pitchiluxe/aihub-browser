@@ -6,6 +6,7 @@ import https from 'https'
 import dns from 'dns'
 import os from 'os'
 import fs from 'fs'
+import { pathToFileURL } from 'url'
 import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
@@ -35,6 +36,7 @@ import {
 } from './containers'
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
+import { createVault } from './vault'
 import { parseTradingViewText, describeReading, isChartUrl } from './trading/chartReader'
 import { analyseReading } from './trading/barAnalysis'
 import {
@@ -3015,6 +3017,59 @@ ipcMain.handle('downloads:getAll',       () => {
   return dls
 })
 ipcMain.handle('downloads:clear',        () => { downloadsStore.set([]); return true })
+
+// ── IPC: Page Vault ────────────────────────────────────────────
+// Snapshots are taken from the live view, so capture has to run here where the
+// webContents lives. Everything else is bookkeeping the renderer asks for.
+const vault = createVault(APP_DIR)
+
+ipcMain.handle('vault:list',   () => vault.list())
+ipcMain.handle('vault:latestFor', (_e, url: string) => vault.latestFor(url))
+ipcMain.handle('vault:remove', (_e, id: string) => vault.remove(id))
+ipcMain.handle('vault:clear',  () => vault.clear())
+ipcMain.handle('vault:reveal', (_e, p: string) => shell.showItemInFolder(p))
+
+/**
+ * Archive what a tab is showing right now. Returns the snapshot, or null when
+ * the page was not eligible or the capture failed — callers treat a null as
+ * "no copy was taken", never as an error, because the action that triggered
+ * this (bookmarking) must succeed either way.
+ */
+ipcMain.handle('vault:capture', async (e, args: { tabId: string; url: string; title?: string; favicon?: string; origin?: 'auto' | 'manual' }) => {
+  const wc = ctxFromEvent(e)?.views.get(args?.tabId)?.webContents
+  if (!wc || wc.isDestroyed()) return null
+  try {
+    return await vault.capture(wc, {
+      url: args.url || wc.getURL(),
+      title: args.title,
+      favicon: args.favicon,
+      origin: args.origin,
+    })
+  } catch { return null }
+})
+
+/**
+ * Open a snapshot in the tab that asked for it. The file:// load is what makes
+ * a dead bookmark usable again — Chromium renders .mhtml natively, so the
+ * archived page comes back with its layout, images and links intact.
+ */
+ipcMain.handle('vault:open', (e, args: { tabId: string; id: string }) => {
+  const snap = vault.list().find(s => s.id === args?.id)
+  if (!snap) return { success: false, error: 'That snapshot is gone.' }
+  if (!fs.existsSync(snap.path)) {
+    vault.remove(snap.id)
+    return { success: false, error: 'The snapshot file was deleted from disk.' }
+  }
+  const wc = ctxFromEvent(e)?.views.get(args.tabId)?.webContents
+  if (!wc || wc.isDestroyed()) return { success: false, error: 'No tab to open it in.' }
+  try {
+    wc.loadURL(pathToFileURL(snap.path).toString())
+    return { success: true, url: snap.url, title: snap.title, createdAt: snap.createdAt }
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) }
+  }
+})
+
 ipcMain.handle('downloads:openFile',     (_e, p: string) => shell.openPath(p))
 ipcMain.handle('downloads:showInFolder', (_e, p: string) => shell.showItemInFolder(p))
 

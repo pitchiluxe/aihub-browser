@@ -23,6 +23,7 @@ const NotesPage      = lazy(() => import('./components/pages/NotesPage'))
 const ManualPage     = lazy(() => import('./components/pages/ManualPage'))
 const RewindPage     = lazy(() => import('./components/pages/RewindPage'))
 const WatchPage      = lazy(() => import('./components/pages/WatchPage'))
+const VaultPage      = lazy(() => import('./components/pages/VaultPage'))
 const BiblePage      = lazy(() => import('./components/pages/BiblePage'))
 const BibleStudyPage = lazy(() => import('./components/pages/BibleStudyPage'))
 const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
@@ -42,6 +43,7 @@ import UpdateNotification from './components/browser/UpdateNotification'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import HostAnnotationCanvas from './components/browser/HostAnnotationCanvas'
 import FindBar from './components/browser/FindBar'
+import VaultRestoreBar from './components/browser/VaultRestoreBar'
 import AIAssistant from './components/ai/AIAssistant'
 import { loadBookmarks } from './services/bookmarkService'
 import { buildPageExtractionScript } from './services/pageExtractor'
@@ -112,6 +114,12 @@ export default function App() {
   // the bar occupies a reserved strip above the native view (see bounds sync).
   const [findOpen, setFindOpen] = useState(false)
   const findVisible = findOpen && needsTabView(activeTab)
+
+  // A failed load on a tab we have an archived copy of. Like the find bar, the
+  // offer lives in a strip reserved above the native view — Chromium's error
+  // page is still a BrowserView, and would paint straight over an overlay.
+  const [restoreOffered, setRestoreOffered] = useState(false)
+  const restoreVisible = restoreOffered && needsTabView(activeTab)
 
   // ── Nav actions — the tab's WebContents lives in the main process now, so
   // these are fire-and-forget IPC calls rather than direct method calls. ────
@@ -478,7 +486,7 @@ export default function App() {
     const rightReserve = isAIPanelOpen ? 388 : 0
     // The find bar lives in a reserved strip above the native view — the view
     // always paints over host HTML, so the bar can't simply overlay it.
-    const topReserve = findVisible ? 44 : 0
+    const topReserve = (findVisible ? 44 : 0) + (restoreVisible ? 58 : 0)
     const sync = () => {
       if (!contentAreaRef.current) return
       const r = contentAreaRef.current.getBoundingClientRect()
@@ -502,7 +510,7 @@ export default function App() {
     const ro = new ResizeObserver(sync)
     if (contentAreaRef.current) ro.observe(contentAreaRef.current)
     return () => { window.removeEventListener('resize', sync); ro.disconnect() }
-  }, [isAIPanelOpen, findVisible])
+  }, [isAIPanelOpen, findVisible, restoreVisible])
 
   // ── Create/destroy native tab views as tabs come and go ───────────────────
   useEffect(() => {
@@ -943,6 +951,7 @@ export default function App() {
                     {tab.pageType === 'manual'     && <ManualPage />}
                     {tab.pageType === 'rewind'     && <RewindPage onNavigate={navigate} />}
                     {tab.pageType === 'watch'      && <WatchPage />}
+                    {tab.pageType === 'vault'      && <VaultPage />}
                     {tab.pageType === 'bible'      && <BiblePage />}
                     {tab.pageType === 'study'      && <BibleStudyPage />}
                     {tab.pageType === 'community'  && <CommunityPage />}
@@ -956,6 +965,15 @@ export default function App() {
                 effect above) — there is no DOM node for it here. */}
 
             {/* Find-in-page bar — sits in the strip the bounds sync reserves */}
+            {/* Offer the archived copy when a page fails to load */}
+            <VaultRestoreBar
+              tabId={activeTabId}
+              url={activeTab?.url}
+              failed={!!activeTab?.loadFailed}
+              topOffset={findVisible ? 44 : 0}
+              onOfferChange={setRestoreOffered}
+            />
+
             {findVisible && activeTabId && (
               <FindBar key={activeTabId} tabId={activeTabId} onClose={() => setFindOpen(false)} />
             )}

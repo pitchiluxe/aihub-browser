@@ -132,6 +132,17 @@ export default function NavigationBar({
       if (result.success && result.bookmark) {
         addBookmark(result.bookmark)
         showBmToast(result.warning ? 'Already in sphere — updated' : 'Added to sphere')
+        // Keep a copy of the page while it still exists. Deliberately not
+        // awaited and deliberately silent: archiving is a courtesy the
+        // bookmark does not depend on, and a page that refuses to be saved
+        // must not turn a successful bookmark into an error message.
+        if (activeTabId) {
+          window.electronAPI.vault?.capture?.({
+            tabId: activeTabId, url,
+            title: activeTab?.title || '', favicon: activeTab?.favicon || '',
+            origin: 'auto',
+          }).catch(() => {})
+        }
       } else {
         showBmToast(result.error || "Couldn't add page")
       }

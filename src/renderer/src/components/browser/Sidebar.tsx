@@ -1,7 +1,7 @@
 import React, { memo, useEffect, useState } from 'react'
 import {
   Home, History, Download, Settings, Plus, Sparkles,
-  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing, BookMarked, GraduationCap, Users,
+  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing, BookMarked, GraduationCap, Users, Archive,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
@@ -28,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: StickyNote,   label: 'Sticky Notes', page: 'notes',        type: 'notes',      accent: '#facc15' },
   { icon: Rewind,       label: 'Rewind',       page: 'rewind',       type: 'rewind',     accent: '#c4b5fd' },
   { icon: BellRing,     label: 'Watch & Ping', page: 'watch',        type: 'watch',      accent: '#f472b6' },
+  { icon: Archive,      label: 'Page Vault',   page: 'vault',        type: 'vault',      accent: '#7dd3fc' },
   { icon: BookMarked,   label: 'Bible',        page: 'bible',        type: 'bible',      accent: '#fbbf24' },
   { icon: GraduationCap, label: 'Bible Study', page: 'study',        type: 'study',      accent: '#e6c86e' },
   { icon: Users,        label: 'Community',    page: 'community',    type: 'community',  accent: '#34d399' },

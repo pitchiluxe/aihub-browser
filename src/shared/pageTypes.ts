@@ -10,7 +10,7 @@
 export type PageType =
   | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research'
   | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind'
-  | 'watch' | 'bible' | 'study' | 'community'
+  | 'watch' | 'bible' | 'study' | 'community' | 'vault'
 
 /** Same set, plus the home page, which is a tab state rather than a page. */
 export type NavTarget = PageType | null

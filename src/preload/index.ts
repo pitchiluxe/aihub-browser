@@ -86,6 +86,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('download:update', handler)
     },
   },
+  vault: {
+    list:      () => ipcRenderer.invoke('vault:list'),
+    latestFor: (url:string) => ipcRenderer.invoke('vault:latestFor', url),
+    capture:   (args:{ tabId:string; url:string; title?:string; favicon?:string; origin?:'auto'|'manual' }) =>
+                 ipcRenderer.invoke('vault:capture', args),
+    open:      (args:{ tabId:string; id:string }) => ipcRenderer.invoke('vault:open', args),
+    remove:    (id:string) => ipcRenderer.invoke('vault:remove', id),
+    clear:     () => ipcRenderer.invoke('vault:clear'),
+    reveal:    (p:string) => ipcRenderer.invoke('vault:reveal', p),
+  },
   cache:    { clear: () => ipcRenderer.invoke('cache:clear') },
   extStore: {
     load: () => ipcRenderer.invoke('extstore:load'),
