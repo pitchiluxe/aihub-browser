@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import '../../styles/community-subview.css'
 import { Users, AlertTriangle, Loader2, ArrowLeft } from 'lucide-react'
 import { validateHandle, joinBlocker } from '../../../../shared/communityHandle'
 import { avatarDataUri } from '../../../../shared/communityAvatar'
@@ -49,15 +50,14 @@ export default function CommunityPage() {
   if (!status) return <Centered><Loader2 size={18} className="animate-spin" /> Loading…</Centered>
   if (status.state === 'unregistered') return <Onboarding onJoined={setStatus} />
 
+  // cm-portal carries the --cm-* palette. Without it every community variable
+  // inside these panels resolved to nothing, which was not a cosmetic problem:
+  // the guide's on/off switch had a transparent track and a 0px border, so the
+  // control was invisible while remaining perfectly clickable.
   if (view !== 'workspace') {
     return (
-      <div className="flex h-full flex-col"
-           style={{ background: 'rgb(var(--ds-bg))', color: 'rgb(var(--ds-text))' }}>
-        <button
-          onClick={backToWorkspace}
-          className="flex items-center gap-2 px-5 py-3 text-sm"
-          style={{ color: 'rgb(var(--ds-muted))', borderBottom: '1px solid rgb(var(--ds-border))' }}
-        >
+      <div className="cm-portal cm-subview flex h-full flex-col" data-view={view}>
+        <button onClick={backToWorkspace} className="cm-subview-back">
           <ArrowLeft size={15} /> Back to the community
         </button>
         {view === 'moderation' && <ModerationPanel />}

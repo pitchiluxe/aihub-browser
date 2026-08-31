@@ -341,6 +341,44 @@ describe('community IPC', () => {
       expect(await invoke('community:moderatorStatus')).toMatchObject({ isModerator: true })
     })
 
+    // The guide's switch is drawn when moderatorStatus says yes, and its own
+    // handler used to ask a different question — the raw isAdmin flag. The two
+    // disagreed on any install where that flag was never set, which made the
+    // switch a control that could be seen, focused and clicked while every
+    // press was refused. Whatever decides to draw it must be what decides to
+    // obey it.
+    // Asserted on what the handler returns rather than by asking guide:status
+    // afterwards: that call probes Ollama over the network, which makes the
+    // test depend on whether a model server happens to be running.
+    it('lets whoever may moderate configure the guide', async () => {
+      await invoke('community:join', 'Grace')
+      expect((await invoke('community:moderatorStatus')).isModerator).toBe(true)
+
+      const out = await invoke('community:guide:set', { model: 'llama3.2:3b' })
+      expect(out.ok).toBe(true)
+      expect(out.model).toBe('llama3.2:3b')
+    })
+
+    it('refuses the guide to somebody who may not moderate', async () => {
+      const joined = await invoke('community:join', 'Grace')
+      const me = joined.status.member.id
+      // Hand the room to somebody else so this caller is an ordinary member.
+      const data = await readData()
+      data.members['other'] = {
+        id: 'other', handle: 'Other', handleKey: 'other',
+        avatarSeed: 'other', createdAt: Date.now() - 1000,
+      }
+      data.ownership = { memberId: 'other', email: 'o@e.test', verifiedAt: Date.now() }
+      delete data.members[me].isAdmin
+      writeData(data)
+      await reload()
+
+      expect((await invoke('community:moderatorStatus')).isModerator).toBe(false)
+      const out = await invoke('community:guide:set', { model: 'llama3.2:3b' })
+      expect(out.ok).toBe(false)
+      expect(out.error).toMatch(/owner/i)
+    })
+
     // The renderer decides which buttons to draw. It does not decide who may
     // press them, so the gate has to hold when the call arrives anyway.
     it('refuses the queue and every action to a non-moderator', async () => {

@@ -599,7 +599,9 @@ function guideDeps(ollamaIsReady: boolean): GuideDeps {
     },
     context: () => ({
       memberId: me,
-      isAdmin: !!(me && dataStore.get().members[me]?.isAdmin),
+      // Same question the switch and the rail ask, so the guide cannot be
+      // enabled by someone the host then refuses to run for.
+      isAdmin: !!(me && canModerate(dataStore.get(), me)),
       ollamaReady: ollamaIsReady,
       hasModel: !!guide().get().model,
       enabled: guide().get().enabled,
@@ -964,9 +966,14 @@ export function registerCommunityIpc(): void {
   ipcMain.handle('community:guide:set', async (_e, input: { enabled?: boolean; model?: string }) => {
     const who = requireMember()
     if ('error' in who) return { ok: false, error: who.error }
-    // Only the owner runs the guide, so only the owner may configure it.
+    // Only the owner runs the guide, so only the owner may configure it —
+    // asked through canModerate rather than the raw isAdmin flag. Reading the
+    // flag directly is what made the switch a control that could be seen,
+    // focused and clicked while every press was refused: the rail asks one
+    // question to decide whether to draw the button and this asked a
+    // different one to decide whether to obey it.
     const { dataStore } = stores()
-    if (!dataStore.get().members[who.id]?.isAdmin) {
+    if (!canModerate(dataStore.get(), who.id)) {
       return { ok: false, error: 'Only the community owner runs the guide.' }
     }
 

@@ -1,0 +1,91 @@
+/* ══ Community sub-views ══════════════════════════════════════════════════
+   The full-page panels reached from the rail: Reports, Guidelines, the AI
+   guide, and your account.
+
+   These render OUTSIDE .cm-shell, which is where the --cm-* palette is
+   declared — so every var() inside them resolved to nothing. The effect was
+   not subtle once you knew to look for it: `background: var(--cm-hover)`
+   became transparent and `border: 1px solid var(--cm-line)` became a 0px
+   border, so the guide's on/off switch was a 42×24 rectangle of nothing. The
+   control was there, focusable and clickable, and completely invisible.
+
+   community.css already anticipated exactly this for popovers and put the
+   palette on `.cm-portal` as well as `.cm-shell`; these panels simply never
+   asked for it. They do now, and this file adds only what is specific to
+   being a whole page rather than a panel inside the workspace. */
+
+.cm-subview {
+  position: relative;
+  background: var(--cm-stage);
+  color: var(--cm-ink);
+}
+
+/* ── The frame ──────────────────────────────────────────────────────────
+   A soft accent border around the whole page.
+
+   Drawn as an overlay rather than a border on the element itself: a real
+   border would take part in layout and shift every panel inside by a pixel,
+   and these panels already position content against the page edge. The
+   overlay cannot be clicked through by accident either — it is inert.
+
+   The colour comes from --cm-glow, which the page sets per view, so the
+   frame agrees with whatever panel is open: aqua for the guide, red for the
+   report queue, the community's own emerald elsewhere. A frame that is
+   always the same colour is decoration; one that matches the room you are
+   in is a second, quieter label. */
+.cm-subview {
+  --cm-glow: var(--cm-accent, #34d399);
+}
+
+.cm-subview[data-view='guide']      { --cm-glow: #33d6c8; }
+.cm-subview[data-view='moderation'] { --cm-glow: #f87171; }
+
+.cm-subview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--cm-glow) 42%, transparent);
+  box-shadow:
+    inset 0 0 24px color-mix(in srgb, var(--cm-glow) 12%, transparent),
+    inset 0 0 1px color-mix(in srgb, var(--cm-glow) 55%, transparent),
+    0 0 22px color-mix(in srgb, var(--cm-glow) 16%, transparent);
+  animation: cm-frame-breathe 5.5s ease-in-out infinite;
+}
+
+/* The breath is slight on purpose. This frame sits behind text somebody is
+   reading in order to make a moderation decision; anything more insistent
+   than this competes with the words. */
+@keyframes cm-frame-breathe {
+  0%, 100% { opacity: 0.75; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-subview::after { animation: none; opacity: 0.9; }
+}
+
+/* ── The back bar ───────────────────────────────────────────────────────
+   It used to be styled from the browser's --ds-* tokens, which is how it
+   ended up looking like a different application from the page beneath it. */
+.cm-subview-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  flex-shrink: 0;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--cm-dim);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--cm-line);
+  transition: color 160ms ease, background 160ms ease;
+}
+
+.cm-subview-back:hover {
+  color: var(--cm-ink);
+  background: var(--cm-raise);
+}
