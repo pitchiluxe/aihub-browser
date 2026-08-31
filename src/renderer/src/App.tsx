@@ -24,6 +24,7 @@ const ManualPage     = lazy(() => import('./components/pages/ManualPage'))
 const RewindPage     = lazy(() => import('./components/pages/RewindPage'))
 const WatchPage      = lazy(() => import('./components/pages/WatchPage'))
 const VaultPage      = lazy(() => import('./components/pages/VaultPage'))
+const RecallPage     = lazy(() => import('./components/pages/RecallPage'))
 const BiblePage      = lazy(() => import('./components/pages/BiblePage'))
 const BibleStudyPage = lazy(() => import('./components/pages/BibleStudyPage'))
 const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
@@ -46,6 +47,7 @@ import FindBar from './components/browser/FindBar'
 import VaultRestoreBar from './components/browser/VaultRestoreBar'
 import AIAssistant from './components/ai/AIAssistant'
 import { loadBookmarks } from './services/bookmarkService'
+import { addItem as addRecallItem } from './services/recall'
 import { buildPageExtractionScript } from './services/pageExtractor'
 import { loadCustomExts } from './extensions/customExts'
 import { shouldRunOn } from './extensions/siteRules'
@@ -382,9 +384,33 @@ export default function App() {
   // (AI / Research / Agent / Annotation / Sphere / Add to Sphere / QR). The
   // native menu is built in main; app-feature items are dispatched here.
   useEffect(() => {
-    const off = window.electronAPI?.ipc?.on?.('page-context-action', (_e: any, data: { action: string; url?: string; selection?: string }) => {
+    const off = window.electronAPI?.ipc?.on?.('page-context-action', (_e: any, data: { action: string; url?: string; selection?: string; title?: string }) => {
       const store = useBrowserStore.getState()
       switch (data.action) {
+        // "Remember This" — the selection joins the Recall queue. Read/modify/
+        // write against the file rather than any in-memory copy: the Recall
+        // page may be open in another tab holding its own book, and the last
+        // write must not silently drop reviews answered elsewhere.
+        case 'recall-add': {
+          const text = (data.selection || '').trim()
+          if (!text) break
+          ;(async () => {
+            try {
+              const book = (await window.electronAPI.recall.get()) || {}
+              const res = addRecallItem(book, {
+                text, url: data.url || '', title: data.title || '',
+              }, Date.now())
+              if (res.item && !res.duplicate) await window.electronAPI.recall.set(res.items)
+              flashHandoff(
+                res.duplicate ? 'Already in Recall' :
+                res.item ? 'Added to Recall' : 'That selection is too long to memorise',
+                !!res.item && !res.duplicate,
+              )
+            } catch {}
+          })()
+          break
+        }
+
         case 'ai':
           if (!store.isAIPanelOpen) store.toggleAIPanel()
           if (data.selection) {
@@ -965,6 +991,7 @@ export default function App() {
                     {tab.pageType === 'rewind'     && <RewindPage onNavigate={navigate} />}
                     {tab.pageType === 'watch'      && <WatchPage />}
                     {tab.pageType === 'vault'      && <VaultPage />}
+                    {tab.pageType === 'recall'     && <RecallPage onNavigate={navigate} />}
                     {tab.pageType === 'bible'      && <BiblePage />}
                     {tab.pageType === 'study'      && <BibleStudyPage />}
                     {tab.pageType === 'community'  && <CommunityPage />}

@@ -913,6 +913,7 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       menu.append(new MenuItem({ label: `Ask AI about “${short}”`, click: () => sendAction('ai', { selection: sel }) }))
       menu.append(new MenuItem({ label: `Search Google for “${short}”`, click: () => sendTo(menuCtx, 'open-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(sel)}`) }))
       menu.append(new MenuItem({ label: 'Save Selection to Obsidian', click: () => { void clipToVault(wc, sel) } }))
+      menu.append(new MenuItem({ label: 'Remember This (Recall)', click: () => sendAction('recall-add', { selection: sel, title: (() => { try { return wc.getTitle() } catch { return '' } })() }) }))
     }
 
     // ── Link ──
@@ -3034,6 +3035,13 @@ ipcMain.handle('vault:latestFor', (_e, url: string) => vault.latestFor(url))
 ipcMain.handle('vault:remove', (_e, id: string) => vault.remove(id))
 ipcMain.handle('vault:clear',  () => vault.clear())
 ipcMain.handle('vault:reveal', (_e, p: string) => shell.showItemInFolder(p))
+
+// ── IPC: Recall ──────────────────────────────────────────────────
+// The scheduling and the rules live in the renderer (services/recall.ts, pure
+// and tested); main only holds the book on disk.
+const recallStore = createManagedJsonStore<Record<string, any>>(join(APP_DIR, 'recall.json'), () => ({}))
+ipcMain.handle('recall:get', () => recallStore.get())
+ipcMain.handle('recall:set', (_e, book: Record<string, any>) => { recallStore.set(book || {}); return true })
 
 // ── IPC: PDF text ───────────────────────────────────────────────
 // Chromium renders a PDF inside a plugin, so there is no DOM for the usual
