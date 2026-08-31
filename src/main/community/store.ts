@@ -4,7 +4,7 @@ import {
   type Attachment, type CommunityState, type Member, type Message, type MessageKind,
   type ModerationAction, type Report, type VerseRef,
 } from '../../shared/community'
-import { hasPermission } from '../../shared/communityPermissions'
+import { hasPermission, isOwner } from '../../shared/communityPermissions'
 import { isTimedOut, inConversation } from './admin'
 import { emptyState } from '../../shared/communityMigrate'
 
@@ -425,13 +425,66 @@ export function reportMessage(
 /**
  * May this member act on other people's messages?
  *
- * One function so the answer is asked the same way everywhere. While the
- * community is local-only every install owns its own data, so this is true for
- * the local member; when the server exists the flag arrives from it and these
- * call sites do not change.
+ * One function so the answer is asked the same way everywhere — main
+ * authorises every moderation call through it, and the renderer asks it before
+ * drawing the Reports and AI-guide buttons.
+ *
+ * It used to read `member.isAdmin` and nothing else. Nothing ever sets that
+ * flag: the community grew a real permission system (roles, `manage_messages`,
+ * ownership) and this path was never moved onto it, so on an install where
+ * nobody had claimed ownership the answer was permanently false and the owner
+ * of the machine could not see their own report queue. Asking the permission
+ * system is the fix; `isAdmin` is still honoured so anything that did set it
+ * keeps working.
+ *
+ * The last clause is the one that matters for a fresh install. Claiming
+ * ownership requires verifying an email, which a local-only community has no
+ * reason to make anyone do — so when nobody has claimed it and there is
+ * exactly one real person here, that person moderates their own room. The
+ * count deliberately excludes bots and is deliberately strict: the moment a
+ * second human appears (replication, an invite), moderation goes back to being
+ * something that has to be granted rather than something everyone has.
  */
 export function canModerate(state: CommunityState, memberId: string): boolean {
-  return !!state.members[memberId]?.isAdmin
+  const member = state.members[memberId]
+  if (!member || member.bannedAt) return false
+  if (member.isAdmin) return true
+  if (isOwner(state, memberId)) return true
+  if (hasPermission(state, memberId, 'manage_messages')) return true
+  return isFounderOfUnclaimedCommunity(state, memberId)
+}
+
+/**
+ * Nobody has claimed this community, and this is the person who started it.
+ *
+ * Claiming ownership means verifying an email through Google, which a
+ * local-first community has no reason to make anyone do — so until somebody
+ * does, the founder moderates. The founder is the earliest-joined human
+ * member, which on a fresh install is simply "you".
+ *
+ * The first version of this rule asked whether the member was the ONLY person
+ * here, and that was wrong in a way that only showed up once a community had
+ * anybody in it: the owner of the room lost their own report queue the moment
+ * a second person joined. Earliest-joined survives that, and it stays
+ * deterministic across replicas because every copy of the state sees the same
+ * join times — with the id as a tie-break so two members created in the same
+ * millisecond cannot disagree between machines.
+ *
+ * Kept separate from canModerate so the rule can be read and tested on its
+ * own: it is the one clause that grants a permission nobody handed out, and it
+ * should be impossible to change by accident.
+ */
+export function isFounderOfUnclaimedCommunity(
+  state: CommunityState, memberId: string,
+): boolean {
+  if (state.ownership) return false
+  const people = Object.values(state.members || {}).filter(m => m && !m.isBot && !m.bannedAt)
+  if (!people.length) return false
+  const founder = people.reduce((earliest, m) =>
+    (m.createdAt ?? 0) < (earliest.createdAt ?? 0) ||
+    ((m.createdAt ?? 0) === (earliest.createdAt ?? 0) && m.id < earliest.id)
+      ? m : earliest)
+  return founder.id === memberId
 }
 
 export interface ReportedMessage {
