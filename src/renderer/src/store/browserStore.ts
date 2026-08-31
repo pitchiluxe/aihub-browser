@@ -74,6 +74,9 @@ interface BrowserState {
   // BrowserView detach while it is open.
   isBookmarksMenuOpen: boolean
   setBookmarksMenuOpen: (v: boolean) => void
+  // Same for the toolbar downloads panel.
+  isDownloadsMenuOpen: boolean
+  setDownloadsMenuOpen: (v: boolean) => void
   isCmdPaletteOpen: boolean
   setCmdPaletteOpen: (v: boolean) => void
   isCompareOpen: boolean
@@ -380,6 +383,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setVpnMenuOpen: (v) => set({ isVpnMenuOpen: v }),
   isBookmarksMenuOpen: false,
   setBookmarksMenuOpen: (v) => set({ isBookmarksMenuOpen: v }),
+  isDownloadsMenuOpen: false,
+  setDownloadsMenuOpen: (v) => set({ isDownloadsMenuOpen: v }),
   isCmdPaletteOpen: false,
   setCmdPaletteOpen: (v) => set({ isCmdPaletteOpen: v }),
   isCompareOpen: false,

@@ -78,13 +78,14 @@ export default function App() {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
-    splitTabId, isBookmarksMenuOpen,
+    splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
     isAnnotationMode: s.isAnnotationMode, isAddBookmarkOpen: s.isAddBookmarkOpen, isAIPanelOpen: s.isAIPanelOpen,
     isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen, isCompareOpen: s.isCompareOpen,
     splitTabId: s.splitTabId, isBookmarksMenuOpen: s.isBookmarksMenuOpen,
+    isDownloadsMenuOpen: s.isDownloadsMenuOpen,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -277,6 +278,18 @@ export default function App() {
 
   // ── Bookmarks + theme + IPC ────────────────────────────────────────────────
   useEffect(() => { loadBookmarks().then(setBookmarks) }, [])
+
+  // ── Downloads, app-wide ───────────────────────────────────────────────────
+  // This used to live in DownloadsPage, which meant the store only knew about
+  // a transfer while that page happened to be open — so the toolbar button had
+  // nothing to count. The subscription belongs here, on the always-mounted
+  // root, and both the toolbar panel and the page now just read the store.
+  useEffect(() => {
+    const store = useBrowserStore.getState()
+    window.electronAPI.downloads.getAll().then(store.setDownloads).catch(() => {})
+    const unsub = window.electronAPI.downloads.onUpdate(store.upsertDownload)
+    return () => { if (typeof unsub === 'function') unsub() }
+  }, [])
 
   // ── Extension re-hydration — if renderer storage was cleared (cache clear,
   // profile wipe), restore custom extensions + toggle states from the disk
@@ -681,8 +694,8 @@ export default function App() {
     // Any host-HTML overlay (Add-to-Sphere modal, QR modal) must detach the
     // active tab's BrowserView, which otherwise always paints on top of and
     // steals clicks from our HTML — making the modal look frozen/invisible.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen)
-  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen])
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen])
 
   // Clear a tab's loading state, but keep the spinner up for a short floor so
   // a load that finished almost instantly still registers as an action. Any
