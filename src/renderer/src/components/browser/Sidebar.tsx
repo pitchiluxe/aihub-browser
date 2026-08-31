@@ -110,6 +110,24 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
       {/* Divider with purple gradient */}
       <div style={{ height: 1, margin: '0 12px 8px', background: 'linear-gradient(90deg, transparent, rgb(var(--ds-accent) / 0.25), transparent)' }} />
 
+      {/*
+        Everything between the brand and the footer scrolls as one column.
+
+        The nav used to be flexShrink: 0 with no overflow of its own, inside a
+        root that clips — so the list simply ran off the bottom once it grew
+        past the window. Settings, the whole bookmarks section and the footer
+        were unreachable on a short window, and nothing indicated they were
+        there. Making the nav its own scroller instead would divide the height
+        between two scrollports and leave both cramped; one column is what the
+        sidebar actually is.
+
+        The scrollbar is deliberately NOT hidden here. This region can overflow
+        with no other clue that it has, and a scrollbar that only appears while
+        the pointer is inside it is the difference between "there is more" and
+        "the app is broken".
+      */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+
       {/* ── Navigation ── */}
       <nav style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
         {NAV_ITEMS.map(({ icon: Icon, label, page, type, accent }) => {
@@ -181,8 +199,7 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
       </div>
 
       {/* Bookmark list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}
-        className="no-scrollbar">
+      <div style={{ flexShrink: 0, padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
         {bookmarks.length === 0 && (
           <div style={{ padding: '12px 8px', textAlign: 'center', color: 'rgb(96,102,130)', fontSize: 11 }}>
             No bookmarks yet
@@ -227,6 +244,8 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
           </button>
         ))}
       </div>
+
+      </div>{/* end scroll region */}
 
       {/* ── Footer ── */}
       <div style={{
