@@ -6,7 +6,7 @@ import https from 'https'
 import dns from 'dns'
 import os from 'os'
 import fs from 'fs'
-import { pathToFileURL } from 'url'
+import { pathToFileURL, fileURLToPath } from 'url'
 import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
@@ -37,6 +37,7 @@ import {
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
 import { createVault } from './vault'
+import { extractPdfText, looksLikePdf } from './pdfText'
 import { parseTradingViewText, describeReading, isChartUrl } from './trading/chartReader'
 import { analyseReading } from './trading/barAnalysis'
 import {
@@ -1102,6 +1103,11 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
     webPreferences: {
       partition,
       contextIsolation: true,
+      // Chromium ships a PDF viewer, but only when plugins are enabled. Off,
+      // a link to a PDF downloads the file and the tab goes nowhere — the
+      // document leaves the browser, and with it every AI, note and clipping
+      // feature the app has. On, the PDF renders in the tab like any page.
+      plugins: true,
       // Site-facing preload: no IPC, no Node — it only restores the
       // window.chrome members Electron omits, which Google's sign-in gate
       // requires. Safe alongside contextIsolation: it talks to the page
@@ -3028,6 +3034,44 @@ ipcMain.handle('vault:latestFor', (_e, url: string) => vault.latestFor(url))
 ipcMain.handle('vault:remove', (_e, id: string) => vault.remove(id))
 ipcMain.handle('vault:clear',  () => vault.clear())
 ipcMain.handle('vault:reveal', (_e, p: string) => shell.showItemInFolder(p))
+
+// ── IPC: PDF text ───────────────────────────────────────────────
+// Chromium renders a PDF inside a plugin, so there is no DOM for the usual
+// page extraction to read. The bytes are fetched again through the tab's own
+// session — not a bare fetch — so a PDF behind a login is readable for exactly
+// as long as the tab that is showing it is.
+ipcMain.handle('pdf:extract', async (_e, url: string) => {
+  const target = String(url || '')
+  try {
+    let bytes: Uint8Array
+    if (target.startsWith('file://')) {
+      bytes = new Uint8Array(fs.readFileSync(fileURLToPath(target)))
+    } else if (/^https?:/i.test(target)) {
+      const res = await session.fromPartition('persist:main').fetch(target)
+      if (!res.ok) return { ok: false, error: `The server returned ${res.status}.` }
+      bytes = new Uint8Array(await res.arrayBuffer())
+    } else {
+      return { ok: false, error: 'Not a fetchable address.' }
+    }
+
+    if (!looksLikePdf(bytes)) return { ok: false, error: 'That file is not a PDF.' }
+    const out = extractPdfText(bytes)
+    if (!out.text) {
+      // Say which kind of nothing this is. "No text" reads as a bug; "this is
+      // a scan" is a fact the user can act on.
+      return {
+        ok: false,
+        error: out.encrypted
+          ? 'This PDF is encrypted, so its text cannot be read.'
+          : 'This PDF has no text layer — it is almost certainly a scan.',
+        encrypted: out.encrypted,
+      }
+    }
+    return { ok: true, text: out.text, streams: out.streams, decoded: out.decoded }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) }
+  }
+})
 
 /**
  * Archive what a tab is showing right now. Returns the snapshot, or null when

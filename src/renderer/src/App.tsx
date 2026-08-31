@@ -213,7 +213,20 @@ export default function App() {
     if (!wcId) return ''
     try {
       const res = await window.electronAPI.webview.execScript(wcId, buildPageExtractionScript())
-      return res?.ok ? String(res.result || '').trim() : ''
+      const text = res?.ok ? String(res.result || '').trim() : ''
+      if (text) return text
+
+      // Nothing in the DOM. A PDF is the usual reason: Chromium renders it in
+      // a plugin, so the extraction script finds an empty document. Read the
+      // file's own bytes instead, and every feature built on page text —
+      // summarise, read aloud, the agent's read_page, clipping to Obsidian —
+      // starts working on PDFs without any of them knowing what a PDF is.
+      const url = useBrowserStore.getState().tabs.find(t => t.id === activeTabId)?.url || ''
+      if (/\.pdf(\?|#|$)/i.test(url) || url.startsWith('blob:')) {
+        const pdf = await window.electronAPI.pdf?.extract?.(url)
+        if (pdf?.ok && pdf.text) return String(pdf.text).trim()
+      }
+      return ''
     } catch { return '' }
   }, [activeTabId])
 
