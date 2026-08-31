@@ -46,6 +46,7 @@ import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import HostAnnotationCanvas from './components/browser/HostAnnotationCanvas'
 import FindBar from './components/browser/FindBar'
 import VaultRestoreBar from './components/browser/VaultRestoreBar'
+import CredentialGuardBar from './components/browser/CredentialGuardBar'
 import AIAssistant from './components/ai/AIAssistant'
 import { loadBookmarks } from './services/bookmarkService'
 import { addItem as addRecallItem } from './services/recall'
@@ -83,7 +84,7 @@ export default function App() {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
-    splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen,
+    splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, tabWcIds,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
@@ -91,6 +92,7 @@ export default function App() {
     isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen, isCompareOpen: s.isCompareOpen,
     splitTabId: s.splitTabId, isBookmarksMenuOpen: s.isBookmarksMenuOpen,
     isDownloadsMenuOpen: s.isDownloadsMenuOpen, isTableExportOpen: s.isTableExportOpen,
+    tabWcIds: s.tabWcIds,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -123,6 +125,10 @@ export default function App() {
   // page is still a BrowserView, and would paint straight over an overlay.
   const [restoreOffered, setRestoreOffered] = useState(false)
   const restoreVisible = restoreOffered && needsTabView(activeTab)
+
+  // Same reserved-strip treatment for the credential notice.
+  const [guardShown, setGuardShown] = useState(false)
+  const guardVisible = guardShown && needsTabView(activeTab)
 
   // ── Nav actions — the tab's WebContents lives in the main process now, so
   // these are fire-and-forget IPC calls rather than direct method calls. ────
@@ -526,7 +532,7 @@ export default function App() {
     const rightReserve = isAIPanelOpen ? 388 : 0
     // The find bar lives in a reserved strip above the native view — the view
     // always paints over host HTML, so the bar can't simply overlay it.
-    const topReserve = (findVisible ? 44 : 0) + (restoreVisible ? 58 : 0)
+    const topReserve = (findVisible ? 44 : 0) + (restoreVisible ? 58 : 0) + (guardVisible ? 58 : 0)
     const sync = () => {
       if (!contentAreaRef.current) return
       const r = contentAreaRef.current.getBoundingClientRect()
@@ -550,7 +556,7 @@ export default function App() {
     const ro = new ResizeObserver(sync)
     if (contentAreaRef.current) ro.observe(contentAreaRef.current)
     return () => { window.removeEventListener('resize', sync); ro.disconnect() }
-  }, [isAIPanelOpen, findVisible, restoreVisible])
+  }, [isAIPanelOpen, findVisible, restoreVisible, guardVisible])
 
   // ── Create/destroy native tab views as tabs come and go ───────────────────
   useEffect(() => {
@@ -1006,12 +1012,22 @@ export default function App() {
                 effect above) — there is no DOM node for it here. */}
 
             {/* Find-in-page bar — sits in the strip the bounds sync reserves */}
+            {/* A second look before a password is typed on a lookalike domain */}
+            <CredentialGuardBar
+              tabId={activeTabId}
+              wcId={activeTabId ? (tabWcIds[activeTabId] ?? null) : null}
+              url={activeTab?.url}
+              isLoading={!!activeTab?.isLoading}
+              topOffset={findVisible ? 44 : 0}
+              onOfferChange={setGuardShown}
+            />
+
             {/* Offer the archived copy when a page fails to load */}
             <VaultRestoreBar
               tabId={activeTabId}
               url={activeTab?.url}
               failed={!!activeTab?.loadFailed}
-              topOffset={findVisible ? 44 : 0}
+              topOffset={(findVisible ? 44 : 0) + (guardVisible ? 58 : 0)}
               onOfferChange={setRestoreOffered}
             />
 

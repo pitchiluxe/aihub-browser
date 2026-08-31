@@ -97,6 +97,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     reveal:    (p:string) => ipcRenderer.invoke('vault:reveal', p),
   },
   pdf: { extract: (url:string) => ipcRenderer.invoke('pdf:extract', url) },
+  guard: { knownDomains: () => ipcRenderer.invoke('guard:knownDomains') },
   recall: {
     get: () => ipcRenderer.invoke('recall:get'),
     set: (book:any) => ipcRenderer.invoke('recall:set', book),

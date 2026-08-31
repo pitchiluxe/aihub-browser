@@ -38,6 +38,7 @@ import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPay
 import { subfolderFor } from './downloadSorting'
 import { createVault } from './vault'
 import { extractPdfText, looksLikePdf } from './pdfText'
+import { registrableDomain } from '../shared/credentialGuard'
 import { parseTradingViewText, describeReading, isChartUrl } from './trading/chartReader'
 import { analyseReading } from './trading/barAnalysis'
 import {
@@ -3042,6 +3043,26 @@ ipcMain.handle('vault:reveal', (_e, p: string) => shell.showItemInFolder(p))
 const recallStore = createManagedJsonStore<Record<string, any>>(join(APP_DIR, 'recall.json'), () => ({}))
 ipcMain.handle('recall:get', () => recallStore.get())
 ipcMain.handle('recall:set', (_e, book: Record<string, any>) => { recallStore.set(book || {}); return true })
+
+// ── IPC: Credential guard ─────────────────────────────────────────
+// The sites this person actually uses, which is what a lookalike is measured
+// against. A domain seen once could be the phishing page itself; the repeat
+// visits are what make it evidence of a habit rather than of a single click.
+const KNOWN_DOMAIN_MIN_VISITS = 3
+
+ipcMain.handle('guard:knownDomains', () => {
+  try {
+    const counts = new Map<string, number>()
+    for (const item of historyStore.get() as any[]) {
+      const domain = registrableDomain(String(item?.url || ''))
+      if (!domain) continue
+      counts.set(domain, (counts.get(domain) || 0) + 1)
+    }
+    return [...counts.entries()]
+      .filter(([, n]) => n >= KNOWN_DOMAIN_MIN_VISITS)
+      .map(([domain]) => domain)
+  } catch { return [] }
+})
 
 // ── IPC: PDF text ───────────────────────────────────────────────
 // Chromium renders a PDF inside a plugin, so there is no DOM for the usual
