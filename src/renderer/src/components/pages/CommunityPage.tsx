@@ -302,60 +302,78 @@ function LocalPreviewBanner() {
 // ── Guidelines ─────────────────────────────────────────────────────────────
 
 function GuidelinesPanel() {
+  // Same shape as the AI guide: one centred column inside a card, on the
+  // room's own palette. It used to be a maxWidth with no auto margins, which
+  // left it pinned to the left edge of a wide pane looking like a draft, and
+  // its colours came from the browser chrome rather than from the community.
   return (
-    <div className="flex-1 overflow-y-auto" style={{ padding: '18px 22px', maxWidth: 620 }}>
-      <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Community guidelines</h2>
-      <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, marginBottom: 16 }}>
-        These are the rules you agreed to when you joined.
-      </p>
+    <div className="cm-page">
+      <div className="cm-page-inner">
+        <div className="cm-page-card">
+          <h2 className="cm-page-title">Community guidelines</h2>
+          <p className="cm-page-lede">These are the rules you agreed to when you joined.</p>
 
-      <Rule>
-        <strong>Posts are public and lasting.</strong> Anyone in the room can read what you
-        write. Prayer requests can be posted anonymously, but they are still public.
-      </Rule>
-      <Rule>
-        <strong>Files stay on this computer.</strong> Images, video and PDFs can be attached.
-        Every file is identified by its actual contents rather than its name, images are
-        re-encoded so location data is stripped, and nothing is uploaded anywhere.
-      </Rule>
-      <Rule>
-        <strong>Be decent.</strong> Harassment, spam and impersonation get you removed.
-        Every message has a report button.
-      </Rule>
+          <div style={{ marginTop: 18 }}>
+            <PageRule>
+              <strong>Posts are public and lasting.</strong> Anyone in the room can read what you
+              write. Prayer requests can be posted anonymously, but they are still public.
+            </PageRule>
+            <PageRule>
+              <strong>Files stay on this computer.</strong> Images, video and PDFs can be attached.
+              Every file is identified by its actual contents rather than its name, images are
+              re-encoded so location data is stripped, and nothing is uploaded anywhere.
+            </PageRule>
+            <PageRule>
+              <strong>Be decent.</strong> Harassment, spam and impersonation get you removed.
+              Every message has a report button.
+            </PageRule>
+          </div>
 
-      <h3 style={{ fontSize: 14, fontWeight: 700, margin: '22px 0 8px' }}>What happens when
-        something is reported</h3>
-      <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, lineHeight: 1.65 }}>
-        One report puts a message in front of a moderator. Three from different people hide
-        it from the room straight away, before anyone has looked at it — hidden, not deleted,
-        so a pile-on cannot destroy anything on its own. A moderator then keeps it, removes
-        it, or removes it and bans whoever posted it. A banned member can still read the
-        rooms; they cannot post.
-      </p>
+          <h3 className="cm-page-h3">What happens when something is reported</h3>
+          <p className="cm-page-p">
+            One report puts a message in front of a moderator. Three from different people hide
+            it from the room straight away, before anyone has looked at it — hidden, not deleted,
+            so a pile-on cannot destroy anything on its own. A moderator then keeps it, removes
+            it, or removes it and bans whoever posted it. A banned member can still read the
+            rooms; they cannot post.
+          </p>
 
-      <h3 style={{ fontSize: 14, fontWeight: 700, margin: '22px 0 8px' }}>Timeouts and bans</h3>
-      <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, lineHeight: 1.65 }}>
-        A timeout is the proportionate answer to a bad afternoon: you keep reading, you stop
-        posting, and it lifts by itself. A ban is the answer to something worse. Both are
-        recorded in the audit log with who did it and when.
-      </p>
+          <h3 className="cm-page-h3">Timeouts and bans</h3>
+          <p className="cm-page-p">
+            A timeout is the proportionate answer to a bad afternoon: you keep reading, you stop
+            posting, and it lifts by itself. A ban is the answer to something worse. Both are
+            recorded in the audit log with who did it and when.
+          </p>
 
-      <h3 style={{ fontSize: 14, fontWeight: 700, margin: '22px 0 8px' }}>Who runs the community</h3>
-      <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, lineHeight: 1.65 }}>
-        Channels, categories and roles are managed by the community owner, and by nobody
-        else. Ownership is not a setting that can be switched on — it is bound to a verified
-        Google account, checked by the main process on every request. Moderators can remove
-        messages and sanction members; they cannot reshape the community.
-      </p>
+          <h3 className="cm-page-h3">Who runs the community</h3>
+          <p className="cm-page-p">
+            Channels, categories and roles are managed by the community owner, and by nobody
+            else. Ownership is not a setting that can be switched on — it is bound to a verified
+            Google account, checked by the main process on every request. Moderators can remove
+            messages and sanction members; they cannot reshape the community.
+          </p>
 
-      <h3 style={{ fontSize: 14, fontWeight: 700, margin: '22px 0 8px' }}>New accounts</h3>
-      <p style={{ color: 'rgb(var(--ds-muted))', fontSize: 12.5, lineHeight: 1.65 }}>
-        For the first day a new name posts once every thirty seconds and cannot post links.
-        Both limits lift once the account has some history. This is not about you — it is
-        what makes a ban cost something.
-      </p>
+          <h3 className="cm-page-h3">New accounts</h3>
+          <p className="cm-page-p">
+            For the first day a new name posts once every thirty seconds and cannot post links.
+            Both limits lift once the account has some history. This is not about you — it is
+            what makes a ban cost something.
+          </p>
+        </div>
+      </div>
     </div>
   )
+}
+
+/**
+ * A rule on a page card.
+ *
+ * Deliberately not the welcome screen's Rule, which is a crystal facet with a
+ * hover sweep built for that screen's water. Sharing one component between the
+ * two would mean every change to either having to be right for both.
+ */
+function PageRule({ children }: { children: React.ReactNode }) {
+  return <div className="cm-page-rule">{children}</div>
 }
 
 function BannedNotice({ reason }: { reason?: string }) {

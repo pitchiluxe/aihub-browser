@@ -89,3 +89,97 @@
   color: var(--cm-ink);
   background: var(--cm-raise);
 }
+
+/* ── A centred page card ────────────────────────────────────────────────
+   The guide reads as a considered page because it is one column, centred,
+   inside a card with an edge. Guidelines had the same job — a document
+   somebody reads once — and none of the same treatment: a maxWidth with no
+   auto margins, so it hugged the left edge of a wide pane, no container, and
+   --ds-* tokens borrowed from the browser chrome rather than the room's own
+   palette. This is that treatment, factored out so a third panel cannot drift
+   again.
+
+   Centred with auto margins rather than align-items, for the reason the guide
+   documents: centring an overflowing child the other way puts its top above
+   the scroll origin, where it cannot be reached. */
+.cm-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  padding: 0 24px;
+}
+
+.cm-page-inner {
+  margin: auto;
+  padding: 26px 0;
+  width: 100%;
+  max-width: 620px;
+}
+
+.cm-page-card {
+  position: relative;
+  padding: 26px 28px 24px;
+  border-radius: 16px;
+  background: var(--cm-shell);
+  border: 1px solid var(--cm-line);
+  box-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.85);
+}
+
+/* The same hairline of light along the top lip the guide's card has, so the
+   two pages are recognisably the same kind of object. */
+.cm-page-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 18px;
+  right: 18px;
+  height: 1px;
+  border-radius: 1px;
+  opacity: 0.55;
+  background: linear-gradient(90deg, transparent,
+    color-mix(in srgb, var(--cm-glow) 60%, transparent), transparent);
+}
+
+.cm-page-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.cm-page-lede {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--cm-dim);
+}
+
+.cm-page-h3 {
+  margin: 24px 0 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--cm-ink);
+}
+
+.cm-page-p {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--cm-dim);
+}
+
+/* A rule, marked with the accent edge the guide's notes use. */
+.cm-page-rule {
+  display: block;
+  margin: 10px 0;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--cm-dim);
+  background: var(--cm-stage);
+  border: 1px solid var(--cm-line);
+  border-left: 2px solid color-mix(in srgb, var(--cm-glow) 55%, transparent);
+}
+
+.cm-page-rule strong { color: var(--cm-ink); font-weight: 650; }
