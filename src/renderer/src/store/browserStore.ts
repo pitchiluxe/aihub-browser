@@ -84,6 +84,20 @@ interface BrowserState {
   // view out of the way while it does.
   isCaptureOverlayOpen: boolean
   setCaptureOverlayOpen: (v: boolean) => void
+  /**
+   * How many host-HTML popups are open right now.
+   *
+   * A BrowserView paints above every piece of host HTML, so any popup drawn
+   * over the page region is invisible unless the view is detached first.
+   * Every popup so far has done that with a boolean of its own, and every new
+   * one has forgotten — the capture menus shipped in 1.58.5 hidden behind the
+   * page for exactly this reason. A counter instead of another flag: it is
+   * the same answer for all of them, and two popups closing out of order
+   * cannot leave the view detached.
+   */
+  hostOverlayCount: number
+  pushHostOverlay: () => void
+  popHostOverlay: () => void
   isCmdPaletteOpen: boolean
   setCmdPaletteOpen: (v: boolean) => void
   isCompareOpen: boolean
@@ -396,6 +410,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setTableExportOpen: (v) => set({ isTableExportOpen: v }),
   isCaptureOverlayOpen: false,
   setCaptureOverlayOpen: (v) => set({ isCaptureOverlayOpen: v }),
+  hostOverlayCount: 0,
+  pushHostOverlay: () => set(s => ({ hostOverlayCount: s.hostOverlayCount + 1 })),
+  popHostOverlay: () => set(s => ({ hostOverlayCount: Math.max(0, s.hostOverlayCount - 1) })),
   isCmdPaletteOpen: false,
   setCmdPaletteOpen: (v) => set({ isCmdPaletteOpen: v }),
   isCompareOpen: false,

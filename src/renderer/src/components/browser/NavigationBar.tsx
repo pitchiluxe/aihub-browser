@@ -657,6 +657,19 @@ function CaptureButton({ title, icon, disabled, wholeLabel, regionLabel, onWhole
   const [anchor, setAnchor] = useState({ top: 52, right: 14 })
   const btnRef = useRef<HTMLButtonElement>(null)
 
+  // The menu drops below the nav bar into the page region, where the tab's
+  // BrowserView paints over host HTML — without this it is drawn correctly
+  // and hidden behind the page, which is exactly how it shipped in 1.58.5.
+  const { pushHostOverlay, popHostOverlay } = useBrowserStore(useShallow(s => ({
+    pushHostOverlay: s.pushHostOverlay,
+    popHostOverlay: s.popHostOverlay,
+  })))
+  useEffect(() => {
+    if (!open) return
+    pushHostOverlay()
+    return () => popHostOverlay()
+  }, [open, pushHostOverlay, popHostOverlay])
+
   const toggle = () => {
     const r = btnRef.current?.getBoundingClientRect()
     if (r) setAnchor({ top: Math.round(r.bottom + 8), right: Math.round(window.innerWidth - r.right) })
