@@ -59,6 +59,7 @@ import { withPanelRuntime } from './extensions/panelRuntime'
 import { applyThemeToDom } from './services/themeService'
 // Pure geometry, shared with the main process so both agree to the pixel.
 import { splitPanes } from '../../shared/splitLayout'
+import { ownsSession, initialUrlFrom } from '../../shared/windowRole'
 
 declare global {
   interface Window {
@@ -206,9 +207,8 @@ export default function App() {
   const initialUrlDone = useRef(false)
   useEffect(() => {
     if (initialUrlDone.current || !activeTabId) return
-    let target = ''
-    try { target = new URLSearchParams(window.location.search).get('initialUrl') || '' } catch {}
-    if (!target || !/^https?:\/\//i.test(target)) return
+    const target = initialUrlFrom(window.location.search)
+    if (!target) return
     initialUrlDone.current = true
     navigate(target)
   }, [activeTabId, navigate])
@@ -711,6 +711,12 @@ export default function App() {
   useEffect(() => {
     if (sessionRestored.current) return
     sessionRestored.current = true
+
+    // A window opened to hold one page does not inherit the session. Without
+    // this, detaching a single tab reopened every tab from the last session
+    // inside the new window — one tab out, a duplicate of everything back.
+    if (!ownsSession(window.location.search)) return
+
     let cancelled = false
     ;(async () => {
       try {
@@ -729,6 +735,11 @@ export default function App() {
   // main process writes this to disk.
   useEffect(() => {
     if (!sessionRestored.current) return
+    // And it does not overwrite the session either. A detached window saving
+    // its own single tab replaced the real window's tabs, so they were gone at
+    // the next launch — the quieter half of the same bug, and the worse half,
+    // because it only showed up the following morning.
+    if (!ownsSession(window.location.search)) return
     const t = setTimeout(() => {
       const state = useBrowserStore.getState()
       const snapshot = state.tabs.map(tab => ({ url: tab.url, title: tab.title, pageType: tab.pageType }))
