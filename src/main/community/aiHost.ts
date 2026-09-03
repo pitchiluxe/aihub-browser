@@ -89,7 +89,7 @@ export function activityFor(state: CommunityState, channel: string): ChannelActi
  */
 export function mayPost(activity: ChannelActivity, now: number): boolean {
   if (activity.lastBotAt !== null && now - activity.lastBotAt < BOT_MIN_INTERVAL_MS) return false
-  if (activity.lastMessageAt !== null && now - activity.lastMessageAt < BOT_QUIET_BEFORE_MS) return false
+  if (activity.lastMessageAt !== null && now - activity.lastMessageAt <= BOT_QUIET_BEFORE_MS) return false
   return true
 }
 
