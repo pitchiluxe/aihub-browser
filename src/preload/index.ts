@@ -119,6 +119,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   trading: {
     readChart: (tabId: string) => ipcRenderer.invoke('trading:readChart', tabId),
+    getMemory: (symbol: string) => ipcRenderer.invoke('trading:getMemory', symbol),
+    saveMemory: (symbol: string, messages: any[]) => ipcRenderer.invoke('trading:saveMemory', symbol, messages),
   },
   backup: {
     // Export hands over the localStorage-only pieces (themes, window styles);

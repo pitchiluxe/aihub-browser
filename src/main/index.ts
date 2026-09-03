@@ -2742,6 +2742,48 @@ ipcMain.handle('trading:readChart', async (e, tabId: string) => {
   }
 })
 
+// ── IPC: Per-symbol trading coach memory ────────────────────────────────────
+// The Trading Coach bot keeps a conversation per instrument so re-opening the
+// same chart (XAUUSD 1D) restores the prior analysis rather than starting over.
+// One JSON file per symbol in userData; debounced writes from the renderer.
+const TRADING_MEMORY_DIR = join(app.getPath('userData'), 'trading-memory')
+
+// Sanitise a symbol into a safe file name: "FX:XAUUSD" → "FX_XAUUSD".
+function safeSymbolFileName(symbol: string): string {
+  return String(symbol || 'unknown').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 80) || 'unknown'
+}
+
+function tradingMemoryPath(symbol: string): string {
+  return join(TRADING_MEMORY_DIR, `${safeSymbolFileName(symbol)}.json`)
+}
+
+ipcMain.handle('trading:getMemory', async (_e, symbol: string) => {
+  try {
+    const path = tradingMemoryPath(symbol)
+    if (!fs.existsSync(path)) return { ok: true, messages: [] }
+    const raw = fs.readFileSync(path, 'utf-8')
+    const parsed = JSON.parse(raw)
+    return { ok: true, messages: Array.isArray(parsed?.messages) ? parsed.messages : [] }
+  } catch (err) {
+    return { ok: false, error: String(err), messages: [] }
+  }
+})
+
+ipcMain.handle('trading:saveMemory', async (_e, symbol: string, messages: any[]) => {
+  try {
+    if (!fs.existsSync(TRADING_MEMORY_DIR)) {
+      fs.mkdirSync(TRADING_MEMORY_DIR, { recursive: true })
+    }
+    const path = tradingMemoryPath(symbol)
+    // Bound the file: 200 messages is plenty for any one symbol's history.
+    const trimmed = (Array.isArray(messages) ? messages : []).slice(-200)
+    fs.writeFileSync(path, JSON.stringify({ symbol, messages: trimmed, savedAt: Date.now() }, null, 2), 'utf-8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+})
+
 // ── IPC: Export / import everything to another computer ───────────────────
 // Sync keeps two machines in step continuously; this is the file you carry.
 // Assembled here because most of it lives on disk, with the renderer handing

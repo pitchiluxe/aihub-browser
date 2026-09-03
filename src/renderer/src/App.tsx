@@ -50,6 +50,7 @@ import FindBar from './components/browser/FindBar'
 import VaultRestoreBar from './components/browser/VaultRestoreBar'
 import CredentialGuardBar from './components/browser/CredentialGuardBar'
 import AIAssistant from './components/ai/AIAssistant'
+import TradingCoach from './components/trading/TradingCoach'
 import { loadBookmarks } from './services/bookmarkService'
 import { addItem as addRecallItem } from './services/recall'
 import { buildPageExtractionScript } from './services/pageExtractor'
@@ -1081,6 +1082,7 @@ export default function App() {
           </div>
 
           <AIAssistant currentUrl={currentUrl} currentTitle={currentTitle} getPageContent={getPageContent} />
+          <TradingCoach />
         </div>
       </div>
 
