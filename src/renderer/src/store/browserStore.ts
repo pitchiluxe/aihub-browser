@@ -84,6 +84,12 @@ interface BrowserState {
   // view out of the way while it does.
   isCaptureOverlayOpen: boolean
   setCaptureOverlayOpen: (v: boolean) => void
+  // The Trading Coach panel is host HTML over the page, same detach
+  // requirement as the AI panel. Lives in the global store so the
+  // NavigationBar button and the floating trigger stay in sync.
+  isTradingCoachOpen: boolean
+  setTradingCoachOpen: (v: boolean) => void
+  toggleTradingCoach: () => void
   /**
    * How many host-HTML popups are open right now.
    *
@@ -410,6 +416,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setTableExportOpen: (v) => set({ isTableExportOpen: v }),
   isCaptureOverlayOpen: false,
   setCaptureOverlayOpen: (v) => set({ isCaptureOverlayOpen: v }),
+  isTradingCoachOpen: false,
+  setTradingCoachOpen: (v) => set({ isTradingCoachOpen: v }),
+  toggleTradingCoach: () => set(s => ({ isTradingCoachOpen: !s.isTradingCoachOpen })),
   hostOverlayCount: 0,
   pushHostOverlay: () => set(s => ({ hostOverlayCount: s.hostOverlayCount + 1 })),
   popHostOverlay: () => set(s => ({ hostOverlayCount: Math.max(0, s.hostOverlayCount - 1) })),

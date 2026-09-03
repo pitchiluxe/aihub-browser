@@ -11,7 +11,6 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   TrendingUp, X, Send, Loader2, BarChart3, Activity, Target, Bell,
@@ -46,14 +45,33 @@ const PLACEHOLDER_BY_FAMILY: Record<InstrumentFamily, string> = {
 }
 
 export default function TradingCoach() {
-  const { tabs, activeTabId } = useBrowserStore(useShallow(s => ({
-    tabs: s.tabs, activeTabId: s.activeTabId,
+  const { tabs, activeTabId, isTradingCoachOpen, setTradingCoachOpen, pushHostOverlay, popHostOverlay } = useBrowserStore(useShallow(s => ({
+    tabs: s.tabs,
+    activeTabId: s.activeTabId,
+    isTradingCoachOpen: s.isTradingCoachOpen,
+    setTradingCoachOpen: s.setTradingCoachOpen,
+    pushHostOverlay: s.pushHostOverlay,
+    popHostOverlay: s.popHostOverlay,
   })))
   const activeTab = tabs.find(t => t.id === activeTabId)
   const isChart = looksLikeChartUrl(activeTab?.url)
 
-  // Panel open/closed — never auto-opens; the floating button is always there on a chart.
-  const [isOpen, setIsOpen] = useState(false)
+  // Panel open/closed lives in the store so the navbar button (and the
+  // floating button) can both read and write it. The panel itself is what
+  // owns the BrowserView overlay counter.
+  const isOpen = isTradingCoachOpen
+
+  // BrowserView always paints above host HTML. When the panel is open, we MUST
+  // detach the active tab's view via setOverlayHidden — otherwise the chart
+  // sits on top of the panel and the user can't see the chat. pushHostOverlay
+  // / popHostOverlay drive the existing counter in App.tsx; we open the panel
+  // on isChart, otherwise just render the panel without the overlay toggle.
+  useEffect(() => {
+    if (!isOpen) return
+    if (!isChart) return
+    pushHostOverlay()
+    return () => popHostOverlay()
+  }, [isOpen, isChart, pushHostOverlay, popHostOverlay])
 
   // Per-symbol message history. Saved/restored via electronAPI.trading.getMemory.
   const [messages, setMessages] = useState<ChatMsg[]>([])
@@ -287,132 +305,28 @@ export default function TradingCoach() {
   // returns null. The button is only ever on a chart.
   // Hooks MUST be called unconditionally before any early return.
 
-  // ── Draggable button position (persists in localStorage) ────────────────
-  // Default is bottom-left; the user can drag the button anywhere on the
-  // viewport. Stored as {x, y} = top-left corner of the 56x56 button. The
-  // panel is anchored to the same position so the two stay together.
-  const BUTTON_SIZE = 56
-  const storedPos = (() => {
-    try {
-      const raw = localStorage.getItem('trading-coach-pos')
-      if (raw) {
-        const p = JSON.parse(raw)
-        if (typeof p?.x === 'number' && typeof p?.y === 'number') return p
-      }
-    } catch {}
-    // Default: bottom-left, 18px margin
-    return { x: 18, y: typeof window !== 'undefined' ? window.innerHeight - BUTTON_SIZE - 18 : 600 }
-  })()
-  const [pos, setPos] = useState(storedPos)
-  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; moved: boolean } | null>(null)
-  const [dragging, setDragging] = useState(false)
-
-  useEffect(() => {
-    if (!isChart) return
-    try { localStorage.setItem('trading-coach-pos', JSON.stringify(pos)) } catch {}
-  }, [pos, isChart])
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y, moved: false }
-    setDragging(true)
-  }
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragRef.current) return
-    const dx = e.clientX - dragRef.current.startX
-    const dy = e.clientY - dragRef.current.startY
-    if (Math.abs(dx) + Math.abs(dy) > 4) dragRef.current.moved = true
-    if (!dragRef.current.moved) return
-    const maxX = window.innerWidth  - BUTTON_SIZE
-    const maxY = window.innerHeight - BUTTON_SIZE
-    setPos({
-      x: Math.max(0, Math.min(maxX, dragRef.current.origX + dx)),
-      y: Math.max(0, Math.min(maxY, dragRef.current.origY + dy)),
-    })
-  }
-  const onPointerUp = (e: React.PointerEvent) => {
-    if (!dragRef.current) return
-    const wasMoved = dragRef.current.moved
-    dragRef.current = null
-    setDragging(false)
-    ;(e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId)
-    // If the pointer didn't move, treat as a click (open/close panel)
-    if (!wasMoved) setIsOpen(o => !o)
-  }
-
   if (!isChart) return null
 
-  // The panel is anchored next to the button: vertically centered, horizontally
-  // to whichever side has more room. The user dragging the button effectively
-  // moves the whole coach.
-  const panelStyle = (() => {
-    const PANEL_W = 400, PANEL_H_PAD = 176 // top+bottom 88
-    const centerY = pos.y + BUTTON_SIZE / 2
-    const wantTop = centerY - window.innerHeight / 2
-    const top = Math.max(8, Math.min(window.innerHeight - PANEL_H_PAD, wantTop))
-    const preferRight = pos.x < window.innerWidth - PANEL_W - 20
-    const left = preferRight ? pos.x + BUTTON_SIZE + 12 : Math.max(8, pos.x - PANEL_W - 12)
-    return { top, left }
-  })()
+  // Panel is anchored right side, detached from the chart's BrowserView via
+  // pushHostOverlay when on a chart page.
+  const PANEL_TOP = 88
+  const PANEL_RIGHT = 14
+  const PANEL_BOTTOM = 14
+  const PANEL_WIDTH = 400
 
-  const body = (
+  return (
     <>
-      {/* Floating button — draggable, only on a chart */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.8, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.8, y: 12 }}
-        transition={{ type: 'spring', damping: 22, stiffness: 320 }}
-        title="Trading Coach — drag to move"
-        className="no-drag"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        style={{
-          position: 'fixed', left: pos.x, top: pos.y, zIndex: 260,
-          width: BUTTON_SIZE, height: BUTTON_SIZE, borderRadius: 18,
-          border: `1px solid ${GOLD}66`,
-          cursor: dragging ? 'grabbing' : 'grab',
-          userSelect: 'none', touchAction: 'none',
-          background: isOpen
-            ? `linear-gradient(135deg, ${GOLD}EE, ${GOLD_DARK}DD)`
-            : `linear-gradient(135deg, ${GOLD}AA, ${GOLD_DARK}88)`,
-          boxShadow: isOpen
-            ? `0 8px 28px ${GOLD}55, 0 0 0 2px ${GOLD}33`
-            : `0 6px 22px ${GOLD}44, 0 0 0 1px ${GOLD}22`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff',
-          transition: dragging ? 'none' : 'box-shadow 0.18s, background 0.18s',
-        }}
-        onMouseEnter={e => { if (!dragging) { e.currentTarget.style.boxShadow = `0 10px 32px ${GOLD}66, 0 0 0 2px ${GOLD}55` } }}
-        onMouseLeave={e => { if (!dragging) { e.currentTarget.style.boxShadow = isOpen ? `0 8px 28px ${GOLD}55, 0 0 0 2px ${GOLD}33` : `0 6px 22px ${GOLD}44, 0 0 0 1px ${GOLD}22` } }}
-      >
-        {isOpen ? <X size={20} /> : <BarChart3 size={22} />}
-        {!isOpen && (
-          <span style={{
-            position: 'absolute', top: -3, right: -3, width: 12, height: 12, borderRadius: '50%',
-            background: GOLD, border: '2px solid var(--ds-bg-1, #0a0a0a)',
-            boxShadow: `0 0 8px ${GOLD}`,
-            animation: 'tcPulse 1.8s ease-in-out infinite',
-          }} />
-        )}
-      </motion.div>
-
-      {/* Panel */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ x: -24, opacity: 0, scale: 0.97 }}
+            initial={{ x: 24, opacity: 0, scale: 0.97 }}
             animate={{ x: 0, opacity: 1, scale: 1 }}
-            exit={{ x: -24, opacity: 0, scale: 0.97 }}
+            exit={{ x: 24, opacity: 0, scale: 0.97 }}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
             className="no-drag"
             style={{
-              position: 'fixed', left: panelStyle.left, top: panelStyle.top,
-              width: 400, height: `calc(100vh - ${panelStyle.top}px - 18px)`, zIndex: 250,
+              position: 'fixed', right: PANEL_RIGHT, top: PANEL_TOP, bottom: PANEL_BOTTOM,
+              width: PANEL_WIDTH, zIndex: 250,
               display: 'flex', flexDirection: 'column', borderRadius: 18, overflow: 'hidden',
               background: 'var(--ds-panel-bg)',
               backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
@@ -464,7 +378,7 @@ export default function TradingCoach() {
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
                 <HeaderBtn onClick={handleClear} title="Clear chat"><Trash2 size={13} /></HeaderBtn>
-                <HeaderBtn onClick={() => setIsOpen(false)} title="Close"><X size={14} /></HeaderBtn>
+                <HeaderBtn onClick={() => setTradingCoachOpen(false)} title="Close"><X size={14} /></HeaderBtn>
               </div>
             </div>
 
@@ -662,13 +576,50 @@ export default function TradingCoach() {
       `}</style>
     </>
   )
+}
 
-  // Portal out to <body> so no ancestor stacking context, overflow, or
-  // transform can ever clip or relocate the floating UI. This guarantees
-  // the button is on the actual viewport, above the sidebar, sidebar
-  // drag-region, and any other in-app chrome.
-  if (typeof document === 'undefined') return body
-  return createPortal(body, document.body)
+// ── TradingCoachButton ────────────────────────────────────────────────────
+// Lives in the NavigationBar so it is ALWAYS visible, including when a
+// TradingView BrowserView is open and would otherwise paint over every
+// piece of host HTML. Gold theme matches the coach panel. Hides itself
+// on non-chart pages (no point opening a trading coach without a chart).
+export function TradingCoachButton() {
+  const { tabs, activeTabId, isTradingCoachOpen, toggleTradingCoach } = useBrowserStore(useShallow(s => ({
+    tabs: s.tabs,
+    activeTabId: s.activeTabId,
+    isTradingCoachOpen: s.isTradingCoachOpen,
+    toggleTradingCoach: s.toggleTradingCoach,
+  })))
+  const activeTab = tabs.find(t => t.id === activeTabId)
+  const isChart = looksLikeChartUrl(activeTab?.url)
+  const [hovered, setHovered] = useState(false)
+  if (!isChart) return null
+  const lit = hovered || isTradingCoachOpen
+  return (
+    <button
+      onClick={toggleTradingCoach}
+      title="Trading Coach (Gold & Nasdaq)"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="no-drag flex items-center gap-1.5 rounded-xl"
+      style={{
+        height: 32, padding: '0 12px', cursor: 'pointer',
+        background: lit
+          ? `linear-gradient(135deg, ${GOLD}, ${GOLD_DARK})`
+          : `linear-gradient(135deg, ${GOLD}33, ${GOLD_DARK}22)`,
+        border: `1px solid ${lit ? GOLD : `${GOLD}55`}`,
+        color: lit ? '#1a1a1a' : GOLD,
+        boxShadow: lit
+          ? `0 4px 20px ${GOLD}55, 0 0 0 1px ${GOLD}33`
+          : `0 2px 10px ${GOLD}22`,
+        transition: 'all 0.18s cubic-bezier(0.34,1.2,0.64,1)',
+        transform: hovered ? 'translateY(-1px) scale(1.02)' : 'translateY(0) scale(1)',
+      }}
+    >
+      <TrendingUp size={13} />
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.02em' }}>Coach</span>
+    </button>
+  )
 }
 
 function HeaderBtn({ onClick, title, children }: { onClick: () => void; title?: string; children: React.ReactNode }) {

@@ -11,6 +11,7 @@ import { addBookmarkWithAI } from '../../services/bookmarkService'
 import BookmarksButton from './BookmarksButton'
 import DownloadsButton from './DownloadsButton'
 import VpnButton from './VpnButton'
+import { TradingCoachButton } from '../trading/TradingCoach'
 import CaptureOverlay from './CaptureOverlay'
 import {
   toPixels, regionInStream, toEvenSize,
@@ -597,6 +598,11 @@ export default function NavigationBar({
 
         {/* VPN quick-toggle — green while protected, right-click to switch country */}
         <VpnButton />
+
+        {/* Trading Coach — gold accent — only renders on TradingView chart
+            URLs. Lives in the navbar so it is above the chart's BrowserView,
+            which would otherwise paint over any host HTML. */}
+        <TradingCoachButton />
 
         {/* AI assistant button — purple accent — opens the full docked panel */}
         <AIButton onClick={toggleAIPanel} active={isAIPanelOpen} />
