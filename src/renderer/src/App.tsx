@@ -96,7 +96,8 @@ export default function App() {
     isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen, isCompareOpen: s.isCompareOpen,
     splitTabId: s.splitTabId, isBookmarksMenuOpen: s.isBookmarksMenuOpen,
     isDownloadsMenuOpen: s.isDownloadsMenuOpen, isTableExportOpen: s.isTableExportOpen,
-    isCaptureOverlayOpen: s.isCaptureOverlayOpen, hostOverlayCount: s.hostOverlayCount,
+    isCaptureOverlayOpen: s.isCaptureOverlayOpen, isTradingCoachOpen: s.isTradingCoachOpen,
+    hostOverlayCount: s.hostOverlayCount,
     tabWcIds: s.tabWcIds,
   })))
 
@@ -554,7 +555,7 @@ export default function App() {
   // The annotation toolbar doesn't need this — it's injected into the page
   // itself (see AnnotationCanvas.tsx), not rendered as host HTML. ──────────
   useLayoutEffect(() => {
-    const rightReserve = (isAIPanelOpen ? 388 : 0) + (isTradingCoachOpen ? 432 : 0)
+    const rightReserve = (isAIPanelOpen ? 388 : 0) + (isTradingCoachOpen ? 388 : 0)
     // The find bar lives in a reserved strip above the native view — the view
     // always paints over host HTML, so the bar can't simply overlay it.
     const topReserve = (findVisible ? 44 : 0) + (restoreVisible ? 58 : 0) + (guardVisible ? 58 : 0)

@@ -273,6 +273,7 @@
       <div class="rail-grp">Intelligence</div>
       <a href="#ai">AI assistant</a>
       <a href="#talk">How to talk to it</a>
+      <a href="#coach">Trading Coach</a>
       <a href="#tools">Agent toolbox</a>
       <a href="#research">Research &amp; Agent</a>
       <div class="rail-grp">Power features</div>
@@ -280,6 +281,8 @@
       <a href="#command">Command palette</a>
       <a href="#rewind">Rewind</a>
       <a href="#watch">Watch &amp; Ping</a>
+      <div class="rail-grp">New in 1.60</div>
+      <a href="#coach">Trading Coach</a>
       <div class="rail-grp">New in 1.59</div>
       <a href="#ai-responses">Beautifully Formatted AI Responses</a>
       <div class="rail-grp">New in 1.58</div>
@@ -420,7 +423,7 @@
         <div class="body-col" style="margin-top:26px">
           <div class="grid g2">
             <div class="feat"><h4>1 · Tab strip</h4><p>Drag to reorder, drag out to detach into its own window, right-click for the full tab menu. Scrolls horizontally when full; the active tab always stays visible.</p></div>
-            <div class="feat"><h4>2 · Navigation + address bar</h4><p>Back, forward, reload, home, then the omnibox. On the right: bookmark, annotate, screenshot, record, and the AI button.</p></div>
+            <div class="feat"><h4>2 · Navigation + address bar</h4><p>Back, forward, reload, home, then the omnibox. On the right: bookmark, annotate, screenshot, record, the gold <strong>Coach</strong> button (charts only), and the AI button.</p></div>
             <div class="feat"><h4>3 · Sidebar</h4><p>Toggle with the panel icon. Home, Research, Agent Mode, Sticky Notes, History, Downloads, Extensions, Wi-Fi, VPN, Mail, Settings.</p></div>
             <div class="feat"><h4>4 · AI panel</h4><p>Docked on the right, resizes the page rather than covering it. Chat, quick actions, and live agent step tracking.</p></div>
           </div>
@@ -438,6 +441,7 @@
             <li><div><strong>Bookmark a few pages.</strong> Press <kbd>Ctrl</kbd>+<kbd>D</kbd> on any site. The AI auto-categorizes and colors each one.</div></li>
             <li><div><strong>Open the Sphere.</strong> Sidebar → <em>Home</em> → sphere view. Hit <em>Timelapse</em> and watch your graph build itself.</div></li>
             <li><div><strong>Make it yours.</strong> <em>Settings</em> → <em>Appearance</em> for 25 themes, transparency, and window opacity.</div></li>
+            <li><div><strong>Try the Trading Coach.</strong> Open a <a href="https://www.tradingview.com/chart/">TradingView chart</a> (e.g. <code>tradingview.com/chart/?symbol=OANDA:XAUUSD</code>) — a gold <strong>Coach</strong> button appears. Click it to get a structured gold/Nasdaq analysis of what's on your screen. See <a href="#coach">Trading Coach</a>.</div></li>
           </ol>
         </div>
       </section>
@@ -777,6 +781,54 @@
           <div class="note warn" style="margin-top:18px"><strong>Safety rails you should know about.</strong> The agent asks permission before running any shell command, and it will never click a final <em>Submit</em> / <em>Apply</em> / <em>Send</em> button on its own — it stops, shows you exactly what's about to be sent, and waits for your confirmation. If a site needs a login, a CAPTCHA, or a file upload, it hands control back to you. Press the ■ stop button any time to halt a running task.</div>
 
           <div class="note" style="margin-top:14px"><strong>Getting better answers:</strong> say the output shape you want ("as a table", "5 bullets", "a bash script"), name the constraint ("under $500", "published this year"), and tell it when to use real sources ("with citations"). It will use live web search whenever the question needs current facts.</div>
+        </div>
+      </section>
+
+      <!-- ══ TRADING COACH ══ -->
+      <section id="coach">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Trading Coach</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A dedicated trading analyst that reads your live chart and answers with structured, actionable analysis — only when you're on a TradingView chart.</p>
+
+        <div class="body-col">
+          <div class="note good"><strong>It reads the live chart first.</strong> Every answer starts by reading what's actually on the chart right now — price, levels, trend, structure — before it speaks. The analysis is grounded in reality, not a training cutoff.</div>
+
+          <h3 style="margin-top:26px">How to open it</h3>
+          <p>Navigate to any <strong>TradingView chart</strong> (e.g. <code>tradingview.com/chart/…</code>). A gold <strong>Coach</strong> button appears automatically in the navigation bar, next to the AI button. Click it to open the panel. The chart slides left to stay fully visible alongside it.</p>
+
+          <h3 style="margin-top:26px">What it knows</h3>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Gold (XAUUSD)</h4><p>Deep expertise in gold futures and spot. Knows the macro drivers, the key levels, and how gold reacts to FOMC, CPI, and geopolitical events.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Nasdaq (NQ)</h4><p>Earnings reaction analysis, sector rotation, and FOMC rate sensitivity. Covers the tech-heavy index with precision.</p></div>
+          </div>
+
+          <h3 style="margin-top:30px">Quick actions</h3>
+          <p>Four one-tap buttons give structured answers instantly:</p>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Full Analysis</h4><p>Complete snapshot: bias, levels, trend, setups — all in tables and a trade-plan block.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Trend Check</h4><p>Is the chart bullish, bearish, or ranging? The answer is backed by the actual levels and structure on the chart.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Key Levels</h4><p>Every important price on the chart — prior day high/low, session ranges, swing points, round numbers.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--rose)"></span>Set Alerts</h4><p>Which price levels deserve an alert and why — so you never miss a move.</p></div>
+          </div>
+
+          <h3 style="margin-top:30px">Per-symbol memory</h3>
+          <p>Your conversation is saved separately for each instrument. Open the XAUUSD chart tomorrow and the last conversation on gold is still there. Switch to Nasdaq and it's a fresh thread.</p>
+
+          <h3 style="margin-top:30px">Structured trade plans</h3>
+          <p>Ask about a setup and the Coach responds with an entry, stop, target, risk-reward, and a rationale — in a card format, not a paragraph. No invented prices: everything is read from the chart first.</p>
+
+          <h3 style="margin-top:30px">How it differs from the AI assistant</h3>
+          <div class="tbl-scroll" style="margin-top:12px">
+            <table>
+              <thead><tr><th></th><th>AI Assistant</th><th>Trading Coach</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Scope</strong></td><td>Anything — research, writing, code, browsing</td><td>Gold &amp; Nasdaq trading charts only</td></tr>
+                <tr><td><strong>Trigger</strong></td><td>Any page, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>TradingView charts only — button auto-appears</td></tr>
+                <tr><td><strong>Reads the chart</strong></td><td>No</td><td>Yes — reads live price, levels, and structure first</td></tr>
+                <tr><td><strong>Output format</strong></td><td>General answers, documents, code</td><td>Tables, key levels, and trade-plan cards</td></tr>
+                <tr><td><strong>Memory</strong></td><td>Session-long conversation</td><td>Per-symbol conversation, saved between sessions</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

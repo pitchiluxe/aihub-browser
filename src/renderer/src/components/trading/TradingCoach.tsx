@@ -10,7 +10,7 @@
  * restored when the same chart is re-opened.
  */
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   TrendingUp, X, Send, Loader2, BarChart3, Activity, Target, Bell,
@@ -295,26 +295,18 @@ export default function TradingCoach() {
 
   if (!isChart) return null
 
-  // Panel is anchored right side, detached from the chart's BrowserView via
-  // pushHostOverlay when on a chart page.
-  const PANEL_TOP = 88
-  const PANEL_RIGHT = 14
-  const PANEL_BOTTOM = 14
-  const PANEL_WIDTH = 400
-
   return (
     <>
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ x: 24, opacity: 0, scale: 0.97 }}
+            initial={{ x: 20, opacity: 0, scale: 0.97 }}
             animate={{ x: 0, opacity: 1, scale: 1 }}
-            exit={{ x: 24, opacity: 0, scale: 0.97 }}
+            exit={{ x: 20, opacity: 0, scale: 0.97 }}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
             className="no-drag"
             style={{
-              position: 'fixed', right: PANEL_RIGHT, top: PANEL_TOP, bottom: PANEL_BOTTOM,
-              width: PANEL_WIDTH, zIndex: 250,
+              position: 'fixed', right: 14, top: 92, bottom: 14, width: 360, zIndex: 200,
               display: 'flex', flexDirection: 'column', borderRadius: 18, overflow: 'hidden',
               background: 'var(--ds-panel-bg)',
               backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
