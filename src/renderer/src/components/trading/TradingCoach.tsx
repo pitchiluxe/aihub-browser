@@ -45,33 +45,21 @@ const PLACEHOLDER_BY_FAMILY: Record<InstrumentFamily, string> = {
 }
 
 export default function TradingCoach() {
-  const { tabs, activeTabId, isTradingCoachOpen, setTradingCoachOpen, pushHostOverlay, popHostOverlay } = useBrowserStore(useShallow(s => ({
+  const { tabs, activeTabId, isTradingCoachOpen, setTradingCoachOpen } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs,
     activeTabId: s.activeTabId,
     isTradingCoachOpen: s.isTradingCoachOpen,
     setTradingCoachOpen: s.setTradingCoachOpen,
-    pushHostOverlay: s.pushHostOverlay,
-    popHostOverlay: s.popHostOverlay,
   })))
   const activeTab = tabs.find(t => t.id === activeTabId)
   const isChart = looksLikeChartUrl(activeTab?.url)
 
   // Panel open/closed lives in the store so the navbar button (and the
-  // floating button) can both read and write it. The panel itself is what
-  // owns the BrowserView overlay counter.
+  // floating button) can both read and write it. The panel itself does NOT
+  // detach the BrowserView — instead, App.tsx's bounds-sync effect reserves
+  // a 432px right gutter when isTradingCoachOpen is true, so the chart
+  // slides left and stays visible alongside the panel.
   const isOpen = isTradingCoachOpen
-
-  // BrowserView always paints above host HTML. When the panel is open, we MUST
-  // detach the active tab's view via setOverlayHidden — otherwise the chart
-  // sits on top of the panel and the user can't see the chat. pushHostOverlay
-  // / popHostOverlay drive the existing counter in App.tsx; we open the panel
-  // on isChart, otherwise just render the panel without the overlay toggle.
-  useEffect(() => {
-    if (!isOpen) return
-    if (!isChart) return
-    pushHostOverlay()
-    return () => popHostOverlay()
-  }, [isOpen, isChart, pushHostOverlay, popHostOverlay])
 
   // Per-symbol message history. Saved/restored via electronAPI.trading.getMemory.
   const [messages, setMessages] = useState<ChatMsg[]>([])

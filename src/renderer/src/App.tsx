@@ -554,7 +554,7 @@ export default function App() {
   // The annotation toolbar doesn't need this — it's injected into the page
   // itself (see AnnotationCanvas.tsx), not rendered as host HTML. ──────────
   useLayoutEffect(() => {
-    const rightReserve = isAIPanelOpen ? 388 : 0
+    const rightReserve = (isAIPanelOpen ? 388 : 0) + (isTradingCoachOpen ? 432 : 0)
     // The find bar lives in a reserved strip above the native view — the view
     // always paints over host HTML, so the bar can't simply overlay it.
     const topReserve = (findVisible ? 44 : 0) + (restoreVisible ? 58 : 0) + (guardVisible ? 58 : 0)
@@ -581,7 +581,7 @@ export default function App() {
     const ro = new ResizeObserver(sync)
     if (contentAreaRef.current) ro.observe(contentAreaRef.current)
     return () => { window.removeEventListener('resize', sync); ro.disconnect() }
-  }, [isAIPanelOpen, findVisible, restoreVisible, guardVisible])
+  }, [isAIPanelOpen, isTradingCoachOpen, findVisible, restoreVisible, guardVisible])
 
   // ── Create/destroy native tab views as tabs come and go ───────────────────
   useEffect(() => {
@@ -784,8 +784,11 @@ export default function App() {
     // Any host-HTML overlay (Add-to-Sphere modal, QR modal) must detach the
     // active tab's BrowserView, which otherwise always paints on top of and
     // steals clicks from our HTML — making the modal look frozen/invisible.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen || isCaptureOverlayOpen || isTradingCoachOpen || hostOverlayCount > 0)
-  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen, isTradingCoachOpen, hostOverlayCount])
+    // The Trading Coach panel does NOT detach the chart — it reserves a
+    // 432px right gutter via the bounds-sync effect above, so the chart
+    // slides to the left and stays visible alongside the panel.
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen || isCaptureOverlayOpen || hostOverlayCount > 0)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen, hostOverlayCount])
 
   // Clear a tab's loading state, but keep the spinner up for a short floor so
   // a load that finished almost instantly still registers as an action. Any
