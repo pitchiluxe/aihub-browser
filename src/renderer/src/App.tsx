@@ -1080,11 +1080,17 @@ export default function App() {
               ? <AnnotationCanvas />
               : <HostAnnotationCanvas />)}
           </div>
-
-          <AIAssistant currentUrl={currentUrl} currentTitle={currentTitle} getPageContent={getPageContent} />
-          <TradingCoach />
         </div>
       </div>
+
+      {/* ── Viewport-level overlays ────────────────────────────────────────
+          These sit OUTSIDE the flex content area so their `position: fixed`
+          is anchored to the actual viewport, not to a clipped ancestor.
+          That keeps the Trading Coach button visible above the sidebar and
+          tab content, and stops the AI panel from being cut off when the
+          sidebar resizes. */}
+      <AIAssistant currentUrl={currentUrl} currentTitle={currentTitle} getPageContent={getPageContent} />
+      <TradingCoach />
 
       {/* Split-view divider — sits in the gutter between the two native views. */}
       {splitDividerVisible && viewBounds && (
