@@ -42,19 +42,19 @@ export function isBot(memberId: string | undefined | null): boolean {
 /**
  * How often the guide may post into one channel, at most.
  *
- * Twelve hours, and only when the room has been quiet. A bot that posts on a
+ * Four hours, and only when the room has been quiet. A bot that posts on a
  * timer regardless of what people are doing is a bot that talks over them,
  * and the fastest way to make a room feel automated rather than inhabited.
  */
-export const BOT_MIN_INTERVAL_MS = 12 * 60 * 60 * 1000
+export const BOT_MIN_INTERVAL_MS = 4 * 60 * 60 * 1000
 
 /**
  * How quiet a channel must be before the guide speaks.
  *
  * The guide exists to break silence, not to join a conversation. If somebody
- * posted in the last six hours the room does not need prompting.
+ * posted in the last hour the room does not need prompting.
  */
-export const BOT_QUIET_BEFORE_MS = 6 * 60 * 60 * 1000
+export const BOT_QUIET_BEFORE_MS = 60 * 60 * 1000
 
 /** Hard ceiling on a generated post. Long enough for a real thought, short
  *  enough that nobody scrolls past the whole room to get by it. */

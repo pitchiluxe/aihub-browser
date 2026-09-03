@@ -128,6 +128,7 @@ const DEFAULT_BOOKMARKS = [
   { id: 'bm-c',  url: 'aihub://community',                              title: 'Community',        favicon: '', category: 'Social',        addedAt: 0, color: '#34d399' },
   { id: 'bm-b',  url: 'aihub://bible',                                  title: 'Bible',            favicon: '', category: 'Reading',       addedAt: 0, color: '#DC2626' },
   { id: 'bm-m',  url: 'aihub://mail',                                   title: 'Mail',             favicon: '', category: 'Productivity',  addedAt: 0, color: '#EA4335' },
+  { id: 'bm-em', url: 'https://erickomari.vercel.app/',                 title: 'ErickOMari',       favicon: '', category: 'Social',        addedAt: 0, color: '#818cf8' },
   { id: 'bm-g',  url: 'https://www.google.com',                        title: 'Google',           favicon: '', category: 'Search',        addedAt: 0, color: '#4285F4' },
   { id: 'bm-yt', url: 'https://www.youtube.com',                       title: 'YouTube',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#FF0000' },
   { id: 'bm-nf', url: 'https://www.netflix.com',                       title: 'Netflix',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#E50914' },
@@ -140,13 +141,13 @@ const DEFAULT_BOOKMARKS = [
 // data.json replaces the whole bookmark list, so installs that predate a new
 // pinned default would never see it — seed it once per id and record that in
 // `seededBookmarks`, so a bookmark the user later deletes stays deleted.
-const PINNED_DEFAULT_IDS = ['bm-c', 'bm-b', 'bm-m']
+const PINNED_DEFAULT_IDS = ['bm-c', 'bm-b', 'bm-m', 'bm-em']
 
 // Permanent bookmarks: the home grid always keeps a way into the reader and into
 // the Community lounge, so those two tiles can't be removed. Matched on url, not
 // id, so a copy the user added by hand is protected too and the seeding above
 // stays consistent with it.
-const UNDELETABLE_BOOKMARK_URLS = ['aihub://community', 'aihub://bible']
+const UNDELETABLE_BOOKMARK_URLS = ['aihub://community', 'aihub://bible', 'https://erickomari.vercel.app/']
 
 function seedPinnedBookmarks(d: any): boolean {
   const seeded: string[] = Array.isArray(d.seededBookmarks) ? d.seededBookmarks : []
@@ -214,10 +215,16 @@ function defaultSettings() {
     openrouterBase:  '',
     openrouterModel: '',
     ollamaUrl:       '',
+    // Direct provider keys — used as the LAST tier of fallback when both
+    // local Ollama and OpenRouter can't answer. Empty by default.
+    claudeKey:       '',
+    chatGptKey:      '',
     // Provider routing. Local first: Ollama is private, free and already on
     // the machine, so it answers unless it genuinely can't. OpenRouter is the
     // safety net, defaulted to its free meta-router so a user with no credits
-    // still gets an answer instead of an HTTP 402.
+    // still gets an answer instead of an HTTP 402. Direct Claude / ChatGPT
+    // keys come after, so a free user never pays for a query that a free
+    // model could have answered.
     primaryProvider:  'ollama',
     fallbackEnabled:  true,
     fallbackProvider: 'openrouter',
@@ -265,7 +272,12 @@ function getAIConfig() {
   // Ollama binds 127.0.0.1 only — the mismatch is ECONNREFUSED ::1:11434.
   const olBase  = ((rawOl && validHttpUrl(rawOl)) ? rawOl : 'http://127.0.0.1:11434')
     .replace('://localhost', '://127.0.0.1')
-  return { orKey, orBase, orMdl, olBase }
+  // Direct provider keys. Empty strings = "not configured"; the IPC layer
+  // shows hasKey/hasClaudeKey/hasChatGptKey for the UI without ever echoing
+  // the actual secret.
+  const claudeKey  = s.claudeKey  || ''
+  const chatGptKey = s.chatGptKey || ''
+  return { orKey, orBase, orMdl, olBase, claudeKey, chatGptKey }
 }
 
 /** The provider-routing half of the AI settings, defaulted for old profiles
@@ -3204,6 +3216,8 @@ ipcMain.handle('settings:getAIConfig', () => {
   const s   = getData().settings
   return {
     hasKey:          !!cfg.orKey,
+    hasClaudeKey:    !!cfg.claudeKey,
+    hasChatGptKey:   !!cfg.chatGptKey,
     openrouterBase:  s.openrouterBase  || '',
     openrouterModel: s.openrouterModel || '',
     ollamaUrl:       s.ollamaUrl       || '',
@@ -3222,6 +3236,7 @@ ipcMain.handle('settings:getAIConfig', () => {
 })
 ipcMain.handle('settings:setAIConfig', (_e, cfg: {
   openrouterKey?: string; openrouterBase?: string; openrouterModel?: string; ollamaUrl?: string
+  claudeKey?: string; chatGptKey?: string
   primaryProvider?: string; fallbackEnabled?: boolean; fallbackProvider?: string
 }) => {
   const d = getData()
@@ -3229,6 +3244,8 @@ ipcMain.handle('settings:setAIConfig', (_e, cfg: {
   // receives the current key, so it cannot send it back unchanged.
   const patch: any = { ...cfg }
   if (!cfg.openrouterKey) delete patch.openrouterKey
+  if (!cfg.claudeKey)     delete patch.claudeKey
+  if (!cfg.chatGptKey)    delete patch.chatGptKey
   d.settings = { ...d.settings, ...patch }
   saveData()
   _data = null // flush cache so getAIConfig() picks up new values immediately
@@ -4276,6 +4293,123 @@ async function openRouterChat(
   }
 }
 
+// ── Direct provider chat (Claude / ChatGPT) ────────────────────────────────
+
+/** Strip the `data:` prefix from a data URL so only the raw base64 remains. */
+function stripDataUrlPrefix(dataUrl: string): string {
+  return String(dataUrl || '').replace(/^data:[^;]*;base64,/, '')
+}
+
+/** Build Claude API body from renderer messages (which carry `images: string[]`).
+ *  Handles: plain text messages, messages with images, and system messages. */
+function buildClaudeMessages(msgs: any[]): { system?: string; messages: any[] } {
+  const system = msgs.find(m => m.role === 'system')?.content || undefined
+  const conversation = msgs.filter(m => m.role !== 'system')
+  const claudeMessages = conversation.map(m => {
+    if (!Array.isArray(m.images) || m.images.length === 0) {
+      return { role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content || '' }
+    }
+    // Claude's multi-image content blocks
+    const blocks: any[] = [{ type: 'text', text: m.content || '' }]
+    for (const img of m.images) {
+      blocks.push({ type: 'image', source: { type: 'base64', media_type: img.startsWith('data:image/png') ? 'image/png' : 'image/jpeg', data: stripDataUrlPrefix(img) } })
+    }
+    return { role: m.role === 'assistant' ? 'assistant' : 'user', content: blocks }
+  })
+  return { system, messages: claudeMessages }
+}
+
+/** Build ChatGPT API body from renderer messages (images as OpenAI content arrays). */
+function buildChatGptMessages(msgs: any[]): any[] {
+  return msgs.filter(m => m.role !== 'system').map(m => {
+    if (!Array.isArray(m.images) || m.images.length === 0) {
+      return { role: m.role, content: m.content || '' }
+    }
+    // OpenAI's multimodal content array: text first, then image blocks
+    const content: any[] = [{ type: 'text', text: m.content || '' }]
+    for (const img of m.images) {
+      content.push({ type: 'image_url', image_url: { url: img } })
+    }
+    return { role: m.role, content }
+  })
+}
+
+/**
+ * Call Claude directly via the Anthropic /v1/messages endpoint.
+ *
+ * Returns null on a skip-able failure (401 bad key, 429 rate-limit) so the
+ * fallback chain can continue. Throws on a hard failure.
+ */
+async function claudeChat(
+  apiKey: string,
+  messages: any[],
+  maxTokens = 4096,
+): Promise<string | null> {
+  try {
+    const { system, messages: claudeMessages } = buildClaudeMessages(messages)
+    const res = await withNetRetry(() => httpPost(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: maxTokens,
+        ...(system ? { system } : {}),
+        messages: claudeMessages,
+      },
+      {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      30000,
+    ))
+    if (res.status === 200) {
+      const body = JSON.parse(res.body)
+      return body.content?.[0]?.text || null
+    }
+    // 401 = bad key, 429 = rate limit → skip to next provider
+    if (/^HTTP (401|429)/.test(String(res.status))) return null
+    throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`)
+  } catch (e: any) {
+    if (/^HTTP (401|429)/.test(e.message || '')) return null
+    throw e
+  }
+}
+
+/**
+ * Call ChatGPT directly via the OpenAI /v1/chat/completions endpoint.
+ *
+ * Returns null on a skip-able failure (401 bad key, 429 rate-limit) so the
+ * fallback chain can continue. Throws on a hard failure.
+ */
+async function chatGptChat(
+  apiKey: string,
+  messages: any[],
+  maxTokens = 2048,
+): Promise<string | null> {
+  try {
+    const { status, body } = await withNetRetry(() => httpPost(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o-mini',
+        messages: buildChatGptMessages(messages),
+        max_tokens: maxTokens,
+      },
+      { Authorization: `Bearer ${apiKey}` },
+      30000,
+    ))
+    const parsed = JSON.parse(body)
+    if (status === 200) {
+      return parsed.choices?.[0]?.message?.content || null
+    }
+    // 401 = bad key, 429 = rate limit → skip to next provider
+    if (/^HTTP (401|429)/.test(String(status))) return null
+    throw new Error(`HTTP ${status}: ${body.slice(0, 200)}`)
+  } catch (e: any) {
+    if (/^HTTP (401|429)/.test(e.message || '')) return null
+    throw e
+  }
+}
+
 // ── IPC: AI chat ──────────────────────────────────────────────────────────
 // The single entry point every agent and AI feature goes through (§37) —
 // nothing else in the app talks to a provider directly. WHICH provider serves
@@ -4453,6 +4587,62 @@ async function runAiRequest(
     },
   })
 
+  // ── Direct-provider fallback (Claude → ChatGPT) ──────────────────────
+  // routeGenerate already tried Ollama + OpenRouter. If both failed, walk
+  // through the user's direct provider keys — Claude first, then ChatGPT.
+  // Both return null on 401/429 so a bad key can't break the chain.
+  if (!result.ok) {
+    const direct = getAIConfig()
+
+    if (direct.claudeKey) {
+      try {
+        // Reset stream so Claude's tokens don't land spliced after a partial
+        // OpenRouter reply.
+        opts?.onDelta?.('', true)
+        const claudeReply = await claudeChat(direct.claudeKey, messages, opts?.maxTokens ?? 4096)
+        if (claudeReply) {
+          const content = stripThinkTags(claudeReply) || claudeReply
+          if (opts?.onDelta) {
+            try { opts.onDelta(content) } catch {}
+          }
+          return {
+            content,
+            model: 'claude-sonnet-4-20250514',
+            provider: 'claude',
+            fallbackUsed: true,
+            fallbackReason: result.fallbackReason,
+            notice: `Answered by Claude (${result.fallbackReason || 'primary failed'}).`,
+          }
+        }
+      } catch (e: any) {
+        console.log(`[aihub] Claude fallback failed: ${e?.message || e}`)
+      }
+    }
+
+    if (direct.chatGptKey) {
+      try {
+        opts?.onDelta?.('', true)
+        const gptReply = await chatGptChat(direct.chatGptKey, messages, opts?.maxTokens ?? 2048)
+        if (gptReply) {
+          const content = stripThinkTags(gptReply) || gptReply
+          if (opts?.onDelta) {
+            try { opts.onDelta(content) } catch {}
+          }
+          return {
+            content,
+            model: 'gpt-4o-mini',
+            provider: 'chatgpt',
+            fallbackUsed: true,
+            fallbackReason: result.fallbackReason,
+            notice: `Answered by ChatGPT (${result.fallbackReason || 'primary failed'}).`,
+          }
+        }
+      } catch (e: any) {
+        console.log(`[aihub] ChatGPT fallback failed: ${e?.message || e}`)
+      }
+    }
+  }
+
   // The renderer sees the same shape it always did, plus honest routing
   // metadata (§24) — a fallback answer is never passed off as the primary's.
   if (result.ok) {
@@ -4586,11 +4776,20 @@ ipcMain.handle('file:saveVideo', async (_e, { buffer }: { buffer: ArrayBuffer })
 })
 
 // ── Agent store: saved custom agents + archived conversations ─────────────
+// 3-month cleanup: removes conversations older than 90 days on every load.
+const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000
+
 function readAgentsStore(): { customAgents: any[]; conversations: any[] } {
   const s = readJson(AGENTS_FILE, null)
+  const conversations: any[] = (Array.isArray(s?.conversations) ? s.conversations : [])
+    .filter((c: any) => (c.updatedAt || c.createdAt || 0) > Date.now() - THREE_MONTHS_MS)
+  // Persist cleanup so the file shrinks on disk
+  if (conversations.length !== (s?.conversations?.length ?? 0)) {
+    writeJson(AGENTS_FILE, { ...s, conversations })
+  }
   return {
     customAgents:  Array.isArray(s?.customAgents)  ? s.customAgents  : [],
-    conversations: Array.isArray(s?.conversations) ? s.conversations : [],
+    conversations,
   }
 }
 
@@ -4631,6 +4830,72 @@ ipcMain.handle('agents:deleteConversation', (_e, id: string) => {
   s.conversations = s.conversations.filter(c => c.id !== id)
   writeJson(AGENTS_FILE, s)
   return true
+})
+
+// ── Agent import/export ──────────────────────────────────────────────────────
+ipcMain.handle('agents:exportAgents', async () => {
+  const { customAgents } = readAgentsStore()
+  if (!customAgents.length) return { success: false, error: 'No custom agents to export' }
+  const pkg = {
+    version: 1,
+    exportedAt: Date.now(),
+    agents: customAgents.map(a => ({
+      id: a.id, name: a.name, description: a.description,
+      template: a.template, color: a.color, custom: true,
+    })),
+  }
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Custom Agents',
+    defaultPath: join(os.homedir(), 'Documents', 'aihub-agents-export.json'),
+    filters: [{ name: 'AIHub Agents', extensions: ['json'] }],
+  })
+  if (canceled || !filePath) return { success: false, cancelled: true }
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2), 'utf-8')
+    return { success: true, path: filePath, count: customAgents.length }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('agents:importAgents', async () => {
+  const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Custom Agents',
+    filters: [{ name: 'AIHub Agents', extensions: ['json'] }],
+    properties: ['openFile'],
+  })
+  if (canceled || !filePaths?.length) return { success: false, cancelled: true }
+  try {
+    const raw = fs.readFileSync(filePaths[0], 'utf-8')
+    const pkg = JSON.parse(raw)
+    if (!Array.isArray(pkg.agents)) return { success: false, error: 'Invalid format: expected { agents: [...] }' }
+    const incoming = pkg.agents.filter((a: any) =>
+      a && typeof a.id === 'string' && typeof a.name === 'string',
+    )
+    if (!incoming.length) return { success: false, error: 'No valid agents found in file' }
+
+    const store = readAgentsStore()
+    const now = Date.now()
+    let added = 0, skipped = 0
+    for (const agent of incoming) {
+      const existing = store.customAgents.find(a => a.id === agent.id)
+      if (!existing) {
+        store.customAgents.unshift({ ...agent, updatedAt: now })
+        added++
+      } else if ((existing.updatedAt || 0) < (agent.updatedAt || 0)) {
+        // Incoming is newer — update
+        const idx = store.customAgents.indexOf(existing)
+        store.customAgents[idx] = { ...existing, ...agent, updatedAt: now }
+        added++
+      } else {
+        skipped++
+      }
+    }
+    writeJson(AGENTS_FILE, store)
+    return { success: true, added, skipped, total: store.customAgents.length }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
 })
 
 // ── Agent file-system access ───────────────────────────────────────────────

@@ -7,6 +7,7 @@ import type { Attachment, Message, Role } from '../../../../shared/community'
 import { Avatar, EmptyRoom, timeOf, dayOf } from './bits'
 import EmojiPicker from './EmojiPicker'
 import type { CommunityMember } from './useCommunity'
+import Markdown from '../ai/Markdown'
 
 /**
  * The conversation.
@@ -315,12 +316,29 @@ function MessageRow(props: RowProps) {
           </div>
         </div>
       ) : (
-        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed" style={{ color: 'var(--cm-ink)' }}>
-          <Body text={message.body} memberById={memberById} />
-          {message.editedAt && (
-            <span className="ml-1.5 text-[11px]" style={{ color: 'var(--cm-faint)' }}>(edited)</span>
+        <div className="text-sm leading-relaxed" style={{ color: 'var(--cm-ink)' }}>
+          {isBot(message.authorId) ? (
+            // AI bot messages render with full markdown — tables, code blocks,
+            // headings, links, lists, blockquotes. The same renderer the
+            // assistant panel uses, so an answer on one surface looks like
+            // the same answer on every other.
+            <div style={{
+              padding: '4px 0',
+            }}>
+              <Body text={message.body} memberById={memberById} renderMarkdown />
+              {message.editedAt && (
+                <span className="ml-1.5 text-[11px]" style={{ color: 'var(--cm-faint)' }}>(edited)</span>
+              )}
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap break-words" style={{ margin: 0 }}>
+              <Body text={message.body} memberById={memberById} />
+              {message.editedAt && (
+                <span className="ml-1.5 text-[11px]" style={{ color: 'var(--cm-faint)' }}>(edited)</span>
+              )}
+            </p>
           )}
-        </p>
+        </div>
       )}
 
       <LinkCard body={message.body} />
@@ -428,13 +446,24 @@ function RowAction({
  *
  * Split rather than replaced into HTML: this text came from another member, and
  * the one thing it must never do is become markup.
+ *
+ * When renderMarkdown is true (for AI bot messages), the text is also rendered
+ * through the markdown renderer so tables, code blocks, headings, and other
+ * formatting are displayed beautifully.
  */
-function Body({ text, memberById }: { text: string; memberById: Map<string, CommunityMember> }) {
+function Body({ text, memberById, renderMarkdown = false }: { text: string; memberById: Map<string, CommunityMember>; renderMarkdown?: boolean }) {
   const handles = useMemo(() => {
     const set = new Set<string>()
     for (const member of memberById.values()) set.add(member.handle.toLowerCase())
     return set
   }, [memberById])
+
+  if (renderMarkdown) {
+    // For AI bot messages: render through markdown. Mentions inside the text
+    // will be picked up by the markdown renderer's own rendering — we just
+    // hand it the raw body, which the bot only uses to write its own text.
+    return <Markdown content={text} onNavigate={() => {}} accent="var(--cm-accent)" />
+  }
 
   const parts = text.split(/(@[\p{L}\p{N}_-]{2,32})/gu)
 

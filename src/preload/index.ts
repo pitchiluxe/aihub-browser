@@ -414,6 +414,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteAgent:        (id: string) => ipcRenderer.invoke('agents:deleteAgent', id),
     saveConversation:   (c: any) => ipcRenderer.invoke('agents:saveConversation', c),
     deleteConversation: (id: string) => ipcRenderer.invoke('agents:deleteConversation', id),
+    exportAgents:       () => ipcRenderer.invoke('agents:exportAgents'),
+    importAgents:       () => ipcRenderer.invoke('agents:importAgents'),
   },
   agentFs: {
     listDir:   (p: string) => ipcRenderer.invoke('agentfs:listDir', p),

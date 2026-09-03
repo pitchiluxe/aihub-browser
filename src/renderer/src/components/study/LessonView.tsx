@@ -136,7 +136,15 @@ export default function LessonView({
                   {passages[p.label] ? (
                     <div className="bible-prose">
                       {passages[p.label].map(v => (
-                        <span key={v.ref}>
+                        <span
+                          key={v.ref}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => onOpenReader(v.ref)}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenReader(v.ref) } }}
+                          title={`Read ${v.ref}`}
+                          className="cursor-pointer rounded-[3px] transition-all hover:bg-amber-100/50 dark:hover:bg-amber-900/20"
+                        >
                           {settings.verseNumbers && <sup className="mr-0.5 select-none opacity-50">{v.v}</sup>}
                           {v.t}{' '}
                         </span>

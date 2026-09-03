@@ -31,7 +31,7 @@ import { searchCommunity, type SearchOptions } from './search'
 import { saveAttachment } from './attachments'
 import { messageToRow } from './sync'
 import { createOllamaAsk } from './ollamaAsk'
-import { ensureBotAndWelcome, runGuideCycle, reviewMessage, type GuideDeps } from './aiGuide'
+import { ensureBotAndWelcome, runGuideCycle, reviewMessage, reviewMention, type GuideDeps } from './aiGuide'
 import { hostBlocker, shouldHost } from './aiHost'
 import { BOT_MEMBER_ID } from '../../shared/communityBot'
 import { createPresenceTracker } from './presence'
@@ -606,6 +606,13 @@ function guideDeps(ollamaIsReady: boolean): GuideDeps {
       hasModel: !!guide().get().model,
       enabled: guide().get().enabled,
     }),
+    recentMessages: (channel, limit = 20) => {
+      const msgs = dataStore.get().messages
+      return msgs
+        .filter(m => m.channel === channel && !m.deletedAt)
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .slice(-limit)
+    },
   }
 }
 
@@ -630,9 +637,10 @@ export function registerCommunityIpc(): void {
     ensureBotAndWelcome(guideDeps(false))
   } catch { /* a missing welcome must never stop Community loading */ }
 
-  // Hourly, not on a short timer: the guide only speaks into a room that has
-  // been quiet for hours, so anything faster is just a wasted model load.
-  guideTimer ||= setInterval(() => { void guideTick() }, 60 * 60 * 1000)
+  // Every 15 minutes: the guide now posts more frequently so the community feels
+  // alive. It only speaks into a room that has been quiet for 1 hour, so the
+  // faster tick is not disruptive.
+  guideTimer ||= setInterval(() => { void guideTick() }, 15 * 60 * 1000)
   setTimeout(() => { void guideTick() }, 90_000)
 
   // Connect on launch if this device has been set up. Deliberately not awaited:
@@ -936,13 +944,15 @@ export function registerCommunityIpc(): void {
     broadcast('community:event', { type: 'message.new', channel: input.channel, message: published })
     notifyFor(result.message)
 
-    // The guide reads the room. Deliberately not awaited — a local model can
-    // take a minute, and nobody should watch their own message hang while an
-    // AI thinks about it. It files a report; it never removes anything.
+    // The guide reads the room and responds to @mentions. Deliberately not awaited —
+    // a local model can take a minute, and nobody should watch their own message
+    // hang while an AI thinks about it.
     void (async () => {
       try {
-        await reviewMessage(guideDeps(await ollamaReady()), result.message)
-      } catch { /* a moderation miss is not worth an error to the user */ }
+        const deps = guideDeps(await ollamaReady())
+        await reviewMessage(deps, result.message)
+        await reviewMention(deps, result.message)
+      } catch { /* a moderation miss or mention is not worth an error to the user */ }
     })()
 
     return { ok: true, message: forViewer(result.message, who.id) }

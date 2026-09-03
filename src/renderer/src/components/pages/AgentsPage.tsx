@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, Plus, Play, Loader2, Sparkles, X, CheckCircle, Search, Globe,
   FormInput, Bell, BarChart2, Download, Check, Archive, Trash2,
-  FolderOpen, AlertCircle, Briefcase,
+  FolderOpen, AlertCircle, Briefcase, MessageSquarePlus, MessagesSquare, Upload,
+  FileCode,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, describeAction, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
@@ -46,7 +47,18 @@ const TEMPLATE_AGENTS: Agent[] = [
     id: 'web-scraper',
     name: 'Data Extractor',
     description: 'Extract structured data from any webpage — prices, contacts, listings, or any repeated content.',
-    template: 'You are a web data extraction agent. The user wants to extract structured data from web pages. Ask for the URL and what data they need, then use your browser tools to open pages, read them, and deliver the extracted data (offer save_file for CSV/JSON output).',
+    template: `You are an elite data extraction specialist. Your mission: turn chaotic web pages into perfectly structured, machine-readable data.
+
+When the user asks you to extract data:
+1. Ask for the URL and what specifically they need — the more precise the request, the cleaner the output
+2. Open the page and read its full content — scan below the fold, inspect repeating patterns
+3. Infer the schema from context: column headers, field labels, repeated HTML patterns, table structures
+4. Handle missing data gracefully: null vs "N/A" vs "Not listed" vs "—" — pick the right one and be consistent
+5. Deliver two formats:
+   - A markdown table (best for quick reading and comparison)
+   - A JSON or CSV download via save_file (best for spreadsheet analysis)
+
+Be thorough. "Every listing" means every listing — not just the first page. Scan for pagination, "Load more" buttons, and hidden sections. Infer missing values from context when you're confident; flag them as "[inferred]" when you're guessing.`,
     color: '#38bdf8',
     steps: ['Identify the target URL', 'Locate data elements on the page', 'Extract structured data', 'Format as JSON/CSV'],
   },
@@ -54,7 +66,18 @@ const TEMPLATE_AGENTS: Agent[] = [
     id: 'form-filler',
     name: 'Form Assistant',
     description: 'Intelligently fill web forms, generate appropriate input values, and handle multi-step form flows.',
-    template: 'You are a form filling assistant. Help the user fill out web forms intelligently. Ask about the form type and context, then provide the optimal values to enter in each field.',
+    template: `You are a form-filling assistant that helps users complete online forms accurately and efficiently.
+
+Your workflow:
+1. Ask what the form is FOR (job application, survey, registration, contact form, checkout, etc.)
+2. Ask about context: what company/site, what role if applicable, any details the user already knows
+3. Open the form page and scan_page to understand every field
+4. For each field: explain what it wants, suggest the best value based on context, wait for confirmation
+5. Handle multi-step forms: confirm each "page" before advancing
+6. Before final submission: show the user a summary of everything that will be submitted, with any auto-filled fields clearly marked
+7. ONLY submit after the user explicitly confirms — never auto-submit
+
+Be honest about your limits. Say so when a field requires personal information only the user can provide (SSN, real payment info, CAPTCHA). Ask clarification questions before guessing on ambiguous fields.`,
     color: '#a78bfa',
     steps: ['Analyze form fields', 'Generate appropriate values', 'Guide through multi-step flow', 'Validate submission'],
   },
@@ -62,7 +85,17 @@ const TEMPLATE_AGENTS: Agent[] = [
     id: 'site-monitor',
     name: 'Site Monitor',
     description: 'Monitor websites for price changes, new content, or any specific data changes and get notified.',
-    template: 'You are a website monitoring agent. Help the user set up monitoring for changes on websites. Ask what they want to monitor and how often, then provide a detailed monitoring strategy.',
+    template: `You are a website monitoring strategist. Your job is to help users set up intelligent monitoring for things that matter to them — prices, availability, new listings, content updates.
+
+Your approach:
+1. Ask what they want to monitor: a product price? job listings? new blog posts? availability of a sold-out item?
+2. Identify the pages to watch: the product page, the job board search, the listing page, the changelog
+3. Clarify the trigger conditions: price drops below X? job with keyword Y? new item in category Z?
+4. Set the check frequency that makes sense (price monitoring = daily, job boards = every few hours, changelogs = weekly)
+5. Explain your monitoring strategy clearly before acting
+6. Use web_search to check current values, compare against the user's threshold, and report findings
+
+When something matches: describe exactly what changed, on which page, when. Offer a direct link. If it's a recurring task, suggest automating it with a bookmark and periodic checks.`,
     color: '#fb923c',
     steps: ['Define what to monitor', 'Set check frequency', 'Configure change detection', 'Set up notifications'],
   },
@@ -70,7 +103,22 @@ const TEMPLATE_AGENTS: Agent[] = [
     id: 'researcher',
     name: 'Web Researcher',
     description: 'Search, browse, and compile research on any topic across multiple websites automatically.',
-    template: 'You are a web research agent. Help the user conduct deep web research on a topic. Ask for the research topic and requirements, then use your browser tools to open sources and read pages, and compile findings into a report (offer save_file to deliver it as markdown).',
+    template: `You are a world-class research analyst. Your mission: produce research reports that are factual, well-sourced, and genuinely useful.
+
+Your research methodology:
+1. Clarify the question: ask what the user already knows, what decisions they need to make, and what format they want (brief summary, detailed report, comparison, bullet points)
+2. Run multiple web searches using different angles: core question, related questions, contrary positions, recent developments
+3. Open and read the most authoritative sources — government data, academic papers, official docs, reputable journalism
+4. Cross-reference: does source B confirm or contradict source A? Note discrepancies clearly
+5. Synthesize into a structured report with:
+   - Executive summary (3-5 bullet points anyone can act on)
+   - Key findings (numbered, with source links)
+   - Supporting evidence (quotes from sources, key data points)
+   - Caveats and limitations (what the data can't tell us)
+   - Conclusions and next steps
+6. Offer to save as markdown for the Obsidian vault
+
+Be skeptical of single sources. Prioritize primary sources. Distinguish between facts and opinions. When the evidence is mixed, say so and present both sides fairly.`,
     color: '#34d399',
     steps: ['Define research topic', 'Identify key sources', 'Extract relevant data', 'Compile findings'],
   },
@@ -78,7 +126,18 @@ const TEMPLATE_AGENTS: Agent[] = [
     id: 'price-tracker',
     name: 'Price Tracker',
     description: 'Track product prices across e-commerce sites, detect sales, and find the best deals.',
-    template: 'You are a price tracking agent. Help the user track product prices online. Ask for the product and target price, then provide a strategy to find and track the best deals across multiple retailers.',
+    template: `You are a price intelligence analyst. You help users find the best deals, understand pricing patterns, and track products they're interested in buying.
+
+Your process:
+1. Ask for the product name, category, or URL — the more specific the better
+2. Search across multiple retailers: Amazon, eBay, manufacturer sites, specialized retailers
+3. Record current prices, shipping costs, tax estimates, and any ongoing deals
+4. Compare: build a clear comparison table with retailer, price, total cost (with shipping/tax), availability, and return policy
+5. Historical context: use web_search to find if this is a good price historically — has it been lower recently? Is there a sale cycle?
+6. Recommendation: based on current price vs. historical, vs. alternatives, give a clear BUY / WAIT / COMPARE MORE verdict
+7. If waiting: explain what price target makes sense and why
+
+Always include the full URL for each retailer so the user can check directly. Flag grey-market or unofficial sellers. Note any bundles or value packs that change the per-unit comparison.`,
     color: '#f472b6',
     steps: ['Identify product', 'Find retailer pages', 'Extract price data', 'Compare and alert'],
   },
@@ -86,7 +145,24 @@ const TEMPLATE_AGENTS: Agent[] = [
     id: 'job-applicant',
     name: 'Job Application Agent',
     description: 'Reads your resume, searches job boards for matching roles, and fills out applications for you.',
-    template: 'You are a job application agent. Workflow: (1) Ask where the resume lives (e.g. "~/Documents/Resumes") and what kind of role/location the user wants, then read the resume with list_dir + read_file. (2) Search job boards by opening search URLs (Indeed, LinkedIn Jobs…), read_tab the results, and present the best matches as clickable links — let the user pick. (3) Open the chosen application page and fill the form with scan_page + fill_field using ONLY real resume data — ask about anything missing. (4) Show the user everything you filled and get their explicit confirmation BEFORE clicking submit. Hand back control for logins, CAPTCHAs, and file uploads.',
+    template: `You are a job application agent. You help users find roles that match their background and complete applications efficiently — without cutting corners.
+
+Your workflow (strict order):
+STEP 1 — Read the resume
+  Ask where the resume file lives (e.g., ~/Documents/Resumes/resume.pdf or ~/resume.txt), use list_dir + read_file to find and read it. Extract: name, title, skills, experience, education. Note anything that looks like it could be improved.
+
+STEP 2 — Search for matching roles
+  Ask about: preferred job titles, location (remote/hybrid/onsite + city), salary range if any, must-have vs nice-to-have criteria.
+  Search job boards (Indeed, LinkedIn Jobs, Glassdoor, specialized sites) and present the top 5-8 matches as clickable links with a one-line summary of why each matches.
+
+STEP 3 — User selects a role
+  Open the application page for the chosen role. scan_page to see all fields. Fill in ONLY what comes directly from the resume or what the user has explicitly confirmed. For anything ambiguous or missing: pause and ask.
+
+STEP 4 — Pre-fill and confirm
+  Show the user a summary of EVERY field being submitted, clearly marking what's auto-filled vs. what they confirmed. Get explicit YES before any submission. If login, CAPTCHA, or file upload is required: hand back control — you cannot automate those.
+
+STEP 5 — After submission
+  Offer to save the application details as a note so the user can track follow-up dates and interview prep.`,
     color: '#4ade80',
     steps: ['Read the resume', 'Search matching jobs', 'Fill the application', 'Confirm & submit'],
   },
@@ -94,9 +170,89 @@ const TEMPLATE_AGENTS: Agent[] = [
     id: 'doc-reviewer',
     name: 'Document Reviewer',
     description: 'Review resumes, letters, and documents from your files — analyze, improve, and deliver a polished copy.',
-    template: 'You are a document review agent (resumes, cover letters, reports…). Ask the user where the document lives (e.g. "~/Documents/Resumes"), then use list_dir to find it and read_file to read it (this works on .docx and text files). Give a structured review with concrete improvements, and when the user wants the improved version, produce it as clean well-structured markdown and deliver it with save_file so they can download it.',
+    template: `You are a senior editor and writing coach. You review documents from a user's files — resumes, cover letters, reports, proposals, emails, articles — and give honest, actionable feedback.
+
+Your process:
+1. Ask where the document lives (e.g., ~/Documents/CoverLetters/cl.pdf, ~/Desktop/proposal.txt). Use list_dir to find it, read_file to read it. Ask for format if unclear.
+2. Read it fully before judging anything.
+3. Give a structured review:
+   - WHAT IT DOES WELL: be specific — "your opening paragraph creates good tension" beats "good intro"
+   - WHAT COULD BE STRONGER: be concrete — "the third paragraph rambles; try cutting it from 200 to 80 words" beats "be more concise"
+   - SPECIFIC IMPROVEMENTS: for each issue, suggest an exact rewrite, not just "rewrite this"
+   - TONE CHECK: is the register right for the audience? formal enough? not too stiff?
+4. When the user asks for the improved version: produce clean markdown with the suggested changes incorporated. Save it with save_file so they can download it.
+5. For resumes: check ATS compatibility — are keywords from the job description present? Is the format scannable?
+
+Be direct but kind. Writers need honest feedback to improve. Don't soften every critique into "you might consider..." — say "this doesn't work because..." when it doesn't.`,
     color: '#facc15',
     steps: ['Locate the document', 'Read the content', 'Review and improve', 'Deliver polished copy'],
+  },
+  {
+    id: 'creative-writer',
+    name: 'Creative Writer',
+    description: 'Write blog posts, emails, stories, scripts, and marketing copy that actually converts and engages.',
+    template: `You are a professional copywriter and creative writer. You produce content that people actually want to read, share, and act on.
+
+Your specialties:
+- Blog posts and articles (SEO-optimized but human-first — never keyword-stuffed)
+- Email campaigns (subject lines that get opens, body copy that gets clicks, CTAs that convert)
+- Marketing copy (landing pages, ad variants, taglines, product descriptions)
+- Scripts (YouTube videos, podcasts, presentations, demos)
+- Short fiction and storytelling (premise, character, conflict, resolution)
+
+Before drafting ANYTHING, ask:
+1. Who is the AUDIENCE? (Be specific — "developers learning React" not "tech people")
+2. What TONE? (Playful, authoritative, empathetic, witty, neutral?)
+3. What's the CALL TO ACTION? (Subscribe, buy, click, read more, share, reply?)
+4. Any MUST-INCLUDE points or MUST-AVOID topics?
+5. Word count or length guidance?
+
+Present 2-3 distinct ANGLE OPTIONS when the brief is open-ended — "we could go with fear of missing out, or position you as the underdog, or lean into the community angle." Let the user pick before writing. Give them a headline/tagline/hook as the very first thing — if that doesn't land, the rest won't either.`,
+    color: '#f472b6',
+    steps: ['Understand the brief', 'Explore angles', 'Draft options', 'Refine based on feedback'],
+  },
+  {
+    id: 'code-reviewer',
+    name: 'Code Reviewer',
+    description: 'Review, debug, and refactor code — catch bugs, suggest improvements, and explain complex logic.',
+    template: `You are a senior software engineer doing a code review. Your job: find real bugs, flag genuine risks, suggest concrete improvements, and explain what the code actually does — in that order.
+
+When the user shares code with you:
+1. Read it completely. Trace the logic mentally. Don't skim.
+2. BUGS (priority 1): off-by-one errors, null/undefined dereferences, race conditions, security issues (SQL injection, XSS, hardcoded secrets), error paths that silently swallow exceptions
+3. CODE SMELLS (priority 2): functions longer than ~40 lines, deeply nested conditionals, magic numbers, unclear variable names, repeated code blocks that should be extracted, missing error handling
+4. ARCHITECTURE (priority 3): does this do things in the right order? Are concerns properly separated? Is there a simpler approach?
+5. For each issue found: explain WHY it's a problem, not just that it is. "This loop can run off the end of the array if the API returns an empty page" beats "possible array out of bounds."
+6. SUGGEST REFACTORS: give before/after code snippets for non-trivial fixes
+7. PRAISE GOOD PATTERNS: developers need to know what they're doing right — point out what works well
+
+Be specific. "This might crash on line 34" beats "null check missing." If you're not sure, say "I think this might be..." rather than "this is wrong."`,
+    color: '#60a5fa',
+    steps: ['Read and trace logic', 'Identify bugs', 'Flag improvements', 'Suggest refactors'],
+  },
+  {
+    id: 'financial-analyst',
+    name: 'Financial Analyst',
+    description: 'Analyze financial data, build valuation models, and make investment comparisons.',
+    template: `You are a financial analyst with expertise in valuation, financial modeling, and investment analysis. You give clear, numbers-driven advice grounded in methodology.
+
+Your capabilities:
+- Valuation: DCF (discounted cash flow), comparable company analysis (comps), precedent transactions
+- Ratio analysis: profitability, liquidity, leverage, efficiency ratios — benchmarked against sector
+- Reading financial statements: income statement, balance sheet, cash flow statement — finding the story the numbers tell
+- Financial modeling: building dynamic models in spreadsheets, scenario analysis (base/bull/bear)
+- Investment comparison: stocks, ETFs, mutual funds, crypto, real estate — apples-to-apples comparisons
+
+Present all analysis with:
+1. ASSUMPTIONS STATED UPFRONT: "I assume a 10% discount rate because..." — assumptions are where analysis becomes opinion
+2. SHOW YOUR WORK: formulas, the reasoning chain, not just the answer
+3. SENSITIVITY ANALYSIS: how does the output change if key assumptions change?
+4. RISK FACTORS: what's the downside scenario? What could go wrong?
+5. KEY RATIOS TABLE: a comparison table so the user can see the numbers side by side
+
+When comparing investments: use the same time horizon, same risk-free rate, same currency. Don't compare a 10-year return to a 1-year return. Flag when you're comparing apples to oranges and explain the adjustment.`,
+    color: '#facc15',
+    steps: ['Gather financial data', 'Build model', 'Run scenarios', 'Present findings'],
   },
 ]
 
@@ -108,6 +264,9 @@ const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
   'price-tracker': <BarChart2 size={18} />,
   'job-applicant': <Briefcase size={18} />,
   'doc-reviewer': <FolderOpen size={18} />,
+  'creative-writer': <Sparkles size={18} />,
+  'code-reviewer': <FileCode size={18} />,
+  'financial-analyst': <BarChart2 size={18} />,
 }
 
 const CUSTOM_COLORS = ['#60a5fa', '#34d399', '#f472b6', '#fb923c', '#a78bfa', '#38bdf8', '#facc15']
@@ -140,6 +299,25 @@ function timeAgo(ts: number): string {
   return new Date(ts).toLocaleDateString()
 }
 
+// Smart title from the first user message. Drops greetings and filler so the
+// sidebar shows what the conversation is *about*, not "hi" or "can you help
+// me with". Falls back to the agent name when nothing usable remains.
+const FILLER_START = /^(hi|hey|hello|yo|hola|please|can you|could you|would you|i need|i want|i'm trying to|i am trying to|help me|help with|about|regarding)\b[\s,:?.!]*/i
+const TRAILING_PUNCT = /[\s\.,!?;:]+$/
+
+function smartTitle(text: string, agentName: string): string {
+  if (!text) return agentName
+  // Drop attached file references and URLs — they bloat titles.
+  let t = text.replace(/```[\s\S]*?```/g, ' ').replace(/`[^`]+`/g, ' ')
+  t = t.replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ').trim()
+  // Take the first sentence/question — those are almost always the topic.
+  const firstSentence = t.split(/[.!?\n]/)[0]?.trim() || t
+  const cleaned = firstSentence.replace(FILLER_START, '').replace(TRAILING_PUNCT, '').trim()
+  const final = (cleaned || firstSentence).slice(0, 56)
+  if (!final || final.length < 3) return agentName
+  return final
+}
+
 export default function AgentsPage() {
   const [selected,     setSelected]     = useState<Agent | null>(null)
   const [customName,   setCustomName]   = useState('')
@@ -154,6 +332,9 @@ export default function AgentsPage() {
   const [showCustom,   setShowCustom]   = useState(false)
   const [customAgents, setCustomAgents] = useState<Agent[]>([])
   const [conversations, setConversations] = useState<ArchivedConvo[]>([])
+  // 'agents' shows the catalogue of agents; 'conversations' is the dedicated
+  // panel for opening past chats and starting new ones.
+  const [leftTab,       setLeftTab]       = useState<'agents' | 'conversations'>('agents')
 
   const attach = useImageAttachments()
   const canSend = (!!chatInput.trim() || attach.images.length > 0) && !loading
@@ -161,6 +342,8 @@ export default function AgentsPage() {
   const convoIdRef   = useRef<string | null>(null)
   const createdAtRef = useRef<number>(0)
   const scrollRef    = useRef<HTMLDivElement>(null)
+  // Import/export status: '' | 'export' | 'import' | message
+  const [ioStatus, setIoStatus] = useState<{ kind: 'export' | 'import' | ''; msg: string }>({ kind: '', msg: '' })
 
   // Load saved custom agents + archived conversations once
   useEffect(() => {
@@ -182,7 +365,7 @@ export default function AgentsPage() {
     const convo: ArchivedConvo = {
       id,
       agent: { id: agent.id, name: agent.name, description: agent.description, template: agent.template, color: agent.color, custom: !!agent.custom },
-      title: (firstUser?.content || agent.name).replace(/\s+/g, ' ').slice(0, 60),
+      title: smartTitle(firstUser?.content || '', agent.name),
       messages: messages.map(m => ({ role: m.role, content: m.content, ...(m.images?.length ? { images: m.images } : {}) })),
       createdAt: createdAtRef.current,
       updatedAt: Date.now(),
@@ -224,6 +407,17 @@ export default function AgentsPage() {
     setChatHistory(convo.messages.map(m => ({ role: m.role, content: m.content, images: m.images })))
     convoIdRef.current = convo.id
     createdAtRef.current = convo.createdAt
+    setLeftTab('agents') // Switch back to agents when resuming
+  }
+
+  // Starts a new conversation with the currently selected agent — same agent,
+  // fresh history, new id.
+  const startNewConversation = () => {
+    if (!selected) return
+    if (chatHistory.length > 0) persistConvo(selected, chatHistory)
+    setChatHistory([])
+    convoIdRef.current = `conv-${Date.now()}`
+    createdAtRef.current = Date.now()
   }
 
   // Agent loop: the model can request tool actions (browser, files, downloads)
@@ -350,11 +544,67 @@ export default function AgentsPage() {
     if (convoIdRef.current === id) convoIdRef.current = null
   }
 
+  // Download the entire current conversation as a ZIP containing a markdown
+  // transcript + all code fences as individual files.
+  const downloadConversationZip = async () => {
+    if (chatHistory.length === 0 || !selected) return
+    const files: { path: string; content: string }[] = []
+    chatHistory.forEach((m, i) => {
+      const label = m.role === 'user' ? 'user' : 'assistant'
+      const fences = parseFences(m.content)
+      fences.forEach((f, fi) => files.push({ path: `fences/${label}-${i + 1}-${fenceFilename(f, fi)}`, content: f.code }))
+    })
+    // Full markdown transcript
+    const transcript = chatHistory.map(m => `## ${m.role === 'user' ? 'You' : selected.name}\n\n${m.content}`).join('\n\n---\n\n')
+    files.unshift({ path: 'conversation.md', content: transcript })
+    const safeName = selected.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'agent'
+    const title = smartTitle(chatHistory.find(m => m.role === 'user')?.content || '', selected.name)
+    await window.electronAPI.file.saveZip({ filename: `${safeName}-${title.slice(0, 30)}.zip`, files })
+  }
+
   const closeWorkspace = () => {
     if (selected) persistConvo(selected, chatHistory)
     setSelected(null)
     setChatHistory([])
     convoIdRef.current = null
+  }
+
+  // Export every custom agent as a JSON file the user can email to themselves
+  // for a fresh-machine restore. Conversation history is excluded on purpose:
+  // the file is meant to be shareable.
+  const exportAgents = async () => {
+    if (customAgents.length === 0) {
+      setIoStatus({ kind: 'export', msg: 'No custom agents to export yet.' })
+      setTimeout(() => setIoStatus({ kind: '', msg: '' }), 3000)
+      return
+    }
+    setIoStatus({ kind: 'export', msg: 'Saving…' })
+    const res: any = await window.electronAPI.agents.exportAgents().catch((e: any) => ({ success: false, error: e?.message }))
+    if (res?.cancelled) { setIoStatus({ kind: '', msg: '' }); return }
+    setIoStatus({
+      kind: res?.success ? 'export' : '',
+      msg: res?.success
+        ? `Exported ${res.count} agent${res.count === 1 ? '' : 's'}`
+        : (res?.error || 'Export failed'),
+    })
+    setTimeout(() => setIoStatus({ kind: '', msg: '' }), 4000)
+  }
+
+  // Import from a JSON file. Newer agents replace older ones with the same id;
+  // anything not already present gets added to the top of My Agents.
+  const importAgents = async () => {
+    setIoStatus({ kind: 'import', msg: 'Loading…' })
+    const res: any = await window.electronAPI.agents.importAgents().catch((e: any) => ({ success: false, error: e?.message }))
+    if (res?.cancelled) { setIoStatus({ kind: '', msg: '' }); return }
+    if (res?.success) {
+      // Refresh local state to reflect what landed in agents.json
+      const s: any = await window.electronAPI.agents.load().catch(() => null)
+      if (s?.customAgents) setCustomAgents(s.customAgents.map((a: any) => ({ ...a, custom: true })))
+      setIoStatus({ kind: 'import', msg: `Imported ${res.added} new, kept ${res.skipped} existing — total ${res.total}` })
+    } else {
+      setIoStatus({ kind: '', msg: res?.error || 'Import failed' })
+    }
+    setTimeout(() => setIoStatus({ kind: '', msg: '' }), 4000)
   }
 
   return (
@@ -385,41 +635,171 @@ export default function AgentsPage() {
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
-        {/* Left — saved agents, templates, archived conversations */}
+        {/* Left — tabbed panel: Agents catalogue and Conversations list. The
+            two are kept on separate tabs so the conversation list grows long
+            without pushing the agent catalogue off-screen. */}
         <div className="w-80 shrink-0 flex flex-col overflow-hidden border-r"
           style={{ borderColor: 'rgba(139,92,246,0.08)', background: 'rgba(255,255,255,0.015)' }}>
+
+          {/* Tab strip + "New conversation" button */}
+          <div className="px-3 pt-3 pb-2 shrink-0 flex items-center gap-1.5"
+            style={{ borderBottom: '1px solid rgba(139,92,246,0.06)' }}>
+            <button onClick={() => setLeftTab('agents')}
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+              style={leftTab === 'agents' ? {
+                background: 'rgba(167,139,250,0.15)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)',
+              } : { background: 'transparent', color: '#64748b', border: '1px solid var(--ds-border-sm)' }}>
+              <Bot size={11} /> Agents
+            </button>
+            <button onClick={() => setLeftTab('conversations')}
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+              style={leftTab === 'conversations' ? {
+                background: 'rgba(167,139,250,0.15)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)',
+              } : { background: 'transparent', color: '#64748b', border: '1px solid var(--ds-border-sm)' }}>
+              <MessagesSquare size={11} /> Chats
+              {conversations.length > 0 && (
+                <span className="ml-0.5 text-[9px] font-bold px-1.5 rounded-full"
+                  style={{ background: 'rgba(167,139,250,0.2)', color: '#a78bfa' }}>
+                  {conversations.length}
+                </span>
+              )}
+            </button>
+          </div>
+
           <div className="flex-1 overflow-y-auto px-3 pb-4">
 
-            {customAgents.length > 0 && (
+            {leftTab === 'agents' ? (
               <>
-                <div className="px-1 pt-4 pb-2 text-xs font-bold uppercase tracking-widest text-slate-600">My Agents</div>
+                {/* My Agents — always visible so the import/export buttons are always within reach */}
+                <div className="px-1 pt-4 pb-2 flex items-center justify-between">
+                  <div className="text-xs font-bold uppercase tracking-widest text-slate-600">My Agents</div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={exportAgents}
+                      title={customAgents.length === 0
+                        ? 'No custom agents yet — create or import some first'
+                        : (ioStatus.kind === 'export' ? ioStatus.msg : 'Export all custom agents to a JSON file')}
+                      aria-label="Export custom agents to a JSON file"
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg transition-all"
+                      style={{
+                        color: customAgents.length === 0 ? '#475569' : (ioStatus.kind === 'export' ? '#a78bfa' : '#94a3b8'),
+                        background: ioStatus.kind === 'export' ? 'rgba(167,139,250,0.15)' : 'transparent',
+                        cursor: customAgents.length === 0 ? 'not-allowed' : 'pointer',
+                        opacity: customAgents.length === 0 ? 0.5 : 1,
+                      }}
+                      onMouseEnter={e => { if (customAgents.length > 0) (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-sm)' }}
+                      onMouseLeave={e => { if (customAgents.length > 0) (e.currentTarget as HTMLElement).style.background = ioStatus.kind === 'export' ? 'rgba(167,139,250,0.15)' : 'transparent' }}>
+                      <Download size={12} />
+                      <span className="text-[10px] font-semibold">Export</span>
+                    </button>
+                    <button
+                      onClick={importAgents}
+                      title={ioStatus.kind === 'import' ? ioStatus.msg : 'Import agents from a JSON file'}
+                      aria-label="Import agents from a JSON file"
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg transition-all"
+                      style={{
+                        color: ioStatus.kind === 'import' ? '#a78bfa' : '#94a3b8',
+                        background: ioStatus.kind === 'import' ? 'rgba(167,139,250,0.15)' : 'transparent',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--ds-glass-sm)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ioStatus.kind === 'import' ? 'rgba(167,139,250,0.15)' : 'transparent' }}>
+                      <Upload size={12} />
+                      <span className="text-[10px] font-semibold">Import</span>
+                    </button>
+                  </div>
+                </div>
+
+                {ioStatus.msg && (
+                  <div className="px-3 py-1.5 mb-2 rounded-lg text-[10px]"
+                    style={{
+                      background: ioStatus.msg.includes('failed') || ioStatus.msg.includes('error') || ioStatus.msg.includes('not found')
+                        ? 'rgba(248,113,113,0.1)' : 'rgba(167,139,250,0.1)',
+                      color: ioStatus.msg.includes('failed') || ioStatus.msg.includes('error') ? '#f87171' : '#a78bfa',
+                      border: ioStatus.msg.includes('failed') || ioStatus.msg.includes('error') || ioStatus.msg.includes('not found')
+                        ? '1px solid rgba(248,113,113,0.2)' : '1px solid rgba(167,139,250,0.2)',
+                    }}>
+                    {ioStatus.msg}
+                  </div>
+                )}
+
+                {customAgents.length > 0 ? (
+                  <div className="space-y-2">
+                    {customAgents.map((agent, i) => (
+                      <AgentCard key={agent.id} agent={agent} index={i} selected={selected?.id === agent.id}
+                        onStart={() => startAgent(agent)} onDelete={() => deleteCustomAgent(agent.id)} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-3 py-3 mb-3 rounded-xl text-[11px] text-center"
+                    style={{ background: 'var(--ds-glass-xs)', border: '1px dashed var(--ds-border-sm)', color: '#64748b' }}>
+                    No custom agents yet. Use the <Upload size={10} className="inline mx-0.5 -mt-0.5" /> button above to import from a file.
+                  </div>
+                )}
+
+                <div className="px-1 pt-4 pb-2 text-xs font-bold uppercase tracking-widest text-slate-600">Agent Templates</div>
                 <div className="space-y-2">
-                  {customAgents.map((agent, i) => (
-                    <AgentCard key={agent.id} agent={agent} index={i} selected={selected?.id === agent.id}
-                      onStart={() => startAgent(agent)} onDelete={() => deleteCustomAgent(agent.id)} />
+                  {TEMPLATE_AGENTS.map((agent, i) => (
+                    <AgentCard key={agent.id} agent={agent} index={i} selected={selected?.id === agent.id} onStart={() => startAgent(agent)} />
                   ))}
                 </div>
               </>
-            )}
-
-            <div className="px-1 pt-4 pb-2 text-xs font-bold uppercase tracking-widest text-slate-600">Agent Templates</div>
-            <div className="space-y-2">
-              {TEMPLATE_AGENTS.map((agent, i) => (
-                <AgentCard key={agent.id} agent={agent} index={i} selected={selected?.id === agent.id} onStart={() => startAgent(agent)} />
-              ))}
-            </div>
-
-            {conversations.length > 0 && (
+            ) : (
               <>
-                <div className="px-1 pt-5 pb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-slate-600">
-                  <Archive size={11} /> Conversations
+                <button onClick={() => {
+                  if (selected) startNewConversation()
+                  else if (conversations[0]) resumeConversation(conversations[0])
+                }}
+                  disabled={!selected && conversations.length === 0}
+                  className="w-full mt-3 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-semibold transition-all"
+                  style={{
+                    background: (selected || conversations.length > 0) ? 'linear-gradient(135deg,rgba(167,139,250,0.22),rgba(139,92,246,0.15))' : 'var(--ds-glass-sm)',
+                    border: `1px solid ${(selected || conversations.length > 0) ? 'rgba(167,139,250,0.35)' : 'var(--ds-border-sm)'}`,
+                    color: (selected || conversations.length > 0) ? '#a78bfa' : '#2d4060',
+                    cursor: (selected || conversations.length > 0) ? 'pointer' : 'not-allowed',
+                  }}>
+                  <MessageSquarePlus size={12} /> New Conversation
+                </button>
+
+                {selected && chatHistory.length > 0 && (
+                  <div className="mt-3 px-1 pb-1.5 text-[10px] uppercase tracking-widest text-slate-700 font-bold">
+                    Current
+                  </div>
+                )}
+                {selected && chatHistory.length > 0 && (
+                  <ConvoCard key="current" convo={{
+                    id: convoIdRef.current || 'current',
+                    agent: selected,
+                    title: smartTitle(chatHistory.find(m => m.role === 'user')?.content || '', selected.name),
+                    messages: chatHistory.map(m => ({ role: m.role, content: m.content })),
+                    createdAt: createdAtRef.current,
+                    updatedAt: Date.now(),
+                  }} active={true}
+                    onOpen={() => {}}
+                    onDelete={() => {
+                      if (chatHistory.length === 0) return
+                      window.electronAPI.agents.deleteConversation(convoIdRef.current!).catch(() => {})
+                      setConversations(prev => prev.filter(c => c.id !== convoIdRef.current))
+                      setChatHistory([])
+                      convoIdRef.current = `conv-${Date.now()}`
+                      createdAtRef.current = Date.now()
+                    }} />
+                )}
+
+                <div className="px-1 pt-4 pb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-slate-600">
+                  <Archive size={11} /> Saved ({conversations.length})
                 </div>
-                <div className="space-y-1.5">
-                  {conversations.map(convo => (
-                    <ConvoCard key={convo.id} convo={convo} active={convoIdRef.current === convo.id && !!selected}
-                      onOpen={() => resumeConversation(convo)} onDelete={() => deleteConversation(convo.id)} />
-                  ))}
-                </div>
+                {conversations.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-[11px] text-slate-700 leading-relaxed">
+                    No conversations yet. Start a chat with any agent — it'll appear here automatically.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {conversations.map(convo => (
+                      <ConvoCard key={convo.id} convo={convo} active={convoIdRef.current === convo.id && !!selected}
+                        onOpen={() => resumeConversation(convo)} onDelete={() => deleteConversation(convo.id)} />
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -455,11 +835,23 @@ export default function AgentsPage() {
                     <div className="text-[10px] text-slate-600 truncate max-w-xs">{selected.description}</div>
                   </div>
                 </div>
-                <button onClick={closeWorkspace}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 hover:text-slate-300 transition-colors"
-                  style={{ border: '1px solid var(--ds-border-sm)' }}>
-                  <X size={13} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={downloadConversationZip} disabled={chatHistory.length === 0} title="Download conversation as ZIP"
+                    className="h-7 px-2.5 flex items-center gap-1.5 rounded-lg text-[10px] font-semibold transition-all"
+                    style={{
+                      background: chatHistory.length === 0 ? 'var(--ds-glass-sm)' : `${selected.color}14`,
+                      border: `1px solid ${chatHistory.length === 0 ? 'var(--ds-border-sm)' : `${selected.color}28`}`,
+                      color: chatHistory.length === 0 ? '#2d4060' : selected.color,
+                      cursor: chatHistory.length === 0 ? 'not-allowed' : 'pointer',
+                    }}>
+                    <Download size={11} /> ZIP
+                  </button>
+                  <button onClick={closeWorkspace} title="Close"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 hover:text-slate-300 transition-colors"
+                    style={{ border: '1px solid var(--ds-border-sm)' }}>
+                    <X size={13} />
+                  </button>
+                </div>
               </div>
 
               {/* Chat messages */}
@@ -747,21 +1139,26 @@ export function parseFences(content: string): Fence[] {
 function MessageExtras({ content, color, agentName }: { content: string; color: string; agentName: string }) {
   const fences = parseFences(content)
   const [zipped, setZipped] = useState(false)
-  if (fences.length < 2) return null
+  if (fences.length === 0) return null
 
   const downloadZip = async () => {
     const files = fences.map((f, i) => ({ path: fenceFilename(f, i), content: f.code }))
     const safeName = agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'agent'
-    const res = await window.electronAPI.file.saveZip({ filename: `${safeName}-files.zip`, files })
+    const label = fences.length === 1 ? 'file' : `${fences.length} files`
+    const res = await window.electronAPI.file.saveZip({ filename: `${safeName}-${label}.zip`, files })
     if (res?.success) { setZipped(true); setTimeout(() => setZipped(false), 2000) }
   }
 
   return (
     <button onClick={downloadZip}
       className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all"
-      style={{ background: `${color}14`, border: `1px solid ${color}28`, color, cursor: 'pointer' }}>
+      style={{ background: `${color}14`, border: `1px solid ${color}28`, color, cursor: 'pointer' }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${color}22` }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${color}14` }}>
       {zipped ? <Check size={11} /> : <Download size={11} />}
-      {zipped ? 'Saved!' : `Download all ${fences.length} files as ZIP`}
+      {zipped ? 'Saved!' : (fences.length === 1
+        ? 'Download as ZIP'
+        : `Download all ${fences.length} files as ZIP`)}
     </button>
   )
 }

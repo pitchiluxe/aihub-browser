@@ -249,7 +249,7 @@
   <div class="hero">
     <canvas id="constellation" aria-label="Animated knowledge-graph constellation of bookmarks"></canvas>
     <div class="hero-copy">
-      <div class="eyebrow">AIHub Browser · __AIHUB_VERSION__ · Created by Erick Omari</div>
+      <div class="eyebrow">AIHub Browser · 1.59 · Created by Erick Omari</div>
       <h1>The browser that thinks with you.</h1>
       <p>Every tab becomes knowledge. Every bookmark becomes a star in your graph. And an AI agent sits behind it all, ready to research, build, and browse on your behalf.</p>
       <button class="hero-btn" id="replay">▶ Replay timelapse</button>
@@ -280,6 +280,8 @@
       <a href="#command">Command palette</a>
       <a href="#rewind">Rewind</a>
       <a href="#watch">Watch &amp; Ping</a>
+      <div class="rail-grp">New in 1.59</div>
+      <a href="#ai-responses">Beautifully Formatted AI Responses</a>
       <div class="rail-grp">New in 1.58</div>
       <a href="#downloads-menu">Downloads menu</a>
       <a href="#pagevault">Page Vault</a>
@@ -775,6 +777,49 @@
           <div class="note warn" style="margin-top:18px"><strong>Safety rails you should know about.</strong> The agent asks permission before running any shell command, and it will never click a final <em>Submit</em> / <em>Apply</em> / <em>Send</em> button on its own — it stops, shows you exactly what's about to be sent, and waits for your confirmation. If a site needs a login, a CAPTCHA, or a file upload, it hands control back to you. Press the ■ stop button any time to halt a running task.</div>
 
           <div class="note" style="margin-top:14px"><strong>Getting better answers:</strong> say the output shape you want ("as a table", "5 bullets", "a bash script"), name the constraint ("under $500", "published this year"), and tell it when to use real sources ("with citations"). It will use live web search whenever the question needs current facts.</div>
+        </div>
+      </section>
+
+      <!-- AI RESPONSES -->
+      <section id="ai-responses">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Beautifully Formatted AI Responses <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Every AI response is rendered as rich, colorful content — not plain text.</p>
+        <div class="body-col">
+          <p>Ask the AI assistant or the Community AI Hub Guide anything and the answer comes back beautifully formatted, ready to read and act on.</p>
+
+          <h3 style="margin-top:24px">Rich content types</h3>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Tables</h4><p>Comparisons, data, and lists render as styled tables with headers, borders, and alternating row hints.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Code blocks</h4><p>Code comes in colored blocks with language detection, a colored dot showing the language, and Copy/Save buttons.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Headings &amp; lists</h4><p>Bold headings, structured bullet points, numbered lists — answers are organized for scanning.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Links &amp; references</h4><p>All links are styled and clickable, opening in a new tab. References have proper citation formatting.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--rose)"></span>Emojis</h4><p>Emojis are preserved and rendered in full color — conversations stay expressive.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Blockquotes</h4><p>Quoted text gets styled with accent-colored borders and subtle gradients.</p></div>
+          </div>
+
+          <h3 style="margin-top:28px">In the Community tab</h3>
+          <p>Even the AI Hub Guide's messages in the Community tab are beautifully formatted. Ask the guide about any topic and get rich, readable responses with tables, code, headings, and more — not wall-of-text plain text.</p>
+
+          <div class="chat" style="margin-top:14px">
+            <div class="bub me">@AIHub Guide What programming languages should I learn in 2026?</div>
+            <div class="bub ai">
+              Great question! Here's my recommendation in a table:
+              <div style="overflow-x:auto">
+              <table>
+                <thead><tr><th>Language</th><th>Best for</th><th>Difficulty</th><th>2026 Outlook</th></tr></thead>
+                <tbody>
+                  <tr><td>Python</td><td>AI, Data Science, Automation</td><td>Easy</td><td>🔥 Very hot</td></tr>
+                  <tr><td>TypeScript</td><td>Web, Apps, Full-stack</td><td>Medium</td><td>🔥 Hot</td></tr>
+                  <tr><td>Rust</td><td>Systems, Performance</td><td>Hard</td><td>🌱 Growing</td></tr>
+                </tbody>
+              </table>
+              </div>
+              <p style="margin-top:10px">Start with Python if you're new! 🚀</p>
+            </div>
+          </div>
+          <figcaption style="text-align:left">AI responses in the Community tab render as rich formatted content — tables, headings, emojis, and more.</figcaption>
+
+          <div class="note good" style="margin-top:20px"><strong>The same renderer everywhere.</strong> Whether you're in the AI assistant panel, Agent Mode, or the Community tab — every AI response uses the same rich formatting system, so the experience is consistent and beautiful everywhere.</div>
         </div>
       </section>
 
@@ -1764,7 +1809,7 @@
       </section>
 
       <footer>
-        <p><strong style="color:var(--ink)">AIHub Browser __AIHUB_VERSION__</strong> — an AI operating system for the web.</p>
+        <p><strong style="color:var(--ink)">AIHub Browser 1.59</strong> — an AI operating system for the web.</p>
         <p style="margin-top:6px">Built on Electron and Chromium · Windows, macOS, Linux · Auto-updating from GitHub Releases</p>
         <p style="margin-top:14px; padding-top:14px; border-top:1px solid var(--line)">
           <strong style="color:var(--ink)">Created by Erick Omari</strong><br>
