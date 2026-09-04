@@ -131,7 +131,76 @@ Additionally, `CommunityPage.tsx` imports heavy dependencies: `react-markdown`, 
 
 ## Security Findings
 
-### S1 — MEDIUM: OpenRouter API key baked into build at compile time
+### S1 — CRITICAL: `sandbox: false` on the main app BrowserWindow
+
+**Location:** `src/main/index.ts:1544`  
+**Evidence:**
+```typescript
+webPreferences: {
+  sandbox: false, webviewTag: false,
+  nodeIntegration: false, contextIsolation: true, webSecurity: false,
+  ...
+}
+```
+
+**Problem:** The main BrowserWindow has `sandbox: false`. While `contextIsolation: true` and `nodeIntegration: false` protect the renderer from the preload bridge, the main window's renderer process is not OS-process-isolated. A vulnerability in V8 (or the Chrome renderer) could be leveraged to escape into the main process, bypassing the IPC security model entirely.
+
+**Fix:** Set `sandbox: true` on the main BrowserWindow. Move any preload functionality that requires the world behind `contextBridge` handlers instead of disabling sandboxing.
+
+**CWE:** CWE-1007 (Insufficiently Protected Credentials / Principle of Least Privilege)
+
+---
+
+### S2 — CRITICAL: `webview:execScript` allows arbitrary JS execution in any webContents
+
+**Location:** `src/main/index.ts:5822–5829`  
+**Evidence:**
+```typescript
+ipcMain.handle('webview:execScript', async (_e, wcId: number, script: string) => {
+  const wc = electronWebContents.fromId(wcId)
+  if (!wc) return { ok: false, error: 'webContents not found' }
+  const result = await wc.executeJavaScript(script, true)
+  return { ok: true, result }
+})
+```
+
+**Problem:** The handler validates `wcId` exists but does **not** verify it belongs to the calling renderer. A compromised renderer context could call this with any `wcId` — including the main app window's webContents — and execute arbitrary JavaScript in it. Even without `nodeIntegration`, script injection into the app shell is a serious escalation path.
+
+**Fix:** Maintain a map of valid tab IDs per renderer session. Validate that `wcId` maps to a tab owned by the calling renderer before executing.
+
+---
+
+### S3 — HIGH: AI-generated extension code has no semantic validation
+
+**Location:** `src/renderer/src/services/extensionGenerator.ts:159–194`  
+**Evidence:**
+```typescript
+// Only SyntaxError is caught — any syntactically valid JS is accepted
+new Function(injectCode)
+new Function(removeCode)
+```
+
+**Problem:** The AI can emit JavaScript that scrapes sensitive page content (form data, passwords), reads `localStorage`/`sessionStorage`, or exfiltrates data to external servers. The only guard is a syntax check. Prompt injection in the extension generation prompt could cause the AI to emit JavaScript with network access or DOM-reading behavior.
+
+**Fix:** Add semantic validation beyond syntax. Reject generated code containing patterns like `eval(`, `Function(`, `document.cookie`, `localStorage`, `fetch(` to external domains, or `location.href` assignment. Add an approval dialog for AI-generated extensions with network access.
+
+---
+
+### S4 — HIGH: `tabView:execJs` allows AI agent to execute arbitrary script in user tabs
+
+**Location:** `src/renderer/src/services/agentTools.ts:583`  
+**Evidence:**
+```typescript
+const res = await window.electronAPI.tabView.execJs(tabId, script)
+```
+
+**Problem:** The AI agent can choose which agent tool to call and with what selectors/data, allowing script execution in user tabs. Selectors and field values could extract sensitive form data or interact with pages in unexpected ways.
+
+**Fix:** Restrict agent tools that read DOM content to read-only operations. Add confirmation prompts for actions that modify page state.
+
+---
+
+### S5 — MEDIUM: OpenRouter API key baked into build at compile time
 
 **Location:** `electron.vite.config.ts` lines 42–48 (`mainDefine`)  
 **Evidence:**
@@ -139,7 +208,6 @@ Additionally, `CommunityPage.tsx` imports heavy dependencies: `react-markdown`, 
 const mainDefine: Record<string, string> = {
   'process.env.AIHUB_VERSION': JSON.stringify(pkgVersion),
   'process.env.ANTHROPIC_AUTH_TOKEN': JSON.stringify(e('ANTHROPIC_AUTH_TOKEN')),
-  'process.env.ANTHROPIC_BASE_URL': ...,
   ...
 }
 ```
@@ -149,89 +217,86 @@ These values are baked into `out/main/index.js` as string literals. Any user who
 
 ---
 
-### S2 — MEDIUM: `webSecurity: false` on the screen capture BrowserView
+### S6 — MEDIUM: `webSecurity: false` on the screen capture BrowserView
 
 **Location:** `src/main/index.ts:1544`  
-**Evidence:**
-```ts
-webPreferences: {
-  sandbox: false, webviewTag: false,
-  nodeIntegration: false, contextIsolation: true, webSecurity: false,
-  ...
-}
-```
-`webSecurity: false` disables same-origin policy and allows local file access from that BrowserView. This is needed for screen capture's still-frame reading, but it means the capture BrowserView can make requests to `file://` URLs.
+**Evidence:** `webSecurity: false` disables same-origin policy and allows local file access from that BrowserView. Needed for screen capture's still-frame reading, but overbroad.
 
-**Fix:** Restrict this to only the capture view. Consider running the capture frame in a sandboxed subprocess with minimal permissions. Add a comment explaining why this is necessary and that it must not be copied to other BrowserView configs.
+**Fix:** Only disable `webSecurity` for specific capture views, not globally. Add a comment explaining why it is necessary.
 
 ---
 
-### S3 — MEDIUM: `executeJavaScript` on arbitrary webContents without timeout
+### S7 — MEDIUM: `ai:fetchPage` SSRF — no internal IP blocklist
+
+**Location:** `src/main/index.ts:5691–5703`  
+**Evidence:**
+```typescript
+ipcMain.handle('ai:fetchPage', async (_e, url: string) => {
+  if (!/^https?:\/\//i.test(String(url || ''))) return ...
+  const { status, body, finalUrl } = await fetchHtml(url, 12000)
+```
+
+**Problem:** A compromised renderer could call `ai:fetchPage` with an internal network address (e.g., `http://192.168.1.1/admin`, `http://localhost:11434/api`). Up to 14,000 characters of the internal response would be visible to the AI model.
+
+**Fix:** Add an internal IP blocklist:
+```ts
+const blocklist = /^(127\.|localhost|0\.0\.0\.0|10\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|192\.168\.|::1|\[::1\])/i
+if (blocklist.test(url)) return { success: false, error: 'internal URLs not allowed' }
+```
+
+---
+
+### S8 — LOW: `executeJavaScript` on arbitrary webContents without timeout
 
 **Location:** `src/main/index.ts:847`, `:1131`, `:2325`, `:2355`, `:2561`, `:2640`, `:5826`  
-**Evidence:** Multiple calls to `wc.executeJavaScript(script, true)` with no timeout. If a page hangs or an injected script causes an infinite loop, the main process blocks indefinitely on the IPC response.
-
-The `true` second argument enables `userGesture` which is correct, but there's no timeout enforcement.
+**Evidence:** Multiple calls to `wc.executeJavaScript(script, true)` with no timeout. If a page hangs, the main process blocks indefinitely.
 
 **Fix:**
 ```ts
-const executeWithTimeout = async (wc: WebContents, script: string, ms = 5000) => {
-  return Promise.race([
+const execWithTimeout = (wc, script, ms = 5000) =>
+  Promise.race([
     wc.executeJavaScript(script, true),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Script timeout')), ms))
+    new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms))
   ])
-}
 ```
 
 ---
 
-### S4 — LOW: `dangerouslySetInnerHTML` used in AnnotationCanvas
+### S9 — LOW: Crash page template — `host` not HTML-escaped
 
-**Location:** `src/renderer/src/components/browser/AnnotationCanvas.tsx`  
-**Evidence:** The renderer uses `dangerouslySetInnerHTML` for annotation canvas content. If annotation data is ever sourced from untrusted input (e.g., a community annotation saved by another user), this is an XSS vector.
+**Location:** `src/main/index.ts:1080`  
+**Evidence:** `host` interpolated into the crash page HTML without escaping. A crashed URL containing `<script>` could inject into the crash page's data: origin context.
 
-**Fix:** Ensure all annotation content is sanitized with `DOMPurify` before rendering. Add a comment explaining the trust model.
-
----
-
-### S5 — LOW: Console.log present in production main process
-
-**Location:** `src/main/index.ts`  
-**Evidence:** `console.log` calls in the main process go to `stdout` and are visible in developer tools. More critically, any accidental logging of sensitive IPC data (URLs, auth tokens, form data) would expose it.
-
-**Fix:** Replace `console.log` in `src/main/index.ts` with a structured logger (e.g., `electron-log`) that respects `LOG_LEVEL` and can be silenced in production builds.
+**Fix:** Escape `host`: `const safeHost = host.replace(/</g, '&lt;')`.
 
 ---
 
-### S6 — LOW: No Content-Security-Policy header in the main window
+### S10 — LOW: Console.log present in production main process
 
-**Evidence:** No `session.webRequest.onHeadersReceived` handler sets CSP for the renderer window. This makes the host HTML vulnerable to injected scripts if any dependency or CDN resource is compromised.
+**Location:** `src/main/index.ts` — 11 instances of `console.log`/`console.warn`  
+**Evidence:** AI routing decisions, model names, and error messages logged to stdout/stderr in production builds.
 
-**Fix:** Add a CSP header:
+**Fix:** Replace with `electron-log` with `LOG_LEVEL` env var, defaulting to `warn` in production.
+
+---
+
+### S11 — LOW: No Content-Security-Policy header for the renderer
+
+**Evidence:** No `session.webRequest.onHeadersReceived` handler sets CSP for the main renderer window.
+
+**Fix:**
 ```
 Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.openrouter.ai https://*.supabase.co https://localhost:*;
 ```
 
 ---
 
-### S7 — INFO: `app.commandLine.appendSwitch('no-sandbox')` disables Chromium sandbox
+### S12 — LOW: `clipboard-read` on the ALLOWED_PERMISSIONS allowlist
 
-**Location:** `src/main/index.ts:92–95`  
-**Evidence:**
-```ts
-// Disable problematic GPU sandbox on Windows to avoid cache permission errors
-app.commandLine.appendSwitch('no-sandbox')
-app.commandLine.appendSwitch('disable-gpu-sandbox')
-```
-The `--no-sandbox` switch is commonly needed in Docker or CI environments but **should not be the default** for installed desktop applications. It removes Chromium's security boundary between the renderer and the OS.
+**Location:** `src/main/index.ts:691`  
+**Evidence:** `clipboard-read` is pre-approved with no user prompt. Pages can poll clipboard without interaction.
 
-**Fix:** Only apply `--no-sandbox` when running in a container or CI environment:
-```ts
-if (process.env.CI || process.env.DOCKER) {
-  app.commandLine.appendSwitch('no-sandbox')
-  app.commandLine.appendSwitch('disable-gpu-sandbox')
-}
-```
+**Fix:** Remove `clipboard-read` from the allowlist.
 
 ---
 
@@ -464,4 +529,4 @@ Mark onboarding complete in `localStorage`. Don't show it again.
 
 ---
 
-*End of audit report. All findings are based on static code analysis and runtime testing of v1.60.0. Findings marked P1/P2/S1 are recommended for immediate action before any major user-facing push.*
+*End of audit report. All findings are based on static code analysis and runtime testing of v1.60.0. Critical security findings (S1-S4) should be addressed before any major user-facing push.*
