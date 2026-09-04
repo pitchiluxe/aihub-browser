@@ -23,6 +23,7 @@ const DownloadsPage  = lazy(() => import('./components/pages/DownloadsPage'))
 const WifiPage       = lazy(() => import('./components/pages/WifiPage'))
 const VpnPage        = lazy(() => import('./components/pages/VpnPage'))
 const ResearchPage   = lazy(() => import('./components/pages/ResearchPage'))
+const CommunityListsPage = lazy(() => import('./components/pages/CommunityListsPage'))
 const AgentsPage     = lazy(() => import('./components/pages/AgentsPage'))
 const ExtensionsPage = lazy(() => import('./components/pages/ExtensionsPage'))
 const MailPage       = lazy(() => import('./components/pages/MailPage'))
@@ -1079,6 +1080,7 @@ export default function App() {
                     {tab.pageType === 'bible'      && <BiblePage />}
                     {tab.pageType === 'study'      && <BibleStudyPage />}
                     {tab.pageType === 'community'  && <CommunityPage />}
+                    {tab.pageType === 'community-lists' && <CommunityListsPage />}
                   </Suspense>
                 </div>
               )
