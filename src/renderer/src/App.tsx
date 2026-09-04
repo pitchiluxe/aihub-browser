@@ -71,6 +71,7 @@ const TradingCoach = lazy(() => import('./components/trading/TradingCoach'))
 const ReaderView = lazy(() => import('./components/reader/ReaderView'))
 const TabCuratorPanel = lazy(() => import('./components/tabCurator/TabCuratorPanel'))
 const BottomSummaryCard = lazy(() => import('./components/parallelIntel/BottomSummaryCard'))
+const FocusNudge = lazy(() => import('./components/focus/FocusPanel'))
 declare global {
   interface Window {
     electronAPI: any
@@ -1139,6 +1140,10 @@ export default function App() {
         {currentPageInsight && currentPageInsight.tabId === activeTabId && (
           <BottomSummaryCard tabId={currentPageInsight.tabId} onClose={dismissPageInsight} />
         )}
+      </Suspense>
+      {/* F9: Focus Mode — time-aware browsing nudge */}
+      <Suspense fallback={null}>
+        <FocusNudge />
       </Suspense>
 
       {/* Split-view divider — sits in the gutter between the two native views. */}
