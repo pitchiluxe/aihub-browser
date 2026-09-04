@@ -69,7 +69,7 @@ const AIAssistant = lazy(() => import('./components/ai/AIAssistant'))
 const TradingCoach = lazy(() => import('./components/trading/TradingCoach'))
 // Reading Mode is a clean article view, only mounted when the user asks for it.
 const ReaderView = lazy(() => import('./components/reader/ReaderView'))
-
+const TabCuratorPanel = lazy(() => import('./components/tabCurator/TabCuratorPanel'))
 declare global {
   interface Window {
     electronAPI: any
@@ -97,7 +97,7 @@ export default function App() {
     canGoBack, canGoForward, setNavState, setBookmarks,
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
     splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen,
-    isTradingCoachOpen, isReaderOpen, hostOverlayCount, tabWcIds,
+    isTradingCoachOpen, isReaderOpen, isCuratorOpen, setCuratorOpen, hostOverlayCount, tabWcIds,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
@@ -106,7 +106,8 @@ export default function App() {
     splitTabId: s.splitTabId, isBookmarksMenuOpen: s.isBookmarksMenuOpen,
     isDownloadsMenuOpen: s.isDownloadsMenuOpen, isTableExportOpen: s.isTableExportOpen,
     isCaptureOverlayOpen: s.isCaptureOverlayOpen, isTradingCoachOpen: s.isTradingCoachOpen,
-    isReaderOpen: s.isReaderOpen,
+    isReaderOpen: s.isReaderOpen, isCuratorOpen: s.isCuratorOpen,
+    setCuratorOpen: s.setCuratorOpen,
     hostOverlayCount: s.hostOverlayCount,
     tabWcIds: s.tabWcIds,
   })))
@@ -798,8 +799,8 @@ export default function App() {
     // The Trading Coach panel does NOT detach the chart — it reserves a
     // 432px right gutter via the bounds-sync effect above, so the chart
     // slides to the left and stays visible alongside the panel.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen || isCaptureOverlayOpen || hostOverlayCount > 0 || isReaderOpen)
-  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen, hostOverlayCount, isReaderOpen])
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen || isCaptureOverlayOpen || hostOverlayCount > 0 || isReaderOpen || isCuratorOpen)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen, hostOverlayCount, isReaderOpen, isCuratorOpen])
 
   // Clear a tab's loading state, but keep the spinner up for a short floor so
   // a load that finished almost instantly still registers as an action. Any
@@ -1107,6 +1108,9 @@ export default function App() {
       <TradingCoach />
       <Suspense fallback={null}>
         <ReaderView />
+      </Suspense>
+      <Suspense fallback={null}>
+        {isCuratorOpen && <TabCuratorPanel onClose={() => setCuratorOpen(false)} />}
       </Suspense>
 
       {/* Split-view divider — sits in the gutter between the two native views. */}

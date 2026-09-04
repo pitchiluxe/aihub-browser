@@ -114,6 +114,8 @@ interface BrowserState {
   setCmdPaletteOpen: (v: boolean) => void
   isCompareOpen: boolean
   setCompareOpen: (v: boolean) => void
+  isCuratorOpen: boolean
+  setCuratorOpen: (v: boolean) => void
   // URL to pre-fill the Add-to-Sphere modal with (set from the page context menu)
   bookmarkPrefill: string
   setBookmarkPrefill: (u: string) => void
@@ -435,6 +437,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setCmdPaletteOpen: (v) => set({ isCmdPaletteOpen: v }),
   isCompareOpen: false,
   setCompareOpen: (v) => set({ isCompareOpen: v }),
+  isCuratorOpen: false,
+  setCuratorOpen: (v) => set({ isCuratorOpen: v }),
 
   bookmarkPrefill: '',
   setBookmarkPrefill: (u) => set({ bookmarkPrefill: u }),
