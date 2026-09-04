@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { X, ChevronUp, ChevronDown, Loader2 } from 'lucide-react'
+import React, { useState } from 'react'
+import { X, ChevronUp, ChevronDown } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
 interface Props {
@@ -12,7 +12,7 @@ export default function BottomSummaryCard({ tabId, onClose }: Props) {
   const [expanded, setExpanded] = useState(false)
 
   if (!insight || insight.tabId !== tabId) return null
-  const { bullets, title, pageType } = insight
+  const { bullets, pageType } = insight
 
   return (
     <div style={{

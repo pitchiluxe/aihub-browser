@@ -3,10 +3,10 @@
 // and manage your own reading lists. AI-generated summaries help decide whether
 // a list is worth your time.
 
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback } from 'react'
 import {
-  Plus, Search, Users, BookOpen, Sparkles, Star, ExternalLink,
-  Trash2, Edit3, Check, X, Loader2, ChevronRight, Filter, Rss,
+  Plus, Search, Users, BookOpen, Sparkles, ExternalLink,
+  Trash2, Check, X, Loader2,
 } from 'lucide-react'
 import {
   useReadingLists, uniqueThemes, type ReadingList, type ReadingListItem,
@@ -139,11 +139,10 @@ function AddToListDrawer({ url, title, onClose }: { url: string; title: string; 
 
 // ─── List card ────────────────────────────────────────────────────────────────
 
-function ListCard({ list, onDelete, onOpen, onAddItem }: {
+function ListCard({ list, onDelete, onAddItem }: {
   list: ReadingList
   onDelete?: () => void
-  onOpen?: () => void
-  onAddItem?: () => void
+  onAddItem?: (item: ReadingListItem) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [summarising, setSummarising] = useState(false)
@@ -184,11 +183,6 @@ function ListCard({ list, onDelete, onOpen, onAddItem }: {
             <div style={{ fontSize: 14, fontWeight: 800, color: 'rgb(var(--ds-text-1))', lineHeight: 1.3 }}>{list.title}</div>
           </div>
           <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-            {onOpen && (
-              <button onClick={onOpen} title="Open list" style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--ds-glass-sm)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ChevronRight size={13} style={{ color: 'rgb(var(--ds-text-4))' }} />
-              </button>
-            )}
             {onDelete && (
               <button onClick={onDelete} title="Delete list" style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Trash2 size={12} style={{ color: '#f87171' }} />
@@ -351,7 +345,6 @@ export default function CommunityListsPage() {
   const [search, setSearch] = useState('')
   const [themeFilter, setThemeFilter] = useState<string | null>(null)
   const [addToListUrl, setAddToListUrl] = useState<{ url: string; title: string } | null>(null)
-  const [openingList, setOpeningList] = useState<ReadingList | null>(null)
 
   const { lists } = useReadingLists()
   const activeTab_ = useBrowserStore(s => s.tabs.find(t => t.id === s.activeTabId))
@@ -460,7 +453,7 @@ export default function CommunityListsPage() {
             {/* Create form */}
             {showCreate ? (
               <div style={{ marginBottom: 20 }}>
-                <CreateListForm onClose={list => { setShowCreate(false); if (list) { setOpeningList(list); setActiveTab('my') } }} />
+                <CreateListForm onClose={list => { setShowCreate(false); if (list) setActiveTab('my') }} />
               </div>
             ) : (
               <button onClick={() => setShowCreate(true)} style={{ marginBottom: 20, padding: '12px 16px', borderRadius: 12, background: 'rgba(167,139,250,0.08)', border: '1px dashed rgba(167,139,250,0.3)', color: '#a78bfa', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -488,7 +481,6 @@ export default function CommunityListsPage() {
               {subscribedLists.map(l => (
                 <ListCard
                   key={l.id} list={l}
-                  onOpen={() => setOpeningList(l)}
                   onDelete={l.author === 'you' ? () => deleteList(l.id) : undefined}
                 />
               ))}
@@ -512,7 +504,6 @@ export default function CommunityListsPage() {
             {filteredLists.map(l => (
               <ListCard
                 key={l.id} list={l}
-                onOpen={() => setOpeningList(l)}
                 onDelete={l.author === 'you' ? () => deleteList(l.id) : undefined}
                 onAddItem={l.author === 'you' ? (item) => removeItem(l.id, item.url) : undefined}
               />

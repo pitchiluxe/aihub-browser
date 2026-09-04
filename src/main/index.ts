@@ -2673,7 +2673,9 @@ ipcMain.handle('history:smartSearch', async (_e, query: string) => {
   const semantic = terms.length >= 2
   if (semantic) {
     try {
-      const docs = history.map(h => ({ id: h.id, text: `${h.title} ${h.url}` }))
+      const docs: SearchDoc[] = history.map(h => ({
+        id: h.id, title: h.title, url: h.url, text: `${h.title} ${h.url}`, ts: h.ts,
+      }))
       const { results: semResults } = await semanticIndex.search(query, docs)
       const byId = new Map(history.map(h => [h.id, h]))
       const semItems = semResults

@@ -90,7 +90,6 @@ function keywordCurator(tabs: Tab[]): TabCluster[] {
 
   for (const tab of tabs) {
     const url = tab.url || ''
-    const title = tab.title || ''
 
     // Extract a meaningful keyword from domain
     const domainMatch = url.match(/https?:\/\/(?:www\.)?([^/]+)/)

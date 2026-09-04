@@ -4,9 +4,9 @@
 // text-to-speech. Closes with Esc, the close button, or the X in the
 // floating toolbar.
 
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import {
-  X, Sun, Moon, Type, Play, Pause, Square, Volume2, Settings, Loader2,
+  X, Play, Pause, Square, Volume2, Settings, Loader2,
   ChevronUp, ChevronDown, Bookmark,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -60,7 +60,7 @@ export default function ReaderView() {
   const [lineHeight, setLineHeight] = useState(1.7)
   const [width, setWidth] = useState(680)
   const [showSettings, setShowSettings] = useState(false)
-  const [showToolbar, setShowToolbar] = useState(true)
+  const [showToolbar] = useState(true)
   const [bookmarked, setBookmarked] = useState(false)
   const [tts, setTts] = useState<TtsState>({ status: 'idle', utterance: null, currentChunk: 0 })
 

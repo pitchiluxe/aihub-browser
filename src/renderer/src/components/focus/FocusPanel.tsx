@@ -4,12 +4,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { Clock, Plus, X, Settings, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Clock, Plus, X } from 'lucide-react'
 import {
-  useFocusTracker, activeBudget, budgetTotal, formatDuration,
-  getTodayTotals, getRecentDays, dismissBudget, isDismissedToday,
-  loadConfig, saveConfig, addBudget, setEnabled, todayKey,
-  type FocusBudget, type FocusConfig, type FocusEntry,
+  useFocusTracker, budgetTotal, formatDuration,
+  getRecentDays, dismissBudget, isDismissedToday,
+  loadConfig, addBudget, setEnabled, todayKey,
+  type FocusConfig, type FocusEntry,
 } from '../../services/focusMode'
 import { useBrowserStore } from '../../store/browserStore'
 
@@ -239,7 +239,7 @@ function FocusPanelContent({ config, onUpdateConfig, today, onClose }: {
               This week
             </div>
             <div style={{ display: 'flex', gap: 4, height: 60, alignItems: 'flex-end' }}>
-              {getLast7Days().map((date, i) => {
+              {getLast7Days().map((date) => {
                 const day = recent.find(d => d.date === date)
                 const total = config.budgets.reduce((s, b) => s + budgetTotal(b, day || null), 0)
                 const max = 60 * 60 // 1h = max bar height
@@ -292,7 +292,7 @@ function FocusPanelContent({ config, onUpdateConfig, today, onClose }: {
 }
 
 function getLast7Days(): string[] {
-  const result = []
+  const result: string[] = []
   for (let i = 6; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)

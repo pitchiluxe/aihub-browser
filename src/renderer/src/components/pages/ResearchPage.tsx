@@ -2,7 +2,7 @@
 // Split-view workspace: notepad (left) + sources/tiles (center) + report (right).
 // Auto-saves notes to localStorage. AI extracts key points from active tabs.
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FlaskConical, Loader2, Sparkles, ExternalLink, FileText,
@@ -72,7 +72,6 @@ export default function ResearchPage({ onNavigate }: Props) {
   // ── Notepad state ──
   const [notes,     setNotes]     = useState<NoteEntry[]>(loadNotes)
   const [draft,     setDraft]     = useState('')
-  const [saving,    setSaving]    = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
 
   // ── Sources / tabs state ──

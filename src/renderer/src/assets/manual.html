@@ -249,7 +249,7 @@
   <div class="hero">
     <canvas id="constellation" aria-label="Animated knowledge-graph constellation of bookmarks"></canvas>
     <div class="hero-copy">
-      <div class="eyebrow">AIHub Browser · 1.59 · Created by Erick Omari</div>
+      <div class="eyebrow">AIHub Browser · 1.61 · Created by Erick Omari</div>
       <h1>The browser that thinks with you.</h1>
       <p>Every tab becomes knowledge. Every bookmark becomes a star in your graph. And an AI agent sits behind it all, ready to research, build, and browse on your behalf.</p>
       <button class="hero-btn" id="replay">▶ Replay timelapse</button>
@@ -281,6 +281,17 @@
       <a href="#command">Command palette</a>
       <a href="#rewind">Rewind</a>
       <a href="#watch">Watch &amp; Ping</a>
+      <div class="rail-grp">New in 1.61</div>
+      <a href="#reading-mode">AI Reading Mode</a>
+      <a href="#semantic-history">Semantic History Search</a>
+      <a href="#tab-curator">AI Tab Curator</a>
+      <a href="#parallel-intel">Parallel Page Intelligence</a>
+      <a href="#research-workspace">Research Workspace</a>
+      <a href="#bookmark-summaries">Smart Bookmark Summaries</a>
+      <a href="#live-prices">Live Price Tracker</a>
+      <a href="#cross-tab-compare">Cross-Tab AI Comparison</a>
+      <a href="#focus-mode">Focus Mode 2.0</a>
+      <a href="#reading-lists">Community Reading Lists</a>
       <div class="rail-grp">New in 1.60</div>
       <a href="#coach">Trading Coach</a>
       <div class="rail-grp">New in 1.59</div>
@@ -832,6 +843,178 @@
         </div>
       </section>
 
+      <!-- ══ NEW IN 1.61 ══════════════════════════════════════════════════════ -->
+
+      <section id="reading-mode">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>AI Reading Mode <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Turn any article into a clean reading experience — or have it read aloud.</p>
+        <div class="body-col">
+          <p>Open any article or documentation page and the AI can extract the main content, strip the ads, sidebars and clutter, and present it as a clean document. Then ask the AI to read it aloud — the assistant narrates the article while you do something else.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Clean extraction</h4><p>The AI identifies the main article content and presents it without navigation, ads, or sidebars.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Read aloud</h4><p>Turn any article into audio. The AI narrates the content while you keep working or browse elsewhere.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>AI summary</h4><p>One click generates a concise summary of the article, exportable as Markdown or filed into your bookmarks.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Ask about the text</h4><p>Select any passage and ask the AI to explain it, translate it, or find related content on the page.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="semantic-history">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Semantic History Search <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Search your browsing history by meaning — not just title or URL.</p>
+        <div class="body-col">
+          <p>Open <strong>History</strong> and type a phrase you half-remember from an article, a product page, or a technical post. The search finds pages that match the meaning of your words, not just the words themselves.</p>
+          <p>Example: search <em>"that post about renderer crashes"</em> and it surfaces the page you read three days ago about V8 internals — even if the title said nothing about crashes.</p>
+          <div class="tbl-scroll" style="margin-top:14px">
+            <table>
+              <thead><tr><th>What changes</th><th>How it works</th></tr></thead>
+              <tbody>
+                <tr><td>Full-text content search</td><td>Pages are indexed by their actual content, not just title and URL</td></tr>
+                <tr><td>Meaning-based ranking</td><td>A local AI model scores pages by semantic similarity to your query</td></tr>
+                <tr><td>Everything stays local</td><td>The index lives on your machine — nothing is sent anywhere</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note good" style="margin-top:14px"><strong>It's in Rewind too.</strong> The same semantic search engine powers Rewind, so "what was that article about AI alignment?" finds the right page whether it's in your recent history or in the Rewind archive.</div>
+        </div>
+      </section>
+
+      <section id="tab-curator">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>AI Tab Curator <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Forty open tabs become an organized workspace — in one click.</p>
+        <div class="body-col">
+          <p>When the tab rail gets full, the <strong>AI Tab Curator</strong> analyses every open tab and groups them by topic, intent, and domain. A click collapses the noise and surfaces what you're actually working on.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Auto-group by topic</h4><p>The AI reads tab titles and URLs and clusters them into meaningful groups — "Documentation", "Reference", "Tools" — named by what they contain.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>One-click tidy</h4><p>A single button collapses inactive groups, focuses the ones you're working in, and dims the rest.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Tab search</h4><p>Press the curator's search field and find any tab by its content — not just its title.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Sleep non-essential groups</h4><p>Dormant groups can be put to sleep — freeing memory for the tabs you're actually using.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="parallel-intel">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Parallel Page Intelligence <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">The AI reads what you're browsing before you ask — and surfaces what matters.</p>
+        <div class="body-col">
+          <p>As a page finishes loading, the AI silently reads it in the background and produces a structured summary: the page type (article, product, documentation, video), key entities, main points, and any notable data.</p>
+          <p>A brief card appears at the bottom of the screen showing the summary at a glance. Expand it for detail, dismiss it, or save it directly to your bookmarks.</p>
+          <div class="tbl-scroll" style="margin-top:14px">
+            <table>
+              <thead><tr><th>Page type</th><th>What the AI extracts</th></tr></thead>
+              <tbody>
+                <tr><td>Article</td><td>Headline, main thesis, key takeaways, tone, and source</td></tr>
+                <tr><td>Product</td><td>Name, price, description, pros/cons, and comparisons</td></tr>
+                <tr><td>Documentation</td><td>API name, endpoints, parameters, and code examples</td></tr>
+                <tr><td>Video</td><td>Title, channel, duration, and topic summary</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Parallel Intelligence runs on local content only — it reads what's in the tab, not what you type in the AI assistant. It's quiet unless you've left it on.</div>
+        </div>
+      </section>
+
+      <section id="research-workspace">
+        <div class="sec-head"><span class="node" style="background:#38bdf8"></span><h2>Research Workspace <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A three-pane research environment: notes, sources, and report generation in one place.</p>
+        <div class="body-col">
+          <p>Open <strong>Research</strong> from the sidebar and get a dedicated workspace for multi-source investigation. Open several tabs on a topic, switch to Research, and the workspace pulls them together.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Notepad pane</h4><p>Draft notes as you read. AI assists — press <em>Extract</em> on any source tab and the AI pulls the key points into your notepad automatically.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Sources pane</h4><p>Every tab you've read is listed here with its AI summary. Click to revisit any source.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Generate Report</h4><p>Pick a mode — Summary, Compare, or Bibliography — and the AI synthesises everything from your notepad and sources into a structured, cited document.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Source attribution</h4><p>Every claim in the generated report is linked back to the specific source it came from.</p></div>
+          </div>
+          <div class="note good" style="margin-top:14px"><strong>Export as Markdown.</strong> Copy the report to clipboard, save it to Obsidian, or open it in the AI assistant for further refinement.</div>
+        </div>
+      </section>
+
+      <section id="bookmark-summaries">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Smart Bookmark Summaries <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Every bookmark in your Sphere gets an AI-generated summary — so you know what it's for before you open it.</p>
+        <div class="body-col">
+          <p>When you save a bookmark, the AI reads the page and writes a one-sentence summary describing what the page is, who it's for, and what makes it worth keeping. Hover over any bookmark node in the Sphere to see the summary in its tooltip.</p>
+          <div class="tbl-scroll" style="margin-top:14px">
+            <table>
+              <thead><tr><th>Where you see it</th><th>What it says</th></tr></thead>
+              <tbody>
+                <tr><td>Sphere node tooltip</td><td>One-sentence summary on hover</td></tr>
+                <tr><td>Bookmark search</td><td>Summary shown alongside the title in search results</td></tr>
+                <tr><td>Bookmark editor</td><td>Edit or regenerate the summary before saving</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin-top:14px">Summaries are stored locally alongside the bookmark. They are regenerated on demand if the page content changes significantly.</p>
+        </div>
+      </section>
+
+      <section id="live-prices">
+        <div class="sec-head"><span class="node" style="background:#f97316"></span><h2>Live Price Tracker <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Gold, crypto, and indices — live prices pinned to your sidebar, always visible.</p>
+        <div class="body-col">
+          <p>The <strong>Live Prices</strong> panel sits at the top of the sidebar, below the logo. Four symbols track in real time: <strong>BTC</strong>, <strong>ETH</strong>, <strong>XAU</strong> (Gold), and <strong>Nasdaq</strong> (NQ). Each shows the current price, a 24-hour change percentage, and a small sparkline of recent movement.</p>
+          <p>No configuration needed — it starts tracking as soon as you open the app. The prices update every 60 seconds and the sparkline gives a visual sense of momentum without needing to open a chart.</p>
+          <div class="tbl-scroll" style="margin-top:14px">
+            <table>
+              <thead><tr><th>Symbol</th><th>Asset</th><th>Source</th></tr></thead>
+              <tbody>
+                <tr><td>XAU</td><td>Gold / XAUUSD</td><td>Free market data feed</td></tr>
+                <tr><td>BTC</td><td>Bitcoin / BTCUSD</td><td>Free market data feed</td></tr>
+                <tr><td>ETH</td><td>Ethereum / ETHUSD</td><td>Free market data feed</td></tr>
+                <tr><td>NQ</td><td>Nasdaq E-mini futures</td><td>Free market data feed</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="cross-tab-compare">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Cross-Tab AI Comparison <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Pick up to 6 open tabs and let the AI lay them out in one structured comparison table.</p>
+        <div class="body-col">
+          <p>Open the <strong>Compare</strong> button in the navigation bar (next to the AI assistant button). Select 2 to 6 tabs from your open tabs — any mix of products, documentation, articles, or reference pages — and the AI reads each one and produces a side-by-side comparison table.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Up to 6 tabs at once</h4><p>Compare an entire shortlist in one view — not just two. Useful for product research, job listings, or reference docs.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Multi-column table</h4><p>The AI reads every page and produces a column-per-tab comparison, with the attributes that matter most for that content type.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Per-tab source links</h4><p>Every column header links directly to the tab so you can open the original page without leaving the comparison.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Any page type</h4><p>Works with articles, products, documentation, or any mix — the AI adapts the comparison attributes to the content.</p></div>
+          </div>
+          <div class="note good" style="margin-top:14px"><strong>TradingView users:</strong> open multiple TradingView charts side by side, then compare them with the same tool — a fast way to cross-check gold vs. NQ setups.</div>
+        </div>
+      </section>
+
+      <section id="focus-mode">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Focus Mode 2.0 <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Time-aware browsing limits — not hard blocks. Know where your time goes.</p>
+        <div class="body-col">
+          <p>The old Focus sessions blocked sites outright. <strong>Focus Mode 2.0</strong> tracks time per category and shows a gentle nudge when a budget is exceeded — never a wall, just awareness. Users who know they spent three hours on Twitter last Tuesday make different choices than users who are surprised.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Category budgets</h4><p>Set daily time budgets for Social (Twitter, X, Facebook), Video (YouTube, Netflix), and News sites. The tracker reads which site you're on and accumulates time automatically.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Gentle nudge, not a block</h4><p>When a category exceeds its budget, a soft panel appears at the bottom of the screen showing time spent vs. limit. Dismiss it to keep browsing — it won't reappear that day.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Today's breakdown</h4><p>Open the Focus panel to see a per-category bar chart of today's time. Each category shows used time vs. limit, with color-coded progress bars.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>7-day pattern chart</h4><p>The panel shows a weekly bar chart so you can see the trend — are you improving, or is Tuesday always social media day?</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Add any site</h4><p>Add hostnames to any category from the panel — or track a completely new category with its own limit and color.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>30-day rolling history</h4><p>Time data is kept for 30 days — enough to see weekly patterns without keeping forever.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="reading-lists">
+        <div class="sec-head"><span class="node" style="background:#a78bfa"></span><h2>Community Reading Lists <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Curated public link collections — publish your research, follow others'.</p>
+        <div class="body-col">
+          <p>Open <strong>Reading Lists</strong> from the sidebar. Browse curated public lists on topics like "Best reads on AI safety", "Trading psychology", or "Genesis deep-dive". Subscribe to lists and follow authors. Create your own lists and share them publicly or keep them private.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>Curated lists</h4><p>Lists are made of URLs with titles and curator notes — "why this link is worth your time." Browse by theme: AI, Trading, Bible, Technology, and more.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>Follow authors</h4><p>Subscribe to lists you find valuable. Your followed lists appear in the Explore tab, so you can see what updated.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>Create your own</h4><p>Build lists with a title, description, theme, and visibility (private or public). Add links one at a time.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>AI summaries</h4><p>On any list, click <em>Generate AI summary</em> and the AI reads every link and produces a 2-3 sentence pitch for the whole collection.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>Add current page</h4><p>Hit <em>Add current page</em> in the Reading Lists header to instantly add whatever you're browsing to any of your lists.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>Per-device for now</h4><p>Lists live in local storage today. When a community backend is connected, lists can be published to the shared community alongside the text channels.</p></div>
+          </div>
+        </div>
+      </section>
+
       <!-- AI RESPONSES -->
       <section id="ai-responses">
         <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Beautifully Formatted AI Responses <span class="pill new">new</span></h2><span class="sec-line"></span></div>
@@ -935,11 +1118,11 @@
             <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Command palette</h4><p>Press <kbd>Ctrl</kbd>+<kbd>K</kbd> and drive the whole browser from the keyboard — open any page, jump to a tab, run an action, or search the web.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Rewind</h4><p>Every page you actually read is indexed by its <em>content</em>. Forgot where you saw something? Search the words, not the title.</p></div>
             <div class="feat"><h4><span class="dot" style="background:#f472b6"></span>Watch &amp; Ping</h4><p>Point AIHub at a page and it re-checks in the background — a desktop ping the moment the price drops, the ticket reopens, or the word appears.</p></div>
-            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Compare two pages</h4><p>Pick any two open tabs and the AI lays them side by side in a table — specs, prices, pros and cons.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Compare up to 6 tabs</h4><p>Pick 2 to 6 open tabs and the AI lays them side by side in a table — specs, prices, pros and cons. Works with products, articles, and docs.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Read aloud</h4><p>Turn any article into audio. The assistant narrates the page while you do something else.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Voice to the agent</h4><p>Tap the mic in the assistant and speak your request instead of typing it.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Per-site AI memory</h4><p>Give the assistant standing notes for a specific site — it remembers them every time you return there.</p></div>
-            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Focus sessions</h4><p>A Pomodoro timer on the homepage that actually blocks the sites you name for the length of the sprint.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Focus Mode 2.0</h4><p>Set daily time budgets for Social, Video, and News. The tracker monitors time automatically and shows a gentle nudge when a budget is exceeded — awareness without a hard block. Opens from the sidebar.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Tab sleeping</h4><p>Idle tabs quietly free their memory and wake instantly when you click back — right-click any tab to sleep it now.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Device handoff</h4><p>Send every open tab to your other computer through your own Google Drive — no server in the middle. Pick up on the other machine right where you left off.</p></div>
           </div>
@@ -1800,7 +1983,7 @@
                 <tr><td><code>pop</code></td><td>Picture-in-picture &mdash; float the video that is playing</td></tr>
                 <tr><td><code>screenshot</code></td><td>Capture the <em>whole</em> page, not just what is on screen, into Pictures</td></tr>
                 <tr><td><code>read aloud</code></td><td>Narrate the current page</td></tr>
-                <tr><td><code>compare</code></td><td>Compare two pages side by side with the assistant</td></tr>
+                <tr><td><code>compare</code></td><td>Compare 2-6 open tabs side by side with the assistant</td></tr>
               </tbody>
             </table>
           </div>
@@ -1861,7 +2044,7 @@
       </section>
 
       <footer>
-        <p><strong style="color:var(--ink)">AIHub Browser 1.59</strong> — an AI operating system for the web.</p>
+        <p><strong style="color:var(--ink)">AIHub Browser 1.61</strong> — an AI operating system for the web.</p>
         <p style="margin-top:6px">Built on Electron and Chromium · Windows, macOS, Linux · Auto-updating from GitHub Releases</p>
         <p style="margin-top:14px; padding-top:14px; border-top:1px solid var(--line)">
           <strong style="color:var(--ink)">Created by Erick Omari</strong><br>

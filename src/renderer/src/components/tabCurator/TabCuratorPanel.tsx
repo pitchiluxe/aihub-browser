@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Wand2, Check, X, ChevronRight, Loader2 } from 'lucide-react'
+import { Wand2, Check, X, Loader2 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { curateTabs, TabCluster } from '../../services/tabCurator'
 
