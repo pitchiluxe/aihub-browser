@@ -88,6 +88,31 @@ export default defineConfig({
     plugins: [react()],
     css: {
       postcss: resolve('postcss.config.js')
+    },
+    build: {
+      sourcemap: false,
+      rollupOptions: {
+        // Split vendor libraries individually so the initial paint only pays for
+        // what the homepage needs. Each listed chunk loads lazily when first used.
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined
+            if (id.includes('framer-motion')) return 'vendor-motion'
+            if (id.includes('react-markdown') || id.includes('remark-')) return 'vendor-markdown'
+            if (id.includes('lucide-react')) return 'vendor-icons'
+            if (id.includes('react') || id.includes('scheduler')) return 'vendor-react'
+            if (id.includes('zustand') || id.includes('use-sync-external-store')) return 'vendor-state'
+            if (id.includes('d3-') || id.includes('/d3/')) return 'vendor-d3'
+            if (id.includes('@supabase')) return 'vendor-supabase'
+            // LiveKit is 1MB+ — only used inside Community for voice/video, so
+            // let it be its own chunk that loads on-demand with the page.
+            if (id.includes('livekit')) return 'vendor-livekit'
+            // Everything else: split each top-level package into its own chunk
+            const pkg = id.split('node_modules/')[1]?.split('/')[0]?.split('/')[0]
+            return `vendor-${pkg}`
+          }
+        }
+      }
     }
   }
 })

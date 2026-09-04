@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     add:     (b:any)            => ipcRenderer.invoke('bookmarks:add', b),
     remove:  (id:string)        => ipcRenderer.invoke('bookmarks:remove', id),
     update:  (id:string, u:any) => ipcRenderer.invoke('bookmarks:update', id, u),
+    summarize: (id:string)       => ipcRenderer.invoke('bookmarks:summarize', id),
     export:  (fmt:'json'|'html') => ipcRenderer.invoke('bookmarks:export', fmt),
     import:  ()                 => ipcRenderer.invoke('bookmarks:import'),
   },
@@ -74,6 +75,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     add:        (e:any) => ipcRenderer.invoke('history:add', e),
     clear:      () => ipcRenderer.invoke('history:clear'),
     deleteItem: (id:string) => ipcRenderer.invoke('history:deleteItem', id),
+    smartSearch: (q:string) => ipcRenderer.invoke('history:smartSearch', q),
   },
   downloads: {
     getAll:       () => ipcRenderer.invoke('downloads:getAll'),
@@ -85,6 +87,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('download:update', handler)
       return () => ipcRenderer.removeListener('download:update', handler)
     },
+  },
+  vault: {
+    list:      () => ipcRenderer.invoke('vault:list'),
+    latestFor: (url:string) => ipcRenderer.invoke('vault:latestFor', url),
+    capture:   (args:{ tabId:string; url:string; title?:string; favicon?:string; origin?:'auto'|'manual' }) =>
+                 ipcRenderer.invoke('vault:capture', args),
+    open:      (args:{ tabId:string; id:string }) => ipcRenderer.invoke('vault:open', args),
+    remove:    (id:string) => ipcRenderer.invoke('vault:remove', id),
+    clear:     () => ipcRenderer.invoke('vault:clear'),
+    reveal:    (p:string) => ipcRenderer.invoke('vault:reveal', p),
+  },
+  pdf: { extract: (url:string) => ipcRenderer.invoke('pdf:extract', url) },
+  guard: { knownDomains: () => ipcRenderer.invoke('guard:knownDomains') },
+  recall: {
+    get: () => ipcRenderer.invoke('recall:get'),
+    set: (book:any) => ipcRenderer.invoke('recall:set', book),
   },
   cache:    { clear: () => ipcRenderer.invoke('cache:clear') },
   extStore: {
@@ -103,6 +121,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   trading: {
     readChart: (tabId: string) => ipcRenderer.invoke('trading:readChart', tabId),
+    getMemory: (symbol: string) => ipcRenderer.invoke('trading:getMemory', symbol),
+    saveMemory: (symbol: string, messages: any[]) => ipcRenderer.invoke('trading:saveMemory', symbol, messages),
   },
   backup: {
     // Export hands over the localStorage-only pieces (themes, window styles);
@@ -119,6 +139,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   containers: {
     list:   () => ipcRenderer.invoke('containers:list'),
+    newBurner: () => ipcRenderer.invoke('containers:newBurner'),
     add:    (name: string, color: string) => ipcRenderer.invoke('containers:add', name, color),
     remove: (id: string) => ipcRenderer.invoke('containers:remove', id),
     clear:  (id: string) => ipcRenderer.invoke('containers:clear', id),
@@ -166,6 +187,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     channels: ()                        => ipcRenderer.invoke('community:channels'),
     join:     (handle: string)          => ipcRenderer.invoke('community:join', handle),
     handleAvailable: (handle: string)   => ipcRenderer.invoke('community:handleAvailable', handle),
+    guide: {
+      status: ()          => ipcRenderer.invoke('community:guide:status'),
+      set:    (i: any)    => ipcRenderer.invoke('community:guide:set', i),
+    },
     moderatorStatus: ()                 => ipcRenderer.invoke('community:moderatorStatus'),
     reports:  ()                        => ipcRenderer.invoke('community:reports'),
     resolveReport: (args: { messageId: string; action: string; reason?: string }) =>
@@ -198,6 +223,118 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const handler = () => cb()
       ipcRenderer.on('community:refresh', handler)
       return () => ipcRenderer.removeListener('community:refresh', handler)
+    },
+    onBackendStatus: (cb: (p: any) => void) => {
+      const handler = (_e: any, p: any) => cb(p)
+      ipcRenderer.on('community:backend', handler)
+      return () => ipcRenderer.removeListener('community:backend', handler)
+    },
+
+    // ── The backend ────────────────────────────────────────────────────────
+    // `get` never returns the anon key. The panel shows that one is configured
+    // and offers to replace it; handing a secret back to the renderer would
+    // widen the blast radius of any renderer bug for no benefit.
+    voiceToken: (channel: string)       => ipcRenderer.invoke('community:voice:token', channel),
+
+    backend: {
+      get:       ()           => ipcRenderer.invoke('community:backend:get'),
+      set:       (input: any) => ipcRenderer.invoke('community:backend:set', input),
+      clear:     ()           => ipcRenderer.invoke('community:backend:clear'),
+      reconnect: ()           => ipcRenderer.invoke('community:backend:reconnect'),
+      // Opens a file picker in the main process. Returns variable NAMES only.
+      importEnv: ()           => ipcRenderer.invoke('community:backend:importEnv'),
+    },
+
+    // ── Reading the room ───────────────────────────────────────────────────
+    snapshot:  ()                       => ipcRenderer.invoke('community:snapshot'),
+    categories: ()                      => ipcRenderer.invoke('community:categories'),
+    roles:     ()                       => ipcRenderer.invoke('community:roles'),
+    permissions: (channel?: string)     => ipcRenderer.invoke('community:permissions', channel),
+    history:   (channel: string, before?: string) =>
+      ipcRenderer.invoke('community:history', channel, before),
+    thread:    (rootId: string)         => ipcRenderer.invoke('community:thread', rootId),
+    editMessage: (id: string, body: string) =>
+      ipcRenderer.invoke('community:editMessage', id, body),
+    search:    (query: string, options?: any) =>
+      ipcRenderer.invoke('community:search', query, options),
+
+    // ── Direct messages and link previews ──────────────────────────────────
+    openDm:    (memberId: string)       => ipcRenderer.invoke('community:openDm', memberId),
+    directMessages: ()                  => ipcRenderer.invoke('community:directMessages'),
+    linkPreview: (url: string)          => ipcRenderer.invoke('community:linkPreview', url),
+
+    // ── Unread and notifications ───────────────────────────────────────────
+    markRead:  (channel: string, at?: number) => ipcRenderer.invoke('community:markRead', channel, at),
+    unread:    ()                       => ipcRenderer.invoke('community:unread'),
+    setNotifPref: (channel: string, level: string) =>
+      ipcRenderer.invoke('community:setNotifPref', channel, level),
+
+    // ── Presence and typing ────────────────────────────────────────────────
+    heartbeat: (status: string)         => ipcRenderer.invoke('community:heartbeat', status),
+    typing:    (channel: string, on: boolean) => ipcRenderer.invoke('community:typing', channel, on),
+
+    // ── Ownership and administration ───────────────────────────────────────
+    ownership: ()                       => ipcRenderer.invoke('community:ownership'),
+    claimOwnership: ()                  => ipcRenderer.invoke('community:claimOwnership'),
+    releaseOwnership: ()                => ipcRenderer.invoke('community:releaseOwnership'),
+    createChannel:  (input: any)        => ipcRenderer.invoke('community:createChannel', input),
+    updateChannel:  (slug: string, edit: any) => ipcRenderer.invoke('community:updateChannel', slug, edit),
+    deleteChannel:  (slug: string)      => ipcRenderer.invoke('community:deleteChannel', slug),
+    restoreChannel: (slug: string)      => ipcRenderer.invoke('community:restoreChannel', slug),
+    purgeChannel:   (slug: string, confirmSlug: string) =>
+      ipcRenderer.invoke('community:purgeChannel', slug, confirmSlug),
+    reorderChannels: (order: any[])     => ipcRenderer.invoke('community:reorderChannels', order),
+    createCategory: (name: string)      => ipcRenderer.invoke('community:createCategory', name),
+    updateCategory: (id: string, name: string) => ipcRenderer.invoke('community:updateCategory', id, name),
+    deleteCategory: (id: string)        => ipcRenderer.invoke('community:deleteCategory', id),
+    createRole: (input: any)            => ipcRenderer.invoke('community:createRole', input),
+    updateRole: (id: string, edit: any) => ipcRenderer.invoke('community:updateRole', id, edit),
+    deleteRole: (id: string)            => ipcRenderer.invoke('community:deleteRole', id),
+    assignRole: (memberId: string, roleId: string) =>
+      ipcRenderer.invoke('community:assignRole', memberId, roleId),
+    revokeRole: (memberId: string, roleId: string) =>
+      ipcRenderer.invoke('community:revokeRole', memberId, roleId),
+    timeoutMember: (args: { memberId: string; durationMs: number; reason?: string }) =>
+      ipcRenderer.invoke('community:timeoutMember', args),
+    auditLog:  (limit?: number)         => ipcRenderer.invoke('community:auditLog', limit),
+
+    // ── Attachments ────────────────────────────────────────────────────────
+    // Bytes, never a path: the renderer hands over contents and gets a record
+    // back. It does not choose the filename and never learns the directory.
+    uploadAttachment: (name: string, bytes: Uint8Array) =>
+      ipcRenderer.invoke('community:uploadAttachment', name, bytes),
+
+    // ── Voice, video and screen share ──────────────────────────────────────
+    voiceJoin:  (channel: string)       => ipcRenderer.invoke('community:voice:join', channel),
+    voiceLeave: ()                      => ipcRenderer.invoke('community:voice:leave'),
+    voiceSignal: (toPeerId: string, payload: any) =>
+      ipcRenderer.invoke('community:voice:signal', toPeerId, payload),
+    voiceState: (patch: any)            => ipcRenderer.invoke('community:voice:state', patch),
+    screenSources: ()                   => ipcRenderer.invoke('community:screenSources'),
+    screenShareChoice: (sourceId: string) =>
+      ipcRenderer.invoke('community:screenShareChoice', sourceId),
+
+    /**
+     * One typed event stream for everything real-time.
+     *
+     * Replaces the three ad-hoc channels above, which are still forwarded for
+     * one version so nothing breaks mid-migration. A single stream means the
+     * renderer has one reducer rather than one subscription per event kind.
+     */
+    onEvent: (cb: (event: any) => void) => {
+      const handler = (_e: any, event: any) => cb(event)
+      ipcRenderer.on('community:event', handler)
+      return () => ipcRenderer.removeListener('community:event', handler)
+    },
+    onVoicePeers: (cb: (payload: any) => void) => {
+      const handler = (_e: any, payload: any) => cb(payload)
+      ipcRenderer.on('community:voice:peers', handler)
+      return () => ipcRenderer.removeListener('community:voice:peers', handler)
+    },
+    onVoiceSignal: (cb: (payload: any) => void) => {
+      const handler = (_e: any, payload: any) => cb(payload)
+      ipcRenderer.on('community:voice:signal', handler)
+      return () => ipcRenderer.removeListener('community:voice:signal', handler)
     },
   },
   brain: {
@@ -281,6 +418,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteAgent:        (id: string) => ipcRenderer.invoke('agents:deleteAgent', id),
     saveConversation:   (c: any) => ipcRenderer.invoke('agents:saveConversation', c),
     deleteConversation: (id: string) => ipcRenderer.invoke('agents:deleteConversation', id),
+    exportAgents:       () => ipcRenderer.invoke('agents:exportAgents'),
+    importAgents:       () => ipcRenderer.invoke('agents:importAgents'),
   },
   agentFs: {
     listDir:   (p: string) => ipcRenderer.invoke('agentfs:listDir', p),

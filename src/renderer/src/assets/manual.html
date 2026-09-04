@@ -249,7 +249,7 @@
   <div class="hero">
     <canvas id="constellation" aria-label="Animated knowledge-graph constellation of bookmarks"></canvas>
     <div class="hero-copy">
-      <div class="eyebrow">AIHub Browser · Version 1.5 · Created by Erick Omari</div>
+      <div class="eyebrow">AIHub Browser · 1.61 · Created by Erick Omari</div>
       <h1>The browser that thinks with you.</h1>
       <p>Every tab becomes knowledge. Every bookmark becomes a star in your graph. And an AI agent sits behind it all, ready to research, build, and browse on your behalf.</p>
       <button class="hero-btn" id="replay">▶ Replay timelapse</button>
@@ -273,6 +273,7 @@
       <div class="rail-grp">Intelligence</div>
       <a href="#ai">AI assistant</a>
       <a href="#talk">How to talk to it</a>
+      <a href="#coach">Trading Coach</a>
       <a href="#tools">Agent toolbox</a>
       <a href="#research">Research &amp; Agent</a>
       <div class="rail-grp">Power features</div>
@@ -280,7 +281,34 @@
       <a href="#command">Command palette</a>
       <a href="#rewind">Rewind</a>
       <a href="#watch">Watch &amp; Ping</a>
+      <div class="rail-grp">New in 1.61</div>
+      <a href="#reading-mode">AI Reading Mode</a>
+      <a href="#semantic-history">Semantic History Search</a>
+      <a href="#tab-curator">AI Tab Curator</a>
+      <a href="#parallel-intel">Parallel Page Intelligence</a>
+      <a href="#research-workspace">Research Workspace</a>
+      <a href="#bookmark-summaries">Smart Bookmark Summaries</a>
+      <a href="#live-prices">Live Price Tracker</a>
+      <a href="#cross-tab-compare">Cross-Tab AI Comparison</a>
+      <a href="#focus-mode">Focus Mode 2.0</a>
+      <a href="#reading-lists">Community Reading Lists</a>
+      <div class="rail-grp">New in 1.60</div>
+      <a href="#coach">Trading Coach</a>
+      <div class="rail-grp">New in 1.59</div>
+      <a href="#ai-responses">Beautifully Formatted AI Responses</a>
+      <div class="rail-grp">New in 1.58</div>
+      <a href="#downloads-menu">Downloads menu</a>
+      <a href="#pagevault">Page Vault</a>
+      <a href="#pdf">PDFs</a>
+      <a href="#recall">Recall</a>
+      <a href="#brief">Morning Brief</a>
+      <a href="#ledger">Ledger</a>
+      <a href="#tablecsv">Tables to CSV</a>
+      <a href="#guard">Credential guard</a>
+      <a href="#burner">Burner tabs</a>
       <a href="#bible">Bible</a>
+      <a href="#bible-study">Bible Study</a>
+      <a href="#community">Community</a>
       <a href="#focus">Focus &amp; sleep</a>
       <a href="#handoff">Device handoff</a>
       <div class="rail-grp">Knowledge</div>
@@ -406,7 +434,7 @@
         <div class="body-col" style="margin-top:26px">
           <div class="grid g2">
             <div class="feat"><h4>1 · Tab strip</h4><p>Drag to reorder, drag out to detach into its own window, right-click for the full tab menu. Scrolls horizontally when full; the active tab always stays visible.</p></div>
-            <div class="feat"><h4>2 · Navigation + address bar</h4><p>Back, forward, reload, home, then the omnibox. On the right: bookmark, annotate, screenshot, record, and the AI button.</p></div>
+            <div class="feat"><h4>2 · Navigation + address bar</h4><p>Back, forward, reload, home, then the omnibox. On the right: bookmark, annotate, screenshot, record, the gold <strong>Coach</strong> button (charts only), and the AI button.</p></div>
             <div class="feat"><h4>3 · Sidebar</h4><p>Toggle with the panel icon. Home, Research, Agent Mode, Sticky Notes, History, Downloads, Extensions, Wi-Fi, VPN, Mail, Settings.</p></div>
             <div class="feat"><h4>4 · AI panel</h4><p>Docked on the right, resizes the page rather than covering it. Chat, quick actions, and live agent step tracking.</p></div>
           </div>
@@ -424,6 +452,7 @@
             <li><div><strong>Bookmark a few pages.</strong> Press <kbd>Ctrl</kbd>+<kbd>D</kbd> on any site. The AI auto-categorizes and colors each one.</div></li>
             <li><div><strong>Open the Sphere.</strong> Sidebar → <em>Home</em> → sphere view. Hit <em>Timelapse</em> and watch your graph build itself.</div></li>
             <li><div><strong>Make it yours.</strong> <em>Settings</em> → <em>Appearance</em> for 25 themes, transparency, and window opacity.</div></li>
+            <li><div><strong>Try the Trading Coach.</strong> Open a <a href="https://www.tradingview.com/chart/">TradingView chart</a> (e.g. <code>tradingview.com/chart/?symbol=OANDA:XAUUSD</code>) — a gold <strong>Coach</strong> button appears. Click it to get a structured gold/Nasdaq analysis of what's on your screen. See <a href="#coach">Trading Coach</a>.</div></li>
           </ol>
         </div>
       </section>
@@ -766,6 +795,269 @@
         </div>
       </section>
 
+      <!-- ══ TRADING COACH ══ -->
+      <section id="coach">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Trading Coach</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A dedicated trading analyst that reads your live chart and answers with structured, actionable analysis — only when you're on a TradingView chart.</p>
+
+        <div class="body-col">
+          <div class="note good"><strong>It reads the live chart first.</strong> Every answer starts by reading what's actually on the chart right now — price, levels, trend, structure — before it speaks. The analysis is grounded in reality, not a training cutoff.</div>
+
+          <h3 style="margin-top:26px">How to open it</h3>
+          <p>Navigate to any <strong>TradingView chart</strong> (e.g. <code>tradingview.com/chart/…</code>). A gold <strong>Coach</strong> button appears automatically in the navigation bar, next to the AI button. Click it to open the panel. The chart slides left to stay fully visible alongside it.</p>
+
+          <h3 style="margin-top:26px">What it knows</h3>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Gold (XAUUSD)</h4><p>Deep expertise in gold futures and spot. Knows the macro drivers, the key levels, and how gold reacts to FOMC, CPI, and geopolitical events.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Nasdaq (NQ)</h4><p>Earnings reaction analysis, sector rotation, and FOMC rate sensitivity. Covers the tech-heavy index with precision.</p></div>
+          </div>
+
+          <h3 style="margin-top:30px">Quick actions</h3>
+          <p>Four one-tap buttons give structured answers instantly:</p>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Full Analysis</h4><p>Complete snapshot: bias, levels, trend, setups — all in tables and a trade-plan block.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Trend Check</h4><p>Is the chart bullish, bearish, or ranging? The answer is backed by the actual levels and structure on the chart.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Key Levels</h4><p>Every important price on the chart — prior day high/low, session ranges, swing points, round numbers.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--rose)"></span>Set Alerts</h4><p>Which price levels deserve an alert and why — so you never miss a move.</p></div>
+          </div>
+
+          <h3 style="margin-top:30px">Per-symbol memory</h3>
+          <p>Your conversation is saved separately for each instrument. Open the XAUUSD chart tomorrow and the last conversation on gold is still there. Switch to Nasdaq and it's a fresh thread.</p>
+
+          <h3 style="margin-top:30px">Structured trade plans</h3>
+          <p>Ask about a setup and the Coach responds with an entry, stop, target, risk-reward, and a rationale — in a card format, not a paragraph. No invented prices: everything is read from the chart first.</p>
+
+          <h3 style="margin-top:30px">How it differs from the AI assistant</h3>
+          <div class="tbl-scroll" style="margin-top:12px">
+            <table>
+              <thead><tr><th></th><th>AI Assistant</th><th>Trading Coach</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Scope</strong></td><td>Anything — research, writing, code, browsing</td><td>Gold &amp; Nasdaq trading charts only</td></tr>
+                <tr><td><strong>Trigger</strong></td><td>Any page, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>TradingView charts only — button auto-appears</td></tr>
+                <tr><td><strong>Reads the chart</strong></td><td>No</td><td>Yes — reads live price, levels, and structure first</td></tr>
+                <tr><td><strong>Output format</strong></td><td>General answers, documents, code</td><td>Tables, key levels, and trade-plan cards</td></tr>
+                <tr><td><strong>Memory</strong></td><td>Session-long conversation</td><td>Per-symbol conversation, saved between sessions</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ NEW IN 1.61 ══════════════════════════════════════════════════════ -->
+
+      <section id="reading-mode">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>AI Reading Mode <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Turn any article into a clean reading experience — or have it read aloud.</p>
+        <div class="body-col">
+          <p>Open any article or documentation page and the AI can extract the main content, strip the ads, sidebars and clutter, and present it as a clean document. Then ask the AI to read it aloud — the assistant narrates the article while you do something else.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Clean extraction</h4><p>The AI identifies the main article content and presents it without navigation, ads, or sidebars.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Read aloud</h4><p>Turn any article into audio. The AI narrates the content while you keep working or browse elsewhere.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>AI summary</h4><p>One click generates a concise summary of the article, exportable as Markdown or filed into your bookmarks.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Ask about the text</h4><p>Select any passage and ask the AI to explain it, translate it, or find related content on the page.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="semantic-history">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Semantic History Search <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Search your browsing history by meaning — not just title or URL.</p>
+        <div class="body-col">
+          <p>Open <strong>History</strong> and type a phrase you half-remember from an article, a product page, or a technical post. The search finds pages that match the meaning of your words, not just the words themselves.</p>
+          <p>Example: search <em>"that post about renderer crashes"</em> and it surfaces the page you read three days ago about V8 internals — even if the title said nothing about crashes.</p>
+          <div class="tbl-scroll" style="margin-top:14px">
+            <table>
+              <thead><tr><th>What changes</th><th>How it works</th></tr></thead>
+              <tbody>
+                <tr><td>Full-text content search</td><td>Pages are indexed by their actual content, not just title and URL</td></tr>
+                <tr><td>Meaning-based ranking</td><td>A local AI model scores pages by semantic similarity to your query</td></tr>
+                <tr><td>Everything stays local</td><td>The index lives on your machine — nothing is sent anywhere</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note good" style="margin-top:14px"><strong>It's in Rewind too.</strong> The same semantic search engine powers Rewind, so "what was that article about AI alignment?" finds the right page whether it's in your recent history or in the Rewind archive.</div>
+        </div>
+      </section>
+
+      <section id="tab-curator">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>AI Tab Curator <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Forty open tabs become an organized workspace — in one click.</p>
+        <div class="body-col">
+          <p>When the tab rail gets full, the <strong>AI Tab Curator</strong> analyses every open tab and groups them by topic, intent, and domain. A click collapses the noise and surfaces what you're actually working on.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Auto-group by topic</h4><p>The AI reads tab titles and URLs and clusters them into meaningful groups — "Documentation", "Reference", "Tools" — named by what they contain.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>One-click tidy</h4><p>A single button collapses inactive groups, focuses the ones you're working in, and dims the rest.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Tab search</h4><p>Press the curator's search field and find any tab by its content — not just its title.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Sleep non-essential groups</h4><p>Dormant groups can be put to sleep — freeing memory for the tabs you're actually using.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="parallel-intel">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Parallel Page Intelligence <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">The AI reads what you're browsing before you ask — and surfaces what matters.</p>
+        <div class="body-col">
+          <p>As a page finishes loading, the AI silently reads it in the background and produces a structured summary: the page type (article, product, documentation, video), key entities, main points, and any notable data.</p>
+          <p>A brief card appears at the bottom of the screen showing the summary at a glance. Expand it for detail, dismiss it, or save it directly to your bookmarks.</p>
+          <div class="tbl-scroll" style="margin-top:14px">
+            <table>
+              <thead><tr><th>Page type</th><th>What the AI extracts</th></tr></thead>
+              <tbody>
+                <tr><td>Article</td><td>Headline, main thesis, key takeaways, tone, and source</td></tr>
+                <tr><td>Product</td><td>Name, price, description, pros/cons, and comparisons</td></tr>
+                <tr><td>Documentation</td><td>API name, endpoints, parameters, and code examples</td></tr>
+                <tr><td>Video</td><td>Title, channel, duration, and topic summary</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Parallel Intelligence runs on local content only — it reads what's in the tab, not what you type in the AI assistant. It's quiet unless you've left it on.</div>
+        </div>
+      </section>
+
+      <section id="research-workspace">
+        <div class="sec-head"><span class="node" style="background:#38bdf8"></span><h2>Research Workspace <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A three-pane research environment: notes, sources, and report generation in one place.</p>
+        <div class="body-col">
+          <p>Open <strong>Research</strong> from the sidebar and get a dedicated workspace for multi-source investigation. Open several tabs on a topic, switch to Research, and the workspace pulls them together.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Notepad pane</h4><p>Draft notes as you read. AI assists — press <em>Extract</em> on any source tab and the AI pulls the key points into your notepad automatically.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Sources pane</h4><p>Every tab you've read is listed here with its AI summary. Click to revisit any source.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Generate Report</h4><p>Pick a mode — Summary, Compare, or Bibliography — and the AI synthesises everything from your notepad and sources into a structured, cited document.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Source attribution</h4><p>Every claim in the generated report is linked back to the specific source it came from.</p></div>
+          </div>
+          <div class="note good" style="margin-top:14px"><strong>Export as Markdown.</strong> Copy the report to clipboard, save it to Obsidian, or open it in the AI assistant for further refinement.</div>
+        </div>
+      </section>
+
+      <section id="bookmark-summaries">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Smart Bookmark Summaries <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Every bookmark in your Sphere gets an AI-generated summary — so you know what it's for before you open it.</p>
+        <div class="body-col">
+          <p>When you save a bookmark, the AI reads the page and writes a one-sentence summary describing what the page is, who it's for, and what makes it worth keeping. Hover over any bookmark node in the Sphere to see the summary in its tooltip.</p>
+          <div class="tbl-scroll" style="margin-top:14px">
+            <table>
+              <thead><tr><th>Where you see it</th><th>What it says</th></tr></thead>
+              <tbody>
+                <tr><td>Sphere node tooltip</td><td>One-sentence summary on hover</td></tr>
+                <tr><td>Bookmark search</td><td>Summary shown alongside the title in search results</td></tr>
+                <tr><td>Bookmark editor</td><td>Edit or regenerate the summary before saving</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin-top:14px">Summaries are stored locally alongside the bookmark. They are regenerated on demand if the page content changes significantly.</p>
+        </div>
+      </section>
+
+      <section id="live-prices">
+        <div class="sec-head"><span class="node" style="background:#f97316"></span><h2>Live Price Tracker <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Gold, crypto, and indices — live prices pinned to your sidebar, always visible.</p>
+        <div class="body-col">
+          <p>The <strong>Live Prices</strong> panel sits at the top of the sidebar, below the logo. Four symbols track in real time: <strong>BTC</strong>, <strong>ETH</strong>, <strong>XAU</strong> (Gold), and <strong>Nasdaq</strong> (NQ). Each shows the current price, a 24-hour change percentage, and a small sparkline of recent movement.</p>
+          <p>No configuration needed — it starts tracking as soon as you open the app. The prices update every 60 seconds and the sparkline gives a visual sense of momentum without needing to open a chart.</p>
+          <div class="tbl-scroll" style="margin-top:14px">
+            <table>
+              <thead><tr><th>Symbol</th><th>Asset</th><th>Source</th></tr></thead>
+              <tbody>
+                <tr><td>XAU</td><td>Gold / XAUUSD</td><td>Free market data feed</td></tr>
+                <tr><td>BTC</td><td>Bitcoin / BTCUSD</td><td>Free market data feed</td></tr>
+                <tr><td>ETH</td><td>Ethereum / ETHUSD</td><td>Free market data feed</td></tr>
+                <tr><td>NQ</td><td>Nasdaq E-mini futures</td><td>Free market data feed</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="cross-tab-compare">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Cross-Tab AI Comparison <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Pick up to 6 open tabs and let the AI lay them out in one structured comparison table.</p>
+        <div class="body-col">
+          <p>Open the <strong>Compare</strong> button in the navigation bar (next to the AI assistant button). Select 2 to 6 tabs from your open tabs — any mix of products, documentation, articles, or reference pages — and the AI reads each one and produces a side-by-side comparison table.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Up to 6 tabs at once</h4><p>Compare an entire shortlist in one view — not just two. Useful for product research, job listings, or reference docs.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Multi-column table</h4><p>The AI reads every page and produces a column-per-tab comparison, with the attributes that matter most for that content type.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Per-tab source links</h4><p>Every column header links directly to the tab so you can open the original page without leaving the comparison.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Any page type</h4><p>Works with articles, products, documentation, or any mix — the AI adapts the comparison attributes to the content.</p></div>
+          </div>
+          <div class="note good" style="margin-top:14px"><strong>TradingView users:</strong> open multiple TradingView charts side by side, then compare them with the same tool — a fast way to cross-check gold vs. NQ setups.</div>
+        </div>
+      </section>
+
+      <section id="focus-mode">
+        <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Focus Mode 2.0 <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Time-aware browsing limits — not hard blocks. Know where your time goes.</p>
+        <div class="body-col">
+          <p>The old Focus sessions blocked sites outright. <strong>Focus Mode 2.0</strong> tracks time per category and shows a gentle nudge when a budget is exceeded — never a wall, just awareness. Users who know they spent three hours on Twitter last Tuesday make different choices than users who are surprised.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Category budgets</h4><p>Set daily time budgets for Social (Twitter, X, Facebook), Video (YouTube, Netflix), and News sites. The tracker reads which site you're on and accumulates time automatically.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Gentle nudge, not a block</h4><p>When a category exceeds its budget, a soft panel appears at the bottom of the screen showing time spent vs. limit. Dismiss it to keep browsing — it won't reappear that day.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Today's breakdown</h4><p>Open the Focus panel to see a per-category bar chart of today's time. Each category shows used time vs. limit, with color-coded progress bars.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>7-day pattern chart</h4><p>The panel shows a weekly bar chart so you can see the trend — are you improving, or is Tuesday always social media day?</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Add any site</h4><p>Add hostnames to any category from the panel — or track a completely new category with its own limit and color.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>30-day rolling history</h4><p>Time data is kept for 30 days — enough to see weekly patterns without keeping forever.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="reading-lists">
+        <div class="sec-head"><span class="node" style="background:#a78bfa"></span><h2>Community Reading Lists <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Curated public link collections — publish your research, follow others'.</p>
+        <div class="body-col">
+          <p>Open <strong>Reading Lists</strong> from the sidebar. Browse curated public lists on topics like "Best reads on AI safety", "Trading psychology", or "Genesis deep-dive". Subscribe to lists and follow authors. Create your own lists and share them publicly or keep them private.</p>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>Curated lists</h4><p>Lists are made of URLs with titles and curator notes — "why this link is worth your time." Browse by theme: AI, Trading, Bible, Technology, and more.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>Follow authors</h4><p>Subscribe to lists you find valuable. Your followed lists appear in the Explore tab, so you can see what updated.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>Create your own</h4><p>Build lists with a title, description, theme, and visibility (private or public). Add links one at a time.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>AI summaries</h4><p>On any list, click <em>Generate AI summary</em> and the AI reads every link and produces a 2-3 sentence pitch for the whole collection.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>Add current page</h4><p>Hit <em>Add current page</em> in the Reading Lists header to instantly add whatever you're browsing to any of your lists.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:#a78bfa"></span>Per-device for now</h4><p>Lists live in local storage today. When a community backend is connected, lists can be published to the shared community alongside the text channels.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI RESPONSES -->
+      <section id="ai-responses">
+        <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Beautifully Formatted AI Responses <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Every AI response is rendered as rich, colorful content — not plain text.</p>
+        <div class="body-col">
+          <p>Ask the AI assistant or the Community AI Hub Guide anything and the answer comes back beautifully formatted, ready to read and act on.</p>
+
+          <h3 style="margin-top:24px">Rich content types</h3>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Tables</h4><p>Comparisons, data, and lists render as styled tables with headers, borders, and alternating row hints.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Code blocks</h4><p>Code comes in colored blocks with language detection, a colored dot showing the language, and Copy/Save buttons.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Headings &amp; lists</h4><p>Bold headings, structured bullet points, numbered lists — answers are organized for scanning.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Links &amp; references</h4><p>All links are styled and clickable, opening in a new tab. References have proper citation formatting.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--rose)"></span>Emojis</h4><p>Emojis are preserved and rendered in full color — conversations stay expressive.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Blockquotes</h4><p>Quoted text gets styled with accent-colored borders and subtle gradients.</p></div>
+          </div>
+
+          <h3 style="margin-top:28px">In the Community tab</h3>
+          <p>Even the AI Hub Guide's messages in the Community tab are beautifully formatted. Ask the guide about any topic and get rich, readable responses with tables, code, headings, and more — not wall-of-text plain text.</p>
+
+          <div class="chat" style="margin-top:14px">
+            <div class="bub me">@AIHub Guide What programming languages should I learn in 2026?</div>
+            <div class="bub ai">
+              Great question! Here's my recommendation in a table:
+              <div style="overflow-x:auto">
+              <table>
+                <thead><tr><th>Language</th><th>Best for</th><th>Difficulty</th><th>2026 Outlook</th></tr></thead>
+                <tbody>
+                  <tr><td>Python</td><td>AI, Data Science, Automation</td><td>Easy</td><td>🔥 Very hot</td></tr>
+                  <tr><td>TypeScript</td><td>Web, Apps, Full-stack</td><td>Medium</td><td>🔥 Hot</td></tr>
+                  <tr><td>Rust</td><td>Systems, Performance</td><td>Hard</td><td>🌱 Growing</td></tr>
+                </tbody>
+              </table>
+              </div>
+              <p style="margin-top:10px">Start with Python if you're new! 🚀</p>
+            </div>
+          </div>
+          <figcaption style="text-align:left">AI responses in the Community tab render as rich formatted content — tables, headings, emojis, and more.</figcaption>
+
+          <div class="note good" style="margin-top:20px"><strong>The same renderer everywhere.</strong> Whether you're in the AI assistant panel, Agent Mode, or the Community tab — every AI response uses the same rich formatting system, so the experience is consistent and beautiful everywhere.</div>
+        </div>
+      </section>
+
       <!-- TOOLBOX -->
       <section id="tools">
         <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>The agent's toolbox</h2><span class="sec-line"></span></div>
@@ -826,11 +1118,11 @@
             <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Command palette</h4><p>Press <kbd>Ctrl</kbd>+<kbd>K</kbd> and drive the whole browser from the keyboard — open any page, jump to a tab, run an action, or search the web.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Rewind</h4><p>Every page you actually read is indexed by its <em>content</em>. Forgot where you saw something? Search the words, not the title.</p></div>
             <div class="feat"><h4><span class="dot" style="background:#f472b6"></span>Watch &amp; Ping</h4><p>Point AIHub at a page and it re-checks in the background — a desktop ping the moment the price drops, the ticket reopens, or the word appears.</p></div>
-            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Compare two pages</h4><p>Pick any two open tabs and the AI lays them side by side in a table — specs, prices, pros and cons.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Compare up to 6 tabs</h4><p>Pick 2 to 6 open tabs and the AI lays them side by side in a table — specs, prices, pros and cons. Works with products, articles, and docs.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Read aloud</h4><p>Turn any article into audio. The assistant narrates the page while you do something else.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Voice to the agent</h4><p>Tap the mic in the assistant and speak your request instead of typing it.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Per-site AI memory</h4><p>Give the assistant standing notes for a specific site — it remembers them every time you return there.</p></div>
-            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Focus sessions</h4><p>A Pomodoro timer on the homepage that actually blocks the sites you name for the length of the sprint.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Focus Mode 2.0</h4><p>Set daily time budgets for Social, Video, and News. The tracker monitors time automatically and shows a gentle nudge when a budget is exceeded — awareness without a hard block. Opens from the sidebar.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Tab sleeping</h4><p>Idle tabs quietly free their memory and wake instantly when you click back — right-click any tab to sleep it now.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Device handoff</h4><p>Send every open tab to your other computer through your own Google Drive — no server in the middle. Pick up on the other machine right where you left off.</p></div>
           </div>
@@ -889,6 +1181,154 @@
         </div>
       </section>
 
+      <!-- ══ NEW IN 1.58 ══════════════════════════════════════════════ -->
+
+      <section id="downloads-menu">
+        <div class="sec-head"><span class="node" style="background:#7dd3fc"></span><h2>The downloads menu <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Everything this browser has pulled down, without leaving the page that produced it.</p>
+        <div class="body-col">
+          <p>There is a <strong>download arrow</strong> in the toolbar, sitting between the bookmarks list and the camera. It carries a small badge counting transfers still in flight, and the icon bobs while something is arriving.</p>
+          <p>Click it for the whole history: what the file is, a live progress bar, its size, whether it finished, and how long ago. Anything completed gets <em>Open</em> and a folder button; double-clicking the row opens it too. <em>Clear</em> empties the list without touching the files on disk.</p>
+          <div class="note">The badge only appears when something is actually downloading. A badge that is always lit stops meaning anything.</div>
+          <p>The full <a href="#hist">Downloads page</a> is still there for a long history — this is the glance.</p>
+        </div>
+      </section>
+
+      <section id="pagevault">
+        <div class="sec-head"><span class="node" style="background:#7dd3fc"></span><h2>Page Vault <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A bookmark is a promise the internet does not keep. This is the browser keeping it anyway.</p>
+        <div class="body-col">
+          <p>Pages get rewritten, moved behind a paywall, quietly edited, or deleted outright — and your bookmark is left pointing at a 404. So when you bookmark a page, AIHub also <strong>keeps a copy of it</strong>, as a single file, on your machine.</p>
+          <p>You will usually meet this without going looking for it. When a page fails to load and there is a copy of that exact address, a bar appears above the page:</p>
+          <div class="note good"><strong>This page didn&rsquo;t load — but you kept a copy.</strong> Click <em>Open the copy</em> and the archived page comes back with its layout, images and links intact.</div>
+          <p>Open <strong>Page Vault</strong> in the sidebar to see everything saved. Copies of the same page are grouped together, so a page that changed shows up as more than one row and you can open either. Each row offers <em>Open copy</em>, a folder button to find the file, and a bin to delete it.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+              <tbody>
+                <tr><td>What is saved?</td><td>One <code>.mhtml</code> file per snapshot — the whole page in a single file, under <code>~/.aihub-browser/vault</code></td></tr>
+                <tr><td>When?</td><td>When you bookmark a page. The same page is not re-archived more than once every 12 hours</td></tr>
+                <tr><td>How much space?</td><td>Up to 3 copies per page and 750 MB overall; the oldest are dropped past that</td></tr>
+                <tr><td>Does it slow bookmarking down?</td><td>No — it happens quietly afterwards, and a page that refuses to be saved never turns a bookmark into an error</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">Deleting a saved copy does not delete the bookmark, and clearing the vault never touches your sphere.</div>
+        </div>
+      </section>
+
+      <section id="pdf">
+        <div class="sec-head"><span class="node" style="background:#7dd3fc"></span><h2>PDFs <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Papers, invoices, contracts and manuals stay inside the browser now.</p>
+        <div class="body-col">
+          <p>A link to a PDF used to download the file and leave the tab sitting there — the document left the browser, and with it every clever thing AIHub can do to a page. Now <strong>PDFs open in the tab</strong>, with the full reader: page thumbnails, zoom, search and print.</p>
+          <p>More usefully, the assistant can <strong>read them</strong>. Everything that works on a web page works on a PDF, because they all ask for the page&rsquo;s text and the text now arrives:</p>
+          <ul>
+            <li>Ask the AI to summarise or explain the document</li>
+            <li>Read it aloud</li>
+            <li>Clip it to Obsidian</li>
+            <li>Let an agent read it with <code>read_page</code></li>
+          </ul>
+          <div class="note">A scanned PDF is a picture of some words, not words. AIHub will tell you that plainly rather than showing you an empty summary — and it will say so too if a file is encrypted.</div>
+        </div>
+      </section>
+
+      <section id="recall">
+        <div class="sec-head"><span class="node" style="background:#f0abfc"></span><h2>Recall <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Reading two hundred articles and remembering none of them is the normal outcome. This is the fix.</p>
+        <div class="body-col">
+          <p>Select any text on any page, right-click, and choose <strong>Remember This (Recall)</strong>. It joins a review queue and comes back to you on a schedule until you actually know it.</p>
+          <p>Open <strong>Recall</strong> in the sidebar. The card shows the cue and hides the answer until you press <em>Show me</em> — a review that shows you the answer first is just reading with extra steps. Then say whether you knew it:</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Answer</th><th>What happens</th></tr></thead>
+              <tbody>
+                <tr><td><strong>I knew it</strong></td><td>Moves up one box — back in 1, 3, 7, 21 then 60 days</td></tr>
+                <tr><td><strong>Missed it</strong></td><td>Straight back to box 1, and you see it again tomorrow</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The <em>Everything</em> tab lists all of it, best-known first, with the source page one click away. This is the same scheduler the <a href="#bible-study">Bible Lab</a> uses for verses — a highlight and a verse are treated exactly alike.</p>
+          <div class="note good">Highlighting the same passage twice does not reset its schedule. Saying &ldquo;this matters&rdquo; a second time should not cost you the progress you made on it.</div>
+        </div>
+      </section>
+
+      <section id="brief">
+        <div class="sec-head"><span class="node" style="background:#fdba74"></span><h2>Morning Brief <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">One page for everything that happened while you were away.</p>
+        <div class="body-col">
+          <p><a href="#watch">Watch</a> knows which pages changed overnight. Your calendar knows what is coming. Your mailbox knows what is unanswered. <a href="#recall">Recall</a> knows what is due. Each of them needs you to go and look, so in practice none of them get looked at.</p>
+          <p><strong>Morning Brief</strong> in the sidebar puts them on one page, with the calendar first — it is the only part with a deadline attached. Anything happening within the hour is marked; everything else can wait until later in the day. Click any line to go straight there.</p>
+          <div class="note">Sections with nothing in them are left out entirely, and a genuinely quiet morning says so in one line. Anything you have not connected — a calendar, a mailbox — simply contributes nothing instead of turning the page into an error message.</div>
+        </div>
+      </section>
+
+      <section id="ledger">
+        <div class="sec-head"><span class="node" style="background:#86efac"></span><h2>Ledger <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">What you actually spent, assembled from receipts you were already sent.</p>
+        <div class="body-col">
+          <p>Purchase confirmations arrive as email. Their invoices arrive as PDFs in your downloads folder. Nothing ever puts the two together, so working out last month&rsquo;s spending means searching your mail badly and retyping numbers into a spreadsheet.</p>
+          <p>Open <strong>Ledger</strong> in the sidebar, choose a window — last month up to last year — and press <em>Read receipts</em>. AIHub reads purchase mail from your own mailbox and builds the table: date, merchant, amount, currency. It totals each currency separately, flags what looks like a subscription, and exports the whole thing as CSV.</p>
+          <p>If an invoice PDF in your Downloads mentions the same merchant, the row offers a link to open it.</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Point</th><th>Detail</th></tr></thead>
+              <tbody>
+                <tr><td>Where the data comes from</td><td>Your Gmail, read on this machine. Connect Google in Settings first</td></tr>
+                <tr><td>Banks and cards</td><td>Never involved. AIHub does not connect to any financial account</td></tr>
+                <tr><td>Rows it is unsure about</td><td>Left out, not guessed at. A wrong number in a ledger is worse than a missing one</td></tr>
+                <tr><td>&ldquo;Recurring&rdquo;</td><td>Three or more charges at a steady amount. A shop whose totals jump around is not a subscription</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note">The Ledger is a reading of your receipts, not accounting. Check it against your statement before you rely on it.</div>
+        </div>
+      </section>
+
+      <section id="tablecsv">
+        <div class="sec-head"><span class="node" style="background:#7dd3fc"></span><h2>Tables to CSV <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Stop copying web tables into spreadsheets by hand.</p>
+        <div class="body-col">
+          <p>Press <kbd>Ctrl</kbd>+<kbd>K</kbd> and choose <strong>Export a table from this page to CSV</strong>. AIHub lists every real table on the page — with its name, its size, and its first row so you can tell them apart — and writes the one you pick.</p>
+          <p>It handles the things that make hand-copying wrong:</p>
+          <ul>
+            <li><strong>Merged cells</strong> are expanded, so a header spanning two columns does not shift everything underneath it</li>
+            <li><strong>Invisible spaces</strong> inside numbers are converted, so amounts import as numbers instead of text</li>
+            <li><strong>Layout tables</strong> — the single-column ones older sites use for positioning — are left out of the list</li>
+            <li><strong>Cells that look like formulas</strong> are defused, so opening the file cannot run something the page wrote</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="guard">
+        <div class="sec-head"><span class="node" style="background:#f87171"></span><h2>Credential guard <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A second look before you type a password somewhere you have never typed one.</p>
+        <div class="body-col">
+          <p>Phishing works because a domain that is wrong by one character looks right when you are reading quickly. Blocklists answer that by knowing which sites are bad, which means they are always behind whoever registered a domain this morning.</p>
+          <p>AIHub asks a different question: <em>does this look like one of yours, without being it?</em> It compares the site against the ones you actually use, from your own history. When a page asks for a password and something is off, a bar appears:</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>What you see</th><th>What it means</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Check this address before signing in</strong></td><td>The domain closely resembles a site you really use, or is written in an encoded alphabet</td></tr>
+                <tr><td><strong>First time signing in here</strong></td><td>Nothing suspicious — just a site you have never signed into before</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note good">It never blocks anything, and it never reads, stores or sends what you type. The check is on the address only. On a brand-new profile it stays quiet entirely, because it has no idea yet which sites are yours.</div>
+        </div>
+      </section>
+
+      <section id="burner">
+        <div class="sec-head"><span class="node" style="background:#fb923c"></span><h2>Burner tabs &amp; sharing <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A tab that forgets, and a fast way to pass something to the Lounge.</p>
+        <div class="body-col">
+          <p>Press <kbd>Ctrl</kbd>+<kbd>K</kbd> and choose <strong>Open a burner tab</strong>. It gets a session of its own that is never written to disk: cookies, storage and any sign-in you do inside it exist for as long as the tab does and are gone when you close it. Every burner gets its own session, so two of them cannot see each other.</p>
+          <p>See <a href="#sessions">Sessions &amp; containers</a> for the persistent version — containers keep their cookies on purpose, so you can be signed into the same site as two different people.</p>
+          <p>Separately: select some text, right-click, and pick <strong>Share to the Lounge</strong> to post the passage and its source into <a href="#community">Community</a>. Nothing is ever posted unless you choose that menu item.</p>
+        </div>
+      </section>
+
       <!-- BIBLE -->
       <section id="bible">
         <div class="sec-head"><span class="node" style="background:#fbbf24"></span><h2>Bible</h2><span class="sec-line"></span></div>
@@ -927,6 +1367,25 @@
           <p>A verse carrying a note shows a small dot next to its verse number, so you can spot your notes as you read.</p>
           <p>The <strong>Saved</strong> button in the reader's header opens your bookmarked verses. Click one to jump straight to it — the reader opens that book and spread and selects the verse — or remove it from the list with the bin icon.</p>
           <p>Highlights, saved verses, notes, and the book and chapter you were last reading are all saved to your machine and are still there the next time you open the app.</p>
+          <h3 style="margin-top:26px">Four editions, two languages</h3>
+          <p>The dropdown at the top of the reader switches translation. All four are bundled into the app, so every one of them opens with no network connection:</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Edition</th><th>Language</th><th>What it is</th></tr></thead>
+              <tbody>
+                <tr><td><strong>World English Bible</strong> (WEB)</td><td>English</td><td>A modern-English translation, fully public domain. The default.</td></tr>
+                <tr><td><strong>Louis Segond 1910</strong> (LSG)</td><td>Français</td><td>The standard French Protestant translation, also public domain.</td></tr>
+                <tr><td><strong>Kids Bible</strong></td><td>English</td><td>The same scripture retold for children, illustrated.</td></tr>
+                <tr><td><strong>Bible Enfants</strong></td><td>Français</td><td>The children's edition in French.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>The two children's editions read as a picture book rather than as a column of verses: each passage carries its own illustration, drawn for that scene. They are meant to be read <em>with</em> a child, and they can be read aloud by the app in either language.</p>
+
+          <h3 style="margin-top:26px">The Gospel room</h3>
+          <p>The <strong>Gospel room</strong> opens from the Bible reader, and it is dressed as a picture house — the screen sits in the dark behind a curtain, with what is showing listed underneath. Search for a song or a sermon, or press <strong>shuffle</strong> and let it pick. The player expands inline above the listing, so choosing the next thing does not interrupt what is playing.</p>
+          <div class="note">The room needs a connection: it is playing video from the web, not from anything bundled in the app. Everything else in the Bible reader keeps working offline.</div>
+
 
           <h3 style="margin-top:26px">Sharing a verse</h3>
           <p>The share sheet offers Facebook, X, WhatsApp, LinkedIn, Telegram, Reddit, and Email — each opens the platform in your system browser with the verse and its reference pre-filled. <strong>Copy</strong> puts the quote and reference on your clipboard.</p>
@@ -956,6 +1415,85 @@
       </section>
 
       <!-- FOCUS & SLEEP -->
+      <section id="bible-study">
+        <div class="sec-head"><span class="node" style="background:#a78bfa"></span><h2>Bible Study</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A separate room from the reader: courses to work through, verses to memorise, and a record of what you have actually done.</p>
+        <div class="body-col">
+          <p>Open <strong>Bible Study</strong> from the sidebar. The reader is for reading; this is for study, and the two are deliberately kept apart. Five rooms across the top:</p>
+
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4>Today</h4><p>A verse for the day, the same one all day, with somewhere to write what you made of it.</p></div>
+            <div class="feat"><h4>Study</h4><p>Your desk: the verses you have highlighted, saved and annotated in the reader, gathered in one place.</p></div>
+            <div class="feat"><h4>Classroom</h4><p>Twenty-four courses, six lessons each — Life of Christ, The Parables, Psalms for Hard Days, Genesis, Exodus, Proverbs and more.</p></div>
+            <div class="feat"><h4>Lab</h4><p>Memorisation. Verses come back on a schedule that stretches as you get them right and shortens when you do not.</p></div>
+            <div class="feat"><h4>Progress</h4><p>Your streak, the courses you have finished, and the badges you have earned along the way.</p></div>
+          </div>
+
+          <h3 style="margin-top:26px">Courses</h3>
+          <p>Each course is six lessons, and each lesson is a passage with something to think about rather than a quiz to pass. Finishing one marks it off; the Classroom remembers where you stopped, so you can leave a course half-done and come back to it a fortnight later without losing your place.</p>
+
+          <h3 style="margin-top:26px">The Lab</h3>
+          <p>Add a verse and it enters a review schedule. Grade yourself honestly when it comes back — the interval stretches when you knew it and collapses when you did not, so the verses you find hard come round more often than the ones you have got. It is the same idea as flashcards, and it works for the same reason.</p>
+
+          <h3 style="margin-top:26px">Progress</h3>
+          <p>A streak counts the days you turned up, not the hours you put in. Badges mark real milestones — a first course finished, a run of days held, a number of verses committed to memory — and everything here is stored on your machine.</p>
+          <div class="note">Nothing in Bible Study is shared anywhere. It is yours, on this computer. If you want to share a verse with other people, that is the <a href="#community">Community</a> Bible Study room, which is a different thing entirely.</div>
+        </div>
+      </section>
+
+      <section id="community">
+        <div class="sec-head"><span class="node" style="background:#33d6c8"></span><h2>Community</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">Rooms inside the browser where people using AIHub meet and talk — text channels, voice channels, and screen sharing, under a name you pick, with no email and no password anywhere.</p>
+        <div class="body-col">
+          <p>Open <strong>Community</strong> from the sidebar. The first time, you are asked for one thing: a name. There is no email field, no password, no account to recover — this machine generates a key, that key <em>is</em> your membership, and nothing else about you is stored.</p>
+
+          <h3 style="margin-top:26px">Choosing a name</h3>
+          <p>Names are unique across the whole community, so the field checks availability as you type. The avatar beside it is generated from the name itself — you cannot upload a picture, and nobody else can either. If the name you want is gone, the field offers alternatives you can click.</p>
+          <div class="note">Uniqueness ignores capitals and character width, so <em>Grace</em>, <em>grace</em> and <em>GRACE</em> are one name, not three. That is deliberate: a room where two people can both be "Grace" is a room where you cannot tell who said what.</div>
+
+          <h3 style="margin-top:26px">The rooms</h3>
+          <p>Channels are grouped down the left-hand side. Every text room opens with a short message saying what belongs there and asking something you can answer, so you never arrive at a blank screen.</p>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4>Community</h4><p><strong>general</strong> for anything without a room of its own, <strong>support</strong> for things that are broken, <strong>random</strong> for the rest.</p></div>
+            <div class="feat"><h4>Technology</h4><p><strong>Developers &amp; AI</strong>, <strong>Cybersecurity</strong>, <strong>ai</strong>, <strong>technology</strong>, <strong>cloud</strong> and <strong>networking</strong>.</p></div>
+            <div class="feat"><h4>Interests</h4><p><strong>Bible Study</strong>, <strong>Traders</strong>, <strong>Sports</strong>, <strong>Entertainment</strong> and <strong>Jobs</strong>.</p></div>
+            <div class="feat"><h4>Voice</h4><p><strong>Lounge</strong> and <strong>Workshop</strong> — talk, video, and share a screen.</p></div>
+          </div>
+
+          <h3 style="margin-top:26px">Talking</h3>
+          <p><kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a new line. Reply to a message to quote it, or open it as a thread when a side conversation deserves its own space. Reactions, mentions and direct messages all work as you would expect.</p>
+          <p>Some rooms accept more than plain text. Bible Study takes <strong>verses</strong> shared straight from the Bible reader — they arrive as a card anyone can open and read in full — along with <strong>prayer requests</strong> and <strong>testimony</strong>. The developer rooms take <strong>code</strong>, syntax highlighted, and never executed by anyone who reads it.</p>
+          <div class="note">A prayer request can be posted anonymously: your name is hidden from the room, though the request itself is still public. Nothing in a community room is private.</div>
+
+          <h3 style="margin-top:26px">Voice rooms</h3>
+          <p>Click <strong>Lounge</strong> or <strong>Workshop</strong> to drop in. A dock appears along the bottom with your microphone, headphones, camera and screen share.</p>
+          <p>The room makes a small sound when somebody arrives or leaves — two notes rising for an arrival, falling for a departure — so you can tell who came and went while you are looking at something else. The bell in the dock turns that off, and the choice is remembered on this machine.</p>
+
+          <h3 style="margin-top:26px">Files</h3>
+          <p>Images, video and PDFs can be attached to a message. They are checked by their actual contents rather than by their file name, and they are stored in your own profile folder — nothing is uploaded to a server anywhere.</p>
+
+          <h3 style="margin-top:26px">Keeping the rooms civil</h3>
+          <p>Every message has a <strong>Report</strong> button. Reports go to a queue the community owner reviews, and enough reports on one message hides it pending that review. Blocking somebody hides everything they have said, including what they said before you blocked them, and it is reversible — nothing is destroyed.</p>
+          <p>Owners get more: timing somebody out for an afternoon, banning them outright, removing a message, and a role system for handing out moderator powers.</p>
+
+          <h3 style="margin-top:26px">The community guide</h3>
+          <p>The guide is an optional AI that runs on the <strong>community owner's machine only</strong>, through <strong>Ollama</strong>. It is switched off until the owner turns it on, and it does exactly two things:</p>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4>It writes into quiet rooms</h4><p>When a channel has had nothing in it for hours, the guide posts one short thing to talk about — at most twice a day, and never while a conversation is happening.</p></div>
+            <div class="feat"><h4>It reports, it never removes</h4><p>It reads new messages and files anything concerning into the moderation queue with its reasoning attached. It cannot hide, delete or ban. A person decides.</p></div>
+          </div>
+          <p>It has no internet access: everything it writes comes from the model's own knowledge and the room's recent messages, so it cannot bring an article, a link or a statistic in from outside. Every message it writes carries an <strong>AI</strong> badge beside the name, every time.</p>
+          <div class="note">Because the guide runs on one machine through that machine's Ollama, it needs a model chosen in its panel before it will do anything. If it says it is not running, the panel names the reason.</div>
+
+          <h3 style="margin-top:26px">On this computer, or shared</h3>
+          <p>Out of the box the community is <strong>local</strong>: everything you post stays on your machine and nobody else can see it, which the banner at the top says plainly. It becomes a real shared community when a backend is connected — a Supabase project, entered once in the setup panel — at which point your name, your key and everything already written carry over.</p>
+
+          <h3 style="margin-top:26px">Your identity, and leaving</h3>
+          <p><strong>Your account</strong> in the rail holds the key this machine generated. Export it and import it on another computer and the same name and history follow you; anyone holding that text can post as you, so treat it like a password.</p>
+          <p>The same panel has <strong>Delete everything</strong>, which is a real deletion behind a typed confirmation: your name, every message you posted, every reaction you left and every report you filed, then the key itself. It cannot be undone and nothing is kept.</p>
+        </div>
+      </section>
+
       <section id="focus">
         <div class="sec-head"><span class="node" style="background:var(--amber)"></span><h2>Focus sessions &amp; tab sleeping</h2><span class="sec-line"></span></div>
         <div class="body-col">
@@ -1096,12 +1634,26 @@
       <!-- CAPTURE -->
       <section id="capture">
         <div class="sec-head"><span class="node" style="background:var(--emerald)"></span><h2>Screenshots &amp; recording</h2><span class="sec-line"></span></div>
+        <p class="sec-sub">All of the page, or just the part of it you meant. <span class="pill new">new</span></p>
         <div class="body-col">
+          <p>The camera and video icons both ask what you want before they start:</p>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Choice</th><th>What you get</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Whole page</strong> / <strong>Whole tab</strong></td><td>Everything, as before &mdash; one click and a save dialog</td></tr>
+                <tr><td><strong>Select an area&hellip;</strong></td><td>Drag out a rectangle first; only that part is captured or recorded</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Choosing an area freezes the page and lets you drag on the still. That is deliberate as well as necessary: the frame stops moving the moment you start choosing, so a page that animates or reflows cannot shift under the selection you are making. The size is shown as you drag, and <kbd>Esc</kbd> backs out.</p>
           <ul>
-            <li><strong>Screenshot</strong> — the camera icon captures the visible page and opens a save dialog.</li>
-            <li><strong>Annotated screenshot</strong> — draw first, then hit <em>Save</em> in the annotation toolbar; drawings are composited onto the real pixels.</li>
-            <li><strong>Record</strong> — the video icon records the window with audio and a live timer. Click stop to save as <code>.webm</code>.</li>
+            <li><strong>Screenshots</strong> are cropped exactly &mdash; the still you dragged on is the source.</li>
+            <li><strong>Recordings</strong> keep rolling on the live page; the region you drew is what gets written to the file.</li>
+            <li><strong>Annotated screenshot</strong> &mdash; draw first, then hit <em>Save</em> in the annotation toolbar; drawings are composited onto the real pixels.</li>
+            <li>Recordings save as <code>.webm</code>, with audio and a live timer while they run.</li>
           </ul>
+          <div class="note">If the browser cannot work out where the page sits inside the window &mdash; mid-resize, for instance &mdash; a region recording falls back to the whole tab and says so, rather than writing a video cropped to the wrong place.</div>
         </div>
       </section>
 
@@ -1431,7 +1983,7 @@
                 <tr><td><code>pop</code></td><td>Picture-in-picture &mdash; float the video that is playing</td></tr>
                 <tr><td><code>screenshot</code></td><td>Capture the <em>whole</em> page, not just what is on screen, into Pictures</td></tr>
                 <tr><td><code>read aloud</code></td><td>Narrate the current page</td></tr>
-                <tr><td><code>compare</code></td><td>Compare two pages side by side with the assistant</td></tr>
+                <tr><td><code>compare</code></td><td>Compare 2-6 open tabs side by side with the assistant</td></tr>
               </tbody>
             </table>
           </div>
@@ -1492,7 +2044,7 @@
       </section>
 
       <footer>
-        <p><strong style="color:var(--ink)">AIHub Browser __AIHUB_VERSION__</strong> — an AI operating system for the web.</p>
+        <p><strong style="color:var(--ink)">AIHub Browser 1.61</strong> — an AI operating system for the web.</p>
         <p style="margin-top:6px">Built on Electron and Chromium · Windows, macOS, Linux · Auto-updating from GitHub Releases</p>
         <p style="margin-top:14px; padding-top:14px; border-top:1px solid var(--line)">
           <strong style="color:var(--ink)">Created by Erick Omari</strong><br>

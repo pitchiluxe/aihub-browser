@@ -1,32 +1,22 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { motion } from 'framer-motion'
 import { Download, FolderOpen, FileText, Trash2, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
-import { DownloadItem, useBrowserStore } from '../../store/browserStore'
+import { useBrowserStore } from '../../store/browserStore'
+import { formatProgress, percentOf, stateLabel } from '../../services/downloadDisplay'
 
+/**
+ * The full downloads history. The toolbar panel (DownloadsButton) is the
+ * glance; this is the page you open when you need to find something from last
+ * week. Both read the same store slice — App owns the live subscription — and
+ * phrase sizes and states through services/downloadDisplay so the two surfaces
+ * never disagree about what a transfer is doing.
+ */
 export default function DownloadsPage() {
-  const { downloads, setDownloads, upsertDownload } = useBrowserStore()
-
-  useEffect(() => {
-    window.electronAPI.downloads.getAll().then(setDownloads)
-    const unsub = window.electronAPI.downloads.onUpdate(upsertDownload)
-    return () => { if (typeof unsub === 'function') unsub() }
-  }, [])
+  const { downloads, setDownloads } = useBrowserStore()
 
   const clearAll = async () => {
     await window.electronAPI.downloads.clear()
     setDownloads([])
-  }
-
-  const formatSize = (bytes: number) => {
-    if (!bytes) return '—'
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
-  const formatProgress = (dl: DownloadItem) => {
-    if (dl.totalBytes > 0) return `${formatSize(dl.receivedBytes)} / ${formatSize(dl.totalBytes)}`
-    return formatSize(dl.receivedBytes)
   }
 
   return (
@@ -73,16 +63,16 @@ export default function DownloadsPage() {
                     {dl.state === 'progressing' && <Loader2 size={13} className="text-aihub-accent animate-spin shrink-0" />}
                   </div>
 
-                  {dl.state === 'progressing' && dl.totalBytes > 0 && (
+                  {dl.state === 'progressing' && percentOf(dl) !== null && (
                     <div className="w-full bg-aihub-border/40 rounded-full h-1 mb-1">
-                      <div className="bg-aihub-accent h-1 rounded-full transition-all" style={{ width: `${Math.min(100, (dl.receivedBytes / dl.totalBytes) * 100)}%` }} />
+                      <div className="bg-aihub-accent h-1 rounded-full transition-all" style={{ width: `${percentOf(dl)}%` }} />
                     </div>
                   )}
 
                   <div className="flex items-center gap-3 text-xs text-aihub-muted">
                     <span>{formatProgress(dl)}</span>
                     <span>·</span>
-                    <span>{dl.state === 'completed' ? 'Complete' : dl.state === 'cancelled' ? 'Cancelled' : dl.state === 'interrupted' ? 'Interrupted' : 'Downloading…'}</span>
+                    <span>{stateLabel(dl.state)}</span>
                     {dl.completedAt && <><span>·</span><span>{new Date(dl.completedAt).toLocaleDateString()}</span></>}
                   </div>
                 </div>

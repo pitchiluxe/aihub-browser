@@ -1,13 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, RotateCw, Home, Bookmark, Bot,
   Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe, Camera, Video, Square, X,
+  Crop, Monitor, BookOpen, GitCompare,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import { addBookmarkWithAI } from '../../services/bookmarkService'
 import BookmarksButton from './BookmarksButton'
+import DownloadsButton from './DownloadsButton'
 import VpnButton from './VpnButton'
+import { TradingCoachButton } from '../trading/TradingCoach'
+import CaptureOverlay from './CaptureOverlay'
+import {
+  toPixels, regionInStream, toEvenSize,
+  type FractionRect, type Rect,
+} from '../../../../shared/captureRegion'
 
 interface Props {
   onNavigate: (url: string) => void
@@ -36,12 +45,16 @@ export default function NavigationBar({
   const {
     tabs, activeTabId, toggleAIPanel, isAIPanelOpen,
     bookmarks, addBookmark, removeBookmark, toggleSidebar, isSidebarOpen,
-    isAnnotationMode, toggleAnnotationMode, tabWcIds,
+    isAnnotationMode, toggleAnnotationMode, tabWcIds, setCaptureOverlayOpen,
+    setReaderOpen, isReaderOpen, isCompareOpen, setCompareOpen,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, toggleAIPanel: s.toggleAIPanel, isAIPanelOpen: s.isAIPanelOpen,
     bookmarks: s.bookmarks, addBookmark: s.addBookmark, removeBookmark: s.removeBookmark,
     toggleSidebar: s.toggleSidebar, isSidebarOpen: s.isSidebarOpen,
     isAnnotationMode: s.isAnnotationMode, toggleAnnotationMode: s.toggleAnnotationMode, tabWcIds: s.tabWcIds,
+    setCaptureOverlayOpen: s.setCaptureOverlayOpen,
+    setReaderOpen: s.setReaderOpen, isReaderOpen: s.isReaderOpen,
+    isCompareOpen: s.isCompareOpen, setCompareOpen: s.setCompareOpen,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -131,6 +144,17 @@ export default function NavigationBar({
       if (result.success && result.bookmark) {
         addBookmark(result.bookmark)
         showBmToast(result.warning ? 'Already in sphere — updated' : 'Added to sphere')
+        // Keep a copy of the page while it still exists. Deliberately not
+        // awaited and deliberately silent: archiving is a courtesy the
+        // bookmark does not depend on, and a page that refuses to be saved
+        // must not turn a successful bookmark into an error message.
+        if (activeTabId) {
+          window.electronAPI.vault?.capture?.({
+            tabId: activeTabId, url,
+            title: activeTab?.title || '', favicon: activeTab?.favicon || '',
+            origin: 'auto',
+          }).catch(() => {})
+        }
       } else {
         showBmToast(result.error || "Couldn't add page")
       }
@@ -152,20 +176,68 @@ export default function NavigationBar({
     return () => document.removeEventListener('aihub-focus-url', h)
   }, [])
 
-  // ── Screenshot ────────────────────────────────────────────────────────
-  const takeScreenshot = async () => {
+  // ── Capture ───────────────────────────────────────────────────────────
+  // Both captures now ask "all of it, or part of it?". A region is chosen on
+  // a still of the page rather than on the page itself, because the tab is a
+  // BrowserView and nothing host-side can be drawn over it — see
+  // CaptureOverlay, where that constraint turns out to be the better
+  // behaviour anyway.
+  const [pickingFor, setPickingFor] = useState<null | 'screenshot' | 'recording'>(null)
+  const [still, setStill] = useState<string>('')
+
+  useEffect(() => { setCaptureOverlayOpen(!!still) }, [still, setCaptureOverlayOpen])
+
+  const pageStill = async (): Promise<string> => {
     const wcId = activeTabId ? tabWcIds[activeTabId] : null
-    if (!wcId) { showBmToast("No page to capture"); return }
-    try {
-      const dataUrl = await window.electronAPI.webview.capture(wcId)
-      if (!dataUrl) { showBmToast("Couldn't capture screenshot"); return }
-      const result = await (window.electronAPI as any).file.saveImage({ dataUrl, baseName: 'screenshot' })
-      if (result?.success) showBmToast('Screenshot saved')
-      else if (result?.error) showBmToast(`Couldn't save: ${result.error}`)
-      // canceled dialog: silent, matches file:saveMd behavior
-    } catch (e: any) {
-      showBmToast(`Couldn't capture: ${e?.message || e}`)
+    if (!wcId) return ''
+    try { return (await window.electronAPI.webview.capture(wcId)) || '' } catch { return '' }
+  }
+
+  const saveScreenshot = async (dataUrl: string) => {
+    const result = await (window.electronAPI as any).file.saveImage({ dataUrl, baseName: 'screenshot' })
+    if (result?.success) showBmToast('Screenshot saved')
+    else if (result?.error) showBmToast(`Couldn't save: ${result.error}`)
+    // A cancelled dialog reports neither — silent, like every file:save* caller.
+  }
+
+  const takeScreenshot = async () => {
+    const dataUrl = await pageStill()
+    if (!dataUrl) { showBmToast("No page to capture"); return }
+    await saveScreenshot(dataUrl)
+  }
+
+  /** Crop the still to the chosen region and save that instead. */
+  const cropAndSave = (dataUrl: string, region: FractionRect) => {
+    const img = new Image()
+    img.onload = () => {
+      const box = toPixels(region, img.naturalWidth, img.naturalHeight)
+      const canvas = document.createElement('canvas')
+      canvas.width = box.width
+      canvas.height = box.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { showBmToast("Couldn't crop that"); return }
+      ctx.drawImage(img, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height)
+      void saveScreenshot(canvas.toDataURL('image/png'))
     }
+    img.onerror = () => showBmToast("Couldn't read the capture")
+    img.src = dataUrl
+  }
+
+  const beginRegionCapture = async (what: 'screenshot' | 'recording') => {
+    const dataUrl = await pageStill()
+    if (!dataUrl) { showBmToast('No page to capture'); return }
+    setPickingFor(what)
+    setStill(dataUrl)
+  }
+
+  const cancelRegion = () => { setStill(''); setPickingFor(null) }
+
+  const onRegionChosen = (region: FractionRect) => {
+    const what = pickingFor
+    const dataUrl = still
+    cancelRegion()
+    if (what === 'screenshot') cropAndSave(dataUrl, region)
+    else if (what === 'recording') void startRecording(region)
   }
 
   // ── Tab recording ────────────────────────────────────────────────────
@@ -178,7 +250,19 @@ export default function NavigationBar({
 
   const formatRecTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
-  const startRecording = async () => {
+  // A cropped recording is the window stream painted through a canvas, one
+  // frame at a time, with only the chosen rectangle copied across. MediaRecorder
+  // cannot crop a track itself, and re-encoding afterwards would mean shipping
+  // a video pipeline for what is three lines of drawImage.
+  const cropRafRef   = useRef<number | null>(null)
+  const cropVideoRef = useRef<HTMLVideoElement | null>(null)
+
+  const stopCropLoop = () => {
+    if (cropRafRef.current !== null) { cancelAnimationFrame(cropRafRef.current); cropRafRef.current = null }
+    if (cropVideoRef.current) { cropVideoRef.current.srcObject = null; cropVideoRef.current = null }
+  }
+
+  const startRecording = async (region?: FractionRect) => {
     try {
       const sourceId = await (window.electronAPI as any).recorder.getSourceId()
       if (!sourceId) { showBmToast("Couldn't start recording"); return }
@@ -192,7 +276,54 @@ export default function NavigationBar({
       } as any)
       recStreamRef.current = stream
       recChunksRef.current = []
-      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' })
+
+      // Which pixels of the stream to keep. Null means all of them.
+      let crop: Rect | null = null
+      let recorded: MediaStream = stream
+
+      if (region) {
+        const track = stream.getVideoTracks()[0]
+        const settings = track?.getSettings?.() || {}
+        const layout = await window.electronAPI.tabView.getLayout().catch(() => null)
+        const streamSize = {
+          width: Number(settings.width) || 0,
+          height: Number(settings.height) || 0,
+        }
+        const mapped = layout?.primary && layout?.window
+          ? regionInStream(region, layout.primary, layout.window, streamSize)
+          : null
+
+        if (!mapped) {
+          // Geometry we cannot trust records the whole window rather than a
+          // confidently wrong rectangle, and says so instead of pretending.
+          showBmToast('Recording the whole tab — region unavailable')
+        } else {
+          crop = toEvenSize(mapped)
+          const canvas = document.createElement('canvas')
+          canvas.width = crop.width
+          canvas.height = crop.height
+          const ctx = canvas.getContext('2d')
+          const video = document.createElement('video')
+          video.srcObject = new MediaStream([track])
+          video.muted = true
+          await video.play().catch(() => {})
+          cropVideoRef.current = video
+
+          const draw = () => {
+            if (ctx && crop && video.readyState >= 2) {
+              ctx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height)
+            }
+            cropRafRef.current = requestAnimationFrame(draw)
+          }
+          draw()
+
+          const cropped = canvas.captureStream(30)
+          for (const audio of stream.getAudioTracks()) cropped.addTrack(audio)
+          recorded = cropped
+        }
+      }
+
+      const recorder = new MediaRecorder(recorded, { mimeType: 'video/webm;codecs=vp9,opus' })
       recorder.ondataavailable = (e) => { if (e.data.size > 0) recChunksRef.current.push(e.data) }
       recorder.onstop = async () => {
         const blob = new Blob(recChunksRef.current, { type: 'video/webm' })
@@ -201,6 +332,7 @@ export default function NavigationBar({
         const result = await (window.electronAPI as any).file.saveVideo({ buffer })
         if (result?.success) showBmToast('Recording saved')
         else if (result?.error) showBmToast(`Couldn't save: ${result.error}`)
+        stopCropLoop()
         recStreamRef.current?.getTracks().forEach(t => t.stop())
         recStreamRef.current = null
       }
@@ -225,6 +357,7 @@ export default function NavigationBar({
   // rather than leaking an active capture.
   useEffect(() => () => {
     if (recTimerRef.current) clearInterval(recTimerRef.current)
+    stopCropLoop()
     recStreamRef.current?.getTracks().forEach(t => t.stop())
   }, [])
 
@@ -270,6 +403,15 @@ export default function NavigationBar({
         >
           {bmToast}
         </div>
+      )}
+
+      {still && pickingFor && (
+        <CaptureOverlay
+          image={still}
+          mode={pickingFor}
+          onSelect={onRegionChosen}
+          onCancel={cancelRegion}
+        />
       )}
 
       {/* Sidebar toggle */}
@@ -406,6 +548,15 @@ export default function NavigationBar({
         </NavBtn>
 
         <NavBtn
+          onClick={() => activeTabId && setReaderOpen(!isReaderOpen, activeTabId)}
+          title={isReaderOpen ? 'Close reading mode' : 'Read in clean mode (F1)'}
+          active={isReaderOpen}
+          disabled={isSpecialPage}
+        >
+          <BookOpen size={13} />
+        </NavBtn>
+
+        <NavBtn
           onClick={toggleAnnotationMode}
           title="Annotate page"
           active={isAnnotationMode}
@@ -413,13 +564,32 @@ export default function NavigationBar({
           <Pencil size={13} />
         </NavBtn>
 
+        {/* F8: Cross-Tab AI Comparison — pick 2+ tabs and get a comparison table */}
+        <NavBtn
+          onClick={() => setCompareOpen(!isCompareOpen)}
+          title="Compare pages (AI)"
+          active={isCompareOpen}
+        >
+          <GitCompare size={13} />
+        </NavBtn>
+
         {/* Every saved bookmark, one click away — the sphere is for exploring,
             this is for opening the one you already have in mind. */}
         <BookmarksButton onNavigate={onNavigate} />
 
-        <NavBtn onClick={takeScreenshot} title="Screenshot" disabled={isSpecialPage || !activeTabId}>
-          <Camera size={13} />
-        </NavBtn>
+        {/* Everything this browser has pulled down, with live progress — the
+            same list as the downloads page, at a glance. */}
+        <DownloadsButton />
+
+        <CaptureButton
+          title="Screenshot"
+          icon={<Camera size={13} />}
+          disabled={isSpecialPage || !activeTabId}
+          wholeLabel="Whole page"
+          regionLabel="Select an area…"
+          onWhole={takeScreenshot}
+          onRegion={() => void beginRegionCapture('screenshot')}
+        />
 
         {isRecording ? (
           <button
@@ -436,13 +606,24 @@ export default function NavigationBar({
             <span style={{ fontSize: 11, fontWeight: 700 }}>{formatRecTime(recSeconds)}</span>
           </button>
         ) : (
-          <NavBtn onClick={startRecording} title="Record tab" disabled={isSpecialPage || !activeTabId}>
-            <Video size={13} />
-          </NavBtn>
+          <CaptureButton
+            title="Record tab"
+            icon={<Video size={13} />}
+            disabled={isSpecialPage || !activeTabId}
+            wholeLabel="Whole tab"
+            regionLabel="Select an area…"
+            onWhole={() => void startRecording()}
+            onRegion={() => void beginRegionCapture('recording')}
+          />
         )}
 
         {/* VPN quick-toggle — green while protected, right-click to switch country */}
         <VpnButton />
+
+        {/* Trading Coach — gold accent — only renders on TradingView chart
+            URLs. Lives in the navbar so it is above the chart's BrowserView,
+            which would otherwise paint over any host HTML. */}
+        <TradingCoachButton />
 
         {/* AI assistant button — purple accent — opens the full docked panel */}
         <AIButton onClick={toggleAIPanel} active={isAIPanelOpen} />
@@ -477,6 +658,110 @@ function AIButton({ onClick, active }: { onClick: () => void; active?: boolean }
     >
       <Bot size={13} />
       <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.02em' }}>AI</span>
+    </button>
+  )
+}
+
+/**
+ * A capture button that asks what to capture.
+ *
+ * Both captures used to mean "everything", which is the wrong default more
+ * often than not — the useful thing is usually one chart or one error dialog,
+ * and cropping afterwards in another application is the step that stops people
+ * bothering. Neither option is buried behind a modifier key, because neither
+ * is secondary.
+ */
+function CaptureButton({ title, icon, disabled, wholeLabel, regionLabel, onWhole, onRegion }: {
+  title: string
+  icon: React.ReactNode
+  disabled?: boolean
+  wholeLabel: string
+  regionLabel: string
+  onWhole: () => void
+  onRegion: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [anchor, setAnchor] = useState({ top: 52, right: 14 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  // The menu drops below the nav bar into the page region, where the tab's
+  // BrowserView paints over host HTML — without this it is drawn correctly
+  // and hidden behind the page, which is exactly how it shipped in 1.58.5.
+  const { pushHostOverlay, popHostOverlay } = useBrowserStore(useShallow(s => ({
+    pushHostOverlay: s.pushHostOverlay,
+    popHostOverlay: s.popHostOverlay,
+  })))
+  useEffect(() => {
+    if (!open) return
+    pushHostOverlay()
+    return () => popHostOverlay()
+  }, [open, pushHostOverlay, popHostOverlay])
+
+  const toggle = () => {
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) setAnchor({ top: Math.round(r.bottom + 8), right: Math.round(window.innerWidth - r.right) })
+    setOpen(o => !o)
+  }
+
+  const pick = (run: () => void) => { setOpen(false); run() }
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        disabled={disabled}
+        title={title}
+        className="ds-navbtn"
+        style={{
+          opacity: disabled ? 0.2 : 1,
+          color: open ? 'rgb(var(--ds-accent-soft))' : 'rgb(var(--ds-text-4))',
+          background: open ? 'rgb(var(--ds-accent) / 0.16)' : 'transparent',
+          border: `1px solid ${open ? 'rgb(var(--ds-accent) / 0.28)' : 'transparent'}`,
+        }}
+      >
+        {icon}
+      </button>
+
+      {open && createPortal(
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 9998 }} />
+          <div style={{
+            position: 'fixed', top: anchor.top, right: anchor.right, zIndex: 9999,
+            width: 208, padding: 5, borderRadius: 13, overflow: 'hidden',
+            background: 'var(--ds-glass-lg, rgb(var(--ds-bg-2)))',
+            border: '1px solid var(--ds-border-sm)',
+            boxShadow: '0 18px 50px rgba(0,0,0,0.45)',
+            backdropFilter: 'blur(18px)',
+          }}>
+            <MenuRow icon={<Monitor size={13} />} label={wholeLabel} onClick={() => pick(onWhole)} />
+            <MenuRow icon={<Crop size={13} />} label={regionLabel} onClick={() => pick(onRegion)} />
+          </div>
+        </>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+function MenuRow({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+        padding: '8px 10px', borderRadius: 9, cursor: 'pointer',
+        background: hovered ? 'rgb(var(--ds-accent) / 0.12)' : 'transparent',
+        border: 'none', textAlign: 'left',
+        color: hovered ? 'rgb(var(--ds-text-2))' : 'rgb(var(--ds-text-3))',
+        fontSize: 12.5, fontWeight: 550,
+      }}
+    >
+      <span style={{ display: 'flex', color: 'rgb(var(--ds-accent-soft))' }}>{icon}</span>
+      {label}
     </button>
   )
 }

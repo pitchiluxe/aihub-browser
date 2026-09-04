@@ -1,6 +1,6 @@
 {
   "name": "aihub-browser",
-  "version": "1.53.0",
+  "version": "1.62.1",
   "description": "AIHub — Next-Generation AI-Powered Browser",
   "main": "./out/main/index.js",
   "homepage": ".",
@@ -24,17 +24,22 @@
     "build:bible:lsg": "node scripts/build-bible-lsg.mjs"
   },
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@supabase/supabase-js": "^2.112.4",
     "@types/d3-force": "^3.0.10",
     "axios": "^1.7.2",
     "d3-force": "^3.0.0",
     "electron-updater": "^6.3.9",
     "framer-motion": "^11.2.10",
+    "livekit-client": "^2.22.0",
+    "livekit-server-sdk": "^2.18.0",
     "lucide-react": "^0.400.0",
     "qrcode-generator": "^1.4.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "ws": "^8.21.0",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
@@ -46,7 +51,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.19",
     "cross-env": "^10.1.0",
-    "electron": "^34.5.8",
+    "electron": "34.5.8",
     "electron-builder": "^26.0.12",
     "electron-vite": "^2.3.0",
     "jsdom": "^29.1.1",

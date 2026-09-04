@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { proposeGroups, groupColorFor, type TabGroup } from '../services/tabGroups'
 import type { SiteRules } from '../extensions/siteRules'
 
-export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string }
+export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string; summary?: string; summaryAt?: number }
 export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; asleep?: boolean; /** Last load ended in an error/crash page — retried when the tab is next activated. */ loadFailed?: boolean; groupId?: string; containerId?: string; pageType?: 'browser' | PageType }
 export interface AIMessage { role: 'user'|'assistant'|'system'; content: string; steps?: { label: string; status: 'pending' | 'done' | 'error' }[]; /** Data URLs the user attached to this turn. */ images?: string[] }
 export interface HistoryItem { id: string; url: string; title: string; favicon?: string; timestamp: number }
@@ -15,6 +15,7 @@ interface BrowserState {
   setBookmarks: (b: Bookmark[]) => void
   addBookmark: (b: Bookmark) => void
   removeBookmark: (id: string) => void
+  updateBookmark: (id: string, patch: Partial<Bookmark>) => void
 
   // Tabs
   tabs: Tab[]
@@ -74,10 +75,53 @@ interface BrowserState {
   // BrowserView detach while it is open.
   isBookmarksMenuOpen: boolean
   setBookmarksMenuOpen: (v: boolean) => void
+  // Same for the toolbar downloads panel.
+  isDownloadsMenuOpen: boolean
+  setDownloadsMenuOpen: (v: boolean) => void
+  // The table exporter is host HTML over the page, same detach requirement.
+  isTableExportOpen: boolean
+  setTableExportOpen: (v: boolean) => void
+  // The region-capture overlay draws a still of the page and needs the live
+  // view out of the way while it does.
+  isCaptureOverlayOpen: boolean
+  setCaptureOverlayOpen: (v: boolean) => void
+  // The Trading Coach panel is host HTML over the page, same detach
+  // requirement as the AI panel. Lives in the global store so the
+  // NavigationBar button and the floating trigger stay in sync.
+  isTradingCoachOpen: boolean
+  setTradingCoachOpen: (v: boolean) => void
+  toggleTradingCoach: () => void
+  // F1 — Reading Mode. The reader takes over the entire page region with a
+  // clean article view, so it owns its own active-tab-id. A null means
+  // "not in reading mode" — when set, the BrowserView is hidden.
+  isReaderOpen: boolean
+  readerTabId: string | null
+  setReaderOpen: (v: boolean, tabId?: string | null) => void
+  /**
+   * How many host-HTML popups are open right now.
+   *
+   * A BrowserView paints above every piece of host HTML, so any popup drawn
+   * over the page region is invisible unless the view is detached first.
+   * Every popup so far has done that with a boolean of its own, and every new
+   * one has forgotten — the capture menus shipped in 1.58.5 hidden behind the
+   * page for exactly this reason. A counter instead of another flag: it is
+   * the same answer for all of them, and two popups closing out of order
+   * cannot leave the view detached.
+   */
+  hostOverlayCount: number
+  pushHostOverlay: () => void
+  popHostOverlay: () => void
   isCmdPaletteOpen: boolean
   setCmdPaletteOpen: (v: boolean) => void
   isCompareOpen: boolean
   setCompareOpen: (v: boolean) => void
+  isCuratorOpen: boolean
+  setCuratorOpen: (v: boolean) => void
+  /** Current page insight (3-bullet summary) shown in the BottomSummaryCard */
+  currentPageInsight: { tabId: string; bullets: string[]; pageType: string; title: string } | null
+  setPageInsight: (v: { tabId: string; bullets: string[]; pageType: string; title: string } | null) => void
+  /** Dismiss the current page insight card */
+  dismissPageInsight: () => void
   // URL to pre-fill the Add-to-Sphere modal with (set from the page context menu)
   bookmarkPrefill: string
   setBookmarkPrefill: (u: string) => void
@@ -137,6 +181,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setBookmarks: (bookmarks) => set({ bookmarks }),
   addBookmark: (b) => set(s => ({ bookmarks: [...s.bookmarks, b] })),
   removeBookmark: (id) => set(s => ({ bookmarks: s.bookmarks.filter(b => b.id !== id) })),
+  updateBookmark: (id, patch) => set(s => ({
+    bookmarks: s.bookmarks.map(b => b.id === id ? { ...b, ...patch } : b),
+  })),
 
   tabs: [{ id: 'tab-1', url: 'home', title: 'New Tab', favicon: '', isLoading: false, isHome: true, pageType: 'browser' }],
   activeTabId: 'tab-1',
@@ -380,10 +427,30 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setVpnMenuOpen: (v) => set({ isVpnMenuOpen: v }),
   isBookmarksMenuOpen: false,
   setBookmarksMenuOpen: (v) => set({ isBookmarksMenuOpen: v }),
+  isDownloadsMenuOpen: false,
+  setDownloadsMenuOpen: (v) => set({ isDownloadsMenuOpen: v }),
+  isTableExportOpen: false,
+  setTableExportOpen: (v) => set({ isTableExportOpen: v }),
+  isCaptureOverlayOpen: false,
+  setCaptureOverlayOpen: (v) => set({ isCaptureOverlayOpen: v }),
+  isTradingCoachOpen: false,
+  setTradingCoachOpen: (v) => set({ isTradingCoachOpen: v }),
+  toggleTradingCoach: () => set(s => ({ isTradingCoachOpen: !s.isTradingCoachOpen })),
+  isReaderOpen: false,
+  readerTabId: null as string | null,
+  setReaderOpen: (v, tabId) => set({ isReaderOpen: v, readerTabId: v ? (tabId ?? null) : null }),
+  hostOverlayCount: 0,
+  pushHostOverlay: () => set(s => ({ hostOverlayCount: s.hostOverlayCount + 1 })),
+  popHostOverlay: () => set(s => ({ hostOverlayCount: Math.max(0, s.hostOverlayCount - 1) })),
   isCmdPaletteOpen: false,
   setCmdPaletteOpen: (v) => set({ isCmdPaletteOpen: v }),
   isCompareOpen: false,
   setCompareOpen: (v) => set({ isCompareOpen: v }),
+  isCuratorOpen: false,
+  setCuratorOpen: (v) => set({ isCuratorOpen: v }),
+  currentPageInsight: null,
+  setPageInsight: (v) => set({ currentPageInsight: v }),
+  dismissPageInsight: () => set({ currentPageInsight: null }),
 
   bookmarkPrefill: '',
   setBookmarkPrefill: (u) => set({ bookmarkPrefill: u }),

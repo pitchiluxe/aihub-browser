@@ -196,8 +196,11 @@ describe('reading', () => {
         kind: 'text', body: `m${i}`, createdAt: NOW + i,
       })
     }
+    // One page, not the whole history. The cap dropped from 200 to 50 when
+    // paging arrived: 200 was "as much as the UI could survive rendering at
+    // once", and 50 is a page you scroll back through.
     const out = visibleMessages(s, 'sports', 'a')
-    expect(out).toHaveLength(200)
+    expect(out).toHaveLength(50)
     // The most recent conversation, not the oldest.
     expect(out[out.length - 1].body).toBe('m249')
   })
@@ -326,6 +329,11 @@ describe('moderation', () => {
       member('b'),
       member('c'),
     )
+    // Ownership is claimed here on purpose. Without it the founder rule would
+    // hand moderation to the earliest member, which is correct behaviour but
+    // not what these tests are about — they are about an ordinary member in an
+    // established room being unable to act on other people's messages.
+    s.ownership = { memberId: 'mod', email: 'mod@example.test', verifiedAt: NOW }
     postMessage(s, { memberId: 'a', channel: 'sports', kind: 'text', body: 'contested' }, NOW, newId)
     return { s, messageId: s.messages[0].id }
   }
@@ -339,6 +347,88 @@ describe('moderation', () => {
     expect(canModerate(s, 'mod')).toBe(true)
     expect(canModerate(s, 'a')).toBe(false)
     expect(canModerate(s, 'nobody')).toBe(false)
+  })
+
+  // The regression this replaced: canModerate read `member.isAdmin` and
+  // nothing else, and nothing in the app ever sets that flag. On an install
+  // where ownership had never been claimed, the person whose machine it was
+  // could not see their own report queue or the AI guide switch, because the
+  // rail hides both behind exactly this answer.
+  describe('who may moderate', () => {
+    it('lets the only person in an unclaimed community moderate it', () => {
+      const s = stateWith(member('solo'))
+      expect(canModerate(s, 'solo')).toBe(true)
+    })
+
+    it('does not count the guide bot as the founder', () => {
+      const s = stateWith(
+        member('bot', { isBot: true, createdAt: NOW - 10 * DAY }),
+        member('solo', { createdAt: NOW - DAY }),
+      )
+      expect(canModerate(s, 'solo')).toBe(true)
+    })
+
+    // The bug in the first version of this rule: it asked whether the member
+    // was the ONLY person here, so the owner of the room lost their own report
+    // queue the moment somebody else joined.
+    it('keeps the founder moderating after other people join', () => {
+      const s = stateWith(
+        member('founder', { createdAt: NOW - 30 * DAY }),
+        member('newcomer', { createdAt: NOW - DAY }),
+        member('later', { createdAt: NOW }),
+      )
+      expect(canModerate(s, 'founder')).toBe(true)
+      expect(canModerate(s, 'newcomer')).toBe(false)
+      expect(canModerate(s, 'later')).toBe(false)
+    })
+
+    it('breaks a tie on id, so replicas cannot disagree', () => {
+      const s = stateWith(
+        member('bbb', { createdAt: NOW }),
+        member('aaa', { createdAt: NOW }),
+      )
+      expect(canModerate(s, 'aaa')).toBe(true)
+      expect(canModerate(s, 'bbb')).toBe(false)
+    })
+
+    it('passes the room on when the founder is banned', () => {
+      const s = stateWith(
+        member('founder', { createdAt: NOW - 30 * DAY, bannedAt: NOW }),
+        member('next', { createdAt: NOW - DAY }),
+      )
+      expect(canModerate(s, 'founder')).toBe(false)
+      expect(canModerate(s, 'next')).toBe(true)
+    })
+
+    it('stops granting it once ownership is claimed', () => {
+      const s = stateWith(member('solo'))
+      s.ownership = { memberId: 'someone-else', email: 'o@e.test', verifiedAt: NOW }
+      expect(canModerate(s, 'solo')).toBe(false)
+    })
+
+    it('lets the owner moderate', () => {
+      const s = stateWith(member('owner'), member('other'))
+      s.ownership = { memberId: 'owner', email: 'o@e.test', verifiedAt: NOW }
+      expect(canModerate(s, 'owner')).toBe(true)
+      expect(canModerate(s, 'other')).toBe(false)
+    })
+
+    it('lets a role with manage_messages moderate', () => {
+      const s = stateWith(member('owner'), member('helper'))
+      s.ownership = { memberId: 'owner', email: 'o@e.test', verifiedAt: NOW }
+      s.memberRoles.helper = ['moderator']
+      expect(canModerate(s, 'helper')).toBe(true)
+    })
+
+    it('refuses a banned member whatever else they hold', () => {
+      const s = stateWith(member('solo', { bannedAt: NOW }))
+      expect(canModerate(s, 'solo')).toBe(false)
+    })
+
+    it('still honours the legacy isAdmin flag', () => {
+      const s = stateWith(member('a', { isAdmin: true }), member('b'))
+      expect(canModerate(s, 'a')).toBe(true)
+    })
   })
 
   // The bug this replaced: auto-hide wrote deletedAt, so a pile-on and a

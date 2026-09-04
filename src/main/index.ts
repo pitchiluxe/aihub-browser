@@ -1,4 +1,4 @@
-import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, webContents as electronWebContents } from 'electron'
+import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, desktopCapturer, webContents as electronWebContents } from 'electron'
 import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname, basename } from 'path'
 import zlib from 'zlib'
 import http from 'http'
@@ -6,10 +6,12 @@ import https from 'https'
 import dns from 'dns'
 import os from 'os'
 import fs from 'fs'
+import { pathToFileURL, fileURLToPath } from 'url'
 import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
-import { registerCommunityIpc } from './community'
+import { registerCommunityIpc, releaseCommunityWindow, shutdownCommunityBackend } from './community'
+import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
 import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel } from './modelRouting'
@@ -30,10 +32,13 @@ import { splitPanes } from '../shared/splitLayout'
 import { writeNote, describeVault, type NoteKind } from './obsidian'
 import { contentHash, describeChange, containsKeyword } from './watchDiff'
 import {
-  partitionFor, addContainer, removeContainer, DEFAULT_CONTAINERS, type Container,
+  partitionFor, addContainer, removeContainer, DEFAULT_CONTAINERS, newBurnerId, type Container,
 } from './containers'
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
+import { createVault } from './vault'
+import { extractPdfText, looksLikePdf } from './pdfText'
+import { registrableDomain } from '../shared/credentialGuard'
 import { parseTradingViewText, describeReading, isChartUrl } from './trading/chartReader'
 import { analyseReading } from './trading/barAnalysis'
 import {
@@ -74,6 +79,12 @@ try { dns.setDefaultResultOrder('ipv4first') } catch {}
 const APP_DIR = join(os.homedir(), '.aihub-browser')
 app.setPath('userData', APP_DIR)
 
+// Community attachments are served over their own scheme. Registering it has
+// to happen here, before app is ready: registerSchemesAsPrivileged is ignored
+// afterwards, and without the privilege Chromium treats every attachment URL
+// as an opaque origin and refuses to render it in an <img>.
+registerAttachmentScheme()
+
 // Point GPU and disk caches to our writable directory so Chromium
 // doesn't fight over temp paths that other processes may have locked.
 app.commandLine.appendSwitch('disk-cache-dir',     join(APP_DIR, 'cache'))
@@ -97,6 +108,22 @@ app.commandLine.appendSwitch('disk-cache-size', String(512 * 1024 * 1024))
 app.commandLine.appendSwitch('enable-features', 'ParallelDownloading')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('enable-zero-copy')
+// HTTP/2: multiplexes multiple requests over a single connection — cuts the
+// TCP handshakes and TLS round-trips dramatically, especially for pages with
+// dozens of assets across the same host.
+app.commandLine.appendSwitch('enable-http2')
+// QUIC (HTTP/3): even faster connection establishment — 0-RTT for known servers,
+// and handles packet loss better than TCP on lossy networks (mobile, spotty WiFi).
+app.commandLine.appendSwitch('enable-quic')
+// More renderer processes = better parallelism for sites with many frames/workers.
+// Default is ~1/4 of cores; bump to 1/2 so complex sites don't queue rendering.
+const CPU_COUNT = require('os').cpus().length
+app.commandLine.appendSwitch('renderer-process-limit', String(Math.max(4, Math.ceil(CPU_COUNT / 2))))
+// Keep DNS entries cached much longer in Chromium's own resolver (30 min vs ~1 min
+// default). First visits still go through Node's async resolver (with system-fallback
+// fallback); this layer caches aggressively on top so repeated internal references
+// to the same host skip DNS entirely.
+app.commandLine.appendSwitch('host-resolver-rules', 'MaxTTL=1800, MinTTL=300')
 
 // ── Single-instance lock — prevent cache conflicts ─────────────────────────
 // If a second instance launches, focus the existing window instead.
@@ -114,8 +141,10 @@ const DL_FILE     = join(APP_DIR, 'downloads.json')
 const AGENTS_FILE = join(APP_DIR, 'agents.json')
 
 const DEFAULT_BOOKMARKS = [
+  { id: 'bm-c',  url: 'aihub://community',                              title: 'Community',        favicon: '', category: 'Social',        addedAt: 0, color: '#34d399' },
   { id: 'bm-b',  url: 'aihub://bible',                                  title: 'Bible',            favicon: '', category: 'Reading',       addedAt: 0, color: '#DC2626' },
   { id: 'bm-m',  url: 'aihub://mail',                                   title: 'Mail',             favicon: '', category: 'Productivity',  addedAt: 0, color: '#EA4335' },
+  { id: 'bm-em', url: 'https://erickomari.vercel.app/',                 title: 'ErickOMari',       favicon: '', category: 'Social',        addedAt: 0, color: '#818cf8' },
   { id: 'bm-g',  url: 'https://www.google.com',                        title: 'Google',           favicon: '', category: 'Search',        addedAt: 0, color: '#4285F4' },
   { id: 'bm-yt', url: 'https://www.youtube.com',                       title: 'YouTube',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#FF0000' },
   { id: 'bm-nf', url: 'https://www.netflix.com',                       title: 'Netflix',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#E50914' },
@@ -128,12 +157,13 @@ const DEFAULT_BOOKMARKS = [
 // data.json replaces the whole bookmark list, so installs that predate a new
 // pinned default would never see it — seed it once per id and record that in
 // `seededBookmarks`, so a bookmark the user later deletes stays deleted.
-const PINNED_DEFAULT_IDS = ['bm-b', 'bm-m']
+const PINNED_DEFAULT_IDS = ['bm-c', 'bm-b', 'bm-m', 'bm-em']
 
-// Permanent bookmarks: the home grid always keeps a way into the reader, so the
-// Bible tile can't be removed. Matched on url, not id, so a copy the user added
-// by hand is protected too and the seeding above stays consistent with it.
-const UNDELETABLE_BOOKMARK_URLS = ['aihub://bible']
+// Permanent bookmarks: the home grid always keeps a way into the reader and into
+// the Community lounge, so those two tiles can't be removed. Matched on url, not
+// id, so a copy the user added by hand is protected too and the seeding above
+// stays consistent with it.
+const UNDELETABLE_BOOKMARK_URLS = ['aihub://community', 'aihub://bible', 'https://erickomari.vercel.app/']
 
 function seedPinnedBookmarks(d: any): boolean {
   const seeded: string[] = Array.isArray(d.seededBookmarks) ? d.seededBookmarks : []
@@ -201,10 +231,16 @@ function defaultSettings() {
     openrouterBase:  '',
     openrouterModel: '',
     ollamaUrl:       '',
+    // Direct provider keys — used as the LAST tier of fallback when both
+    // local Ollama and OpenRouter can't answer. Empty by default.
+    claudeKey:       '',
+    chatGptKey:      '',
     // Provider routing. Local first: Ollama is private, free and already on
     // the machine, so it answers unless it genuinely can't. OpenRouter is the
     // safety net, defaulted to its free meta-router so a user with no credits
-    // still gets an answer instead of an HTTP 402.
+    // still gets an answer instead of an HTTP 402. Direct Claude / ChatGPT
+    // keys come after, so a free user never pays for a query that a free
+    // model could have answered.
     primaryProvider:  'ollama',
     fallbackEnabled:  true,
     fallbackProvider: 'openrouter',
@@ -252,7 +288,12 @@ function getAIConfig() {
   // Ollama binds 127.0.0.1 only — the mismatch is ECONNREFUSED ::1:11434.
   const olBase  = ((rawOl && validHttpUrl(rawOl)) ? rawOl : 'http://127.0.0.1:11434')
     .replace('://localhost', '://127.0.0.1')
-  return { orKey, orBase, orMdl, olBase }
+  // Direct provider keys. Empty strings = "not configured"; the IPC layer
+  // shows hasKey/hasClaudeKey/hasChatGptKey for the UI without ever echoing
+  // the actual secret.
+  const claudeKey  = s.claudeKey  || ''
+  const chatGptKey = s.chatGptKey || ''
+  return { orKey, orBase, orMdl, olBase, claudeKey, chatGptKey }
 }
 
 /** The provider-routing half of the AI settings, defaulted for old profiles
@@ -901,6 +942,10 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       menu.append(new MenuItem({ label: `Ask AI about “${short}”`, click: () => sendAction('ai', { selection: sel }) }))
       menu.append(new MenuItem({ label: `Search Google for “${short}”`, click: () => sendTo(menuCtx, 'open-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(sel)}`) }))
       menu.append(new MenuItem({ label: 'Save Selection to Obsidian', click: () => { void clipToVault(wc, sel) } }))
+      menu.append(new MenuItem({ label: 'Remember This (Recall)', click: () => sendAction('recall-add', { selection: sel, title: (() => { try { return wc.getTitle() } catch { return '' } })() }) }))
+      if (isWebPage) {
+        menu.append(new MenuItem({ label: 'Share to the Lounge', click: () => sendAction('share-lounge', { selection: sel, title: (() => { try { return wc.getTitle() } catch { return '' } })() }) }))
+      }
     }
 
     // ── Link ──
@@ -1091,6 +1136,11 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
     webPreferences: {
       partition,
       contextIsolation: true,
+      // Chromium ships a PDF viewer, but only when plugins are enabled. Off,
+      // a link to a PDF downloads the file and the tab goes nowhere — the
+      // document leaves the browser, and with it every AI, note and clipping
+      // feature the app has. On, the PDF renders in the tab like any page.
+      plugins: true,
       // Site-facing preload: no IPC, no Node — it only restores the
       // window.chrome members Electron omits, which Google's sign-in gate
       // requires. Safe alongside contextIsolation: it talks to the page
@@ -1225,6 +1275,17 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
     try { curUrl = wc.getURL() } catch {}
     if (isCrashPage(curUrl)) { curUrl = ''; title = '' }
     sendTabEvent(ctx, tabId, 'did-stop-loading', { title, url: curUrl })
+  })
+  // Fire AFTER the main frame is fully painted (not just on stop) so the
+  // extract script the renderer runs against the page has a complete DOM to
+  // read. 'did-finish-load' fires once per top-level load, including reloads
+  // and back/forward — exactly the trigger points the AI wants.
+  wc.on('did-finish-load', () => {
+    let title = ''; let curUrl = ''
+    try { title = wc.getTitle() } catch {}
+    try { curUrl = wc.getURL() } catch {}
+    if (isCrashPage(curUrl)) return
+    sendTabEvent(ctx, tabId, 'did-finish-load', { title, url: curUrl })
   })
 
   // ── Renderer crash recovery ───────────────────────────────────────────────
@@ -1367,6 +1428,40 @@ function configureContentSession(ses: Electron.Session): Electron.Session {
 function setupSharedApp(firstWin: BrowserWindow): void {
   // Configure the persist:main session used by all <webview partition="persist:main"> tags.
   configureContentSession(session.fromPartition('persist:main'))
+
+  // ── Preconnect to the CDNs and origins that appear on most pages ─────────
+  // Warm TCP/TLS handshakes for the top 20 origins before the user navigates
+  // anywhere. These are the Google, Cloudflare, and CDN origins that appear
+  // in analytics, fonts, JS bundles, and ad/track scripts across >80% of
+  // pages. Starting handshakes now means the first real request to any of
+  // these hosts arrives on an already-warmed connection — saving 50-200 ms
+  // per origin on the first page load. A failed preconnect costs essentially
+  // nothing (one TCP SYN to a firewall, dropped immediately).
+  const persistSes = session.fromPartition('persist:main')
+  for (const origin of [
+    'https://www.google.com',
+    'https://www.google-analytics.com',
+    'https://stats.g.doubleclick.net',
+    'https://ssl.google-analytics.com',
+    'https://cdn.jsdelivr.net',
+    'https://cdnjs.cloudflare.com',
+    'https://fonts.googleapis.com',
+    'https://fonts.gstatic.com',
+    'https://static.cloudflareinsights.com',
+    'https://widget.intercom.io',
+    'https://js.intercomcdn.com',
+    'https://connect.facebook.net',
+    'https://platform.twitter.com',
+    'https://cdn.syndication.twimg.com',
+    'https://www.youtube.com',
+    'https://i.ytimg.com',
+    'https://adservice.google.com',
+    'https://pagead2.googlesyndication.com',
+    'https://securepubads.g.doubleclick.net',
+    'https://www.googletagmanager.com',
+  ]) {
+    try { persistSes.preconnect({ url: origin, numSockets: 1 }) } catch {}
+  }
 
   // ── Auto-update (GitHub Releases) — checks on startup + periodically and
   // notifies the renderer when a newer version is published. No-op in dev. ──
@@ -1527,11 +1622,17 @@ function createAppWindow(initialUrl?: string): AppWin {
   appWins.set(winId, ctx)
   if (!mainWindow || mainWindow.isDestroyed()) mainWindow = win
 
+  // Captured before 'closed', because webContents is gone by the time it fires.
+  const communityPeerId = win.webContents.id
+
   win.on('closed', () => {
     ctx.views.forEach(v => { try { v.webContents.close() } catch {} })
     ctx.views.clear()
     ctx.activeId = null
     appWins.delete(winId)
+    // Nobody clicks Disconnect before closing a window. Without this the room
+    // keeps them in its roster, holding a peer connection with no one behind it.
+    try { releaseCommunityWindow(communityPeerId) } catch {}
     // Keep mainWindow pointing at a window that still exists
     if (mainWindow === win) {
       const next = appWins.values().next()
@@ -1646,11 +1747,56 @@ app.on('second-instance', (_event, commandLine) => {
   else safelySend('open-in-new-tab', url) // no window yet — first one to load takes it
 })
 
+/**
+ * Let getDisplayMedia() work inside the app.
+ *
+ * Chromium's own screen picker belongs to Chrome, not to embedders, so an
+ * Electron app that does nothing here has getDisplayMedia() reject every call.
+ * The handler below is what makes screen sharing possible at all.
+ *
+ * The renderer asks the user which screen or window first (community:screenSources
+ * feeds that chooser) and passes the chosen id through, so the selection is
+ * still a deliberate human act — this never picks a screen on the user's behalf.
+ * A request with no prior choice is denied rather than defaulted to screen 0,
+ * because silently sharing a whole desktop is the one outcome nobody wants.
+ */
+const pendingScreenShare = new Map<number, string>()
+
+/** The renderer records the user's choice here, then calls getDisplayMedia(). */
+ipcMain.handle('community:screenShareChoice', (e, sourceId: string) => {
+  pendingScreenShare.set(e.sender.id, String(sourceId))
+  return { ok: true }
+})
+
+function registerScreenShareHandler(): void {
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    // Resolve the request back to the exact webContents that made it, so one
+    // window's pending choice can never satisfy another window's request.
+    const asker = request.frame ? electronWebContents.fromFrame(request.frame) : null
+    const sourceId = asker ? pendingScreenShare.get(asker.id) : undefined
+    if (asker) pendingScreenShare.delete(asker.id)
+
+    // No prior choice means no share. Defaulting to the first screen would
+    // silently hand over a whole desktop, which is the one outcome nobody wants.
+    if (!sourceId) return callback(undefined as never)
+
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
+    const source = sources.find(s => s.id === sourceId)
+    if (!source) return callback(undefined as never)
+
+    // 'loopback' shares system audio along with a screen on Windows; it is
+    // ignored where the platform cannot do it rather than failing the share.
+    callback({ video: source, audio: 'loopback' })
+  })
+}
+
 app.whenReady().then(() => {
   // Restore the DNS preference before the first navigation, or the session
   // would resolve its first hostnames in plaintext regardless of the setting.
   try { applyDoh(getData().settings?.dohProvider || 'off') } catch {}
   getData()
+  registerAttachmentProtocol()
+  registerScreenShareHandler()
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
   if (isDev) {
     app.on('browser-window-created', (_, w) => {
@@ -1666,7 +1812,16 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 // quitting inside that window would drop the last few navigations or download
 // rows. Flush synchronously here — 'before-quit' still runs on the main thread
 // with the process alive, which an async write would not survive.
-app.on('before-quit', () => { flushAllJsonStores() })
+app.on('before-quit', () => {
+  flushAllJsonStores()
+  // The community's push queue lives in memory too, and a message sitting in it
+  // when the app closes has been written to this disk and to nobody else's.
+  // Fired without awaiting for the same reason the flush above is synchronous:
+  // 'before-quit' will not wait for a promise, so this is a best effort that
+  // usually wins the race against process exit, backed by the queue's own
+  // retry on next launch when it does not.
+  void shutdownCommunityBackend()
+})
 
 // Network service crashes and restarts automatically — this is non-fatal.
 // Without this handler Electron 28+ may surface it as an unhandled event.
@@ -2323,6 +2478,7 @@ ipcMain.handle('privacy:setDoh', (_e, provider: string) => {
 })
 
 // ── IPC: Site containers ───────────────────────────────────────────────────
+ipcMain.handle('containers:newBurner', () => newBurnerId())
 ipcMain.handle('containers:list', () => {
   const stored = getData().settings?.containers
   return Array.isArray(stored) && stored.length ? stored as Container[] : DEFAULT_CONTAINERS
@@ -2375,11 +2531,21 @@ ipcMain.handle('tabview:getLayout', (e) => {
     const view = ctx.views.get(id)
     try { return view ? view.getBounds() : null } catch { return null }
   }
+  // The window's own content size travels with the layout because region
+  // recording needs it: the selection is made on the page, the stream is of
+  // the whole window, and mapping between them is a ratio of the two.
+  let windowSize: { width: number; height: number } | null = null
+  try {
+    const [width, height] = ctx.win.getContentSize()
+    windowSize = { width, height }
+  } catch {}
+
   return {
     activeId: ctx.activeId,
     splitId: ctx.splitId,
     ratio: ctx.splitRatio,
     content: ctx.bounds,
+    window: windowSize,
     attached: ctx.win.getBrowserViews().length,
     primary: boundsOf(ctx.activeId),
     secondary: boundsOf(ctx.splitId),
@@ -2478,6 +2644,40 @@ ipcMain.handle('bookmarks:update', (_e, id: string, u: any) => {
   const d = getData(); const i = d.bookmarks.findIndex((b: any) => b.id === id)
   if (i !== -1) d.bookmarks[i] = { ...d.bookmarks[i], ...u }; saveData(); return d.bookmarks[i]
 })
+// F6: Smart Bookmark Summaries — fetch the page and generate a 3-bullet AI summary
+ipcMain.handle('bookmarks:summarize', async (_e, id: string) => {
+  const d = getData()
+  const bm = d.bookmarks.find((b: any) => b.id === id)
+  if (!bm) return { error: 'Bookmark not found' }
+
+  // Try to fetch page text
+  let pageText = ''
+  try {
+    const res = await fetch(bm.url, { signal: AbortSignal.timeout(8000) })
+    if (res.ok) {
+      const html = await res.text()
+      // Strip HTML tags to get text
+      pageText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 6000)
+    }
+  } catch { /* fetch failed — use URL-only fallback */ }
+
+  // Use the existing ai:summarizePage handler logic
+  const userContent = pageText.length > 100
+    ? `Summarize this web page in 3 concise bullet points. Focus on key takeaways.\n\nURL: ${bm.url}\n\n${pageText}`
+    : `Describe the website at ${bm.url} in 3 bullet points.`
+
+  const r = await runAiRequest([{ role: 'user', content: userContent }], undefined, { maxTokens: 600 })
+  const summary = r.provider === 'none' ? '' : (r.content || '').slice(0, 500)
+
+  if (summary) {
+    const idx = d.bookmarks.findIndex((b: any) => b.id === id)
+    if (idx !== -1) {
+      d.bookmarks[idx] = { ...d.bookmarks[idx], summary, summaryAt: Date.now() }
+      saveData()
+    }
+  }
+  return { summary, provider: r.provider }
+})
 
 // ── IPC: History ───────────────────────────────────────────────────────────
 // history:add runs on EVERY navigation. Re-reading and rewriting the whole
@@ -2511,6 +2711,36 @@ ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?
   })
   recordVisit(entry.url, entry.title)
   return true
+})
+// F2: Semantic History Search — natural language queries over browsing history.
+// Falls back to keyword match when the semantic index has no embeddings yet.
+ipcMain.handle('history:smartSearch', async (_e, query: string) => {
+  const history = historyStore.get()
+  const terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean)
+  if (!terms.length) return { results: history.slice(0, 50) }
+
+  // Use the semantic index for natural language queries (≥3 meaningful words)
+  const semantic = terms.length >= 2
+  if (semantic) {
+    try {
+      const docs: SearchDoc[] = history.map(h => ({
+        id: h.id, title: h.title, url: h.url, text: `${h.title} ${h.url}`, ts: h.ts,
+      }))
+      const { results: semResults } = await semanticIndex.search(query, docs)
+      const byId = new Map(history.map(h => [h.id, h]))
+      const semItems = semResults
+        .map(r => byId.get(r.id))
+        .filter(Boolean)
+        .slice(0, 30)
+      if (semItems.length > 0) return { results: semItems, via: 'semantic' }
+    } catch { /* no semantic index — fall through */ }
+  }
+
+  // Keyword fallback
+  const kwItems = history.filter(h =>
+    terms.every(t => h.title.toLowerCase().includes(t) || h.url.toLowerCase().includes(t))
+  ).slice(0, 50)
+  return { results: kwItems, via: 'keyword' }
 })
 
 // ── IPC: Read the chart the user is actually looking at ───────────────────
@@ -2634,6 +2864,48 @@ ipcMain.handle('trading:readChart', async (e, tabId: string) => {
     analysis,
     screenshot,
     readAt: Date.now(),
+  }
+})
+
+// ── IPC: Per-symbol trading coach memory ────────────────────────────────────
+// The Trading Coach bot keeps a conversation per instrument so re-opening the
+// same chart (XAUUSD 1D) restores the prior analysis rather than starting over.
+// One JSON file per symbol in userData; debounced writes from the renderer.
+const TRADING_MEMORY_DIR = join(app.getPath('userData'), 'trading-memory')
+
+// Sanitise a symbol into a safe file name: "FX:XAUUSD" → "FX_XAUUSD".
+function safeSymbolFileName(symbol: string): string {
+  return String(symbol || 'unknown').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 80) || 'unknown'
+}
+
+function tradingMemoryPath(symbol: string): string {
+  return join(TRADING_MEMORY_DIR, `${safeSymbolFileName(symbol)}.json`)
+}
+
+ipcMain.handle('trading:getMemory', async (_e, symbol: string) => {
+  try {
+    const path = tradingMemoryPath(symbol)
+    if (!fs.existsSync(path)) return { ok: true, messages: [] }
+    const raw = fs.readFileSync(path, 'utf-8')
+    const parsed = JSON.parse(raw)
+    return { ok: true, messages: Array.isArray(parsed?.messages) ? parsed.messages : [] }
+  } catch (err) {
+    return { ok: false, error: String(err), messages: [] }
+  }
+})
+
+ipcMain.handle('trading:saveMemory', async (_e, symbol: string, messages: any[]) => {
+  try {
+    if (!fs.existsSync(TRADING_MEMORY_DIR)) {
+      fs.mkdirSync(TRADING_MEMORY_DIR, { recursive: true })
+    }
+    const path = tradingMemoryPath(symbol)
+    // Bound the file: 200 messages is plenty for any one symbol's history.
+    const trimmed = (Array.isArray(messages) ? messages : []).slice(-200)
+    fs.writeFileSync(path, JSON.stringify({ symbol, messages: trimmed, savedAt: Date.now() }, null, 2), 'utf-8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
   }
 })
 
@@ -2946,6 +3218,124 @@ ipcMain.handle('downloads:getAll',       () => {
   return dls
 })
 ipcMain.handle('downloads:clear',        () => { downloadsStore.set([]); return true })
+
+// ── IPC: Page Vault ────────────────────────────────────────────
+// Snapshots are taken from the live view, so capture has to run here where the
+// webContents lives. Everything else is bookkeeping the renderer asks for.
+const vault = createVault(APP_DIR)
+
+ipcMain.handle('vault:list',   () => vault.list())
+ipcMain.handle('vault:latestFor', (_e, url: string) => vault.latestFor(url))
+ipcMain.handle('vault:remove', (_e, id: string) => vault.remove(id))
+ipcMain.handle('vault:clear',  () => vault.clear())
+ipcMain.handle('vault:reveal', (_e, p: string) => shell.showItemInFolder(p))
+
+// ── IPC: Recall ──────────────────────────────────────────────────
+// The scheduling and the rules live in the renderer (services/recall.ts, pure
+// and tested); main only holds the book on disk.
+const recallStore = createManagedJsonStore<Record<string, any>>(join(APP_DIR, 'recall.json'), () => ({}))
+ipcMain.handle('recall:get', () => recallStore.get())
+ipcMain.handle('recall:set', (_e, book: Record<string, any>) => { recallStore.set(book || {}); return true })
+
+// ── IPC: Credential guard ─────────────────────────────────────────
+// The sites this person actually uses, which is what a lookalike is measured
+// against. A domain seen once could be the phishing page itself; the repeat
+// visits are what make it evidence of a habit rather than of a single click.
+const KNOWN_DOMAIN_MIN_VISITS = 3
+
+ipcMain.handle('guard:knownDomains', () => {
+  try {
+    const counts = new Map<string, number>()
+    for (const item of historyStore.get() as any[]) {
+      const domain = registrableDomain(String(item?.url || ''))
+      if (!domain) continue
+      counts.set(domain, (counts.get(domain) || 0) + 1)
+    }
+    return [...counts.entries()]
+      .filter(([, n]) => n >= KNOWN_DOMAIN_MIN_VISITS)
+      .map(([domain]) => domain)
+  } catch { return [] }
+})
+
+// ── IPC: PDF text ───────────────────────────────────────────────
+// Chromium renders a PDF inside a plugin, so there is no DOM for the usual
+// page extraction to read. The bytes are fetched again through the tab's own
+// session — not a bare fetch — so a PDF behind a login is readable for exactly
+// as long as the tab that is showing it is.
+ipcMain.handle('pdf:extract', async (_e, url: string) => {
+  const target = String(url || '')
+  try {
+    let bytes: Uint8Array
+    if (target.startsWith('file://')) {
+      bytes = new Uint8Array(fs.readFileSync(fileURLToPath(target)))
+    } else if (/^https?:/i.test(target)) {
+      const res = await session.fromPartition('persist:main').fetch(target)
+      if (!res.ok) return { ok: false, error: `The server returned ${res.status}.` }
+      bytes = new Uint8Array(await res.arrayBuffer())
+    } else {
+      return { ok: false, error: 'Not a fetchable address.' }
+    }
+
+    if (!looksLikePdf(bytes)) return { ok: false, error: 'That file is not a PDF.' }
+    const out = extractPdfText(bytes)
+    if (!out.text) {
+      // Say which kind of nothing this is. "No text" reads as a bug; "this is
+      // a scan" is a fact the user can act on.
+      return {
+        ok: false,
+        error: out.encrypted
+          ? 'This PDF is encrypted, so its text cannot be read.'
+          : 'This PDF has no text layer — it is almost certainly a scan.',
+        encrypted: out.encrypted,
+      }
+    }
+    return { ok: true, text: out.text, streams: out.streams, decoded: out.decoded }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) }
+  }
+})
+
+/**
+ * Archive what a tab is showing right now. Returns the snapshot, or null when
+ * the page was not eligible or the capture failed — callers treat a null as
+ * "no copy was taken", never as an error, because the action that triggered
+ * this (bookmarking) must succeed either way.
+ */
+ipcMain.handle('vault:capture', async (e, args: { tabId: string; url: string; title?: string; favicon?: string; origin?: 'auto' | 'manual' }) => {
+  const wc = ctxFromEvent(e)?.views.get(args?.tabId)?.webContents
+  if (!wc || wc.isDestroyed()) return null
+  try {
+    return await vault.capture(wc, {
+      url: args.url || wc.getURL(),
+      title: args.title,
+      favicon: args.favicon,
+      origin: args.origin,
+    })
+  } catch { return null }
+})
+
+/**
+ * Open a snapshot in the tab that asked for it. The file:// load is what makes
+ * a dead bookmark usable again — Chromium renders .mhtml natively, so the
+ * archived page comes back with its layout, images and links intact.
+ */
+ipcMain.handle('vault:open', (e, args: { tabId: string; id: string }) => {
+  const snap = vault.list().find(s => s.id === args?.id)
+  if (!snap) return { success: false, error: 'That snapshot is gone.' }
+  if (!fs.existsSync(snap.path)) {
+    vault.remove(snap.id)
+    return { success: false, error: 'The snapshot file was deleted from disk.' }
+  }
+  const wc = ctxFromEvent(e)?.views.get(args.tabId)?.webContents
+  if (!wc || wc.isDestroyed()) return { success: false, error: 'No tab to open it in.' }
+  try {
+    wc.loadURL(pathToFileURL(snap.path).toString())
+    return { success: true, url: snap.url, title: snap.title, createdAt: snap.createdAt }
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) }
+  }
+})
+
 ipcMain.handle('downloads:openFile',     (_e, p: string) => shell.openPath(p))
 ipcMain.handle('downloads:showInFolder', (_e, p: string) => shell.showItemInFolder(p))
 
@@ -2993,6 +3383,8 @@ ipcMain.handle('settings:getAIConfig', () => {
   const s   = getData().settings
   return {
     hasKey:          !!cfg.orKey,
+    hasClaudeKey:    !!cfg.claudeKey,
+    hasChatGptKey:   !!cfg.chatGptKey,
     openrouterBase:  s.openrouterBase  || '',
     openrouterModel: s.openrouterModel || '',
     ollamaUrl:       s.ollamaUrl       || '',
@@ -3011,6 +3403,7 @@ ipcMain.handle('settings:getAIConfig', () => {
 })
 ipcMain.handle('settings:setAIConfig', (_e, cfg: {
   openrouterKey?: string; openrouterBase?: string; openrouterModel?: string; ollamaUrl?: string
+  claudeKey?: string; chatGptKey?: string
   primaryProvider?: string; fallbackEnabled?: boolean; fallbackProvider?: string
 }) => {
   const d = getData()
@@ -3018,6 +3411,8 @@ ipcMain.handle('settings:setAIConfig', (_e, cfg: {
   // receives the current key, so it cannot send it back unchanged.
   const patch: any = { ...cfg }
   if (!cfg.openrouterKey) delete patch.openrouterKey
+  if (!cfg.claudeKey)     delete patch.claudeKey
+  if (!cfg.chatGptKey)    delete patch.chatGptKey
   d.settings = { ...d.settings, ...patch }
   saveData()
   _data = null // flush cache so getAIConfig() picks up new values immediately
@@ -4065,6 +4460,123 @@ async function openRouterChat(
   }
 }
 
+// ── Direct provider chat (Claude / ChatGPT) ────────────────────────────────
+
+/** Strip the `data:` prefix from a data URL so only the raw base64 remains. */
+function stripDataUrlPrefix(dataUrl: string): string {
+  return String(dataUrl || '').replace(/^data:[^;]*;base64,/, '')
+}
+
+/** Build Claude API body from renderer messages (which carry `images: string[]`).
+ *  Handles: plain text messages, messages with images, and system messages. */
+function buildClaudeMessages(msgs: any[]): { system?: string; messages: any[] } {
+  const system = msgs.find(m => m.role === 'system')?.content || undefined
+  const conversation = msgs.filter(m => m.role !== 'system')
+  const claudeMessages = conversation.map(m => {
+    if (!Array.isArray(m.images) || m.images.length === 0) {
+      return { role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content || '' }
+    }
+    // Claude's multi-image content blocks
+    const blocks: any[] = [{ type: 'text', text: m.content || '' }]
+    for (const img of m.images) {
+      blocks.push({ type: 'image', source: { type: 'base64', media_type: img.startsWith('data:image/png') ? 'image/png' : 'image/jpeg', data: stripDataUrlPrefix(img) } })
+    }
+    return { role: m.role === 'assistant' ? 'assistant' : 'user', content: blocks }
+  })
+  return { system, messages: claudeMessages }
+}
+
+/** Build ChatGPT API body from renderer messages (images as OpenAI content arrays). */
+function buildChatGptMessages(msgs: any[]): any[] {
+  return msgs.filter(m => m.role !== 'system').map(m => {
+    if (!Array.isArray(m.images) || m.images.length === 0) {
+      return { role: m.role, content: m.content || '' }
+    }
+    // OpenAI's multimodal content array: text first, then image blocks
+    const content: any[] = [{ type: 'text', text: m.content || '' }]
+    for (const img of m.images) {
+      content.push({ type: 'image_url', image_url: { url: img } })
+    }
+    return { role: m.role, content }
+  })
+}
+
+/**
+ * Call Claude directly via the Anthropic /v1/messages endpoint.
+ *
+ * Returns null on a skip-able failure (401 bad key, 429 rate-limit) so the
+ * fallback chain can continue. Throws on a hard failure.
+ */
+async function claudeChat(
+  apiKey: string,
+  messages: any[],
+  maxTokens = 4096,
+): Promise<string | null> {
+  try {
+    const { system, messages: claudeMessages } = buildClaudeMessages(messages)
+    const res = await withNetRetry(() => httpPost(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: maxTokens,
+        ...(system ? { system } : {}),
+        messages: claudeMessages,
+      },
+      {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      30000,
+    ))
+    if (res.status === 200) {
+      const body = JSON.parse(res.body)
+      return body.content?.[0]?.text || null
+    }
+    // 401 = bad key, 429 = rate limit → skip to next provider
+    if (/^HTTP (401|429)/.test(String(res.status))) return null
+    throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`)
+  } catch (e: any) {
+    if (/^HTTP (401|429)/.test(e.message || '')) return null
+    throw e
+  }
+}
+
+/**
+ * Call ChatGPT directly via the OpenAI /v1/chat/completions endpoint.
+ *
+ * Returns null on a skip-able failure (401 bad key, 429 rate-limit) so the
+ * fallback chain can continue. Throws on a hard failure.
+ */
+async function chatGptChat(
+  apiKey: string,
+  messages: any[],
+  maxTokens = 2048,
+): Promise<string | null> {
+  try {
+    const { status, body } = await withNetRetry(() => httpPost(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o-mini',
+        messages: buildChatGptMessages(messages),
+        max_tokens: maxTokens,
+      },
+      { Authorization: `Bearer ${apiKey}` },
+      30000,
+    ))
+    const parsed = JSON.parse(body)
+    if (status === 200) {
+      return parsed.choices?.[0]?.message?.content || null
+    }
+    // 401 = bad key, 429 = rate limit → skip to next provider
+    if (/^HTTP (401|429)/.test(String(status))) return null
+    throw new Error(`HTTP ${status}: ${body.slice(0, 200)}`)
+  } catch (e: any) {
+    if (/^HTTP (401|429)/.test(e.message || '')) return null
+    throw e
+  }
+}
+
 // ── IPC: AI chat ──────────────────────────────────────────────────────────
 // The single entry point every agent and AI feature goes through (§37) —
 // nothing else in the app talks to a provider directly. WHICH provider serves
@@ -4242,6 +4754,62 @@ async function runAiRequest(
     },
   })
 
+  // ── Direct-provider fallback (Claude → ChatGPT) ──────────────────────
+  // routeGenerate already tried Ollama + OpenRouter. If both failed, walk
+  // through the user's direct provider keys — Claude first, then ChatGPT.
+  // Both return null on 401/429 so a bad key can't break the chain.
+  if (!result.ok) {
+    const direct = getAIConfig()
+
+    if (direct.claudeKey) {
+      try {
+        // Reset stream so Claude's tokens don't land spliced after a partial
+        // OpenRouter reply.
+        opts?.onDelta?.('', true)
+        const claudeReply = await claudeChat(direct.claudeKey, messages, opts?.maxTokens ?? 4096)
+        if (claudeReply) {
+          const content = stripThinkTags(claudeReply) || claudeReply
+          if (opts?.onDelta) {
+            try { opts.onDelta(content) } catch {}
+          }
+          return {
+            content,
+            model: 'claude-sonnet-4-20250514',
+            provider: 'claude',
+            fallbackUsed: true,
+            fallbackReason: result.fallbackReason,
+            notice: `Answered by Claude (${result.fallbackReason || 'primary failed'}).`,
+          }
+        }
+      } catch (e: any) {
+        console.log(`[aihub] Claude fallback failed: ${e?.message || e}`)
+      }
+    }
+
+    if (direct.chatGptKey) {
+      try {
+        opts?.onDelta?.('', true)
+        const gptReply = await chatGptChat(direct.chatGptKey, messages, opts?.maxTokens ?? 2048)
+        if (gptReply) {
+          const content = stripThinkTags(gptReply) || gptReply
+          if (opts?.onDelta) {
+            try { opts.onDelta(content) } catch {}
+          }
+          return {
+            content,
+            model: 'gpt-4o-mini',
+            provider: 'chatgpt',
+            fallbackUsed: true,
+            fallbackReason: result.fallbackReason,
+            notice: `Answered by ChatGPT (${result.fallbackReason || 'primary failed'}).`,
+          }
+        }
+      } catch (e: any) {
+        console.log(`[aihub] ChatGPT fallback failed: ${e?.message || e}`)
+      }
+    }
+  }
+
   // The renderer sees the same shape it always did, plus honest routing
   // metadata (§24) — a fallback answer is never passed off as the primary's.
   if (result.ok) {
@@ -4375,11 +4943,20 @@ ipcMain.handle('file:saveVideo', async (_e, { buffer }: { buffer: ArrayBuffer })
 })
 
 // ── Agent store: saved custom agents + archived conversations ─────────────
+// 3-month cleanup: removes conversations older than 90 days on every load.
+const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000
+
 function readAgentsStore(): { customAgents: any[]; conversations: any[] } {
   const s = readJson(AGENTS_FILE, null)
+  const conversations: any[] = (Array.isArray(s?.conversations) ? s.conversations : [])
+    .filter((c: any) => (c.updatedAt || c.createdAt || 0) > Date.now() - THREE_MONTHS_MS)
+  // Persist cleanup so the file shrinks on disk
+  if (conversations.length !== (s?.conversations?.length ?? 0)) {
+    writeJson(AGENTS_FILE, { ...s, conversations })
+  }
   return {
     customAgents:  Array.isArray(s?.customAgents)  ? s.customAgents  : [],
-    conversations: Array.isArray(s?.conversations) ? s.conversations : [],
+    conversations,
   }
 }
 
@@ -4420,6 +4997,72 @@ ipcMain.handle('agents:deleteConversation', (_e, id: string) => {
   s.conversations = s.conversations.filter(c => c.id !== id)
   writeJson(AGENTS_FILE, s)
   return true
+})
+
+// ── Agent import/export ──────────────────────────────────────────────────────
+ipcMain.handle('agents:exportAgents', async () => {
+  const { customAgents } = readAgentsStore()
+  if (!customAgents.length) return { success: false, error: 'No custom agents to export' }
+  const pkg = {
+    version: 1,
+    exportedAt: Date.now(),
+    agents: customAgents.map(a => ({
+      id: a.id, name: a.name, description: a.description,
+      template: a.template, color: a.color, custom: true,
+    })),
+  }
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Custom Agents',
+    defaultPath: join(os.homedir(), 'Documents', 'aihub-agents-export.json'),
+    filters: [{ name: 'AIHub Agents', extensions: ['json'] }],
+  })
+  if (canceled || !filePath) return { success: false, cancelled: true }
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2), 'utf-8')
+    return { success: true, path: filePath, count: customAgents.length }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('agents:importAgents', async () => {
+  const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Custom Agents',
+    filters: [{ name: 'AIHub Agents', extensions: ['json'] }],
+    properties: ['openFile'],
+  })
+  if (canceled || !filePaths?.length) return { success: false, cancelled: true }
+  try {
+    const raw = fs.readFileSync(filePaths[0], 'utf-8')
+    const pkg = JSON.parse(raw)
+    if (!Array.isArray(pkg.agents)) return { success: false, error: 'Invalid format: expected { agents: [...] }' }
+    const incoming = pkg.agents.filter((a: any) =>
+      a && typeof a.id === 'string' && typeof a.name === 'string',
+    )
+    if (!incoming.length) return { success: false, error: 'No valid agents found in file' }
+
+    const store = readAgentsStore()
+    const now = Date.now()
+    let added = 0, skipped = 0
+    for (const agent of incoming) {
+      const existing = store.customAgents.find(a => a.id === agent.id)
+      if (!existing) {
+        store.customAgents.unshift({ ...agent, updatedAt: now })
+        added++
+      } else if ((existing.updatedAt || 0) < (agent.updatedAt || 0)) {
+        // Incoming is newer — update
+        const idx = store.customAgents.indexOf(existing)
+        store.customAgents[idx] = { ...existing, ...agent, updatedAt: now }
+        added++
+      } else {
+        skipped++
+      }
+    }
+    writeJson(AGENTS_FILE, store)
+    return { success: true, added, skipped, total: store.customAgents.length }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
 })
 
 // ── Agent file-system access ───────────────────────────────────────────────

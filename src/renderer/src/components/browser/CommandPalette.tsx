@@ -5,7 +5,7 @@ import {
   Home, FlaskConical, Sparkles, StickyNote, History, Download, Puzzle, Wifi,
   Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft, GitCompare, BellRing,
   Smartphone, Laptop, BookMarked, Layers, Columns2, PictureInPicture2, Camera, CopyMinus,
-  GraduationCap,
+  GraduationCap, Archive, Brain, Table, Receipt, Sunrise, Flame,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 
@@ -95,6 +95,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     wifi: <Wifi size={15} />, vpn: <Shield size={15} />, mail: <Mail size={15} />,
     manual: <BookOpen size={15} />, settings: <Settings size={15} />,
     bible: <BookMarked size={15} />, study: <GraduationCap size={15} />,
+    vault: <Archive size={15} />, recall: <Brain size={15} />, ledger: <Receipt size={15} />, brief: <Sunrise size={15} />,
   }
 
   const commands: Cmd[] = useMemo(() => {
@@ -103,6 +104,17 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       out.push({ id, label, group: 'Actions', icon, run: () => { run(); close() }, keywords, hint })
 
     act('new-tab', 'New Tab', <Plus size={15} />, () => addTab(), 'open create', 'Ctrl+T')
+    act('burner-tab', 'Open a burner tab', <Flame size={15} />, () => {
+      // The session is created fresh and never written to disk, so closing the
+      // tab takes the cookies with it.
+      window.electronAPI.containers.newBurner()
+        .then((id: string) => addTab('home', 'browser', id))
+        .catch(() => {})
+    }, 'private incognito temporary throwaway session cookies')
+
+    act('export-tables', 'Export a table from this page to CSV', <Table size={15} />,
+      () => useBrowserStore.getState().setTableExportOpen(true),
+      'csv spreadsheet excel sheets table data extract')
     act('reopen', 'Reopen Closed Tab', <RotateCcw size={15} />, () => reopenClosedTab(), 'restore undo', 'Ctrl+Shift+T')
     act('ai', 'Toggle AI Assistant', <Bot size={15} />, () => toggleAIPanel(), 'chat agent', 'Ctrl+Shift+A')
     act('sidebar', 'Toggle Sidebar', <PanelLeft size={15} />, () => toggleSidebar())
@@ -152,6 +164,10 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       ['research', 'Research Mode'], ['agents', 'Agent Mode'], ['notes', 'Sticky Notes'],
       ['rewind', 'Rewind — search what you\'ve read'], ['watch', 'Watch & Ping — track a page for changes'],
       ['bible', 'Bible — read, highlight and study'], ['study', 'Bible Study — daily verse, courses and memorisation'], ['history', 'History'], ['downloads', 'Downloads'],
+      ['vault', 'Page Vault — copies of the pages you bookmarked'],
+      ['recall', 'Recall — review what you highlighted'],
+      ['ledger', 'Ledger — what you spent, from your receipts'],
+      ['brief', 'Morning Brief — what happened while you were away'],
       ['extensions', 'Extensions'], ['wifi', 'Free WiFi'], ['vpn', 'VPN / Proxy'], ['mail', 'Mail'],
       ['manual', 'User Manual'], ['settings', 'Settings'],
     ]

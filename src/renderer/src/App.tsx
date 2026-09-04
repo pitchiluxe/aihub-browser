@@ -7,6 +7,13 @@ import NavigationBar from './components/browser/NavigationBar'
 import Sidebar from './components/browser/Sidebar'
 import HomePage from './components/homepage/HomePage'
 import { EXTENSION_DEFS } from './extensions/extensionDefs'
+import { loadBookmarks } from './services/bookmarkService'
+import { addItem as addRecallItem } from './services/recall'
+import { buildPageExtractionScript } from './services/pageExtractor'
+import { loadCustomExts } from './extensions/customExts'
+import { shouldRunOn } from './extensions/siteRules'
+import { withPanelRuntime } from './extensions/panelRuntime'
+import { applyThemeToDom } from './services/themeService'
 
 // Special pages are code-split — none are needed at startup, so keeping them
 // out of the entry chunk makes first paint faster.
@@ -16,6 +23,7 @@ const DownloadsPage  = lazy(() => import('./components/pages/DownloadsPage'))
 const WifiPage       = lazy(() => import('./components/pages/WifiPage'))
 const VpnPage        = lazy(() => import('./components/pages/VpnPage'))
 const ResearchPage   = lazy(() => import('./components/pages/ResearchPage'))
+const CommunityListsPage = lazy(() => import('./components/pages/CommunityListsPage'))
 const AgentsPage     = lazy(() => import('./components/pages/AgentsPage'))
 const ExtensionsPage = lazy(() => import('./components/pages/ExtensionsPage'))
 const MailPage       = lazy(() => import('./components/pages/MailPage'))
@@ -23,6 +31,10 @@ const NotesPage      = lazy(() => import('./components/pages/NotesPage'))
 const ManualPage     = lazy(() => import('./components/pages/ManualPage'))
 const RewindPage     = lazy(() => import('./components/pages/RewindPage'))
 const WatchPage      = lazy(() => import('./components/pages/WatchPage'))
+const VaultPage      = lazy(() => import('./components/pages/VaultPage'))
+const RecallPage     = lazy(() => import('./components/pages/RecallPage'))
+const LedgerPage     = lazy(() => import('./components/pages/LedgerPage'))
+const BriefPage      = lazy(() => import('./components/pages/BriefPage'))
 const BiblePage      = lazy(() => import('./components/pages/BiblePage'))
 const BibleStudyPage = lazy(() => import('./components/pages/BibleStudyPage'))
 const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
@@ -36,22 +48,31 @@ import type { PageType } from '../../shared/pageTypes'
 const QRCodeModal    = lazy(() => import('./components/browser/QRCodeModal'))
 const CommandPalette = lazy(() => import('./components/browser/CommandPalette'))
 const CompareModal   = lazy(() => import('./components/browser/CompareModal'))
-import AddBookmarkModal from './components/homepage/AddBookmarkModal'
+const TableExportModal = lazy(() => import('./components/browser/TableExportModal'))
+
+// Modal is only rendered when open; lazy-load keeps the form code out of the
+// entry chunk.
+const AddBookmarkModal = lazy(() => import('./components/homepage/AddBookmarkModal'))
 
 import UpdateNotification from './components/browser/UpdateNotification'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import HostAnnotationCanvas from './components/browser/HostAnnotationCanvas'
 import FindBar from './components/browser/FindBar'
-import AIAssistant from './components/ai/AIAssistant'
-import { loadBookmarks } from './services/bookmarkService'
-import { buildPageExtractionScript } from './services/pageExtractor'
-import { loadCustomExts } from './extensions/customExts'
-import { shouldRunOn } from './extensions/siteRules'
-import { withPanelRuntime } from './extensions/panelRuntime'
-import { applyThemeToDom } from './services/themeService'
+import VaultRestoreBar from './components/browser/VaultRestoreBar'
+import CredentialGuardBar from './components/browser/CredentialGuardBar'
 // Pure geometry, shared with the main process so both agree to the pixel.
 import { splitPanes } from '../../shared/splitLayout'
+import { ownsSession, initialUrlFrom } from '../../shared/windowRole'
 
+// AI assistant and Trading Coach are huge — lazy-load them so the initial
+// paint doesn't pay for code that most users only open occasionally.
+const AIAssistant = lazy(() => import('./components/ai/AIAssistant'))
+const TradingCoach = lazy(() => import('./components/trading/TradingCoach'))
+// Reading Mode is a clean article view, only mounted when the user asks for it.
+const ReaderView = lazy(() => import('./components/reader/ReaderView'))
+const TabCuratorPanel = lazy(() => import('./components/tabCurator/TabCuratorPanel'))
+const BottomSummaryCard = lazy(() => import('./components/parallelIntel/BottomSummaryCard'))
+const FocusNudge = lazy(() => import('./components/focus/FocusPanel'))
 declare global {
   interface Window {
     electronAPI: any
@@ -78,13 +99,22 @@ export default function App() {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
-    splitTabId, isBookmarksMenuOpen,
+    splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen,
+    isTradingCoachOpen, isReaderOpen, isCuratorOpen, setCuratorOpen, hostOverlayCount, tabWcIds,
+    currentPageInsight, dismissPageInsight,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
     isAnnotationMode: s.isAnnotationMode, isAddBookmarkOpen: s.isAddBookmarkOpen, isAIPanelOpen: s.isAIPanelOpen,
     isVpnMenuOpen: s.isVpnMenuOpen, isCmdPaletteOpen: s.isCmdPaletteOpen, isCompareOpen: s.isCompareOpen,
     splitTabId: s.splitTabId, isBookmarksMenuOpen: s.isBookmarksMenuOpen,
+    isDownloadsMenuOpen: s.isDownloadsMenuOpen, isTableExportOpen: s.isTableExportOpen,
+    isCaptureOverlayOpen: s.isCaptureOverlayOpen, isTradingCoachOpen: s.isTradingCoachOpen,
+    isReaderOpen: s.isReaderOpen, isCuratorOpen: s.isCuratorOpen,
+    setCuratorOpen: s.setCuratorOpen,
+    currentPageInsight: s.currentPageInsight, dismissPageInsight: s.dismissPageInsight,
+    hostOverlayCount: s.hostOverlayCount,
+    tabWcIds: s.tabWcIds,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -111,6 +141,16 @@ export default function App() {
   // the bar occupies a reserved strip above the native view (see bounds sync).
   const [findOpen, setFindOpen] = useState(false)
   const findVisible = findOpen && needsTabView(activeTab)
+
+  // A failed load on a tab we have an archived copy of. Like the find bar, the
+  // offer lives in a strip reserved above the native view — Chromium's error
+  // page is still a BrowserView, and would paint straight over an overlay.
+  const [restoreOffered, setRestoreOffered] = useState(false)
+  const restoreVisible = restoreOffered && needsTabView(activeTab)
+
+  // Same reserved-strip treatment for the credential notice.
+  const [guardShown, setGuardShown] = useState(false)
+  const guardVisible = guardShown && needsTabView(activeTab)
 
   // ── Nav actions — the tab's WebContents lives in the main process now, so
   // these are fire-and-forget IPC calls rather than direct method calls. ────
@@ -168,14 +208,20 @@ export default function App() {
     let tempTitle = finalUrl
     try { tempTitle = new URL(finalUrl).hostname.replace(/^www\./, '') } catch {}
 
-    updateTab(activeTabId, { url: finalUrl, title: tempTitle, isHome: false, isLoading: true, pageType: 'browser', fromHome: wasHome })
-    setNavState({ canGoBack: false, canGoForward: false })
-
-    // If a view already exists for this tab, drive it directly. Otherwise the
-    // tab-lifecycle effect below will create it with this URL once state settles.
+    // For a tab that already has a view, drive it directly. For a brand-new tab
+    // (first ever navigation), create the BrowserView synchronously in the same
+    // tick so the page starts loading before React's next render cycle — saving
+    // the 1-2 frame (~16-33 ms) re-render delay that would otherwise stand
+    // between Enter and the first byte arriving.
     if (createdViewIds.current.has(activeTabId)) {
       window.electronAPI.tabView.navigate(activeTabId, finalUrl)
+    } else {
+      window.electronAPI.tabView.create(activeTabId, finalUrl, null)
+      createdViewIds.current.add(activeTabId)
     }
+
+    updateTab(activeTabId, { url: finalUrl, title: tempTitle, isHome: false, isLoading: true, pageType: 'browser', fromHome: wasHome })
+    setNavState({ canGoBack: false, canGoForward: false })
   }, [activeTabId, updateTab, setNavState])
 
   // ── Detached-window hand-off ───────────────────────────────────────────────
@@ -185,9 +231,8 @@ export default function App() {
   const initialUrlDone = useRef(false)
   useEffect(() => {
     if (initialUrlDone.current || !activeTabId) return
-    let target = ''
-    try { target = new URLSearchParams(window.location.search).get('initialUrl') || '' } catch {}
-    if (!target || !/^https?:\/\//i.test(target)) return
+    const target = initialUrlFrom(window.location.search)
+    if (!target) return
     initialUrlDone.current = true
     navigate(target)
   }, [activeTabId, navigate])
@@ -204,7 +249,20 @@ export default function App() {
     if (!wcId) return ''
     try {
       const res = await window.electronAPI.webview.execScript(wcId, buildPageExtractionScript())
-      return res?.ok ? String(res.result || '').trim() : ''
+      const text = res?.ok ? String(res.result || '').trim() : ''
+      if (text) return text
+
+      // Nothing in the DOM. A PDF is the usual reason: Chromium renders it in
+      // a plugin, so the extraction script finds an empty document. Read the
+      // file's own bytes instead, and every feature built on page text —
+      // summarise, read aloud, the agent's read_page, clipping to Obsidian —
+      // starts working on PDFs without any of them knowing what a PDF is.
+      const url = useBrowserStore.getState().tabs.find(t => t.id === activeTabId)?.url || ''
+      if (/\.pdf(\?|#|$)/i.test(url) || url.startsWith('blob:')) {
+        const pdf = await window.electronAPI.pdf?.extract?.(url)
+        if (pdf?.ok && pdf.text) return String(pdf.text).trim()
+      }
+      return ''
     } catch { return '' }
   }, [activeTabId])
 
@@ -278,6 +336,18 @@ export default function App() {
   // ── Bookmarks + theme + IPC ────────────────────────────────────────────────
   useEffect(() => { loadBookmarks().then(setBookmarks) }, [])
 
+  // ── Downloads, app-wide ───────────────────────────────────────────────────
+  // This used to live in DownloadsPage, which meant the store only knew about
+  // a transfer while that page happened to be open — so the toolbar button had
+  // nothing to count. The subscription belongs here, on the always-mounted
+  // root, and both the toolbar panel and the page now just read the store.
+  useEffect(() => {
+    const store = useBrowserStore.getState()
+    window.electronAPI.downloads.getAll().then(store.setDownloads).catch(() => {})
+    const unsub = window.electronAPI.downloads.onUpdate(store.upsertDownload)
+    return () => { if (typeof unsub === 'function') unsub() }
+  }, [])
+
   // ── Extension re-hydration — if renderer storage was cleared (cache clear,
   // profile wipe), restore custom extensions + toggle states from the disk
   // mirror so installed extensions survive restarts until the user deletes
@@ -348,9 +418,54 @@ export default function App() {
   // (AI / Research / Agent / Annotation / Sphere / Add to Sphere / QR). The
   // native menu is built in main; app-feature items are dispatched here.
   useEffect(() => {
-    const off = window.electronAPI?.ipc?.on?.('page-context-action', (_e: any, data: { action: string; url?: string; selection?: string }) => {
+    const off = window.electronAPI?.ipc?.on?.('page-context-action', (_e: any, data: { action: string; url?: string; selection?: string; title?: string }) => {
       const store = useBrowserStore.getState()
       switch (data.action) {
+        // "Remember This" — the selection joins the Recall queue. Read/modify/
+        // write against the file rather than any in-memory copy: the Recall
+        // page may be open in another tab holding its own book, and the last
+        // write must not silently drop reviews answered elsewhere.
+        case 'recall-add': {
+          const text = (data.selection || '').trim()
+          if (!text) break
+          ;(async () => {
+            try {
+              const book = (await window.electronAPI.recall.get()) || {}
+              const res = addRecallItem(book, {
+                text, url: data.url || '', title: data.title || '',
+              }, Date.now())
+              if (res.item && !res.duplicate) await window.electronAPI.recall.set(res.items)
+              flashHandoff(
+                res.duplicate ? 'Already in Recall' :
+                res.item ? 'Added to Recall' : 'That selection is too long to memorise',
+                !!res.item && !res.duplicate,
+              )
+            } catch {}
+          })()
+          break
+        }
+
+        // Share the passage and its source into the community lounge. Posting
+        // is the user's own click on a menu item; nothing is sent otherwise.
+        case 'share-lounge': {
+          const quoted = (data.selection || '').trim().replace(/\s+/g, ' ')
+          if (!quoted) break
+          ;(async () => {
+            const body = `“${quoted}”
+
+— ${data.title || ''} ${data.url || ''}`.trim()
+            try {
+              const res = await window.electronAPI.community.post({
+                channel: 'general', kind: 'text', body,
+              })
+              flashHandoff(res?.error ? `Couldn't share: ${res.error}` : 'Shared to the Lounge', !res?.error)
+            } catch (e: any) {
+              flashHandoff(`Couldn't share: ${e?.message || e}`, false)
+            }
+          })()
+          break
+        }
+
         case 'ai':
           if (!store.isAIPanelOpen) store.toggleAIPanel()
           if (data.selection) {
@@ -462,10 +577,10 @@ export default function App() {
   // The annotation toolbar doesn't need this — it's injected into the page
   // itself (see AnnotationCanvas.tsx), not rendered as host HTML. ──────────
   useLayoutEffect(() => {
-    const rightReserve = isAIPanelOpen ? 388 : 0
+    const rightReserve = (isAIPanelOpen ? 388 : 0) + (isTradingCoachOpen ? 388 : 0)
     // The find bar lives in a reserved strip above the native view — the view
     // always paints over host HTML, so the bar can't simply overlay it.
-    const topReserve = findVisible ? 44 : 0
+    const topReserve = (findVisible ? 44 : 0) + (restoreVisible ? 58 : 0) + (guardVisible ? 58 : 0)
     const sync = () => {
       if (!contentAreaRef.current) return
       const r = contentAreaRef.current.getBoundingClientRect()
@@ -489,7 +604,7 @@ export default function App() {
     const ro = new ResizeObserver(sync)
     if (contentAreaRef.current) ro.observe(contentAreaRef.current)
     return () => { window.removeEventListener('resize', sync); ro.disconnect() }
-  }, [isAIPanelOpen, findVisible])
+  }, [isAIPanelOpen, isTradingCoachOpen, findVisible, restoreVisible, guardVisible])
 
   // ── Create/destroy native tab views as tabs come and go ───────────────────
   useEffect(() => {
@@ -620,6 +735,12 @@ export default function App() {
   useEffect(() => {
     if (sessionRestored.current) return
     sessionRestored.current = true
+
+    // A window opened to hold one page does not inherit the session. Without
+    // this, detaching a single tab reopened every tab from the last session
+    // inside the new window — one tab out, a duplicate of everything back.
+    if (!ownsSession(window.location.search)) return
+
     let cancelled = false
     ;(async () => {
       try {
@@ -638,6 +759,11 @@ export default function App() {
   // main process writes this to disk.
   useEffect(() => {
     if (!sessionRestored.current) return
+    // And it does not overwrite the session either. A detached window saving
+    // its own single tab replaced the real window's tabs, so they were gone at
+    // the next launch — the quieter half of the same bug, and the worse half,
+    // because it only showed up the following morning.
+    if (!ownsSession(window.location.search)) return
     const t = setTimeout(() => {
       const state = useBrowserStore.getState()
       const snapshot = state.tabs.map(tab => ({ url: tab.url, title: tab.title, pageType: tab.pageType }))
@@ -681,8 +807,14 @@ export default function App() {
     // Any host-HTML overlay (Add-to-Sphere modal, QR modal) must detach the
     // active tab's BrowserView, which otherwise always paints on top of and
     // steals clicks from our HTML — making the modal look frozen/invisible.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen)
-  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen])
+    // The Trading Coach panel does NOT detach the chart — it reserves a
+    // 432px right gutter via the bounds-sync effect above, so the chart
+    // slides to the left and stays visible alongside the panel.
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen || isCaptureOverlayOpen || hostOverlayCount > 0 || isReaderOpen || isCuratorOpen)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen, hostOverlayCount, isReaderOpen, isCuratorOpen])
+  // Note: the BottomSummaryCard is non-interactive overlay (pointer-events:
+  // none on its base); it does NOT need to hide the BrowserView, so it's
+  // not in the list above.
 
   // Clear a tab's loading state, but keep the spinner up for a short floor so
   // a load that finished almost instantly still registers as an action. Any
@@ -806,6 +938,23 @@ export default function App() {
           if (url)   store.updateTab(tabId, { url })
           if (favicon) store.updateTab(tabId, { favicon })
           finishLoading(tabId)
+          // Background-summarize the page as soon as the load settles. The user
+          // shouldn't have to ask "summarize this" — the AI should already
+          // have a 3-bullet summary waiting by the time they look up.
+          if (url && url !== 'about:blank' && url !== 'home') {
+            import('./services/parallelIntel').then(({ analyzeTab }) => {
+              analyzeTab(tabId, url, title || url).then(insight => {
+                if (insight && insight.bullets.length) {
+                  store.setPageInsight({
+                    tabId,
+                    bullets: insight.bullets,
+                    pageType: insight.pageType,
+                    title: insight.title,
+                  })
+                }
+              }).catch(() => { /* insight failure is non-fatal */ })
+            })
+          }
           if (url && url !== 'about:blank') {
             window.electronAPI?.history?.add({ url, title: title || url, favicon })
           }
@@ -930,9 +1079,14 @@ export default function App() {
                     {tab.pageType === 'manual'     && <ManualPage />}
                     {tab.pageType === 'rewind'     && <RewindPage onNavigate={navigate} />}
                     {tab.pageType === 'watch'      && <WatchPage />}
+                    {tab.pageType === 'vault'      && <VaultPage />}
+                    {tab.pageType === 'recall'     && <RecallPage onNavigate={navigate} />}
+                    {tab.pageType === 'ledger'     && <LedgerPage />}
+                    {tab.pageType === 'brief'      && <BriefPage onNavigate={navigate} />}
                     {tab.pageType === 'bible'      && <BiblePage />}
                     {tab.pageType === 'study'      && <BibleStudyPage />}
                     {tab.pageType === 'community'  && <CommunityPage />}
+                    {tab.pageType === 'community-lists' && <CommunityListsPage />}
                   </Suspense>
                 </div>
               )
@@ -943,6 +1097,25 @@ export default function App() {
                 effect above) — there is no DOM node for it here. */}
 
             {/* Find-in-page bar — sits in the strip the bounds sync reserves */}
+            {/* A second look before a password is typed on a lookalike domain */}
+            <CredentialGuardBar
+              tabId={activeTabId}
+              wcId={activeTabId ? (tabWcIds[activeTabId] ?? null) : null}
+              url={activeTab?.url}
+              isLoading={!!activeTab?.isLoading}
+              topOffset={findVisible ? 44 : 0}
+              onOfferChange={setGuardShown}
+            />
+
+            {/* Offer the archived copy when a page fails to load */}
+            <VaultRestoreBar
+              tabId={activeTabId}
+              url={activeTab?.url}
+              failed={!!activeTab?.loadFailed}
+              topOffset={(findVisible ? 44 : 0) + (guardVisible ? 58 : 0)}
+              onOfferChange={setRestoreOffered}
+            />
+
             {findVisible && activeTabId && (
               <FindBar key={activeTabId} tabId={activeTabId} onClose={() => setFindOpen(false)} />
             )}
@@ -954,10 +1127,32 @@ export default function App() {
               ? <AnnotationCanvas />
               : <HostAnnotationCanvas />)}
           </div>
-
-          <AIAssistant currentUrl={currentUrl} currentTitle={currentTitle} getPageContent={getPageContent} />
         </div>
       </div>
+
+      {/* ── Viewport-level overlays ────────────────────────────────────────
+          These sit OUTSIDE the flex content area so their `position: fixed`
+          is anchored to the actual viewport, not to a clipped ancestor.
+          That keeps the Trading Coach button visible above the sidebar and
+          tab content, and stops the AI panel from being cut off when the
+          sidebar resizes. */}
+      <AIAssistant currentUrl={currentUrl} currentTitle={currentTitle} getPageContent={getPageContent} />
+      <TradingCoach />
+      <Suspense fallback={null}>
+        <ReaderView />
+      </Suspense>
+      <Suspense fallback={null}>
+        {isCuratorOpen && <TabCuratorPanel onClose={() => setCuratorOpen(false)} />}
+      </Suspense>
+      <Suspense fallback={null}>
+        {currentPageInsight && currentPageInsight.tabId === activeTabId && (
+          <BottomSummaryCard tabId={currentPageInsight.tabId} onClose={dismissPageInsight} />
+        )}
+      </Suspense>
+      {/* F9: Focus Mode — time-aware browsing nudge */}
+      <Suspense fallback={null}>
+        <FocusNudge />
+      </Suspense>
 
       {/* Split-view divider — sits in the gutter between the two native views. */}
       {splitDividerVisible && viewBounds && (
@@ -999,6 +1194,7 @@ export default function App() {
           />
         )}
         {isCompareOpen && <CompareModal />}
+        {isTableExportOpen && <TableExportModal />}
       </Suspense>
 
       {/* Cross-device handoff toast */}

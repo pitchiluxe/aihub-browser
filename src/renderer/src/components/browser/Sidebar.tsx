@@ -1,11 +1,12 @@
 import React, { memo, useEffect, useState } from 'react'
 import {
   Home, History, Download, Settings, Plus, Sparkles,
-  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing, BookMarked, GraduationCap, Users,
+  Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing, BookMarked, GraduationCap, Users, Archive, Brain, Receipt, Sunrise, Library,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import Favicon from '../common/Favicon'
+import PriceTracker from '../prices/PriceTracker'
 import type { PageType } from '../../../../shared/pageTypes'
 
 interface Props {
@@ -23,14 +24,19 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { icon: Home,         label: 'Home',        page: null,           type: 'home'       },
+  { icon: Sunrise,      label: 'Morning Brief', page: 'brief',       type: 'brief',      accent: '#fdba74' },
   { icon: FlaskConical, label: 'Research',     page: 'research',     type: 'research',   accent: '#38bdf8' },
   { icon: Bot,          label: 'Agent Mode',   page: 'agents',       type: 'agents',     accent: '#a78bfa' },
   { icon: StickyNote,   label: 'Sticky Notes', page: 'notes',        type: 'notes',      accent: '#facc15' },
   { icon: Rewind,       label: 'Rewind',       page: 'rewind',       type: 'rewind',     accent: '#c4b5fd' },
   { icon: BellRing,     label: 'Watch & Ping', page: 'watch',        type: 'watch',      accent: '#f472b6' },
+  { icon: Archive,      label: 'Page Vault',   page: 'vault',        type: 'vault',      accent: '#7dd3fc' },
+  { icon: Brain,        label: 'Recall',       page: 'recall',       type: 'recall',     accent: '#f0abfc' },
+  { icon: Receipt,      label: 'Ledger',       page: 'ledger',       type: 'ledger',     accent: '#86efac' },
   { icon: BookMarked,   label: 'Bible',        page: 'bible',        type: 'bible',      accent: '#fbbf24' },
   { icon: GraduationCap, label: 'Bible Study', page: 'study',        type: 'study',      accent: '#e6c86e' },
   { icon: Users,        label: 'Community',    page: 'community',    type: 'community',  accent: '#34d399' },
+  { icon: Library,      label: 'Reading Lists', page: 'community-lists', type: 'community-lists', accent: '#a78bfa' },
   { icon: History,      label: 'History',      page: 'history',      type: 'history'    },
   { icon: Download,     label: 'Downloads',    page: 'downloads',    type: 'downloads'  },
   { icon: Puzzle,       label: 'Extensions',   page: 'extensions',   type: 'extensions', accent: '#fb923c' },
@@ -42,11 +48,16 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 function Sidebar({ onNavigate, onOpenPage }: Props) {
+  // F6: local state for hover summary affordance
+  const [hoveredSummaryId, setHoveredSummaryId] = useState<string | null>(null)
+  const [summarizingId, setSummarizingId] = useState<string | null>(null)
+
   // Narrow subscription — avoids re-rendering on unrelated store churn
-  const { isSidebarOpen, bookmarks, setAddBookmarkOpen, tabs, activeTabId } = useBrowserStore(
+  const { isSidebarOpen, bookmarks, setAddBookmarkOpen, tabs, activeTabId, updateBookmark } = useBrowserStore(
     useShallow(s => ({
       isSidebarOpen: s.isSidebarOpen, bookmarks: s.bookmarks,
       setAddBookmarkOpen: s.setAddBookmarkOpen, tabs: s.tabs, activeTabId: s.activeTabId,
+      updateBookmark: s.updateBookmark,
     })))
   const activeTab = tabs.find(t => t.id === activeTabId)
 
@@ -105,6 +116,24 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
 
       {/* Divider with purple gradient */}
       <div style={{ height: 1, margin: '0 12px 8px', background: 'linear-gradient(90deg, transparent, rgb(var(--ds-accent) / 0.25), transparent)' }} />
+
+      {/*
+        Everything between the brand and the footer scrolls as one column.
+
+        The nav used to be flexShrink: 0 with no overflow of its own, inside a
+        root that clips — so the list simply ran off the bottom once it grew
+        past the window. Settings, the whole bookmarks section and the footer
+        were unreachable on a short window, and nothing indicated they were
+        there. Making the nav its own scroller instead would divide the height
+        between two scrollports and leave both cramped; one column is what the
+        sidebar actually is.
+
+        The scrollbar is deliberately NOT hidden here. This region can overflow
+        with no other clue that it has, and a scrollbar that only appears while
+        the pointer is inside it is the difference between "there is more" and
+        "the app is broken".
+      */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
 
       {/* ── Navigation ── */}
       <nav style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
@@ -177,52 +206,99 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
       </div>
 
       {/* Bookmark list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}
-        className="no-scrollbar">
+      <div style={{ flexShrink: 0, padding: '0 8px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
         {bookmarks.length === 0 && (
           <div style={{ padding: '12px 8px', textAlign: 'center', color: 'rgb(96,102,130)', fontSize: 11 }}>
             No bookmarks yet
           </div>
         )}
         {bookmarks.map(bm => (
-          <button
+          <div
             key={bm.id}
-            onClick={() => onNavigate(bm.url)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '6px 8px', borderRadius: 10, border: '1px solid transparent',
-              background: 'transparent', cursor: 'pointer', textAlign: 'left',
-              color: 'rgb(96,102,130)',
-              transition: 'all 0.13s',
-            }}
-            onMouseEnter={e => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = 'rgb(var(--ds-accent) / 0.07)'
-              el.style.borderColor = 'rgb(var(--ds-accent) / 0.14)'
-              el.style.color = 'rgb(184,184,199)'
-            }}
-            onMouseLeave={e => {
-              const el = e.currentTarget as HTMLElement
-              el.style.background = 'transparent'
-              el.style.borderColor = 'transparent'
-              el.style.color = 'rgb(96,102,130)'
-            }}
+            style={{ position: 'relative' }}
+            onMouseLeave={() => setHoveredSummaryId(null)}
           >
-            {/* Favicon with color-tinted bg */}
-            <div style={{
-              width: 18, height: 18, borderRadius: 6, flexShrink: 0,
-              background: `${bm.color || 'rgb(var(--ds-accent))'}1a`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-              border: `1px solid ${bm.color || 'rgb(var(--ds-accent) / 0.2)'}30`,
-            }}>
-              <Favicon url={bm.url} size={11} style={{ objectFit: 'contain', borderRadius: 3 }} />
-            </div>
-            <span style={{ flex: 1, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {bm.title}
-            </span>
-          </button>
+            <button
+              onClick={() => onNavigate(bm.url)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 8px', borderRadius: 10, border: '1px solid transparent',
+                background: 'transparent', cursor: 'pointer', textAlign: 'left',
+                color: 'rgb(96,102,130)',
+                width: '100%',
+                transition: 'all 0.13s',
+              }}
+              onMouseEnter={e => {
+                const el = e.currentTarget as HTMLElement
+                el.style.background = 'rgb(var(--ds-accent) / 0.07)'
+                el.style.borderColor = 'rgb(var(--ds-accent) / 0.14)'
+                el.style.color = 'rgb(184,184,199)'
+              }}
+            >
+              {/* Favicon with color-tinted bg */}
+              <div style={{
+                width: 18, height: 18, borderRadius: 6, flexShrink: 0,
+                background: `${bm.color || 'rgb(var(--ds-accent))'}1a`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+                border: `1px solid ${bm.color || 'rgb(var(--ds-accent) / 0.2)'}30`,
+              }}>
+                <Favicon url={bm.url} size={11} style={{ objectFit: 'contain', borderRadius: 3 }} />
+              </div>
+              <span style={{ flex: 1, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {bm.title}
+              </span>
+              {/* F6: AI summary affordance — shows the AI button on hover */}
+              <span
+                onClick={async e => {
+                  e.stopPropagation()
+                  if (bm.summary) { setHoveredSummaryId(hoveredSummaryId === bm.id ? null : bm.id); return }
+                  setHoveredSummaryId(bm.id)
+                  setSummarizingId(bm.id)
+                  try {
+                    const api = (window as any).electronAPI?.bookmarks
+                    if (api?.summarize) {
+                      const result = await api.summarize(bm.id)
+                      if (result?.summary) updateBookmark(bm.id, { summary: result.summary, summaryAt: Date.now() })
+                    }
+                  } finally { setSummarizingId(null) }
+                }}
+                title={bm.summary ? 'View AI summary' : 'Generate AI summary'}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 18, height: 18, borderRadius: 4,
+                  color: 'rgb(var(--ds-accent-soft))',
+                  background: 'rgb(var(--ds-accent) / 0.10)',
+                  fontSize: 10, flexShrink: 0, cursor: 'pointer',
+                }}
+              >
+                {summarizingId === bm.id ? '…' : '✨'}
+              </span>
+            </button>
+            {/* F6: AI Summary tooltip */}
+            {hoveredSummaryId === bm.id && bm.summary && (
+              <div style={{
+                position: 'absolute', left: 24, right: 8, top: '100%', zIndex: 50,
+                marginTop: 4, padding: 8,
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                fontSize: 10.5, lineHeight: 1.4,
+                color: 'var(--text-secondary)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                whiteSpace: 'pre-wrap',
+                maxWidth: 240,
+              }}>
+                {bm.summary}
+              </div>
+            )}
+          </div>
         ))}
       </div>
+
+      </div>{/* end scroll region */}
+
+      {/* ── F7: Live Price Tracker ── */}
+      <PriceTracker />
 
       {/* ── Footer ── */}
       <div style={{

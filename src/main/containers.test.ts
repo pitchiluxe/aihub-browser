@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   slugifyContainerId, partitionFor, addContainer, removeContainer, findContainer,
-  DEFAULT_PARTITION, DEFAULT_CONTAINERS, type Container,
+  DEFAULT_PARTITION, DEFAULT_CONTAINERS, isBurnerId, newBurnerId, type Container,
 } from './containers'
 
 describe('slugifyContainerId', () => {
@@ -79,5 +79,31 @@ describe('removeContainer / findContainer', () => {
     expect(findContainer(list, 'home')?.name).toBe('Home')
     expect(findContainer(list, null)).toBeNull()
     expect(findContainer(list, 'nope')).toBeNull()
+  })
+})
+
+describe('burner tabs', () => {
+  it('is recognised by its id', () => {
+    expect(isBurnerId('burner')).toBe(true)
+    expect(isBurnerId('burner:123-abc')).toBe(true)
+    expect(isBurnerId('work')).toBe(false)
+    expect(isBurnerId(null)).toBe(false)
+  })
+
+  it('gets a partition that Chromium never writes to disk', () => {
+    // The absence of "persist:" IS the feature — with it, a burner tab would
+    // quietly leave its cookies behind.
+    const p = partitionFor(newBurnerId(1))
+    expect(p.startsWith('persist:')).toBe(false)
+    expect(p.startsWith('burner-')).toBe(true)
+  })
+
+  it('never lets two burners share a session', () => {
+    expect(partitionFor(newBurnerId(1))).not.toBe(partitionFor(newBurnerId(1)))
+  })
+
+  it('leaves ordinary containers persistent', () => {
+    expect(partitionFor('work')).toBe('persist:container-work')
+    expect(partitionFor(null)).toBe(DEFAULT_PARTITION)
   })
 })
