@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, RotateCw, Home, Bookmark, Bot,
   Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe, Camera, Video, Square, X,
-  Crop, Monitor, BookOpen,
+  Crop, Monitor, BookOpen, GitCompare,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
@@ -46,7 +46,7 @@ export default function NavigationBar({
     tabs, activeTabId, toggleAIPanel, isAIPanelOpen,
     bookmarks, addBookmark, removeBookmark, toggleSidebar, isSidebarOpen,
     isAnnotationMode, toggleAnnotationMode, tabWcIds, setCaptureOverlayOpen,
-    setReaderOpen, isReaderOpen,
+    setReaderOpen, isReaderOpen, isCompareOpen, setCompareOpen,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, toggleAIPanel: s.toggleAIPanel, isAIPanelOpen: s.isAIPanelOpen,
     bookmarks: s.bookmarks, addBookmark: s.addBookmark, removeBookmark: s.removeBookmark,
@@ -54,6 +54,7 @@ export default function NavigationBar({
     isAnnotationMode: s.isAnnotationMode, toggleAnnotationMode: s.toggleAnnotationMode, tabWcIds: s.tabWcIds,
     setCaptureOverlayOpen: s.setCaptureOverlayOpen,
     setReaderOpen: s.setReaderOpen, isReaderOpen: s.isReaderOpen,
+    isCompareOpen: s.isCompareOpen, setCompareOpen: s.setCompareOpen,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -561,6 +562,15 @@ export default function NavigationBar({
           active={isAnnotationMode}
         >
           <Pencil size={13} />
+        </NavBtn>
+
+        {/* F8: Cross-Tab AI Comparison — pick 2+ tabs and get a comparison table */}
+        <NavBtn
+          onClick={() => setCompareOpen(!isCompareOpen)}
+          title="Compare pages (AI)"
+          active={isCompareOpen}
+        >
+          <GitCompare size={13} />
         </NavBtn>
 
         {/* Every saved bookmark, one click away — the sphere is for exploring,
