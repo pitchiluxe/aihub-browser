@@ -1260,6 +1260,17 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
     if (isCrashPage(curUrl)) { curUrl = ''; title = '' }
     sendTabEvent(ctx, tabId, 'did-stop-loading', { title, url: curUrl })
   })
+  // Fire AFTER the main frame is fully painted (not just on stop) so the
+  // extract script the renderer runs against the page has a complete DOM to
+  // read. 'did-finish-load' fires once per top-level load, including reloads
+  // and back/forward — exactly the trigger points the AI wants.
+  wc.on('did-finish-load', () => {
+    let title = ''; let curUrl = ''
+    try { title = wc.getTitle() } catch {}
+    try { curUrl = wc.getURL() } catch {}
+    if (isCrashPage(curUrl)) return
+    sendTabEvent(ctx, tabId, 'did-finish-load', { title, url: curUrl })
+  })
 
   // ── Renderer crash recovery ───────────────────────────────────────────────
   // A tab's renderer process can die outright — segfault, out-of-memory, GPU

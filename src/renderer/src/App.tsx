@@ -70,6 +70,7 @@ const TradingCoach = lazy(() => import('./components/trading/TradingCoach'))
 // Reading Mode is a clean article view, only mounted when the user asks for it.
 const ReaderView = lazy(() => import('./components/reader/ReaderView'))
 const TabCuratorPanel = lazy(() => import('./components/tabCurator/TabCuratorPanel'))
+const BottomSummaryCard = lazy(() => import('./components/parallelIntel/BottomSummaryCard'))
 declare global {
   interface Window {
     electronAPI: any
@@ -98,6 +99,7 @@ export default function App() {
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
     splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen,
     isTradingCoachOpen, isReaderOpen, isCuratorOpen, setCuratorOpen, hostOverlayCount, tabWcIds,
+    currentPageInsight, dismissPageInsight,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
@@ -108,6 +110,7 @@ export default function App() {
     isCaptureOverlayOpen: s.isCaptureOverlayOpen, isTradingCoachOpen: s.isTradingCoachOpen,
     isReaderOpen: s.isReaderOpen, isCuratorOpen: s.isCuratorOpen,
     setCuratorOpen: s.setCuratorOpen,
+    currentPageInsight: s.currentPageInsight, dismissPageInsight: s.dismissPageInsight,
     hostOverlayCount: s.hostOverlayCount,
     tabWcIds: s.tabWcIds,
   })))
@@ -801,6 +804,9 @@ export default function App() {
     // slides to the left and stays visible alongside the panel.
     window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen || isCaptureOverlayOpen || hostOverlayCount > 0 || isReaderOpen || isCuratorOpen)
   }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen, hostOverlayCount, isReaderOpen, isCuratorOpen])
+  // Note: the BottomSummaryCard is non-interactive overlay (pointer-events:
+  // none on its base); it does NOT need to hide the BrowserView, so it's
+  // not in the list above.
 
   // Clear a tab's loading state, but keep the spinner up for a short floor so
   // a load that finished almost instantly still registers as an action. Any
@@ -924,6 +930,23 @@ export default function App() {
           if (url)   store.updateTab(tabId, { url })
           if (favicon) store.updateTab(tabId, { favicon })
           finishLoading(tabId)
+          // Background-summarize the page as soon as the load settles. The user
+          // shouldn't have to ask "summarize this" — the AI should already
+          // have a 3-bullet summary waiting by the time they look up.
+          if (url && url !== 'about:blank' && url !== 'home') {
+            import('./services/parallelIntel').then(({ analyzeTab }) => {
+              analyzeTab(tabId, url, title || url).then(insight => {
+                if (insight && insight.bullets.length) {
+                  store.setPageInsight({
+                    tabId,
+                    bullets: insight.bullets,
+                    pageType: insight.pageType,
+                    title: insight.title,
+                  })
+                }
+              }).catch(() => { /* insight failure is non-fatal */ })
+            })
+          }
           if (url && url !== 'about:blank') {
             window.electronAPI?.history?.add({ url, title: title || url, favicon })
           }
@@ -1111,6 +1134,11 @@ export default function App() {
       </Suspense>
       <Suspense fallback={null}>
         {isCuratorOpen && <TabCuratorPanel onClose={() => setCuratorOpen(false)} />}
+      </Suspense>
+      <Suspense fallback={null}>
+        {currentPageInsight && currentPageInsight.tabId === activeTabId && (
+          <BottomSummaryCard tabId={currentPageInsight.tabId} onClose={dismissPageInsight} />
+        )}
       </Suspense>
 
       {/* Split-view divider — sits in the gutter between the two native views. */}

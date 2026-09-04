@@ -116,6 +116,11 @@ interface BrowserState {
   setCompareOpen: (v: boolean) => void
   isCuratorOpen: boolean
   setCuratorOpen: (v: boolean) => void
+  /** Current page insight (3-bullet summary) shown in the BottomSummaryCard */
+  currentPageInsight: { tabId: string; bullets: string[]; pageType: string; title: string } | null
+  setPageInsight: (v: { tabId: string; bullets: string[]; pageType: string; title: string } | null) => void
+  /** Dismiss the current page insight card */
+  dismissPageInsight: () => void
   // URL to pre-fill the Add-to-Sphere modal with (set from the page context menu)
   bookmarkPrefill: string
   setBookmarkPrefill: (u: string) => void
@@ -439,6 +444,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setCompareOpen: (v) => set({ isCompareOpen: v }),
   isCuratorOpen: false,
   setCuratorOpen: (v) => set({ isCuratorOpen: v }),
+  currentPageInsight: null,
+  setPageInsight: (v) => set({ currentPageInsight: v }),
+  dismissPageInsight: () => set({ currentPageInsight: null }),
 
   bookmarkPrefill: '',
   setBookmarkPrefill: (u) => set({ bookmarkPrefill: u }),
