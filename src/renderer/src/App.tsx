@@ -7,6 +7,13 @@ import NavigationBar from './components/browser/NavigationBar'
 import Sidebar from './components/browser/Sidebar'
 import HomePage from './components/homepage/HomePage'
 import { EXTENSION_DEFS } from './extensions/extensionDefs'
+import { loadBookmarks } from './services/bookmarkService'
+import { addItem as addRecallItem } from './services/recall'
+import { buildPageExtractionScript } from './services/pageExtractor'
+import { loadCustomExts } from './extensions/customExts'
+import { shouldRunOn } from './extensions/siteRules'
+import { withPanelRuntime } from './extensions/panelRuntime'
+import { applyThemeToDom } from './services/themeService'
 
 // Special pages are code-split — none are needed at startup, so keeping them
 // out of the entry chunk makes first paint faster.
@@ -41,7 +48,10 @@ const QRCodeModal    = lazy(() => import('./components/browser/QRCodeModal'))
 const CommandPalette = lazy(() => import('./components/browser/CommandPalette'))
 const CompareModal   = lazy(() => import('./components/browser/CompareModal'))
 const TableExportModal = lazy(() => import('./components/browser/TableExportModal'))
-import AddBookmarkModal from './components/homepage/AddBookmarkModal'
+
+// Modal is only rendered when open; lazy-load keeps the form code out of the
+// entry chunk.
+const AddBookmarkModal = lazy(() => import('./components/homepage/AddBookmarkModal'))
 
 import UpdateNotification from './components/browser/UpdateNotification'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
@@ -49,18 +59,16 @@ import HostAnnotationCanvas from './components/browser/HostAnnotationCanvas'
 import FindBar from './components/browser/FindBar'
 import VaultRestoreBar from './components/browser/VaultRestoreBar'
 import CredentialGuardBar from './components/browser/CredentialGuardBar'
-import AIAssistant from './components/ai/AIAssistant'
-import TradingCoach from './components/trading/TradingCoach'
-import { loadBookmarks } from './services/bookmarkService'
-import { addItem as addRecallItem } from './services/recall'
-import { buildPageExtractionScript } from './services/pageExtractor'
-import { loadCustomExts } from './extensions/customExts'
-import { shouldRunOn } from './extensions/siteRules'
-import { withPanelRuntime } from './extensions/panelRuntime'
-import { applyThemeToDom } from './services/themeService'
 // Pure geometry, shared with the main process so both agree to the pixel.
 import { splitPanes } from '../../shared/splitLayout'
 import { ownsSession, initialUrlFrom } from '../../shared/windowRole'
+
+// AI assistant and Trading Coach are huge — lazy-load them so the initial
+// paint doesn't pay for code that most users only open occasionally.
+const AIAssistant = lazy(() => import('./components/ai/AIAssistant'))
+const TradingCoach = lazy(() => import('./components/trading/TradingCoach'))
+// Reading Mode is a clean article view, only mounted when the user asks for it.
+const ReaderView = lazy(() => import('./components/reader/ReaderView'))
 
 declare global {
   interface Window {
@@ -88,7 +96,8 @@ export default function App() {
     tabs, activeTabId, updateTab,
     canGoBack, canGoForward, setNavState, setBookmarks,
     isAnnotationMode, isAddBookmarkOpen, isAIPanelOpen, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen,
-    splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen, isTradingCoachOpen, hostOverlayCount, tabWcIds,
+    splitTabId, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen,
+    isTradingCoachOpen, isReaderOpen, hostOverlayCount, tabWcIds,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, updateTab: s.updateTab,
     canGoBack: s.canGoBack, canGoForward: s.canGoForward, setNavState: s.setNavState, setBookmarks: s.setBookmarks,
@@ -97,6 +106,7 @@ export default function App() {
     splitTabId: s.splitTabId, isBookmarksMenuOpen: s.isBookmarksMenuOpen,
     isDownloadsMenuOpen: s.isDownloadsMenuOpen, isTableExportOpen: s.isTableExportOpen,
     isCaptureOverlayOpen: s.isCaptureOverlayOpen, isTradingCoachOpen: s.isTradingCoachOpen,
+    isReaderOpen: s.isReaderOpen,
     hostOverlayCount: s.hostOverlayCount,
     tabWcIds: s.tabWcIds,
   })))
@@ -788,8 +798,8 @@ export default function App() {
     // The Trading Coach panel does NOT detach the chart — it reserves a
     // 432px right gutter via the bounds-sync effect above, so the chart
     // slides to the left and stays visible alongside the panel.
-    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen || isCaptureOverlayOpen || hostOverlayCount > 0)
-  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen, hostOverlayCount])
+    window.electronAPI.tabView.setOverlayHidden(isAddBookmarkOpen || !!qrUrl || isVpnMenuOpen || isCmdPaletteOpen || isCompareOpen || isBookmarksMenuOpen || isDownloadsMenuOpen || isTableExportOpen || isCaptureOverlayOpen || hostOverlayCount > 0 || isReaderOpen)
+  }, [isAddBookmarkOpen, qrUrl, isVpnMenuOpen, isCmdPaletteOpen, isCompareOpen, isBookmarksMenuOpen, isDownloadsMenuOpen, isTableExportOpen, isCaptureOverlayOpen, hostOverlayCount, isReaderOpen])
 
   // Clear a tab's loading state, but keep the spinner up for a short floor so
   // a load that finished almost instantly still registers as an action. Any
@@ -1095,6 +1105,9 @@ export default function App() {
           sidebar resizes. */}
       <AIAssistant currentUrl={currentUrl} currentTitle={currentTitle} getPageContent={getPageContent} />
       <TradingCoach />
+      <Suspense fallback={null}>
+        <ReaderView />
+      </Suspense>
 
       {/* Split-view divider — sits in the gutter between the two native views. */}
       {splitDividerVisible && viewBounds && (

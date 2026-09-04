@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, RotateCw, Home, Bookmark, Bot,
   Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe, Camera, Video, Square, X,
-  Crop, Monitor,
+  Crop, Monitor, BookOpen,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
@@ -46,12 +46,14 @@ export default function NavigationBar({
     tabs, activeTabId, toggleAIPanel, isAIPanelOpen,
     bookmarks, addBookmark, removeBookmark, toggleSidebar, isSidebarOpen,
     isAnnotationMode, toggleAnnotationMode, tabWcIds, setCaptureOverlayOpen,
+    setReaderOpen, isReaderOpen,
   } = useBrowserStore(useShallow(s => ({
     tabs: s.tabs, activeTabId: s.activeTabId, toggleAIPanel: s.toggleAIPanel, isAIPanelOpen: s.isAIPanelOpen,
     bookmarks: s.bookmarks, addBookmark: s.addBookmark, removeBookmark: s.removeBookmark,
     toggleSidebar: s.toggleSidebar, isSidebarOpen: s.isSidebarOpen,
     isAnnotationMode: s.isAnnotationMode, toggleAnnotationMode: s.toggleAnnotationMode, tabWcIds: s.tabWcIds,
     setCaptureOverlayOpen: s.setCaptureOverlayOpen,
+    setReaderOpen: s.setReaderOpen, isReaderOpen: s.isReaderOpen,
   })))
 
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -542,6 +544,15 @@ export default function NavigationBar({
           disabled={isSpecialPage || bmBusy}
         >
           <Bookmark size={13} fill={isBookmarked ? 'currentColor' : 'none'} />
+        </NavBtn>
+
+        <NavBtn
+          onClick={() => activeTabId && setReaderOpen(!isReaderOpen, activeTabId)}
+          title={isReaderOpen ? 'Close reading mode' : 'Read in clean mode (F1)'}
+          active={isReaderOpen}
+          disabled={isSpecialPage}
+        >
+          <BookOpen size={13} />
         </NavBtn>
 
         <NavBtn

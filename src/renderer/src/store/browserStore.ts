@@ -90,6 +90,12 @@ interface BrowserState {
   isTradingCoachOpen: boolean
   setTradingCoachOpen: (v: boolean) => void
   toggleTradingCoach: () => void
+  // F1 — Reading Mode. The reader takes over the entire page region with a
+  // clean article view, so it owns its own active-tab-id. A null means
+  // "not in reading mode" — when set, the BrowserView is hidden.
+  isReaderOpen: boolean
+  readerTabId: string | null
+  setReaderOpen: (v: boolean, tabId?: string | null) => void
   /**
    * How many host-HTML popups are open right now.
    *
@@ -419,6 +425,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   isTradingCoachOpen: false,
   setTradingCoachOpen: (v) => set({ isTradingCoachOpen: v }),
   toggleTradingCoach: () => set(s => ({ isTradingCoachOpen: !s.isTradingCoachOpen })),
+  isReaderOpen: false,
+  readerTabId: null as string | null,
+  setReaderOpen: (v, tabId) => set({ isReaderOpen: v, readerTabId: v ? (tabId ?? null) : null }),
   hostOverlayCount: 0,
   pushHostOverlay: () => set(s => ({ hostOverlayCount: s.hostOverlayCount + 1 })),
   popHostOverlay: () => set(s => ({ hostOverlayCount: Math.max(0, s.hostOverlayCount - 1) })),
