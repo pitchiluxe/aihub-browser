@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     add:     (b:any)            => ipcRenderer.invoke('bookmarks:add', b),
     remove:  (id:string)        => ipcRenderer.invoke('bookmarks:remove', id),
     update:  (id:string, u:any) => ipcRenderer.invoke('bookmarks:update', id, u),
+    summarize: (id:string)       => ipcRenderer.invoke('bookmarks:summarize', id),
     export:  (fmt:'json'|'html') => ipcRenderer.invoke('bookmarks:export', fmt),
     import:  ()                 => ipcRenderer.invoke('bookmarks:import'),
   },

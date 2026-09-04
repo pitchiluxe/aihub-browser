@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { proposeGroups, groupColorFor, type TabGroup } from '../services/tabGroups'
 import type { SiteRules } from '../extensions/siteRules'
 
-export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string }
+export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string; summary?: string; summaryAt?: number }
 export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; asleep?: boolean; /** Last load ended in an error/crash page — retried when the tab is next activated. */ loadFailed?: boolean; groupId?: string; containerId?: string; pageType?: 'browser' | PageType }
 export interface AIMessage { role: 'user'|'assistant'|'system'; content: string; steps?: { label: string; status: 'pending' | 'done' | 'error' }[]; /** Data URLs the user attached to this turn. */ images?: string[] }
 export interface HistoryItem { id: string; url: string; title: string; favicon?: string; timestamp: number }
@@ -15,6 +15,7 @@ interface BrowserState {
   setBookmarks: (b: Bookmark[]) => void
   addBookmark: (b: Bookmark) => void
   removeBookmark: (id: string) => void
+  updateBookmark: (id: string, patch: Partial<Bookmark>) => void
 
   // Tabs
   tabs: Tab[]
@@ -180,6 +181,9 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   setBookmarks: (bookmarks) => set({ bookmarks }),
   addBookmark: (b) => set(s => ({ bookmarks: [...s.bookmarks, b] })),
   removeBookmark: (id) => set(s => ({ bookmarks: s.bookmarks.filter(b => b.id !== id) })),
+  updateBookmark: (id, patch) => set(s => ({
+    bookmarks: s.bookmarks.map(b => b.id === id ? { ...b, ...patch } : b),
+  })),
 
   tabs: [{ id: 'tab-1', url: 'home', title: 'New Tab', favicon: '', isLoading: false, isHome: true, pageType: 'browser' }],
   activeTabId: 'tab-1',

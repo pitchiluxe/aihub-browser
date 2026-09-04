@@ -2594,6 +2594,40 @@ ipcMain.handle('bookmarks:update', (_e, id: string, u: any) => {
   const d = getData(); const i = d.bookmarks.findIndex((b: any) => b.id === id)
   if (i !== -1) d.bookmarks[i] = { ...d.bookmarks[i], ...u }; saveData(); return d.bookmarks[i]
 })
+// F6: Smart Bookmark Summaries — fetch the page and generate a 3-bullet AI summary
+ipcMain.handle('bookmarks:summarize', async (_e, id: string) => {
+  const d = getData()
+  const bm = d.bookmarks.find((b: any) => b.id === id)
+  if (!bm) return { error: 'Bookmark not found' }
+
+  // Try to fetch page text
+  let pageText = ''
+  try {
+    const res = await fetch(bm.url, { signal: AbortSignal.timeout(8000) })
+    if (res.ok) {
+      const html = await res.text()
+      // Strip HTML tags to get text
+      pageText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 6000)
+    }
+  } catch { /* fetch failed — use URL-only fallback */ }
+
+  // Use the existing ai:summarizePage handler logic
+  const userContent = pageText.length > 100
+    ? `Summarize this web page in 3 concise bullet points. Focus on key takeaways.\n\nURL: ${bm.url}\n\n${pageText}`
+    : `Describe the website at ${bm.url} in 3 bullet points.`
+
+  const r = await runAiRequest([{ role: 'user', content: userContent }], undefined, { maxTokens: 600 })
+  const summary = r.provider === 'none' ? '' : (r.content || '').slice(0, 500)
+
+  if (summary) {
+    const idx = d.bookmarks.findIndex((b: any) => b.id === id)
+    if (idx !== -1) {
+      d.bookmarks[idx] = { ...d.bookmarks[idx], summary, summaryAt: Date.now() }
+      saveData()
+    }
+  }
+  return { summary, provider: r.provider }
+})
 
 // ── IPC: History ───────────────────────────────────────────────────────────
 // history:add runs on EVERY navigation. Re-reading and rewriting the whole
