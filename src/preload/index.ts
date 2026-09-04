@@ -75,6 +75,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     add:        (e:any) => ipcRenderer.invoke('history:add', e),
     clear:      () => ipcRenderer.invoke('history:clear'),
     deleteItem: (id:string) => ipcRenderer.invoke('history:deleteItem', id),
+    smartSearch: (q:string) => ipcRenderer.invoke('history:smartSearch', q),
   },
   downloads: {
     getAll:       () => ipcRenderer.invoke('downloads:getAll'),

@@ -2662,6 +2662,34 @@ ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?
   recordVisit(entry.url, entry.title)
   return true
 })
+// F2: Semantic History Search — natural language queries over browsing history.
+// Falls back to keyword match when the semantic index has no embeddings yet.
+ipcMain.handle('history:smartSearch', async (_e, query: string) => {
+  const history = historyStore.get()
+  const terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean)
+  if (!terms.length) return { results: history.slice(0, 50) }
+
+  // Use the semantic index for natural language queries (≥3 meaningful words)
+  const semantic = terms.length >= 2
+  if (semantic) {
+    try {
+      const docs = history.map(h => ({ id: h.id, text: `${h.title} ${h.url}` }))
+      const { results: semResults } = await semanticIndex.search(query, docs)
+      const byId = new Map(history.map(h => [h.id, h]))
+      const semItems = semResults
+        .map(r => byId.get(r.id))
+        .filter(Boolean)
+        .slice(0, 30)
+      if (semItems.length > 0) return { results: semItems, via: 'semantic' }
+    } catch { /* no semantic index — fall through */ }
+  }
+
+  // Keyword fallback
+  const kwItems = history.filter(h =>
+    terms.every(t => h.title.toLowerCase().includes(t) || h.url.toLowerCase().includes(t))
+  ).slice(0, 50)
+  return { results: kwItems, via: 'keyword' }
+})
 
 // ── IPC: Read the chart the user is actually looking at ───────────────────
 // The assistant used to answer chart questions from imagination — inventing a
