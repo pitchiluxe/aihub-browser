@@ -208,14 +208,20 @@ export default function App() {
     let tempTitle = finalUrl
     try { tempTitle = new URL(finalUrl).hostname.replace(/^www\./, '') } catch {}
 
-    updateTab(activeTabId, { url: finalUrl, title: tempTitle, isHome: false, isLoading: true, pageType: 'browser', fromHome: wasHome })
-    setNavState({ canGoBack: false, canGoForward: false })
-
-    // If a view already exists for this tab, drive it directly. Otherwise the
-    // tab-lifecycle effect below will create it with this URL once state settles.
+    // For a tab that already has a view, drive it directly. For a brand-new tab
+    // (first ever navigation), create the BrowserView synchronously in the same
+    // tick so the page starts loading before React's next render cycle — saving
+    // the 1-2 frame (~16-33 ms) re-render delay that would otherwise stand
+    // between Enter and the first byte arriving.
     if (createdViewIds.current.has(activeTabId)) {
       window.electronAPI.tabView.navigate(activeTabId, finalUrl)
+    } else {
+      window.electronAPI.tabView.create(activeTabId, finalUrl, null)
+      createdViewIds.current.add(activeTabId)
     }
+
+    updateTab(activeTabId, { url: finalUrl, title: tempTitle, isHome: false, isLoading: true, pageType: 'browser', fromHome: wasHome })
+    setNavState({ canGoBack: false, canGoForward: false })
   }, [activeTabId, updateTab, setNavState])
 
   // ── Detached-window hand-off ───────────────────────────────────────────────
