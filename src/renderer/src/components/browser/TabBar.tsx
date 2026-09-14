@@ -184,7 +184,7 @@ export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compa
 
       {/* Private-window indicator. Pinned beside the window controls so it is
           visible however many tabs are open, in both strip layouts. */}
-      {IS_INCOGNITO && <IncognitoBadge />}
+      {IS_INCOGNITO ? <IncognitoBadge /> : <NewIncognitoWindowBtn />}
 
       {/* Window controls — pinned right, always visible regardless of tab
           count. macOS uses its native traffic lights (left inset) instead. */}
@@ -344,6 +344,25 @@ function IncognitoBadge() {
     >
       <VenetianMask size={13} aria-hidden="true" />
       <span>Incognito</span>
+    </button>
+  )
+}
+
+// The way INTO Incognito from a normal window, in the spot where a private
+// window shows its badge. Worded as an action ("New Incognito window") so it
+// can't be mistaken for the badge that says the current window is private.
+function NewIncognitoWindowBtn() {
+  const shortcut = IS_MAC ? '⌘+Shift+N' : 'Ctrl+Shift+N'
+  return (
+    <button
+      type="button"
+      onClick={() => window.electronAPI.incognito?.openWindow?.()}
+      className="ds-new-incognito-btn no-drag shrink-0 self-center"
+      title={`Open a new Incognito window (${shortcut})`}
+      aria-label={`Open a new Incognito window (${shortcut})`}
+    >
+      <VenetianMask size={13} aria-hidden="true" />
+      <span>New Incognito window</span>
     </button>
   )
 }

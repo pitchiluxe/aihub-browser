@@ -13,6 +13,7 @@ Profile location (for disk checks): `~/.aihub-browser` (Windows: `C:\Users\<you>
 
 ## A. Opening Incognito
 
+- [ ] **Tab-strip button:** a normal window shows **New Incognito window** beside the window controls (icon only in narrow windows) and clicking it opens a private window.
 - [ ] **Keyboard shortcut:** Ctrl+Shift+N (Windows/Linux) or ⌘+Shift+N (macOS) opens a new Incognito window. Try it with focus in the address bar **and** with focus inside a web page.
 - [ ] **Command palette:** Ctrl+K → "New Incognito Window" opens one. The hint shows the shortcut.
 - [ ] **Tab context menu:** right-click a tab → "New Incognito Window".
