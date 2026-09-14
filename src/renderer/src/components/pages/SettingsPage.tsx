@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Palette, Bot, Shield, ShieldBan, Layers, Info, CheckCircle2, Loader2, RefreshCw, Download, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked, Lock } from 'lucide-react'
+import { Palette, Bot, Shield, ShieldBan, Layers, Info, CheckCircle2, Loader2, RefreshCw, Download, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked, Lock, VenetianMask } from 'lucide-react'
 import ClaudeKitSection from './ClaudeKitSection'
 import { useBibleSettings } from '../../services/bibleSettings'
 import { TRANSLATIONS } from '../../services/bibleService'
@@ -1497,6 +1497,28 @@ export default function SettingsPage() {
       </Section>
 
       <Section icon={<Shield size={15} />} title="Privacy & Data">
+        {/* Deliberately a button and an explanation, not switches: Incognito
+            is private by default, and "clear the private session when the
+            last window closes" is the definition of the feature, not an option. */}
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Incognito</div>
+            <div className="text-xs text-aihub-muted max-w-xl">
+              A private window with its own temporary cookie jar and site storage. No history, Rewind, session
+              restore or AI conversations are saved from it, and its cookies and site data are wiped when the last
+              Incognito window closes. Downloads and bookmarks you save are kept. It does not hide your activity
+              from websites, your network, your employer or your internet provider.
+            </div>
+          </div>
+          <button
+            onClick={() => window.electronAPI.incognito?.openWindow?.()}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm bg-aihub-card hover:bg-aihub-border/40 text-aihub-text transition-all shrink-0"
+            title={`New Incognito Window (${window.electronAPI.platform === 'darwin' ? '⌘' : 'Ctrl'}+Shift+N)`}
+          >
+            <VenetianMask size={13} aria-hidden="true" /> Open Incognito Window
+          </button>
+        </div>
+
         <div className={ROW}>
           <div>
             <div className={LBL}>Encrypted DNS</div>

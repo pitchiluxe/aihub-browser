@@ -53,7 +53,12 @@ export function initialUrlFrom(search: string): string | null {
  * save have to agree: a window that restores the session but does not save it
  * loses the user's own changes, and one that saves without restoring wipes
  * everything else.
+ *
+ * An Incognito window never owns it: restoring would pour the normal session's
+ * tabs into a private window, and saving would write private tabs to disk for
+ * crash recovery. (The main process refuses both independently.)
  */
-export function ownsSession(search: string): boolean {
+export function ownsSession(search: string, incognito = false): boolean {
+  if (incognito) return false
   return !isSecondaryWindow(search)
 }

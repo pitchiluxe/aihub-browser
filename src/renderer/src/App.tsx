@@ -6,6 +6,8 @@ import VerticalTabs from './components/browser/VerticalTabs'
 import NavigationBar from './components/browser/NavigationBar'
 import Sidebar from './components/browser/Sidebar'
 import HomePage from './components/homepage/HomePage'
+import IncognitoHomePage from './components/homepage/IncognitoHomePage'
+import { IS_INCOGNITO, effectiveThemeId } from './services/incognitoMode'
 import { EXTENSION_DEFS } from './extensions/extensionDefs'
 import { loadBookmarks } from './services/bookmarkService'
 import { addItem as addRecallItem } from './services/recall'
@@ -375,7 +377,7 @@ export default function App() {
         if (Array.isArray(disk.customThemes) && disk.customThemes.length > 0 && localThemes.length === 0) {
           localStorage.setItem('aihub-custom-themes', JSON.stringify(disk.customThemes))
           const s = await window.electronAPI.settings.get()
-          applyThemeToDom(s.theme || 'dark')
+          applyThemeToDom(effectiveThemeId(s.theme || 'dark'))
         } else if (localThemes.length > 0 && (!disk.customThemes || disk.customThemes.length === 0)) {
           window.electronAPI.extStore?.save?.({ customThemes: localThemes })
         }
@@ -401,8 +403,8 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    window.electronAPI.settings.get().then((s: any) => applyThemeToDom(s.theme || 'dark'))
-    const handler = (e: Event) => applyThemeToDom((e as CustomEvent).detail)
+    window.electronAPI.settings.get().then((s: any) => applyThemeToDom(effectiveThemeId(s.theme || 'dark')))
+    const handler = (e: Event) => applyThemeToDom(effectiveThemeId((e as CustomEvent).detail))
     document.addEventListener('aihub-theme-change', handler)
     return () => document.removeEventListener('aihub-theme-change', handler)
   }, [])
@@ -739,7 +741,7 @@ export default function App() {
     // A window opened to hold one page does not inherit the session. Without
     // this, detaching a single tab reopened every tab from the last session
     // inside the new window — one tab out, a duplicate of everything back.
-    if (!ownsSession(window.location.search)) return
+    if (!ownsSession(window.location.search, IS_INCOGNITO)) return
 
     let cancelled = false
     ;(async () => {
@@ -763,7 +765,7 @@ export default function App() {
     // its own single tab replaced the real window's tabs, so they were gone at
     // the next launch — the quieter half of the same bug, and the worse half,
     // because it only showed up the following morning.
-    if (!ownsSession(window.location.search)) return
+    if (!ownsSession(window.location.search, IS_INCOGNITO)) return
     const t = setTimeout(() => {
       const state = useBrowserStore.getState()
       const snapshot = state.tabs.map(tab => ({ url: tab.url, title: tab.title, pageType: tab.pageType }))
@@ -941,7 +943,12 @@ export default function App() {
           // Background-summarize the page as soon as the load settles. The user
           // shouldn't have to ask "summarize this" — the AI should already
           // have a 3-bullet summary waiting by the time they look up.
-          if (url && url !== 'about:blank' && url !== 'home') {
+          //
+          // Not in Incognito. That summary sends the page's text to whichever
+          // AI provider is configured — possibly a cloud one — without the
+          // user asking. Private pages are only sent when the user asks the
+          // assistant about them.
+          if (!IS_INCOGNITO && url && url !== 'about:blank' && url !== 'home') {
             import('./services/parallelIntel').then(({ analyzeTab }) => {
               analyzeTab(tabId, url, title || url).then(insight => {
                 if (insight && insight.bullets.length) {
@@ -955,7 +962,10 @@ export default function App() {
               }).catch(() => { /* insight failure is non-fatal */ })
             })
           }
-          if (url && url !== 'about:blank') {
+          // History and Rewind are refused for private windows in the main
+          // process regardless; not asking keeps the private page's URL and
+          // text from even crossing IPC for nothing.
+          if (!IS_INCOGNITO && url && url !== 'about:blank') {
             window.electronAPI?.history?.add({ url, title: title || url, favicon })
           }
 
@@ -993,7 +1003,7 @@ export default function App() {
           // Rewind capture — after a 5s dwell (so redirects/skims aren't kept),
           // if this tab is still on the same page, save its readable text so it
           // can be found later by content, not just URL.
-          if (url && /^https?:\/\//i.test(url) && wcId) {
+          if (!IS_INCOGNITO && url && /^https?:\/\//i.test(url) && wcId) {
             const prev = rewindTimers.current.get(tabId)
             if (prev) clearTimeout(prev)
             rewindTimers.current.set(tabId, setTimeout(async () => {
@@ -1018,7 +1028,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className="ds-app-root flex flex-col h-screen w-screen overflow-hidden select-none">
+    <div className={`ds-app-root flex flex-col h-screen w-screen overflow-hidden select-none${IS_INCOGNITO ? ' ds-incognito-root' : ''}`}>
       <div className="drag-region">
         <TabBar variant={tabLayout === 'vertical' ? 'compact' : 'full'} />
       </div>
@@ -1055,7 +1065,9 @@ export default function App() {
               tab.isHome && tab.pageType === 'browser' && (
                 <div key={`home-${tab.id}`} className="absolute inset-0"
                   style={{ display: tab.id === activeTabId ? 'block' : 'none' }}>
-                  <HomePage onNavigate={navigate} />
+                  {/* A private window's new tab explains what private means
+                      instead of surfacing recommendations built from history. */}
+                  {IS_INCOGNITO ? <IncognitoHomePage onNavigate={navigate} /> : <HomePage onNavigate={navigate} />}
                 </div>
               )
             ))}

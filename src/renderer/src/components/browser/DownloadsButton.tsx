@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore, DownloadItem } from '../../store/browserStore'
+import { IS_INCOGNITO } from '../../services/incognitoMode'
 import {
   kindOf, formatProgress, percentOf, stateLabel, activeCount, formatWhen,
   type DownloadKind,
@@ -70,7 +71,8 @@ export default function DownloadsButton() {
 
   const clearAll = async () => {
     await window.electronAPI.downloads.clear()
-    setDownloads([])
+    // Re-read: a private window's clear keeps transfers still in flight.
+    try { setDownloads(await window.electronAPI.downloads.getAll()) } catch { setDownloads([]) }
   }
 
   const openDownloadsPage = () => {
@@ -141,7 +143,10 @@ export default function DownloadsButton() {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
                 <Download size={13} style={{ color: 'rgb(var(--ds-accent-soft))', flexShrink: 0 }} />
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: 'rgb(var(--ds-text-2))' }}>Downloads</span>
+                <span
+                  style={{ fontSize: 12.5, fontWeight: 700, color: 'rgb(var(--ds-text-2))' }}
+                  title={IS_INCOGNITO ? 'Listed until you close every Incognito window. Files stay on your computer.' : undefined}
+                >{IS_INCOGNITO ? 'Incognito downloads' : 'Downloads'}</span>
                 <span style={{ fontSize: 11, color: 'rgb(var(--ds-text-4))' }}>
                   {active ? `${active} in progress` : `${downloads.length} ${downloads.length === 1 ? 'file' : 'files'}`}
                 </span>

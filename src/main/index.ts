@@ -34,6 +34,7 @@ import { contentHash, describeChange, containsKeyword } from './watchDiff'
 import {
   partitionFor, addContainer, removeContainer, DEFAULT_CONTAINERS, newBurnerId, type Container,
 } from './containers'
+import { createIncognitoManager, canMoveBetweenWindows } from './incognito'
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
 import { createVault } from './vault'
@@ -588,6 +589,14 @@ let pendingOpenUrl: string | null = extractLaunchUrl(process.argv)
 // a bare page, so all tab state has to be scoped per window instead of global.
 interface AppWin {
   win: BrowserWindow
+  /** The window's renderer webContents id — the key in appWins. */
+  id: number
+  /**
+   * Set by the main process when it created the window, and only then. Every
+   * privacy decision (which session tabs use, whether history is written)
+   * reads this — never a value the renderer supplied.
+   */
+  incognito: boolean
   /** Tab content views owned by THIS window, keyed by renderer tabId */
   views: Map<string, BrowserView>
   activeId: string | null
@@ -638,6 +647,93 @@ function sendTo(ctx: AppWin | undefined, channel: string, ...args: any[]) {
       ctx.win.webContents.send(channel, ...args)
     }
   } catch {}
+}
+
+// ── Incognito ──────────────────────────────────────────────────────────────
+// See src/main/incognito.ts for the session model. The window's renderer gets
+// this switch on its command line so the UI can present itself as private
+// before first paint; the main process never reads it back.
+const INCOGNITO_WINDOW_ARG = '--aihub-incognito-window'
+
+const incognito = createIncognitoManager<Electron.Session>({
+  fromPartition: (partition) => session.fromPartition(partition),
+  onSessionCreated: (ses) => {
+    // Same identity, request filter and permission rules as every other jar —
+    // a private session that behaved differently would be easy to fingerprint.
+    configureContentSession(ses, { privateStats: true })
+    // A VPN the user switched on must cover private tabs too; skipping it here
+    // would send Incognito traffic out on the real IP.
+    if (currentTrafficProxy) ses.setProxy(currentTrafficProxy).catch(() => {})
+  },
+  onSessionEnded: (ended) => {
+    privateAdblockStats = emptyStats()
+    // Diagnostics name the event, never a site.
+    if (ended.failures.length) console.warn(`[aihub] private session ended; incomplete clear steps: ${ended.failures.join(', ')}`)
+  },
+})
+
+/** The in-memory session an Incognito window's tabs and popups must use. */
+function privateSessionFor(ctx: AppWin): { partition: string; session: Electron.Session } {
+  const active = incognito.isIncognitoWindow(ctx.id) ? incognito.current() : null
+  // Unreachable while the window is open; throwing beats silently falling back
+  // to the persistent jar, which is the one outcome this feature exists to stop.
+  if (!active) throw new Error('Incognito window has no private session')
+  return active
+}
+
+/** The session this window's tab content runs in. */
+function tabSessionFor(ctx: AppWin | undefined): Electron.Session {
+  return ctx?.incognito ? privateSessionFor(ctx).session : session.fromPartition('persist:main')
+}
+
+/**
+ * Whether an IPC sender may write browsing activity to disk. Answered from the
+ * main process's own record of which windows it opened as Incognito — never
+ * from anything the renderer claims. A sender that is not a known app window
+ * is refused as well: persistence is granted by identity, not revoked by flag.
+ */
+function mayPersistFrom(e: { sender: Electron.WebContents }): boolean {
+  const ctx = ctxFromEvent(e)
+  return !!ctx && !ctx.incognito && !incognito.isIncognitoWindow(e.sender.id)
+}
+
+/**
+ * Register a handler that persists (or restores) browsing activity. Private
+ * and unrecognised senders get `whenPrivate` instead, which must not touch
+ * disk. Every channel in PRIVATE_BLOCKED_CHANNELS goes through here — enforced
+ * by incognito.test.ts.
+ */
+function handlePersistent(
+  channel: string,
+  handler: (e: Electron.IpcMainInvokeEvent, ...args: any[]) => any,
+  whenPrivate: (e: Electron.IpcMainInvokeEvent, ...args: any[]) => any,
+) {
+  ipcMain.handle(channel, (e, ...args) => (mayPersistFrom(e) ? handler(e, ...args) : whenPrivate(e, ...args)))
+}
+
+/** A normal (persistent) window to hand something to, preferring the focused one. */
+function normalWindowCtx(): AppWin | undefined {
+  const focused = BrowserWindow.getFocusedWindow()
+  const focusedCtx = focused ? appWins.get(focused.webContents.id) : undefined
+  if (focusedCtx && !focusedCtx.incognito) return focusedCtx
+  for (const ctx of appWins.values()) if (!ctx.incognito && !ctx.win.isDestroyed()) return ctx
+  return undefined
+}
+
+function openIncognitoWindow(url?: string): BrowserWindow {
+  const safe = url && /^https?:\/\//i.test(url) ? url : undefined
+  return createAppWindow(safe, { incognito: true }).win
+}
+
+/** Close every Incognito window. The session ends when the last one goes. */
+function closeIncognitoWindows(): number {
+  let n = 0
+  for (const ctx of [...appWins.values()]) {
+    if (!ctx.incognito || ctx.win.isDestroyed()) continue
+    ctx.win.close()
+    n++
+  }
+  return n
 }
 
 // Electron's default UA carries "aihub-browser/x" and "Electron/x" tokens that
@@ -756,6 +852,8 @@ function matchAppShortcut(input: Electron.Input): string | null {
   }
   if (input.alt) return null
   if (key === 't') return input.shift ? 'reopen-tab' : 'new-tab'
+  // Ctrl+Shift+N (Cmd+Shift+N on macOS — `meta` counts as ctrl above).
+  if (key === 'n' && input.shift) return 'new-incognito-window'
   if (key === 'w' && !input.shift) return 'close-tab'
   if (key === 'tab') return input.shift ? 'prev-tab' : 'next-tab'
   if (key === 'l' && !input.shift) return 'focus-url'
@@ -790,6 +888,9 @@ function attachAppShortcuts(wc: Electron.WebContents) {
     const action = matchAppShortcut(input)
     if (!action) return
     e.preventDefault()
+    // Opened here rather than in the renderer: a new window is a main-process
+    // act, and the privacy mode of that window must be decided by main.
+    if (action === 'new-incognito-window') { openIncognitoWindow(); return }
     const page = resolvePageWc(wc)
     switch (action) {
       case 'nav-back':    { try { if (page?.canGoBack())    page.goBack() } catch {} return }
@@ -952,7 +1053,15 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
     if (params.linkURL) {
       sep()
       menu.append(new MenuItem({ label: 'Open Link in New Tab', click: () => sendTo(menuCtx, 'open-in-new-tab', params.linkURL) }))
-      menu.append(new MenuItem({ label: 'Open Link in New Window', click: () => { try { openDetachedWindow(params.linkURL) } catch {} } }))
+      // A link opened from a private page stays private: the new window
+      // inherits this window's mode, it does not fall back to a normal one.
+      menu.append(new MenuItem({
+        label: menuCtx?.incognito ? 'Open Link in New Incognito Window' : 'Open Link in New Window',
+        click: () => { try { openDetachedWindow(params.linkURL, undefined, !!menuCtx?.incognito) } catch {} },
+      }))
+      if (!menuCtx?.incognito && /^https?:\/\//i.test(params.linkURL)) {
+        menu.append(new MenuItem({ label: 'Open Link in Incognito Window', click: () => { try { openIncognitoWindow(params.linkURL) } catch {} } }))
+      }
       menu.append(new MenuItem({ label: 'Copy Link Address', click: () => clipboard.writeText(params.linkURL) }))
     }
 
@@ -1130,7 +1239,9 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   const tabViews = ctx.views
   // A tab in a container gets its own cookie jar, configured exactly like the
   // main one so the only difference is isolation (see configureContentSession).
-  const partition = partitionFor(containerId)
+  // An Incognito window overrides that entirely: whatever container id the
+  // renderer passed, its tabs run in the window's in-memory private session.
+  const partition = ctx.incognito ? privateSessionFor(ctx).partition : partitionFor(containerId)
   configureContentSession(session.fromPartition(partition))
   const view = new BrowserView({
     webPreferences: {
@@ -1227,6 +1338,17 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   wc.on('did-create-window', (childWin) => {
     const cwc = childWin.webContents
     try { cwc.setUserAgent(CHROME_UA) } catch {}
+    // A sign-in popup from a private tab shares the private session, so it
+    // must not outlive it: closing the last Incognito window closes it too.
+    if (ctx.incognito) {
+      const trackPopup = (popup: BrowserWindow) => {
+        const untrack = incognito.trackDisposable(() => { try { if (!popup.isDestroyed()) popup.destroy() } catch {} })
+        popup.once('closed', untrack)
+        // Identity providers occasionally chain a second popup; it is just as private.
+        popup.webContents.on('did-create-window', trackPopup)
+      }
+      trackPopup(childWin)
+    }
     attachContextMenu(cwc)
     // Links clicked inside a popup go to a main-window tab; nested scripted
     // popups (rare, but some IdPs chain them) stay real windows.
@@ -1343,6 +1465,7 @@ function destroyTabView(ctx: AppWin | undefined, tabId: string) {
   if (!view) return
   if (ctx.activeId === tabId) { ctx.activeId = null; syncActiveBrowserView(ctx) }
   try { if (!ctx.win.isDestroyed()) ctx.win.removeBrowserView(view) } catch {}
+  try { pageHostByWc.delete(view.webContents.id) } catch {}
   try { view.webContents.close() } catch {}
   ctx.views.delete(tabId)
 }
@@ -1358,7 +1481,7 @@ let sharedSetupDone = false
 // support nightmare, so this is written once and applied to each.
 const configuredSessions = new WeakSet<Electron.Session>()
 
-function configureContentSession(ses: Electron.Session): Electron.Session {
+function configureContentSession(ses: Electron.Session, opts: { privateStats?: boolean } = {}): Electron.Session {
   if (configuredSessions.has(ses)) return ses
   configuredSessions.add(ses)
 
@@ -1394,7 +1517,9 @@ function configureContentSession(ses: Electron.Session): Electron.Session {
 
   // One request filter for the whole session — ad blocking and focus mode both
   // resolve through it (Electron only allows a single onBeforeRequest).
-  installRequestFilter(ses)
+  // A private session counts its blocks separately: the global tally is shown
+  // in Settings from any window, and would list the trackers private pages hit.
+  installRequestFilter(ses, !!opts.privateStats)
 
   ses.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(ALLOWED_PERMISSIONS.has(permission))
@@ -1473,7 +1598,9 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   // N listeners on one session → one download produced N entries. Guard with a
   // WeakSet so each unique Session is hooked exactly once.
   let dlSeq = 0
-  const handleDownload = (_e: any, item: any) => {
+  const handleDownload = (sess: Electron.Session, _e: any, item: Electron.DownloadItem) => {
+    // Classified by the session that started it, which is decided in main.
+    const isPrivate = incognito.isIncognitoSession(sess)
     // File the download by type before the transfer starts — setSavePath is
     // only honoured while the item is still 'progressing'. Unrecognised types
     // keep the default location rather than disappearing into an "Other" bin.
@@ -1495,13 +1622,24 @@ function setupSharedApp(firstWin: BrowserWindow): void {
       state: 'progressing', startedAt: Date.now(), completedAt: null,
     }
     const persist = () => {
+      if (isPrivate) {
+        // A transfer cancelled by the session ending still reports 'done'
+        // afterwards; that row must not reappear in the NEXT private session.
+        if (incognito.current()?.session !== sess) return
+        // The file lands on disk like any download; the record of it does not.
+        // It lives in the private session and is shown only to private windows.
+        const row = incognito.upsertDownload(dl)
+        for (const ctx of appWins.values()) if (ctx.incognito) sendTo(ctx, 'download:update', row)
+        return
+      }
       downloadsStore.update(list => {
         const i = list.findIndex((x: any) => x.id === dl.id)
         if (i !== -1) list[i] = { ...dl }; else list.unshift({ ...dl })
         if (list.length > 500) list.length = 500
       })
-      safelySend('download:update', dl)
+      for (const ctx of appWins.values()) if (!ctx.incognito) sendTo(ctx, 'download:update', dl)
     }
+    if (isPrivate) incognito.trackActiveDownload(dl.id, () => { try { item.cancel() } catch {} })
     // Progress ticks fire many times per second on fast links. The store
     // debounces the disk write, but the renderer broadcast and the array walk
     // are still per-call, so keep the throttle: state transitions and
@@ -1515,6 +1653,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
       if (stateChanged || now - lastProgressWrite >= 500) { lastProgressWrite = now; persist() }
     })
     item.on('done', (_ev, state) => {
+      if (isPrivate) incognito.settleDownload(dl.id)
       dl.state = state; dl.savePath = item.getSavePath()
       dl.completedAt = Date.now(); dl.receivedBytes = item.getReceivedBytes()
       persist()
@@ -1526,7 +1665,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   const hookDownloadSession = (sess: Electron.Session) => {
     if (!sess || hookedSessions.has(sess)) return
     hookedSessions.add(sess)
-    sess.on('will-download', handleDownload)
+    sess.on('will-download', (e, item) => handleDownload(sess, e, item))
   }
 
   // Attach to default session (covers webviews) + mainWindow session
@@ -1569,7 +1708,8 @@ function setupSharedApp(firstWin: BrowserWindow): void {
 // VPN control, annotation, screenshot and recording all included. Used both for
 // the first window at launch and for every tab detached into its own window,
 // so a detached tab is indistinguishable from a freshly opened browser.
-function createAppWindow(initialUrl?: string): AppWin {
+function createAppWindow(initialUrl?: string, opts: { incognito?: boolean } = {}): AppWin {
+  const isIncognito = !!opts.incognito
   // Render web pages in their natural (light) colors. Forcing 'dark' here made
   // every site that honours prefers-color-scheme serve its dark variant, which
   // users found dim and hard to read (e.g. sign-up pages showing near-black).
@@ -1587,6 +1727,9 @@ function createAppWindow(initialUrl?: string): AppWin {
     width: 1440, height: 900, minWidth: 900, minHeight: 600,
     ...(offset ? { x: 60 + offset, y: 40 + offset } : {}),
     show: false, frame: false,
+    // The OS task switcher and taskbar show this, so a private window says so
+    // there too — not only inside its own chrome.
+    title: isIncognito ? 'AIHub Browser — Incognito' : 'AIHub Browser',
     // macOS: keep the native traffic lights but inset them so they sit
     // vertically centered inside the custom tab strip instead of floating
     // over the tabs. Renderer reserves matching left padding (TabBar) and
@@ -1599,16 +1742,26 @@ function createAppWindow(initialUrl?: string): AppWin {
     // DWM frame entirely (square corners, no shadow) and conflicts with
     // setBackgroundMaterial. Mica/acrylic only need the fully transparent
     // backgroundColor to show through.
-    backgroundColor: glassMode ? '#00000000' : '#17182B',
+    // Incognito never uses the glass material: a translucent private window
+    // would show whatever sits behind it, and the solid dark ground is part of
+    // how the window reads as private at a glance.
+    backgroundColor: isIncognito ? '#121218' : glassMode ? '#00000000' : '#17182B',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false, webviewTag: false,
       nodeIntegration: false, contextIsolation: true, webSecurity: false,
+      // Presentation hint for the renderer only (see INCOGNITO_WINDOW_ARG).
+      ...(isIncognito ? { additionalArguments: [INCOGNITO_WINDOW_ARG] } : {}),
     }
   })
 
+  // Captured up front: by the time 'closed' fires the window is already
+  // destroyed and touching win.webContents throws "Object has been destroyed".
+  const winId = win.webContents.id
   const ctx: AppWin = {
     win,
+    id: winId,
+    incognito: isIncognito,
     views: new Map(),
     activeId: null,
     bounds: { x: 0, y: 0, width: 0, height: 0 },
@@ -1616,35 +1769,71 @@ function createAppWindow(initialUrl?: string): AppWin {
     splitId: null,
     splitRatio: 0.5,
   }
-  // Capture the id up front: by the time 'closed' fires the window is already
-  // destroyed and touching win.webContents throws "Object has been destroyed".
-  const winId = win.webContents.id
+  // The private session exists before the window can ask for a single tab.
+  if (isIncognito) {
+    try { incognito.acquire(winId) } catch (err) {
+      // A session that cannot be made private must not become a window that
+      // looks private. Tear it down and say so.
+      try { win.destroy() } catch {}
+      throw err
+    }
+  }
   appWins.set(winId, ctx)
-  if (!mainWindow || mainWindow.isDestroyed()) mainWindow = win
+  // mainWindow anchors app-global dialogs (updater, OAuth). Prefer a normal
+  // window for that role whenever one exists.
+  const mainIsPrivate = !!mainWindow && !mainWindow.isDestroyed() && !!appWins.get(mainWindow.webContents.id)?.incognito
+  if (!mainWindow || mainWindow.isDestroyed() || (mainIsPrivate && !isIncognito)) mainWindow = win
 
   // Captured before 'closed', because webContents is gone by the time it fires.
   const communityPeerId = win.webContents.id
+
+  // Closing the last private window cancels private downloads still running
+  // (their session is about to be wiped). Ask first, as Chrome does.
+  win.on('close', (e) => {
+    if (!isIncognito || incognito.windowCount() !== 1 || !incognito.isIncognitoWindow(winId)) return
+    const running = incognito.activeDownloadCount()
+    if (!running) return
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'warning',
+      buttons: ['Cancel downloads and close', 'Keep window open'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'Close Incognito window?',
+      message: `${running} Incognito download${running === 1 ? ' is' : 's are'} still in progress.`,
+      detail: 'Closing the last Incognito window ends the private session, which cancels these downloads. Files that already finished stay on your computer.',
+    })
+    if (choice === 1) e.preventDefault()
+  })
+  if (isIncognito) {
+    // The renderer's <title> must not replace the private title in the taskbar.
+    win.on('page-title-updated', (e) => e.preventDefault())
+  }
 
   win.on('closed', () => {
     ctx.views.forEach(v => { try { v.webContents.close() } catch {} })
     ctx.views.clear()
     ctx.activeId = null
     appWins.delete(winId)
+    // Last private window gone → the private session is wiped (see incognito.ts).
+    if (isIncognito) void incognito.release(winId)
     // Nobody clicks Disconnect before closing a window. Without this the room
     // keeps them in its roster, holding a peer connection with no one behind it.
     try { releaseCommunityWindow(communityPeerId) } catch {}
-    // Keep mainWindow pointing at a window that still exists
+    // Keep mainWindow pointing at a window that still exists, normal first.
     if (mainWindow === win) {
-      const next = appWins.values().next()
-      mainWindow = next.done ? (undefined as unknown as BrowserWindow) : next.value.win
+      const remaining = [...appWins.values()]
+      const next = remaining.find(c => !c.incognito) ?? remaining[0]
+      mainWindow = next ? next.win : (undefined as unknown as BrowserWindow)
     }
   })
 
-  applyTransparency(win, settings.transparency)
+  // Private windows keep the solid ground even when the app uses glass.
+  const transparency = isIncognito ? 'none' : settings.transparency
+  applyTransparency(win, transparency)
   win.on('ready-to-show', () => {
     win.show()
     applyWindowOpacity(win, settings.windowOpacity ?? 1)
-    sendTo(ctx, 'theme:transparency', settings.transparency)
+    sendTo(ctx, 'theme:transparency', transparency)
   })
 
   // Keep the renderer's maximize button in sync when the OS changes the state
@@ -1696,7 +1885,8 @@ function createAppWindow(initialUrl?: string): AppWin {
   // renderer has actually mounted its 'open-in-new-tab' listener — sending any
   // earlier is a silent no-op since nothing is listening yet.
   win.webContents.on('did-finish-load', () => {
-    if (pendingOpenUrl) {
+    // A link from another app opens in normal browsing, never a private window.
+    if (pendingOpenUrl && !isIncognito) {
       sendTo(ctx, 'open-in-new-tab', pendingOpenUrl)
       pendingOpenUrl = null
     }
@@ -1735,16 +1925,25 @@ function createWindow(): void {
 app.on('second-instance', (_event, commandLine) => {
   // The link opens in ONE window — the one we just brought forward. Broadcasting
   // it opened the same page in every open window at once.
-  const target = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  //
+  // That window is always a NORMAL one. A link clicked in another app is not a
+  // private act, and dropping it into an Incognito window would hide it from
+  // history the user expects it in (Chrome behaves the same way).
+  const ctx = normalWindowCtx()
+  const url = extractLaunchUrl(commandLine)
+  if (!ctx && appWins.size) {
+    // Only private windows are open: a normal window has to exist to take it.
+    createAppWindow(url || undefined)
+    return
+  }
+  const target = ctx?.win ?? BrowserWindow.getAllWindows()[0]
   if (target) {
     if (target.isMinimized()) target.restore()
     target.focus()
   }
-  const url = extractLaunchUrl(commandLine)
   if (!url) return
-  const ctx = target ? appWins.get(target.webContents.id) : undefined
   if (ctx) sendTo(ctx, 'open-in-new-tab', url)
-  else safelySend('open-in-new-tab', url) // no window yet — first one to load takes it
+  else pendingOpenUrl = url // no window yet — the first normal one to load takes it
 })
 
 /**
@@ -1928,11 +2127,21 @@ async function fetchFreeProxyList(cc: string): Promise<string[]> {
 // (AI requests, update checks, favicons) is deliberately left direct: routing
 // it through a flaky free proxy would stall the UI without protecting anything
 // the user cares about. The VPN exists so websites see the chosen country.
+//
+// The live private session is browsing traffic too. Leaving it off this list
+// would let an Incognito window go out on the real IP while the VPN shows on.
+// A private session created later picks the config up from currentTrafficProxy.
+let currentTrafficProxy: Electron.ProxyConfig | null = null
+
 function trafficSessions(): Electron.Session[] {
-  return [session.fromPartition('persist:main')]
+  const sessions = [session.fromPartition('persist:main')]
+  const privateSession = incognito.current()?.session
+  if (privateSession) sessions.push(privateSession)
+  return sessions
 }
 
 async function applyProxyToTraffic(config: Electron.ProxyConfig): Promise<void> {
+  currentTrafficProxy = config.mode === 'direct' ? null : config
   for (const ses of trafficSessions()) {
     try { await ses.setProxy(config) } catch {}
   }
@@ -2066,6 +2275,8 @@ ipcMain.handle('focus:apply', (_e, blocked: string[] | null) => {
 
 // ── Ad and tracker blocking ────────────────────────────────────────────────
 const adblockStats = emptyStats()
+// Blocks counted in the private session. Reset when that session ends.
+let privateAdblockStats = emptyStats()
 // Host of each tab's top-level document, so a request can be judged in the
 // context of the page that made it (that is what makes "allow on this site"
 // and the never-block-your-own-domain rule work). Kept as a map rather than
@@ -2090,7 +2301,7 @@ function saveAdblockConfig(next: Partial<AdblockConfig>) {
   return adblockConfig()
 }
 
-function installRequestFilter(ses: Electron.Session) {
+function installRequestFilter(ses: Electron.Session, privateStats = false) {
   ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, cb) => {
     try {
       const wcId = (details as any).webContentsId as number | undefined
@@ -2107,7 +2318,7 @@ function installRequestFilter(ses: Electron.Session) {
       )
       if (decision.redirectURL) { cb({ redirectURL: decision.redirectURL }); return }
       if (decision.cancel) {
-        recordBlock(adblockStats, hostOf(details.url), wcId)
+        recordBlock(privateStats ? privateAdblockStats : adblockStats, hostOf(details.url), wcId)
         cb({ cancel: true })
         return
       }
@@ -2116,13 +2327,18 @@ function installRequestFilter(ses: Electron.Session) {
   })
 }
 
-ipcMain.handle('adblock:get', () => ({
-  config: adblockConfig(),
-  stats: { total: adblockStats.total, topDomains: adblockStats.topDomains },
-  listSize: BLOCKLIST_SIZE,
-}))
+ipcMain.handle('adblock:get', (e) => {
+  // Each window sees the tally for its own kind of browsing.
+  const stats = ctxFromEvent(e)?.incognito ? privateAdblockStats : adblockStats
+  return {
+    config: adblockConfig(),
+    stats: { total: stats.total, topDomains: stats.topDomains },
+    listSize: BLOCKLIST_SIZE,
+  }
+})
 ipcMain.handle('adblock:setEnabled', (_e, enabled: boolean) => saveAdblockConfig({ enabled: !!enabled }))
-ipcMain.handle('adblock:countForTab', (_e, wcId: number) => adblockStats.perTab[wcId] || 0)
+ipcMain.handle('adblock:countForTab', (e, wcId: number) =>
+  (ctxFromEvent(e)?.incognito ? privateAdblockStats : adblockStats).perTab[wcId] || 0)
 ipcMain.handle('adblock:toggleSite', (_e, url: string) => {
   const host = hostOf(url)
   if (!host) return adblockConfig()
@@ -2236,8 +2452,11 @@ ipcMain.handle('window:isMaximized', (e) => !!winFrom(e)?.isMaximized())
 // context menu, or "Open Link in New Window". The result is a COMPLETE browser
 // window (tab strip, sidebar, toolbar, AI panel, VPN, annotation, screenshot,
 // recording), identical to launching the app fresh, just opened on this page.
-function openDetachedWindow(url: string, _title?: string) {
-  return createAppWindow(url).win
+//
+// `incognito` is the privacy mode of the window the page comes FROM, as main
+// recorded it — so a private tab moved out stays private.
+function openDetachedWindow(url: string, _title?: string, incognitoMode = false) {
+  return createAppWindow(url, { incognito: incognitoMode }).win
 }
 
 // ── Windows: listing, and moving tabs back between them ────────────────────
@@ -2256,14 +2475,19 @@ function windowLabel(ctx: AppWin, index: number): string {
   return index === 0 ? 'Main window' : `Window ${index + 1}`
 }
 
+// Only windows in the caller's own privacy mode are listed: a tab can never be
+// offered a move across the normal/Incognito boundary.
 function listWindows(callerId?: number) {
+  const caller = callerId !== undefined ? appWins.get(callerId) : undefined
   return [...appWins.entries()]
     .filter(([, ctx]) => !ctx.win.isDestroyed())
+    .filter(([, ctx]) => !caller || canMoveBetweenWindows(caller, ctx))
     .map(([id, ctx], index) => ({
       id,
-      label: windowLabel(ctx, index),
+      label: ctx.incognito ? `Incognito — ${windowLabel(ctx, index)}` : windowLabel(ctx, index),
       tabCount: ctx.views.size,
       isCurrent: id === callerId,
+      incognito: ctx.incognito,
     }))
 }
 
@@ -2273,9 +2497,14 @@ ipcMain.handle('windows:list', (e) => listWindows(e.sender.id))
 // its own copy. The page reloads there rather than being transplanted —
 // Electron cannot move a BrowserView between windows without tearing down its
 // renderer anyway, and a reload is honest about what happens to page state.
-ipcMain.handle('window:sendTabTo', (_e, targetId: number, tab: { url: string; title?: string }) => {
+ipcMain.handle('window:sendTabTo', (e, targetId: number, tab: { url: string; title?: string }) => {
   const target = appWins.get(targetId)
   if (!target || target.win.isDestroyed()) return { success: false, error: 'That window is gone' }
+  // Checked here, not in the renderer's menu: a private page must not be
+  // reloaded into a window that records history, whatever asked for it.
+  if (!canMoveBetweenWindows(ctxFromEvent(e), target)) {
+    return { success: false, error: 'Tabs cannot move between Incognito and normal windows' }
+  }
   if (!tab?.url) return { success: false, error: 'Nothing to move' }
   try {
     sendTo(target, 'open-in-new-tab', tab.url)
@@ -2288,21 +2517,62 @@ ipcMain.handle('window:sendTabTo', (_e, targetId: number, tab: { url: string; ti
 // Ask every other window to hand its tabs to this one and close itself.
 ipcMain.handle('windows:mergeAllInto', (e) => {
   const targetId = e.sender.id
+  const target = ctxFromEvent(e)
   let asked = 0
   for (const [id, ctx] of appWins) {
     if (id === targetId || ctx.win.isDestroyed()) continue
+    if (!canMoveBetweenWindows(ctx, target)) continue
     sendTo(ctx, 'merge-into-window', targetId)
     asked++
   }
   return { success: true, windows: asked }
 })
 
-ipcMain.handle('window:detachTab', (_e, url: string, title?: string) => {
+ipcMain.handle('window:detachTab', (e, url: string, title?: string) => {
   try {
     if (!/^https?:\/\//i.test(url)) return { success: false, error: 'Only web pages can move to their own window' }
-    openDetachedWindow(url, title)
+    const from = ctxFromEvent(e)
+    if (!from) return { success: false, error: 'Unknown window' }
+    openDetachedWindow(url, title, from.incognito)
     return { success: true }
   } catch (e: any) { return { success: false, error: e.message } }
+})
+
+// ── IPC: Incognito ─────────────────────────────────────────────────────────
+// None of these take a privacy flag from the renderer. "Is this window
+// private?" is answered from appWins, which only main writes.
+ipcMain.handle('incognito:openWindow', (_e, url?: string) => {
+  try {
+    openIncognitoWindow(typeof url === 'string' ? url : undefined)
+    return { success: true }
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Could not open an Incognito window' }
+  }
+})
+
+ipcMain.handle('incognito:closeWindows', () => ({ success: true, closed: closeIncognitoWindows() }))
+
+ipcMain.handle('incognito:status', (e) => ({
+  incognito: !!ctxFromEvent(e)?.incognito,
+  windowCount: incognito.windowCount(),
+  activeDownloads: incognito.activeDownloadCount(),
+}))
+
+// The private-window badge's menu. Native for the same reason the tab menu is:
+// an HTML dropdown under the tab strip would be painted over by the page.
+ipcMain.handle('incognito:showMenu', (e) => {
+  const ctx = ctxFromEvent(e)
+  if (!ctx?.incognito) return ''
+  const count = incognito.windowCount()
+  const menu = Menu.buildFromTemplate([
+    { label: 'You’re browsing privately', enabled: false },
+    { type: 'separator' },
+    { label: 'New Incognito Window', accelerator: 'CmdOrCtrl+Shift+N', click: () => { openIncognitoWindow() } },
+    { label: 'Close This Incognito Window', click: () => { if (!ctx.win.isDestroyed()) ctx.win.close() } },
+    ...(count > 1 ? [{ label: `Close All ${count} Incognito Windows`, click: () => { closeIncognitoWindows() } }] : []),
+  ])
+  menu.popup({ window: ctx.win })
+  return ''
 })
 
 // ── IPC: Tab context menu ───────────────────────────────────────────────────
@@ -2319,6 +2589,7 @@ ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: bo
     const otherWindows = listWindows(e.sender.id).filter(w => !w.isCurrent)
     const menu = Menu.buildFromTemplate([
       { label: 'New Tab',                 click: () => done('new-tab') },
+      { label: 'New Incognito Window',    accelerator: 'CmdOrCtrl+Shift+N', click: () => { openIncognitoWindow(); done('') } },
       { label: 'Duplicate Tab',           click: () => done('duplicate') },
       { label: info.isSplit ? 'Leave Split View' : 'Split View with This Tab',
         enabled: info.isBrowser && !info.isActive, click: () => done('split') },
@@ -2358,8 +2629,9 @@ ipcMain.handle('window:setTransparency', (e, mode: string) => {
   const d = getData(); d.settings.transparency = mode; saveData()
   const w = winFrom(e)
   if (w) {
-    applyTransparency(w, mode)
-    safelySend('theme:transparency', mode)
+    // Private windows keep their solid ground (see createAppWindow).
+    if (!ctxFromEvent(e)?.incognito) applyTransparency(w, mode)
+    for (const ctx of appWins.values()) if (!ctx.incognito) sendTo(ctx, 'theme:transparency', mode)
   }
 })
 ipcMain.handle('window:setOpacity', (e, opacity: number) => {
@@ -2369,7 +2641,7 @@ ipcMain.handle('window:setOpacity', (e, opacity: number) => {
 
 registerGoogleIpc(safelySend)
 registerCommunityIpc()
-registerFaviconIpc()
+registerFaviconIpc({ mayRemember: mayPersistFrom })
 
 // ── IPC: Tab content views (BrowserView) ────────────────────────────────────
 ipcMain.handle('tabview:create', (e, tabId: string, url: string, containerId?: string | null) =>
@@ -2574,10 +2846,12 @@ ipcMain.handle('tabview:stop', (e, tabId: string) => {
 // renderer fires this the moment a navigation is requested, so the handshake
 // overlaps the React re-render and BrowserView creation that follow instead of
 // happening after them. Purely additive — a failed preconnect costs nothing.
-ipcMain.handle('tabview:preconnect', (_e, url: string) => {
+ipcMain.handle('tabview:preconnect', (e, url: string) => {
   try {
     const origin = new URL(url).origin
-    session.fromPartition('persist:main').preconnect({ url: origin, numSockets: 2 })
+    // Warm the jar the page will actually load in. A private window warming
+    // the normal session would open sockets to its sites from the wrong profile.
+    tabSessionFor(ctxFromEvent(e)).preconnect({ url: origin, numSockets: 2 })
   } catch {}
 })
 ipcMain.handle('tabview:goBack', (e, tabId: string) => {
@@ -2694,8 +2968,9 @@ ipcMain.handle('history:deleteItem', (_e, id: string) => {
   historyStore.update(h => h.filter((x: any) => x.id !== id))
   return true
 })
-ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?: string }) => {
-  if (!entry.url || entry.url === 'home' || entry.url.startsWith('aihub://')) return
+// Private windows record nothing — not the row, and not the AI brain's visit.
+handlePersistent('history:add', (_e, entry: { url: string; title: string; favicon?: string }) => {
+  if (!entry?.url || entry.url === 'home' || entry.url.startsWith('aihub://')) return
   historyStore.update(h => {
     // Collapse a re-visit of the same page within 30s (reloads, redirects)
     // into one row. Scanning from the front stops at the first candidate
@@ -2711,7 +2986,7 @@ ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?
   })
   recordVisit(entry.url, entry.title)
   return true
-})
+}, () => false)
 // F2: Semantic History Search — natural language queries over browsing history.
 // Falls back to keyword match when the semantic index has no embeddings yet.
 ipcMain.handle('history:smartSearch', async (_e, query: string) => {
@@ -2894,7 +3169,7 @@ ipcMain.handle('trading:getMemory', async (_e, symbol: string) => {
   }
 })
 
-ipcMain.handle('trading:saveMemory', async (_e, symbol: string, messages: any[]) => {
+handlePersistent('trading:saveMemory', async (_e, symbol: string, messages: any[]) => {
   try {
     if (!fs.existsSync(TRADING_MEMORY_DIR)) {
       fs.mkdirSync(TRADING_MEMORY_DIR, { recursive: true })
@@ -2907,7 +3182,7 @@ ipcMain.handle('trading:saveMemory', async (_e, symbol: string, messages: any[])
   } catch (err) {
     return { ok: false, error: String(err) }
   }
-})
+}, () => ({ ok: true, private: true })) // the coach still answers; it just doesn't remember
 
 // ── IPC: Export / import everything to another computer ───────────────────
 // Sync keeps two machines in step continuously; this is the file you carry.
@@ -3157,15 +3432,17 @@ const chatStore = createManagedJsonStore<{ role: string; content: string }[]>(
   join(APP_DIR, 'chat-history.json'), () => [], { debounceMs: 2500 },
 )
 
-ipcMain.handle('chat:load', () => chatStore.get())
-ipcMain.handle('chat:save', (_e, messages: { role: string; content: string }[]) => {
+// A private window starts with an empty assistant, keeps its conversation in
+// renderer memory only, and cannot save over — or clear — the normal one.
+handlePersistent('chat:load', () => chatStore.get(), () => [])
+handlePersistent('chat:save', (_e, messages: { role: string; content: string }[]) => {
   const clean = (Array.isArray(messages) ? messages : [])
     .filter(m => m && typeof m.content === 'string' && m.role !== 'system')
     .slice(-CHAT_CAP)
   chatStore.set(clean)
   return true
-})
-ipcMain.handle('chat:clear', () => { chatStore.set([]); return true })
+}, () => false)
+handlePersistent('chat:clear', () => { chatStore.set([]); return true }, () => true)
 
 // ── IPC: Sessions and workspaces ───────────────────────────────────────────
 // The renderer owns tab state (a sleeping or crashed view still belongs in the
@@ -3175,9 +3452,11 @@ const sessions = createSessionManager(APP_DIR)
 // it — otherwise opening the app immediately destroys what you wanted back.
 sessions.captureLaunchSnapshot()
 
-ipcMain.handle('session:save', (_e, tabs: SessionTab[], activeIndex: number) => sessions.save(tabs, activeIndex))
-ipcMain.handle('session:getLast', () => sessions.getLast())
-ipcMain.handle('session:getPrevious', () => sessions.getPrevious())
+// Private tabs are never part of crash/restart recovery, and a private window
+// never inherits the normal session's tabs either.
+handlePersistent('session:save', (_e, tabs: SessionTab[], activeIndex: number) => sessions.save(tabs, activeIndex), () => null)
+handlePersistent('session:getLast', () => sessions.getLast(), () => null)
+handlePersistent('session:getPrevious', () => sessions.getPrevious(), () => null)
 ipcMain.handle('workspace:list', () => sessions.listWorkspaces())
 ipcMain.handle('workspace:save', (_e, name: string, tabs: SessionTab[], activeIndex: number) =>
   sessions.saveWorkspace(name, tabs, activeIndex))
@@ -3189,7 +3468,10 @@ ipcMain.handle('workspace:delete', (_e, id: string) => sessions.deleteWorkspace(
 // same in-memory + debounced-write treatment as history.
 const downloadsStore = createManagedJsonStore<any[]>(DL_FILE, () => [])
 
-ipcMain.handle('downloads:getAll',       () => {
+ipcMain.handle('downloads:getAll',       (e) => {
+  // A private window lists the downloads of the private session and nothing
+  // else; the persistent list is never shown to it, nor its rows to others.
+  if (ctxFromEvent(e)?.incognito) return incognito.listDownloads()
   // A download can only be "progressing" while its BrowserView is alive. If any
   // entry is still marked progressing on read, its download died with a previous
   // app session (crash / quit mid-transfer) and will never emit 'done' — left
@@ -3217,7 +3499,13 @@ ipcMain.handle('downloads:getAll',       () => {
   if (changed) downloadsStore.set(dls)
   return dls
 })
-ipcMain.handle('downloads:clear',        () => { downloadsStore.set([]); return true })
+ipcMain.handle('downloads:clear',        (e) => {
+  if (ctxFromEvent(e)?.incognito) { incognito.clearFinishedDownloads(); return true }
+  // Only a normal window may clear the persistent list.
+  if (!mayPersistFrom(e)) return false
+  downloadsStore.set([])
+  return true
+})
 
 // ── IPC: Page Vault ────────────────────────────────────────────
 // Snapshots are taken from the live view, so capture has to run here where the
@@ -3262,14 +3550,16 @@ ipcMain.handle('guard:knownDomains', () => {
 // page extraction to read. The bytes are fetched again through the tab's own
 // session — not a bare fetch — so a PDF behind a login is readable for exactly
 // as long as the tab that is showing it is.
-ipcMain.handle('pdf:extract', async (_e, url: string) => {
+ipcMain.handle('pdf:extract', async (e, url: string) => {
   const target = String(url || '')
   try {
     let bytes: Uint8Array
     if (target.startsWith('file://')) {
       bytes = new Uint8Array(fs.readFileSync(fileURLToPath(target)))
     } else if (/^https?:/i.test(target)) {
-      const res = await session.fromPartition('persist:main').fetch(target)
+      // The asking window's own jar: a private PDF is fetched with private
+      // cookies, and a normal one never with them.
+      const res = await tabSessionFor(ctxFromEvent(e)).fetch(target)
       if (!res.ok) return { ok: false, error: `The server returned ${res.status}.` }
       bytes = new Uint8Array(await res.arrayBuffer())
     } else {
@@ -3302,7 +3592,12 @@ ipcMain.handle('pdf:extract', async (_e, url: string) => {
  * this (bookmarking) must succeed either way.
  */
 ipcMain.handle('vault:capture', async (e, args: { tabId: string; url: string; title?: string; favicon?: string; origin?: 'auto' | 'manual' }) => {
-  const wc = ctxFromEvent(e)?.views.get(args?.tabId)?.webContents
+  const ctx = ctxFromEvent(e)
+  // The automatic copy taken when a page is bookmarked would archive the page
+  // exactly as the private session saw it — signed in, with private cookies —
+  // to disk. Only an explicit "save a copy" is honoured from a private window.
+  if (ctx?.incognito && args?.origin !== 'manual') return null
+  const wc = ctx?.views.get(args?.tabId)?.webContents
   if (!wc || wc.isDestroyed()) return null
   try {
     return await vault.capture(wc, {
@@ -3609,7 +3904,9 @@ ipcMain.handle('siteMemory:get', (_e, url: string) => {
   const k = originKey(url)
   return k ? (getSiteMemory()[k]?.text || '') : ''
 })
-ipcMain.handle('siteMemory:set', (_e, url: string, text: string, title?: string) => {
+// The assistant's `remember` tool writes here on its own initiative, so from a
+// private window it is refused outright rather than trusted to be deliberate.
+handlePersistent('siteMemory:set', (_e, url: string, text: string, title?: string) => {
   try {
     const store = getSiteMemory()
     const k = originKey(url)
@@ -3621,7 +3918,7 @@ ipcMain.handle('siteMemory:set', (_e, url: string, text: string, title?: string)
     safelySend('siteMemory:changed', { origin: k })
     return { ok: true }
   } catch (e: any) { return { ok: false, error: e.message } }
-})
+}, () => ({ ok: false, error: 'Site memory is not saved from Incognito windows.' }))
 ipcMain.handle('siteMemory:getAll', () => getSiteMemory())
 
 // ── Rewind / Time Machine ──────────────────────────────────────────────────
@@ -3694,7 +3991,8 @@ ipcMain.handle('rewind:smartSearch', async (_e, query: string) => {
 
 ipcMain.handle('semantic:stats', () => ({ ...semanticIndex.stats(), total: getRewind().length }))
 
-ipcMain.handle('rewind:add', (_e, entry: { url: string; title?: string; favicon?: string; text?: string }) => {
+// Page text and its embeddings are the most revealing record the app keeps.
+handlePersistent('rewind:add', (_e, entry: { url: string; title?: string; favicon?: string; text?: string }) => {
   try {
     if (!entry?.url || !/^https?:\/\//i.test(entry.url)) return { ok: false }
     const store = getRewind()
@@ -3718,7 +4016,7 @@ ipcMain.handle('rewind:add', (_e, entry: { url: string; title?: string; favicon?
     if (saved) semanticIndex.index({ id: saved.id, title: saved.title, url: saved.url, text: saved.text, ts: saved.ts })
     return { ok: true }
   } catch (e: any) { return { ok: false, error: e.message } }
-})
+}, () => ({ ok: false, private: true }))
 
 ipcMain.handle('rewind:search', (_e, query: string) => {
   const q = String(query || '').toLowerCase().trim()
@@ -4979,7 +5277,7 @@ ipcMain.handle('agents:deleteAgent', (_e, id: string) => {
   return true
 })
 
-ipcMain.handle('agents:saveConversation', (_e, convo: any) => {
+handlePersistent('agents:saveConversation', (_e, convo: any) => {
   if (!convo?.id) return false
   const s = readAgentsStore()
   const i = s.conversations.findIndex(c => c.id === convo.id)
@@ -4990,7 +5288,7 @@ ipcMain.handle('agents:saveConversation', (_e, convo: any) => {
   s.conversations = s.conversations.slice(0, 100)
   writeJson(AGENTS_FILE, s)
   return true
-})
+}, () => false) // the agent runs; its transcript stays in the private window's memory
 
 ipcMain.handle('agents:deleteConversation', (_e, id: string) => {
   const s = readAgentsStore()
@@ -5934,9 +6232,23 @@ ipcMain.handle('bookmarks:import', async () => {
 })
 
 // ── IPC: Capture webview screenshot ──────────────────────────────────────
-ipcMain.handle('webview:capture', async (_e, wcId: number) => {
+// Both of these take a raw webContents id from the renderer. Resolve it only
+// among the SENDER's own tab views: otherwise any window could read or script
+// a page in another window — including a private page from a normal window,
+// or a signed-in normal page from a private one.
+function ownTabWebContents(e: { sender: Electron.WebContents }, wcId: number): Electron.WebContents | null {
+  const ctx = ctxFromEvent(e)
+  if (!ctx || !Number.isInteger(wcId)) return null
+  for (const view of ctx.views.values()) {
+    const wc = view.webContents
+    if (!wc.isDestroyed() && wc.id === wcId) return wc
+  }
+  return null
+}
+
+ipcMain.handle('webview:capture', async (e, wcId: number) => {
   try {
-    const wc = electronWebContents.fromId(wcId)
+    const wc = ownTabWebContents(e, wcId)
     if (!wc) return null
     const img = await wc.capturePage()
     return img.toDataURL()
@@ -5944,9 +6256,9 @@ ipcMain.handle('webview:capture', async (_e, wcId: number) => {
 })
 
 // ── IPC: Execute script inside webview via webContents ────────────────────
-ipcMain.handle('webview:execScript', async (_e, wcId: number, script: string) => {
+ipcMain.handle('webview:execScript', async (e, wcId: number, script: string) => {
   try {
-    const wc = electronWebContents.fromId(wcId)
+    const wc = ownTabWebContents(e, wcId)
     if (!wc) return { ok: false, error: 'webContents not found for id ' + wcId }
     const result = await wc.executeJavaScript(script, true)
     return { ok: true, result }

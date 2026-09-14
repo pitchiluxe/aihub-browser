@@ -12,6 +12,7 @@ import { resolveNavTarget } from '../../services/navIntent'
 import { withFallbackNotice } from '../../services/routeNotice'
 import { streamChat } from '../../services/streamingChat'
 import { PAGE_REFERENCE, REFUSAL, wantedTools, selectBookmarksForPrompt, CHAT_ONLY_NOTE } from '../../services/assistantIntent'
+import { IS_INCOGNITO } from '../../services/incognitoMode'
 import ChatMessage from './ChatMessage'
 import { AttachImageButton, AttachmentStrip, useImageAttachments } from './ImageComposer'
 
@@ -37,6 +38,7 @@ const AI_NEWS_INTENT  = /latest\s+ai|ai\s+news|ai\s+articles?|ai\s+updates?|what
 // why constant text is worth real seconds.
 const FEATURE_MAP = `## AIHub Browser — full feature map (answer any "can the browser do X?" from this)
 - **Tabs**: multi-tab strip with drag-reorder, context menu (duplicate / close others / close right), Ctrl+T new tab.
+- **Incognito windows**: Ctrl+Shift+N (Cmd+Shift+N on Mac) opens a private window whose tabs use a separate in-memory session. No history, Rewind, session restore or AI chat history is saved from it, and its cookies and site data are wiped when the last Incognito window closes. Downloaded files and bookmarks stay. It does not make anyone anonymous to websites, employers or networks.
 - **Bookmark Sphere / Knowledge Graph**: force-directed graph of bookmarks clustered by category, with search, zoom, and per-node actions. Follows the active theme.
 - **Smart Homepage**: universal search, quick-access apps, AI site recommendations learned from browsing patterns.
 - **AI Assistant** (you): local Ollama or cloud OpenRouter, switchable in Settings → AI. Agent tools let you drive tabs, fill forms, read/write files, run approved commands, and build projects.
@@ -706,11 +708,13 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                 <QuickBtn onClick={attachPage} disabled={!hasUrl || isAILoading || !getPageContent} color="purple" icon={<Paperclip size={12} />} label="Attach Page" title="Attach page content" />
                 <QuickBtn
                   onClick={() => { setMemoryDraft(siteMemory); setMemoryOpen(o => !o) }}
-                  disabled={!hasUrl}
+                  // Site memory is written to disk per origin; a private window
+                  // would leave the site behind in it (main refuses it anyway).
+                  disabled={!hasUrl || IS_INCOGNITO}
                   color="green"
                   icon={<Brain size={12} />}
                   label={siteMemory ? 'Memory •' : 'Memory'}
-                  title="What the assistant remembers about this site"
+                  title={IS_INCOGNITO ? 'Site memory is not saved in Incognito windows' : 'What the assistant remembers about this site'}
                 />
               </div>
 
@@ -786,6 +790,23 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Private-window notice — what is and isn't kept, stated plainly */}
+            {IS_INCOGNITO && (
+              <div role="note" style={{
+                margin: '8px 12px 0', padding: '8px 12px', borderRadius: 10, flexShrink: 0,
+                background: 'rgba(148,163,184,0.08)', border: '1px solid rgba(148,163,184,0.2)',
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+              }}>
+                <AlertCircle size={13} style={{ color: 'rgb(var(--ds-text-3))', flexShrink: 0, marginTop: 1 }} />
+                <span style={{ fontSize: 11, color: 'rgb(var(--ds-text-4))', lineHeight: 1.5 }}>
+                  <b style={{ color: 'rgb(var(--ds-text-2))' }}>Incognito:</b> this conversation isn't saved and disappears when the window closes.
+                  {ollamaStatus && !ollamaStatus.running
+                    ? ' Messages you send, and any page you attach, still go to the cloud AI provider.'
+                    : ' Pages are only sent to the AI when you ask.'}
+                </span>
+              </div>
+            )}
 
             {/* Offline notice */}
             {ollamaStatus && !ollamaStatus.running && (

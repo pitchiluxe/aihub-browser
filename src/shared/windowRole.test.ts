@@ -47,6 +47,13 @@ describe('isSecondaryWindow / ownsSession', () => {
     expect(ownsSession('?initialUrl=not-a-url')).toBe(true)
   })
 
+  it('never lets an Incognito window restore or save the session', () => {
+    expect(ownsSession('', true)).toBe(false)
+    expect(ownsSession('?initialUrl=https://a.test', true)).toBe(false)
+    // The default stays exactly what normal windows had before.
+    expect(ownsSession('')).toBe(true)
+  })
+
   it('gives restore and save the same answer', () => {
     for (const search of ['', '?initialUrl=https://a.test', '?x=1']) {
       expect(ownsSession(search)).toBe(!isSecondaryWindow(search))

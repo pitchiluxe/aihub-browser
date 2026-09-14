@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Download, FolderOpen, FileText, Trash2, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { formatProgress, percentOf, stateLabel } from '../../services/downloadDisplay'
+import { IS_INCOGNITO } from '../../services/incognitoMode'
 
 /**
  * The full downloads history. The toolbar panel (DownloadsButton) is the
@@ -16,7 +17,9 @@ export default function DownloadsPage() {
 
   const clearAll = async () => {
     await window.electronAPI.downloads.clear()
-    setDownloads([])
+    // Re-read rather than assume empty: a private window's clear keeps the
+    // transfers still in flight, exactly as the main process decided.
+    try { setDownloads(await window.electronAPI.downloads.getAll()) } catch { setDownloads([]) }
   }
 
   return (
@@ -25,6 +28,12 @@ export default function DownloadsPage() {
         <div>
           <h1 className="text-2xl font-bold text-aihub-text">Downloads</h1>
           <p className="text-sm text-aihub-muted mt-0.5">{downloads.length} files</p>
+          {IS_INCOGNITO && (
+            <p className="text-xs text-aihub-muted mt-2 max-w-xl" role="note">
+              Incognito downloads are listed here only until you close every Incognito window.
+              The files themselves are saved to your computer and are not deleted.
+            </p>
+          )}
         </div>
         {downloads.length > 0 && (
           <button onClick={clearAll} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-medium transition-all">

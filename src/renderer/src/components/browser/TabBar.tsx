@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Plus, Home, Minus, Square, Wand2 } from 'lucide-react'
+import { X, Plus, Home, Minus, Square, Wand2, VenetianMask } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore, Tab } from '../../store/browserStore'
+import { IS_INCOGNITO } from '../../services/incognitoMode'
 
 // macOS keeps its native traffic lights (inset into the tab strip by the main
 // process via titleBarStyle 'hiddenInset'); the strip reserves room for them
@@ -172,7 +173,7 @@ export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compa
         </AnimatePresence>
 
         {/* New tab button */}
-        <NewTabBtn onClick={() => addTab()} />
+        <NewTabBtn onClick={() => addTab()} title={IS_INCOGNITO ? 'New Incognito tab (Ctrl+T)' : 'New tab (Ctrl+T)'} />
 
         {/* Tab Curator — AI groups open tabs by topic (F3) */}
         <CuratorBtn />
@@ -180,6 +181,10 @@ export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compa
         {/* Draggable filler — collapses to 0 once tabs fill the strip */}
         <div style={{ flex: '1 0 12px', minWidth: 12, alignSelf: 'stretch' }} className="drag-region" />
       </div>}
+
+      {/* Private-window indicator. Pinned beside the window controls so it is
+          visible however many tabs are open, in both strip layouts. */}
+      {IS_INCOGNITO && <IncognitoBadge />}
 
       {/* Window controls — pinned right, always visible regardless of tab
           count. macOS uses its native traffic lights (left inset) instead. */}
@@ -326,11 +331,30 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
   )
 }
 
-function NewTabBtn({ onClick }: { onClick: () => void }) {
+// Says "private" in words, not just with an icon, and opens the Incognito menu
+// (new window / close) natively so it is never hidden behind page content.
+function IncognitoBadge() {
+  return (
+    <button
+      type="button"
+      onClick={() => window.electronAPI.incognito?.showMenu?.()}
+      className="ds-incognito-badge no-drag shrink-0 self-center"
+      title="You're browsing privately. Click for Incognito options."
+      aria-label="Incognito window — you're browsing privately. Open Incognito options."
+    >
+      <VenetianMask size={13} aria-hidden="true" />
+      <span>Incognito</span>
+    </button>
+  )
+}
+
+function NewTabBtn({ onClick, title }: { onClick: () => void; title?: string }) {
   const [hovered, setHovered] = useState(false)
   return (
     <button
       onClick={onClick}
+      title={title}
+      aria-label={title}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className="shrink-0 no-drag flex items-center justify-center"

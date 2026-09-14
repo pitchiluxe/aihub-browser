@@ -4,6 +4,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 'darwin' | 'win32' | 'linux' — lets the renderer adapt chrome layout
   // (macOS native traffic lights vs custom window buttons).
   platform: process.platform,
+  // Private windows are opened by the main process with this switch on the
+  // renderer's command line, so the UI knows before first paint. It only
+  // decides presentation: every privacy rule is enforced in main, which never
+  // reads this value back from the renderer.
+  incognito: {
+    isIncognito:  process.argv.includes('--aihub-incognito-window'),
+    openWindow:   (url?: string) => ipcRenderer.invoke('incognito:openWindow', url),
+    closeWindows: () => ipcRenderer.invoke('incognito:closeWindows'),
+    status:       () => ipcRenderer.invoke('incognito:status'),
+    showMenu:     () => ipcRenderer.invoke('incognito:showMenu'),
+  },
   window: {
     minimize:        () => ipcRenderer.invoke('window:minimize'),
     maximize:        () => ipcRenderer.invoke('window:maximize'),

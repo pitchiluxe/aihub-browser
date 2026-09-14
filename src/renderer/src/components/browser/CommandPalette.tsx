@@ -5,9 +5,12 @@ import {
   Home, FlaskConical, Sparkles, StickyNote, History, Download, Puzzle, Wifi,
   Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft, GitCompare, BellRing,
   Smartphone, Laptop, BookMarked, Layers, Columns2, PictureInPicture2, Camera, CopyMinus,
-  GraduationCap, Archive, Brain, Table, Receipt, Sunrise, Flame,
+  GraduationCap, Archive, Brain, Table, Receipt, Sunrise, Flame, VenetianMask, X,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
+import { IS_INCOGNITO } from '../../services/incognitoMode'
+
+const IS_MAC = window.electronAPI?.platform === 'darwin'
 
 import type { PageType } from '../../../../shared/pageTypes'
 export type { PageType }
@@ -103,14 +106,25 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     const act = (id: string, label: string, icon: React.ReactNode, run: () => void, keywords?: string, hint?: string) =>
       out.push({ id, label, group: 'Actions', icon, run: () => { run(); close() }, keywords, hint })
 
-    act('new-tab', 'New Tab', <Plus size={15} />, () => addTab(), 'open create', 'Ctrl+T')
-    act('burner-tab', 'Open a burner tab', <Flame size={15} />, () => {
-      // The session is created fresh and never written to disk, so closing the
-      // tab takes the cookies with it.
-      window.electronAPI.containers.newBurner()
-        .then((id: string) => addTab('home', 'browser', id))
-        .catch(() => {})
-    }, 'private incognito temporary throwaway session cookies')
+    act('new-tab', IS_INCOGNITO ? 'New Incognito Tab' : 'New Tab', <Plus size={15} />, () => addTab(), 'open create', 'Ctrl+T')
+    act('incognito-window', 'New Incognito Window', <VenetianMask size={15} />,
+      () => { window.electronAPI.incognito?.openWindow?.() },
+      'private browsing inprivate window no history secret', IS_MAC ? '⌘+Shift+N' : 'Ctrl+Shift+N')
+    if (IS_INCOGNITO) {
+      act('incognito-close', 'Close Incognito Windows', <X size={15} />,
+        () => { window.electronAPI.incognito?.closeWindows?.() },
+        'private end session exit quit')
+    } else {
+      // Inside an Incognito window every tab is already in the private
+      // session, so a "burner" there would be a promise with nothing behind it.
+      act('burner-tab', 'Open a burner tab', <Flame size={15} />, () => {
+        // The session is created fresh and never written to disk, so closing the
+        // tab takes the cookies with it.
+        window.electronAPI.containers.newBurner()
+          .then((id: string) => addTab('home', 'browser', id))
+          .catch(() => {})
+      }, 'private incognito temporary throwaway session cookies')
+    }
 
     act('export-tables', 'Export a table from this page to CSV', <Table size={15} />,
       () => useBrowserStore.getState().setTableExportOpen(true),
@@ -123,7 +137,11 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     act('find', 'Find in Page', <Search size={15} />, () => onFind(), 'search text', 'Ctrl+F')
     act('bookmark', 'Add this Page to Sphere', <BookmarkPlus size={15} />, () => onAddBookmark(), 'save', 'Ctrl+D')
     act('compare', 'Compare two pages', <GitCompare size={15} />, () => onCompare(), 'versus vs comparison table diff')
-    act('handoff-send', 'Send my tabs to another device', <Smartphone size={15} />, () => onSendTabs(), 'handoff continue phone laptop sync move transfer')
+    // Handoff uploads the open tabs' URLs to Google Drive for another device to
+    // reopen — a sync of browsing activity, which a private window doesn't do.
+    if (!IS_INCOGNITO) {
+      act('handoff-send', 'Send my tabs to another device', <Smartphone size={15} />, () => onSendTabs(), 'handoff continue phone laptop sync move transfer')
+    }
     act('handoff-recv', 'Open tabs from another device', <Laptop size={15} />, () => onReceiveTabs(), 'handoff continue receive pull phone laptop sync')
     act('pip', 'Pop the video out (picture-in-picture)', <PictureInPicture2 size={15} />, async () => {
       const state = useBrowserStore.getState()
@@ -151,9 +169,12 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       if (partner) state.setSplitTab(partner.id)
     }, 'split screen side by side two panes compare dual')
 
-    act('session-previous', 'Reopen my previous session', <RotateCcw size={15} />,
-      async () => restoreSaved(await window.electronAPI.session.getPrevious()),
-      'restore tabs last time yesterday reopen session')
+    // A private window never inherits the saved session (main refuses it too).
+    if (!IS_INCOGNITO) {
+      act('session-previous', 'Reopen my previous session', <RotateCcw size={15} />,
+        async () => restoreSaved(await window.electronAPI.session.getPrevious()),
+        'restore tabs last time yesterday reopen session')
+    }
     act('workspace-save', `Save these tabs as a workspace`, <Layers size={15} />,
       async () => {
         const { tabs: snap, activeIndex } = tabSnapshot()
