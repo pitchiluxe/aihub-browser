@@ -665,6 +665,906 @@ export const EXTENSION_PACK: ExtensionDef[] = [
     remove: cleanup('quickdefine'),
   },
 
+  // ── Developer & Design (cont'd) ─────────────────────────────────────────
+  {
+    id: 'apisniffer',
+    name: 'API Sniffer',
+    tagline: 'Every fetch and XHR, with headers and bodies',
+    description: 'Wraps fetch and XHR to capture every request the page makes — method, URL, request headers and body, response status and body — without opening devtools. Any request can be copied as a ready-to-run cURL command, or the whole session exported as a HAR file for Chrome DevTools, Postman or Insomnia.',
+    howTo: 'Enable, then use the page. Every request lands in the panel as it happens — press Copy cURL on any row, or Export HAR to save the whole session.',
+    icon: '🔌', color: '#22d3ee', category: 'Developer', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'rows', label: 'Keep last N requests', type: 'range', min: 10, max: 100, step: 10, default: 40 },
+      { key: 'captureBodies', label: 'Capture request/response bodies', type: 'toggle', default: true },
+    ],
+    inject: (s) => ext('apisniffer', `
+    var ROWS=${+(s.rows ?? 40)},CAPTURE_BODY=${s.captureBodies === false ? 'false' : 'true'};
+    var records=[];
+    var panel=window.AIHubPanel.create({key:'apisniffer',title:'API Sniffer',icon:'🔌',width:420});
+    var bd=panel.body;
+    var toolbar=document.createElement('div');toolbar.style.cssText='display:flex;gap:6px;margin-bottom:8px';
+    var harBtn=document.createElement('button');harBtn.textContent='Export HAR';
+    var clearBtn=document.createElement('button');clearBtn.textContent='Clear';clearBtn.style.cssText='background:rgba(255,255,255,.08)';
+    toolbar.appendChild(harBtn);toolbar.appendChild(clearBtn);bd.appendChild(toolbar);
+    var list=document.createElement('div');bd.appendChild(list);
+    function curlFor(rec){
+      var parts=['curl',"'"+rec.url.replace(/'/g,"'\\\\''")+"'",'-X',rec.method];
+      (rec.reqHeaders||[]).forEach(function(h){parts.push('-H',"'"+h[0]+': '+String(h[1]).replace(/'/g,"'\\\\''")+"'")});
+      if(rec.reqBody)parts.push('--data',"'"+String(rec.reqBody).replace(/'/g,"'\\\\''")+"'");
+      return parts.join(' ');
+    }
+    function addRow(rec){
+      records.unshift(rec);
+      if(records.length>ROWS)records.length=ROWS;
+      renderList();
+    }
+    function renderList(){
+      while(list.firstChild)list.removeChild(list.firstChild);
+      records.forEach(function(rec){
+        var row=document.createElement('div');
+        row.style.cssText='padding:6px 8px;margin-bottom:5px;border-radius:8px;background:rgba(255,255,255,.04);font-size:11px';
+        var top=document.createElement('div');top.style.cssText='display:flex;justify-content:space-between;gap:8px';
+        var m=document.createElement('span');m.style.cssText='opacity:.6;width:40px';m.textContent=rec.method;
+        var u=document.createElement('span');u.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';u.textContent=rec.url.replace(/^https?:\\/\\//,'');
+        var st=document.createElement('span');st.style.cssText='color:'+(rec.ok===false?'#f87171':'#6ee7b7');st.textContent=rec.status!=null?rec.status:'\\u2026';
+        top.appendChild(m);top.appendChild(u);top.appendChild(st);
+        var copyB=document.createElement('button');copyB.textContent='Copy cURL';copyB.style.cssText='margin-top:5px;padding:2px 8px;font-size:10px';
+        copyB.onclick=function(){try{navigator.clipboard.writeText(curlFor(rec));copyB.textContent='Copied';setTimeout(function(){copyB.textContent='Copy cURL'},1200)}catch(e){}};
+        row.appendChild(top);row.appendChild(copyB);
+        list.appendChild(row);
+      });
+    }
+    harBtn.onclick=function(){
+      var har={log:{version:'1.2',creator:{name:'AIHub API Sniffer',version:'1.0'},entries:records.map(function(rec){
+        return {
+          startedDateTime:new Date(rec.time).toISOString(),
+          time:rec.duration||0,
+          request:{method:rec.method,url:rec.url,httpVersion:'HTTP/1.1',headers:(rec.reqHeaders||[]).map(function(h){return{name:h[0],value:String(h[1])}}),queryString:[],cookies:[],headersSize:-1,bodySize:rec.reqBody?rec.reqBody.length:0,postData:rec.reqBody?{mimeType:'text/plain',text:rec.reqBody}:undefined},
+          response:{status:rec.status||0,statusText:'',httpVersion:'HTTP/1.1',headers:[],cookies:[],content:{size:rec.respBody?rec.respBody.length:0,mimeType:'text/plain',text:rec.respBody||''},redirectURL:'',headersSize:-1,bodySize:-1},
+          cache:{},timings:{send:0,wait:rec.duration||0,receive:0}
+        };
+      })}};
+      var blob=new Blob([JSON.stringify(har,null,2)],{type:'application/json'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');a.href=url;a.download='api-sniffer.har';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url)},4000);
+    };
+    clearBtn.onclick=function(){records=[];renderList()};
+    var of=window.fetch;
+    if(of){
+      window.fetch=function(input,init){
+        var url=(input&&input.url)||input;
+        var method=(init&&init.method)||(input&&input.method)||'GET';
+        var reqHeaders=[];
+        try{
+          var h=(init&&init.headers)||(input&&input.headers);
+          if(h){if(typeof Headers!=='undefined'&&h instanceof Headers){h.forEach(function(v,k){reqHeaders.push([k,v])})}else if(Array.isArray(h)){reqHeaders=h.slice()}else{Object.keys(h).forEach(function(k){reqHeaders.push([k,h[k]])})}}
+        }catch(e){}
+        var reqBody=CAPTURE_BODY&&init&&typeof init.body==='string'?init.body.slice(0,4000):null;
+        var start=performance.now();
+        var rec={method:method,url:String(url),reqHeaders:reqHeaders,reqBody:reqBody,time:Date.now(),status:null,ok:null,duration:null,respBody:null};
+        addRow(rec);
+        return of.apply(this,arguments).then(function(r){
+          rec.status=r.status;rec.ok=r.ok;rec.duration=performance.now()-start;
+          if(CAPTURE_BODY){try{r.clone().text().then(function(t){rec.respBody=t.slice(0,4000);renderList()}).catch(function(){})}catch(e){}}
+          renderList();
+          return r;
+        },function(e){rec.status='ERR';rec.ok=false;rec.duration=performance.now()-start;renderList();throw e});
+      };
+      onClean(function(){window.fetch=of});
+    }
+    var OX=window.XMLHttpRequest&&window.XMLHttpRequest.prototype.open;
+    var OSend=window.XMLHttpRequest&&window.XMLHttpRequest.prototype.send;
+    var OSetHeader=window.XMLHttpRequest&&window.XMLHttpRequest.prototype.setRequestHeader;
+    if(OX&&OSend&&OSetHeader){
+      window.XMLHttpRequest.prototype.open=function(m,u){this.__aihubMethod=m;this.__aihubUrl=u;this.__aihubHeaders=[];return OX.apply(this,arguments)};
+      window.XMLHttpRequest.prototype.setRequestHeader=function(k,v){if(this.__aihubHeaders)this.__aihubHeaders.push([k,v]);return OSetHeader.apply(this,arguments)};
+      window.XMLHttpRequest.prototype.send=function(body){
+        var xhr=this;
+        var rec={method:xhr.__aihubMethod||'GET',url:String(xhr.__aihubUrl||''),reqHeaders:xhr.__aihubHeaders||[],reqBody:CAPTURE_BODY&&typeof body==='string'?body.slice(0,4000):null,time:Date.now(),status:null,ok:null,duration:null,respBody:null};
+        var start=performance.now();
+        addRow(rec);
+        xhr.addEventListener('loadend',function(){
+          rec.status=xhr.status;rec.ok=xhr.status>=200&&xhr.status<400;rec.duration=performance.now()-start;
+          if(CAPTURE_BODY){try{rec.respBody=String(xhr.responseText||'').slice(0,4000)}catch(e){}}
+          renderList();
+        });
+        return OSend.apply(this,arguments);
+      };
+      onClean(function(){
+        window.XMLHttpRequest.prototype.open=OX;
+        window.XMLHttpRequest.prototype.send=OSend;
+        window.XMLHttpRequest.prototype.setRequestHeader=OSetHeader;
+      });
+    }`),
+    remove: cleanup('apisniffer'),
+  },
+
+  {
+    id: 'jsonschemagen',
+    name: 'JSON Schema Generator',
+    tagline: 'Turns a raw JSON response into a real type',
+    description: 'When a URL returns raw JSON, infers a TypeScript interface or a JSON Schema document straight from the actual payload — nested objects become their own named interfaces, arrays are typed from their first element. One click copies it, ready to paste into your codebase.',
+    howTo: 'Enable, then open any JSON endpoint (works alongside JSON Peek). Pick TypeScript or JSON Schema in settings, then press Copy.',
+    icon: '🧬', color: '#34d399', category: 'Developer', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'mode', label: 'Generate as', type: 'select', default: 'ts', options: [
+        { value: 'ts', label: 'TypeScript interface' },
+        { value: 'schema', label: 'JSON Schema' },
+      ] },
+    ],
+    inject: (s) => ext('jsonschemagen', `
+    var MODE=${JSON.stringify(s.mode ?? 'ts')};
+    var panel=window.AIHubPanel.create({key:'jsonschemagen',title:'JSON Schema Generator',icon:'🧬',width:400});
+    var bd=panel.body;
+    var pre=document.body&&document.body.children.length===1?document.body.querySelector('pre'):null;
+    var raw=pre?pre.textContent:(document.body?document.body.innerText:'');
+    var data=null;
+    if(raw&&raw.length<3000000){try{data=JSON.parse(raw)}catch(e){data=null}}
+    if(data===null){
+      var msg=document.createElement('div');
+      msg.style.cssText='font-size:11.5px;opacity:.7;line-height:1.6';
+      msg.textContent='This page is not a raw JSON response, so there is nothing to generate a type from.';
+      bd.appendChild(msg);
+    }else{
+      function toPascal(name){
+        var s2=String(name||'Root').replace(/[^a-zA-Z0-9]+(.)/g,function(_,c){return c.toUpperCase()}).replace(/[^a-zA-Z0-9]/g,'');
+        return (s2.charAt(0).toUpperCase()+s2.slice(1))||'Root';
+      }
+      function safeKey(k){return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k)?k:JSON.stringify(k)}
+      var blocks=[];
+      function tsType(val,name){
+        if(val===null)return 'null';
+        if(Array.isArray(val))return val.length?tsType(val[0],name)+'[]':'any[]';
+        var t=typeof val;
+        if(t==='object'){
+          var ifName=toPascal(name);
+          var lines=['interface '+ifName+' {'];
+          Object.keys(val).forEach(function(k){lines.push('  '+safeKey(k)+': '+tsType(val[k],k)+';')});
+          lines.push('}');
+          blocks.push(lines.join('\\n'));
+          return ifName;
+        }
+        if(t==='string')return 'string';
+        if(t==='number')return 'number';
+        if(t==='boolean')return 'boolean';
+        return 'any';
+      }
+      function schemaOf(val){
+        if(val===null)return {type:'null'};
+        if(Array.isArray(val))return {type:'array',items:val.length?schemaOf(val[0]):{}};
+        var t=typeof val;
+        if(t==='object'){
+          var props={},required=[];
+          Object.keys(val).forEach(function(k){props[k]=schemaOf(val[k]);required.push(k)});
+          return {type:'object',properties:props,required:required};
+        }
+        if(t==='string')return {type:'string'};
+        if(t==='number')return {type:Number.isInteger(val)?'integer':'number'};
+        if(t==='boolean')return {type:'boolean'};
+        return {};
+      }
+      var text;
+      if(MODE==='schema'){
+        var schema=schemaOf(data);
+        schema['$schema']='http://json-schema.org/draft-07/schema#';
+        text=JSON.stringify(schema,null,2);
+      }else{
+        tsType(data,'Root');
+        text=blocks.join('\\n\\n');
+      }
+      var pre2=document.createElement('pre');
+      pre2.style.cssText='white-space:pre-wrap;word-break:break-word;font-size:11px;font-family:ui-monospace,monospace;line-height:1.5;opacity:.9;max-height:340px;overflow:auto;margin-bottom:8px';
+      pre2.textContent=text;
+      bd.appendChild(pre2);
+      var copyB=document.createElement('button');copyB.textContent='Copy';
+      copyB.onclick=function(){try{navigator.clipboard.writeText(text);copyB.textContent='Copied';setTimeout(function(){copyB.textContent='Copy'},1200)}catch(e){}};
+      bd.appendChild(copyB);
+    }`),
+    remove: cleanup('jsonschemagen'),
+  },
+
+  {
+    id: 'contrastfixer',
+    name: 'Color Contrast Fixer',
+    tagline: 'Not just a failing ratio — a color that passes',
+    description: 'Finds the same low-contrast text Contrast Audit does, but for each failure computes the nearest color — by lightness, keeping the original hue — that actually clears the ratio, and applies it with one click. A real fix, not just a diagnosis.',
+    howTo: 'Enable, open the panel, and press Apply on any failure to swap in the suggested color immediately. Disabling the extension restores every original color.',
+    icon: '🛠', color: '#f472b6', category: 'Developer', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'level', label: 'Standard', type: 'select', default: 'AA', options: [
+        { value: 'AA', label: 'AA — 4.5:1 body text' },
+        { value: 'AAA', label: 'AAA — 7:1 body text' },
+      ] },
+    ],
+    inject: (s) => ext('contrastfixer', `
+    var LEVEL=${JSON.stringify(s.level ?? 'AA')};
+    var need=LEVEL==='AAA'?7:4.5;
+    function lum(c){var p=c.map(function(v){v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4)});return 0.2126*p[0]+0.7152*p[1]+0.0722*p[2]}
+    function parse(c){var m=(c||'').match(/[\\d.]+/g);return m&&m.length>=3?[+m[0],+m[1],+m[2],m[3]===undefined?1:+m[3]]:null}
+    function bgOf(el){for(var n=el;n&&n!==document.documentElement;n=n.parentElement){var c=parse(getComputedStyle(n).backgroundColor);if(c&&c[3]>0.05)return c}return [255,255,255,1]}
+    function ratio(a,b){var la=lum(a),lb=lum(b);return (Math.max(la,lb)+0.05)/(Math.min(la,lb)+0.05)}
+    function rgbToHsl(r,g,b){r/=255;g/=255;b/=255;var max=Math.max(r,g,b),min=Math.min(r,g,b);var h,s2,l=(max+min)/2;
+      if(max===min){h=s2=0}else{var d=max-min;s2=l>0.5?d/(2-max-min):d/(max+min);
+        switch(max){case r:h=(g-b)/d+(g<b?6:0);break;case g:h=(b-r)/d+2;break;default:h=(r-g)/d+4}
+        h/=6}
+      return [h,s2,l];
+    }
+    function hslToRgb(h,s2,l){
+      if(s2===0){var v=Math.round(l*255);return [v,v,v]}
+      function hue2rgb(p,q,t){if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p}
+      var q=l<0.5?l*(1+s2):l+s2-l*s2,p=2*l-q;
+      return [Math.round(hue2rgb(p,q,h+1/3)*255),Math.round(hue2rgb(p,q,h)*255),Math.round(hue2rgb(p,q,h-1/3)*255)];
+    }
+    function findAccessible(fg,bg,needR){
+      var hsl=rgbToHsl(fg[0],fg[1],fg[2]);
+      var goDark=lum(bg)>0.5;
+      var l=hsl[2];
+      for(var i=0;i<50;i++){
+        var rgb=hslToRgb(hsl[0],hsl[1],l);
+        if(ratio(rgb,bg)>=needR)return rgb;
+        l=goDark?Math.max(0,l-0.02):Math.min(1,l+0.02);
+      }
+      return goDark?[0,0,0]:[255,255,255];
+    }
+    var panel=window.AIHubPanel.create({key:'contrastfixer',title:'Contrast Fixer',icon:'🛠',width:360});
+    var bd=panel.body;
+    var applied=[];
+    function scan(){
+      while(bd.firstChild)bd.removeChild(bd.firstChild);
+      var walk=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null);
+      var node,list=[];
+      while((node=walk.nextNode())&&list.length<4000){if(node.nodeValue&&node.nodeValue.trim().length>1)list.push(node)}
+      var bad=[];
+      list.forEach(function(t){
+        var el=t.parentElement;if(!el)return;
+        var st=getComputedStyle(el);
+        if(st.visibility==='hidden'||st.display==='none'||+st.opacity===0)return;
+        var r=el.getBoundingClientRect();if(!r.width||!r.height)return;
+        var fg=parse(st.color);if(!fg||fg[3]<0.5)return;
+        var bg=bgOf(el);
+        var got=ratio(fg,bg);
+        if(got<need)bad.push({el:el,fg:fg,bg:bg,got:got,text:t.nodeValue.trim().slice(0,44)});
+      });
+      if(!bad.length){
+        var ok=document.createElement('div');ok.style.cssText='color:#6ee7b7;font-size:12px';ok.textContent='No contrast failures at '+LEVEL+'.';
+        bd.appendChild(ok);return;
+      }
+      var head=document.createElement('div');head.style.cssText='margin-bottom:8px;color:#fca5a5;font-weight:600;font-size:12px';
+      head.textContent=bad.length+' elements fail '+LEVEL+'.';
+      bd.appendChild(head);
+      bad.slice(0,30).forEach(function(b){
+        var suggestion=findAccessible(b.fg,b.bg,need);
+        var sugRgb='rgb('+suggestion[0]+','+suggestion[1]+','+suggestion[2]+')';
+        var row=document.createElement('div');
+        row.style.cssText='padding:7px 9px;margin-bottom:6px;border-radius:9px;background:rgba(255,255,255,.05)';
+        var top=document.createElement('div');top.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px';
+        var lbl=document.createElement('span');lbl.style.cssText='font-size:11px;opacity:.8';lbl.textContent=b.got.toFixed(2)+':1 \\u2192 '+ratio(suggestion,b.bg).toFixed(2)+':1';
+        var swatch=document.createElement('span');swatch.style.cssText='display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:'+sugRgb;
+        top.appendChild(lbl);top.appendChild(swatch);
+        var txt=document.createElement('div');txt.style.cssText='font-size:11px;opacity:.6;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        txt.textContent=b.text;
+        var applyB=document.createElement('button');applyB.textContent='Apply';applyB.style.cssText='padding:3px 10px;font-size:10.5px';
+        applyB.onclick=function(){
+          var prevColor=b.el.style.color;
+          b.el.style.color=sugRgb;
+          applied.push(function(){b.el.style.color=prevColor});
+          applyB.textContent='Applied \\u2713';applyB.disabled=true;
+        };
+        row.appendChild(top);row.appendChild(txt);row.appendChild(applyB);
+        bd.appendChild(row);
+      });
+      var rescanBtn=document.createElement('button');rescanBtn.textContent='Rescan';rescanBtn.style.cssText='margin-top:6px;background:rgba(255,255,255,.08)';
+      rescanBtn.onclick=scan;
+      bd.appendChild(rescanBtn);
+    }
+    scan();
+    onClean(function(){applied.forEach(function(f){f()})});`),
+    remove: cleanup('contrastfixer'),
+  },
+
+  {
+    id: 'cssvarinspector',
+    name: 'CSS Variable Inspector',
+    tagline: 'Hover anything, see which design tokens it uses',
+    description: 'Hover any element to see which CSS custom properties (--variables) its own matching stylesheet rules actually reference, their resolved values, and the nearest ancestor where each one is defined — so a token change is traced to its source instead of guessed at. Cross-origin stylesheets can’t be read by any page script and are skipped, which the panel says plainly rather than pretending otherwise.',
+    howTo: 'Enable and move the pointer over the page — the panel updates to the hovered element’s custom properties. Click to freeze on the current element; click again to resume.',
+    icon: '🎨', color: '#c084fc', category: 'Developer', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'color', label: 'Highlight color', type: 'select', default: '#c084fc', options: [
+        { value: '#c084fc', label: 'Purple' },
+        { value: '#60a5fa', label: 'Blue' },
+        { value: '#34d399', label: 'Green' },
+        { value: '#fbbf24', label: 'Gold' },
+      ] },
+    ],
+    inject: (s) => ext('cssvarinspector', `
+    var COLOR=${JSON.stringify(s.color || '#c084fc')};
+    var panel=window.AIHubPanel.create({key:'cssvarinspector',title:'CSS Variable Inspector',icon:'🎨',width:360});
+    var bd=panel.body;
+    var hint=document.createElement('div');hint.style.cssText='font-size:11px;opacity:.55;margin-bottom:8px';
+    hint.textContent='Hover an element on the page. Click to freeze.';
+    bd.appendChild(hint);
+    var out=document.createElement('div');bd.appendChild(out);
+    var hi=document.createElement('div');
+    hi.style.cssText='position:fixed;pointer-events:none;z-index:2147482999;border:2px solid '+COLOR+';background:'+COLOR+'22;border-radius:3px;display:none';
+    document.documentElement.appendChild(hi);onClean(function(){hi.remove()});
+    var frozen=false;
+    function varsUsedBy(el){
+      var names={};
+      try{
+        var sheets=document.styleSheets;
+        for(var i=0;i<sheets.length;i++){
+          var rules;
+          try{rules=sheets[i].cssRules}catch(e){continue}
+          if(!rules)continue;
+          for(var j=0;j<rules.length;j++){
+            var rule=rules[j];
+            if(!rule.selectorText||!rule.style)continue;
+            var matches=false;
+            try{matches=el.matches(rule.selectorText)}catch(e){continue}
+            if(!matches)continue;
+            var css2=rule.style.cssText||'';
+            var m=css2.match(/var\\(\\s*(--[a-zA-Z0-9-_]+)/g)||[];
+            m.forEach(function(v){names[v.replace(/var\\(\\s*/,'')]=true});
+          }
+        }
+      }catch(e){}
+      if(el.style&&el.style.cssText){
+        (el.style.cssText.match(/var\\(\\s*(--[a-zA-Z0-9-_]+)/g)||[]).forEach(function(v){names[v.replace(/var\\(\\s*/,'')]=true});
+      }
+      return Object.keys(names);
+    }
+    function whereDefined(el,name){
+      var chain=[];
+      for(var n=el;n;n=n.parentElement)chain.push(n);
+      chain.push(document.documentElement);
+      chain.reverse();
+      var prevVal='',definedAt=null,definedVal='';
+      chain.forEach(function(node){
+        var v=(getComputedStyle(node).getPropertyValue(name)||'').trim();
+        if(v&&v!==prevVal){definedAt=node;definedVal=v}
+        prevVal=v;
+      });
+      return {node:definedAt,value:definedVal};
+    }
+    function describe(node){
+      if(!node)return '(not found)';
+      var id=node.id?'#'+node.id:'';
+      var cls=node.className&&typeof node.className==='string'?'.'+node.className.trim().split(/\\s+/).slice(0,2).join('.'):'';
+      return '<'+node.tagName.toLowerCase()+'>'+id+cls;
+    }
+    function render(el){
+      while(out.firstChild)out.removeChild(out.firstChild);
+      var names=varsUsedBy(el);
+      var tag=document.createElement('div');tag.style.cssText='font-weight:600;margin-bottom:8px;color:'+COLOR;
+      tag.textContent='<'+el.tagName.toLowerCase()+'>'+(el.id?'#'+el.id:'');
+      out.appendChild(tag);
+      if(!names.length){
+        var none=document.createElement('div');none.style.cssText='opacity:.5;font-size:11.5px';
+        none.textContent='No var(--…) usage found in this element\\'s matching same-origin rules.';
+        out.appendChild(none);return;
+      }
+      names.forEach(function(name){
+        var def=whereDefined(el,name);
+        var row=document.createElement('div');
+        row.style.cssText='padding:6px 8px;margin-bottom:5px;border-radius:8px;background:rgba(255,255,255,.04);font-size:11px';
+        var top=document.createElement('div');top.style.cssText='display:flex;justify-content:space-between;gap:8px;font-family:ui-monospace,monospace';
+        var k=document.createElement('span');k.style.color=COLOR;k.textContent=name;
+        var v=document.createElement('span');v.style.opacity='.8';v.textContent=def.value.slice(0,60);
+        top.appendChild(k);top.appendChild(v);
+        var meta=document.createElement('div');meta.style.cssText='opacity:.45;margin-top:2px';
+        meta.textContent='defined at '+esc(describe(def.node));
+        row.appendChild(top);row.appendChild(meta);
+        out.appendChild(row);
+      });
+    }
+    on(document,'mousemove',function(e){
+      if(frozen)return;
+      var el=e.target;if(!el||panel.host.contains(el))return;
+      var r=el.getBoundingClientRect();
+      hi.style.display='block';hi.style.top=r.top+'px';hi.style.left=r.left+'px';hi.style.width=r.width+'px';hi.style.height=r.height+'px';
+      render(el);
+    },true);
+    on(document,'click',function(e){
+      if(panel.host.contains(e.target))return;
+      frozen=!frozen;
+      if(!frozen){var el=document.elementFromPoint(e.clientX,e.clientY);if(el)render(el)}
+    },true);`),
+    remove: cleanup('cssvarinspector'),
+  },
+
+  {
+    id: 'responsivecarousel',
+    name: 'Responsive Preview Carousel',
+    tagline: 'This exact page at 5 real breakpoints, side by side',
+    description: 'Renders the current page inside five same-origin iframes sized to mobile, tablet, laptop, desktop and 4K widths, laid out in a scrollable strip so you can see how it actually reflows at each size at once. Some sites refuse to be framed at all (X-Frame-Options or a frame-ancestors CSP) and will show blank previews — that is the site’s own protection, not a bug here.',
+    howTo: 'Enable, then open the panel — five live copies of the current page load at real breakpoint widths. Scroll the strip horizontally to compare them.',
+    icon: '📱', color: '#f59e0b', category: 'Design', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'scale', label: 'Preview scale', type: 'range', min: 0.2, max: 0.6, step: 0.05, default: 0.32 },
+    ],
+    inject: (s) => ext('responsivecarousel', `
+    var SCALE=${+(s.scale ?? 0.32)};
+    var BREAKS=[['Mobile',375],['Tablet',768],['Laptop',1024],['Desktop',1440],['4K',2560]];
+    var panel=window.AIHubPanel.create({key:'responsivecarousel',title:'Responsive Preview',icon:'📱',width:Math.min(900,window.innerWidth-40)});
+    var bd=panel.body;
+    bd.style.cssText+=';max-height:70vh';
+    var strip=document.createElement('div');
+    strip.style.cssText='display:flex;gap:14px;overflow-x:auto;padding-bottom:8px';
+    BREAKS.forEach(function(b){
+      var name=b[0],w=b[1],h=900;
+      var box=document.createElement('div');box.style.cssText='flex:0 0 auto;text-align:center';
+      var label=document.createElement('div');label.style.cssText='font-size:10.5px;opacity:.6;margin-bottom:4px';
+      label.textContent=name+' \\u00b7 '+w+'px';
+      var frameWrap=document.createElement('div');
+      frameWrap.style.cssText='width:'+(w*SCALE)+'px;height:'+(h*SCALE)+'px;overflow:hidden;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:#0b0d18';
+      var iframe=document.createElement('iframe');
+      iframe.style.cssText='width:'+w+'px;height:'+h+'px;border:0;transform:scale('+SCALE+');transform-origin:top left;';
+      iframe.src=location.href;
+      frameWrap.appendChild(iframe);
+      box.appendChild(label);box.appendChild(frameWrap);
+      strip.appendChild(box);
+    });
+    bd.appendChild(strip);
+    var note=document.createElement('div');
+    note.style.cssText='margin-top:8px;font-size:10px;opacity:.4;line-height:1.5';
+    note.textContent='A blank preview usually means the site blocks being framed (X-Frame-Options / frame-ancestors), not a failure here.';
+    bd.appendChild(note);`),
+    remove: cleanup('responsivecarousel'),
+  },
+
+  {
+    id: 'perfbudget',
+    name: 'Performance Budget Monitor',
+    tagline: 'Core Web Vitals, watched live as you browse',
+    description: 'Tracks LCP, CLS and FID from the browser’s own PerformanceObserver as they happen, approximates Total Blocking Time from long tasks, and totals the JS actually transferred — each graded against the standard Core Web Vitals thresholds. Cross-origin scripts without a Timing-Allow-Origin header can report 0 bytes; that is a browser privacy limit, not a bug.',
+    howTo: 'Enable on any page and browse it normally — metrics fill in as they occur (LCP needs the main content to paint, FID/CLS need you to interact and scroll). Toggle strict thresholds in settings.',
+    icon: '⏱', color: '#facc15', category: 'Developer', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'thresholdsStrict', label: 'Use strict ("good") thresholds', type: 'toggle', default: true },
+    ],
+    inject: (s) => ext('perfbudget', `
+    var STRICT=${s.thresholdsStrict === false ? 'false' : 'true'};
+    var panel=window.AIHubPanel.create({key:'perfbudget',title:'Performance Budget',icon:'⏱',width:300});
+    var bd=panel.body;
+    var metrics={lcp:null,cls:0,fid:null,tbt:0};
+    var observers=[];
+    function watch(type,cb){try{var o=new PerformanceObserver(cb);o.observe({type:type,buffered:true});observers.push(o)}catch(e){}}
+    watch('largest-contentful-paint',function(list){
+      var entries=list.getEntries(),last=entries[entries.length-1];
+      if(last)metrics.lcp=last.renderTime||last.loadTime||last.startTime;
+      paint();
+    });
+    watch('layout-shift',function(list){
+      list.getEntries().forEach(function(entry){if(!entry.hadRecentInput)metrics.cls+=entry.value});
+      paint();
+    });
+    watch('first-input',function(list){
+      var e2=list.getEntries()[0];
+      if(e2)metrics.fid=e2.processingStart-e2.startTime;
+      paint();
+    });
+    watch('longtask',function(list){
+      list.getEntries().forEach(function(t){metrics.tbt+=Math.max(0,t.duration-50)});
+      paint();
+    });
+    function jsSize(){
+      var total=0;
+      (performance.getEntriesByType('resource')||[]).forEach(function(r){if(r.initiatorType==='script')total+=(r.transferSize||0)});
+      return total;
+    }
+    function grade(val,good,ok){
+      if(val==null)return {c:'#94a3b8',t:'\\u2013'};
+      var g=STRICT?good:ok,o=STRICT?ok:ok*1.6;
+      return val<=g?{c:'#6ee7b7',t:'good'}:val<=o?{c:'#fbbf24',t:'needs work'}:{c:'#f87171',t:'poor'};
+    }
+    function fmtVal(val,isMs){return val==null?'\\u2013':(isMs?Math.round(val)+'ms':val.toFixed(3))}
+    function row(label,val,isMs,good,ok){
+      var g=grade(val,good,ok);
+      var r=document.createElement('div');
+      r.style.cssText='display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px';
+      var l=document.createElement('span');l.style.opacity='.7';l.textContent=label;
+      var v=document.createElement('span');v.style.cssText='color:'+g.c+';font-weight:600';v.textContent=fmtVal(val,isMs)+' \\u00b7 '+g.t;
+      r.appendChild(l);r.appendChild(v);return r;
+    }
+    function paint(){
+      while(bd.firstChild)bd.removeChild(bd.firstChild);
+      bd.appendChild(row('LCP',metrics.lcp,true,2500,4000));
+      bd.appendChild(row('CLS',metrics.cls,false,0.1,0.25));
+      bd.appendChild(row('FID',metrics.fid,true,100,300));
+      bd.appendChild(row('TBT (approx)',metrics.tbt,true,200,600));
+      var jsRow=document.createElement('div');
+      jsRow.style.cssText='display:flex;justify-content:space-between;padding:5px 0;font-size:12px';
+      var l2=document.createElement('span');l2.style.opacity='.7';l2.textContent='Total JS (transferred)';
+      var v2=document.createElement('span');v2.style.opacity='.85';v2.textContent=Math.round(jsSize()/1024)+' KB';
+      jsRow.appendChild(l2);jsRow.appendChild(v2);
+      bd.appendChild(jsRow);
+      var note=document.createElement('div');note.style.cssText='margin-top:8px;font-size:10px;opacity:.4;line-height:1.5';
+      note.textContent='TBT is approximated from long tasks. Cross-origin scripts without Timing-Allow-Origin can show 0 KB.';
+      bd.appendChild(note);
+    }
+    paint();
+    var iv=setInterval(paint,2000);
+    onClean(function(){clearInterval(iv);observers.forEach(function(o){try{o.disconnect()}catch(e){}})});`),
+    remove: cleanup('perfbudget'),
+  },
+
+  {
+    id: 'websocketinspector',
+    name: 'WebSocket Inspector',
+    tagline: 'Every WebSocket connection, live, with replay',
+    description: 'Wraps the page’s WebSocket constructor to list every connection it opens with a live in/out message log, and lets you resend any outgoing message you captured. Nothing else in this browser’s extension pack touches WebSocket traffic.',
+    howTo: 'Enable before the page opens its sockets (or reload after enabling). Each connection gets its own log in the panel; press resend on any outgoing message, or Pause log to freeze the view without closing anything.',
+    icon: '🔗', color: '#60a5fa', category: 'Developer', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'rows', label: 'Messages kept per connection', type: 'range', min: 20, max: 200, step: 20, default: 80 },
+    ],
+    inject: (s) => ext('websocketinspector', `
+    var ROWS=${+(s.rows ?? 80)};
+    var OrigWS=window.WebSocket;
+    var panel=window.AIHubPanel.create({key:'websocketinspector',title:'WebSocket Inspector',icon:'🔗',width:380});
+    var bd=panel.body;
+    var paused=false;
+    var pauseBtn=document.createElement('button');pauseBtn.textContent='Pause log';pauseBtn.style.cssText='margin-bottom:8px;background:rgba(255,255,255,.08)';
+    pauseBtn.onclick=function(){paused=!paused;pauseBtn.textContent=paused?'Resume log':'Pause log'};
+    bd.appendChild(pauseBtn);
+    var connWrap=document.createElement('div');bd.appendChild(connWrap);
+    function addConn(url){
+      var box=document.createElement('div');
+      box.style.cssText='margin-bottom:10px;padding:8px;border-radius:8px;background:rgba(255,255,255,.04)';
+      var head=document.createElement('div');head.style.cssText='display:flex;justify-content:space-between;font-size:11.5px;font-weight:600;margin-bottom:6px;gap:8px';
+      var urlEl=document.createElement('span');urlEl.style.cssText='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px';urlEl.textContent=url;
+      var statusEl=document.createElement('span');statusEl.style.cssText='color:#fbbf24';statusEl.textContent='connecting';
+      head.appendChild(urlEl);head.appendChild(statusEl);
+      var log=document.createElement('div');log.style.cssText='max-height:160px;overflow:auto;font-family:ui-monospace,monospace;font-size:10.5px';
+      box.appendChild(head);box.appendChild(log);
+      connWrap.insertBefore(box,connWrap.firstChild);
+      return {statusEl:statusEl,log:log,url:url};
+    }
+    function logMsg(rec,dir,data,resend){
+      if(paused)return;
+      var row=document.createElement('div');
+      row.style.cssText='padding:3px 5px;margin-bottom:3px;border-radius:5px;background:rgba(255,255,255,.03);border-left:2px solid '+(dir==='out'?'#60a5fa':'#34d399');
+      var text=typeof data==='string'?data:'[binary]';
+      var line=document.createElement('span');line.textContent=(dir==='out'?'\\u2192 ':'\\u2190 ')+text.slice(0,160);
+      row.appendChild(line);
+      if(dir==='out'&&resend){
+        var rb=document.createElement('button');rb.textContent='resend';rb.style.cssText='margin-left:6px;padding:1px 6px;font-size:9px';
+        rb.onclick=resend;row.appendChild(rb);
+      }
+      rec.log.insertBefore(row,rec.log.firstChild);
+      while(rec.log.children.length>ROWS)rec.log.removeChild(rec.log.lastChild);
+    }
+    var empty=null;
+    if(OrigWS){
+      function PatchedWS(url,protocols){
+        var inst=protocols===undefined?Reflect.construct(OrigWS,[url]):Reflect.construct(OrigWS,[url,protocols]);
+        if(empty){empty.remove();empty=null}
+        var rec=addConn(String(url));
+        var origSend=inst.send.bind(inst);
+        inst.send=function(data){
+          logMsg(rec,'out',data,function(){try{if(inst.readyState===1)origSend(data)}catch(e){}});
+          return origSend(data);
+        };
+        inst.addEventListener('open',function(){rec.statusEl.textContent='open';rec.statusEl.style.color='#6ee7b7'});
+        inst.addEventListener('close',function(e){rec.statusEl.textContent='closed ('+e.code+')';rec.statusEl.style.color='#94a3b8'});
+        inst.addEventListener('error',function(){rec.statusEl.textContent='error';rec.statusEl.style.color='#f87171'});
+        inst.addEventListener('message',function(e){logMsg(rec,'in',e.data)});
+        return inst;
+      }
+      PatchedWS.prototype=OrigWS.prototype;
+      PatchedWS.CONNECTING=OrigWS.CONNECTING;PatchedWS.OPEN=OrigWS.OPEN;PatchedWS.CLOSING=OrigWS.CLOSING;PatchedWS.CLOSED=OrigWS.CLOSED;
+      window.WebSocket=PatchedWS;
+      onClean(function(){window.WebSocket=OrigWS});
+    }
+    empty=document.createElement('div');empty.style.cssText='opacity:.5;font-size:11.5px';empty.textContent='No WebSocket connections yet on this page.';
+    connWrap.appendChild(empty);`),
+    remove: cleanup('websocketinspector'),
+  },
+
+  // ── Media (cont'd) ──────────────────────────────────────────────────────
+  {
+    id: 'speedboost',
+    name: 'Speed Boost Presets',
+    tagline: 'One-tap playback speed, remembered per site',
+    description: 'A small always-visible strip of speed presets from 0.25× to 4×, applied to every video and audio element on the page at once — including ones added later by the site. Remembers your chosen speed per domain, so YouTube can stay at 1.5× while a course site stays at 1× without you resetting it every visit. Media Deck (also in this pack) covers the same ground plus A-B looping and skip step if you want the fuller transport instead.',
+    howTo: 'Enable, then tap a speed in the small strip that appears bottom-left. It reapplies automatically to new media on the page and remembers your choice for this site.',
+    icon: '⏩', color: '#fb7185', category: 'Media', version: '1.0.0',
+    settings: [
+      { key: 'rememberPerDomain', label: 'Remember speed per site', type: 'toggle', default: true },
+    ],
+    inject: (s) => ext('speedboost', `
+    var REMEMBER=${s.rememberPerDomain === false ? 'false' : 'true'};
+    var PRESETS=[0.25,0.5,0.75,1,1.25,1.5,2,3,4];
+    var key='aihub.speedboost.'+location.hostname;
+    function loadSaved(){if(!REMEMBER)return null;try{var v=+localStorage.getItem(key);return v>0?v:null}catch(e){return null}}
+    function persist(v){if(!REMEMBER)return;try{localStorage.setItem(key,String(v))}catch(e){}}
+    var current=loadSaved()||1;
+    function applyAll(){document.querySelectorAll('video,audio').forEach(function(m){try{m.playbackRate=current}catch(e){}})}
+    applyAll();
+    var mo=new MutationObserver(function(){applyAll()});
+    mo.observe(document.body||document.documentElement,{childList:true,subtree:true});
+    onClean(function(){mo.disconnect()});
+    var bar=document.createElement('div');
+    bar.style.cssText='position:fixed;bottom:14px;left:14px;z-index:2147483000;display:flex;gap:3px;padding:5px;border-radius:10px;background:rgba(15,17,30,.92);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(10px)';
+    document.documentElement.appendChild(bar);onClean(function(){bar.remove()});
+    var buttons=[];
+    function paint(){buttons.forEach(function(b){b.style.background=Math.abs(b.__v-current)<0.01?'rgba(96,165,250,.35)':'transparent'})}
+    PRESETS.forEach(function(v){
+      var b=document.createElement('button');
+      b.__v=v;b.textContent=v+'\\u00d7';
+      b.style.cssText='padding:3px 6px;font-size:10px;border:0;border-radius:6px;background:transparent;color:#e9ebf5;cursor:pointer';
+      b.onclick=function(){current=v;applyAll();persist(v);paint()};
+      bar.appendChild(b);buttons.push(b);
+    });
+    paint();`),
+    remove: cleanup('speedboost'),
+  },
+
+  {
+    id: 'audionormalizer',
+    name: 'Audio Normalizer',
+    tagline: 'Boosts quiet audio, tames sudden loud peaks',
+    description: 'Routes every video and audio element on the page through a real Web Audio compressor — quiet dialogue gets easier to hear and sudden loud moments get tamed, instead of you riding the volume slider. A gain slider layers a per-site volume on top and remembers it for next time. New media added later by the page (an infinite-scroll feed, a lazy-loaded player) is picked up automatically. Verified live against a real cross-origin video that this doesn’t stop playback — but if a site’s video CDN sends no CORS header at all, the Web Audio spec can silence that element’s output entirely rather than just skip normalizing it, a browser-level restriction no page script can work around; toggle the extension off for that one site if audio ever drops out.',
+    howTo: 'Enable while audio or video is on the page. Adjust the gain slider in the panel — it remembers your setting for this site.',
+    icon: '🔊', color: '#0ea5e9', category: 'Media', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'threshold', label: 'Compressor threshold (dB)', type: 'range', min: -60, max: 0, step: 5, default: -24 },
+      { key: 'ratio', label: 'Compression ratio', type: 'range', min: 1, max: 20, step: 1, default: 8 },
+    ],
+    inject: (s) => ext('audionormalizer', `
+    var THRESH=${+(s.threshold ?? -24)},RATIO=${+(s.ratio ?? 8)};
+    var volKey='aihub.audionorm.'+location.hostname;
+    function loadVol(){try{var v=+localStorage.getItem(volKey);return v>0?v:1}catch(e){return 1}}
+    function saveVol(v){try{localStorage.setItem(volKey,String(v))}catch(e){}}
+    var gainValue=loadVol();
+    var ctx=null;
+    function getCtx(){
+      if(!ctx){var AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;ctx=new AC()}
+      return ctx;
+    }
+    function ensureRunning(){if(ctx&&ctx.state==='suspended')ctx.resume().catch(function(){})}
+    on(document,'click',ensureRunning,true);
+    on(document,'keydown',ensureRunning,true);
+    var nodes=[];
+    var panel=window.AIHubPanel.create({key:'audionormalizer',title:'Audio Normalizer',icon:'🔊',width:280});
+    var bd=panel.body;
+    var label=document.createElement('div');label.style.cssText='font-size:11px;opacity:.6;margin-bottom:8px';
+    bd.appendChild(label);
+    function updateLabel(){label.textContent='Boosts quiet audio, tames loud peaks, on '+nodes.length+' element(s) found so far.'}
+    updateLabel();
+    function wrap(el){
+      if(el.__aihubNormalized)return;
+      var c=getCtx();if(!c)return;
+      el.__aihubNormalized=true;
+      try{
+        var src=c.createMediaElementSource(el);
+        var comp=c.createDynamicsCompressor();
+        comp.threshold.value=THRESH;comp.ratio.value=RATIO;comp.knee.value=24;comp.attack.value=0.003;comp.release.value=0.25;
+        var gain=c.createGain();gain.gain.value=gainValue;
+        src.connect(comp);comp.connect(gain);gain.connect(c.destination);
+        nodes.push({el:el,gain:gain});
+        updateLabel();
+        ensureRunning();
+      }catch(e){}
+    }
+    function scan(){document.querySelectorAll('video,audio').forEach(wrap)}
+    scan();
+    var mo=new MutationObserver(function(){scan()});
+    mo.observe(document.body||document.documentElement,{childList:true,subtree:true});
+    onClean(function(){mo.disconnect();if(ctx)try{ctx.close()}catch(e){}});
+    var row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:8px';
+    var slider=document.createElement('input');slider.type='range';slider.min='0.2';slider.max='3';slider.step='0.1';slider.value=String(gainValue);
+    var val=document.createElement('span');val.style.cssText='font-family:ui-monospace,monospace;font-size:11px;width:40px;text-align:right';val.textContent=gainValue.toFixed(1)+'\\u00d7';
+    slider.oninput=function(){
+      gainValue=+slider.value;val.textContent=gainValue.toFixed(1)+'\\u00d7';
+      nodes.forEach(function(n){n.gain.gain.value=gainValue});
+      saveVol(gainValue);
+    };
+    row.appendChild(slider);row.appendChild(val);bd.appendChild(row);
+    var note=document.createElement('div');note.style.cssText='margin-top:8px;font-size:10px;opacity:.4;line-height:1.5';
+    note.textContent='Remembers this level for '+location.hostname+'. New media on the page is picked up automatically.';
+    bd.appendChild(note);`),
+    remove: cleanup('audionormalizer'),
+  },
+
+  // ── Reading & Accessibility (cont'd) ────────────────────────────────────
+  {
+    id: 'bionicreader',
+    name: 'Bionic Reader',
+    tagline: 'Bolds the lead of every word to speed reading',
+    description: 'Rewrites the visible text so the leading letters of each word are bold and the rest lighter — a fixation-guide technique some readers find noticeably faster, since the eye can often complete a word from its first few letters alone. Reverts to the page’s real text exactly when switched off.',
+    howTo: 'Enable to boldify the whole page. Adjust how much of each word gets bolded in settings — more bold is a stronger effect but can feel busier.',
+    icon: '⚡', color: '#fbbf24', category: 'Reading', version: '1.0.0',
+    settings: [
+      { key: 'ratio', label: 'Bold portion of each word', type: 'range', min: 0.2, max: 0.7, step: 0.05, default: 0.4 },
+    ],
+    inject: (s) => ext('bionicreader', `
+    var RATIO=${+(s.ratio ?? 0.4)};
+    var SKIP={SCRIPT:1,STYLE:1,TEXTAREA:1,INPUT:1,CODE:1,PRE:1,NOSCRIPT:1,SVG:1};
+    var walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{
+      acceptNode:function(node){
+        var p=node.parentNode;
+        if(!p||SKIP[p.nodeName])return NodeFilter.FILTER_REJECT;
+        if(!node.nodeValue||!/\\S/.test(node.nodeValue))return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var targets=[];var n;
+    while(n=walker.nextNode())targets.push(n);
+    var restores=[];
+    targets.forEach(function(textNode){
+      var text=textNode.nodeValue;
+      var frag=document.createDocumentFragment();
+      text.split(/(\\s+)/).forEach(function(tok){
+        if(!tok)return;
+        if(/^\\s+$/.test(tok)){frag.appendChild(document.createTextNode(tok));return}
+        var boldLen=Math.max(1,Math.ceil(tok.length*RATIO));
+        var b=document.createElement('b');
+        b.style.cssText='font-weight:800';
+        b.textContent=tok.slice(0,boldLen);
+        frag.appendChild(b);
+        if(tok.length>boldLen)frag.appendChild(document.createTextNode(tok.slice(boldLen)));
+      });
+      var parent=textNode.parentNode;
+      if(!parent)return;
+      var newNodes=Array.prototype.slice.call(frag.childNodes);
+      if(!newNodes.length)return;
+      parent.replaceChild(frag,textNode);
+      restores.push(function(){
+        try{
+          parent.insertBefore(textNode,newNodes[0]);
+          newNodes.forEach(function(nn){try{parent.removeChild(nn)}catch(e){}});
+        }catch(e){}
+      });
+    });
+    onClean(function(){restores.forEach(function(f){f()})});`),
+    remove: cleanup('bionicreader'),
+  },
+
+  {
+    id: 'ttsplayer',
+    name: 'Text-to-Speech Player',
+    tagline: 'Reads the article aloud, sentence by sentence',
+    description: 'Reads the current selection (or the whole article, if nothing is selected) out loud using the browser’s own speech engine, with adjustable rate and pitch and a choice of installed voices. Each sentence is highlighted in the player panel as it is spoken — kept inside the panel itself rather than injected into the page’s own markup, so it never risks breaking a site’s layout or scripts.',
+    howTo: 'Enable, then press Play in the panel — it reads the current selection, or the whole article if nothing is selected. Pick a voice from the dropdown and tune rate/pitch in settings.',
+    icon: '🔊', color: '#38bdf8', category: 'Reading', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'rate', label: 'Speech rate', type: 'range', min: 0.5, max: 2, step: 0.1, default: 1 },
+      { key: 'pitch', label: 'Speech pitch', type: 'range', min: 0.5, max: 2, step: 0.1, default: 1 },
+    ],
+    inject: (s) => ext('ttsplayer', `
+    var RATE=${+(s.rate ?? 1)},PITCH=${+(s.pitch ?? 1)};
+    var panel=window.AIHubPanel.create({key:'ttsplayer',title:'Read Aloud',icon:'🔊',width:360});
+    var bd=panel.body;
+    var voiceSel=document.createElement('select');
+    function loadVoices(){
+      var voices=window.speechSynthesis?window.speechSynthesis.getVoices():[];
+      while(voiceSel.firstChild)voiceSel.removeChild(voiceSel.firstChild);
+      voices.forEach(function(v,i){
+        var o=document.createElement('option');o.value=String(i);o.textContent=v.name+' ('+v.lang+')';
+        voiceSel.appendChild(o);
+      });
+    }
+    loadVoices();
+    if(window.speechSynthesis){window.speechSynthesis.onvoiceschanged=loadVoices;onClean(function(){window.speechSynthesis.onvoiceschanged=null});}
+    bd.appendChild(voiceSel);
+    var controls=document.createElement('div');controls.style.cssText='display:flex;gap:6px;margin:8px 0';
+    var playBtn=document.createElement('button');playBtn.textContent='\\u25b6 Play';
+    var stopBtn=document.createElement('button');stopBtn.textContent='\\u25a0 Stop';stopBtn.style.cssText='background:rgba(255,255,255,.08)';
+    controls.appendChild(playBtn);controls.appendChild(stopBtn);
+    bd.appendChild(controls);
+    var list=document.createElement('div');list.style.cssText='max-height:280px;overflow:auto';bd.appendChild(list);
+    var rows=[],idx=0,sentences=[],state='idle';
+    function buildSentences(){
+      var sel=window.getSelection();
+      var selText=sel?String(sel).trim():'';
+      var source=selText.length>40?selText:((document.querySelector('article,main')||document.body).innerText||'');
+      var raw=source.replace(/\\s+/g,' ').trim();
+      var parts=raw.match(/[^.!?]+[.!?]+(\\s|$)|[^.!?]+$/g)||[raw];
+      return parts.map(function(p){return p.trim()}).filter(function(p){return p.length>0}).slice(0,400);
+    }
+    function render(list2){
+      while(list.firstChild)list.removeChild(list.firstChild);
+      rows=[];
+      list2.forEach(function(s2){
+        var row=document.createElement('div');
+        row.style.cssText='padding:5px 7px;margin-bottom:3px;border-radius:6px;font-size:11.5px;line-height:1.5';
+        row.textContent=s2;
+        list.appendChild(row);rows.push(row);
+      });
+    }
+    function speakNext(){
+      if(!window.speechSynthesis||idx>=sentences.length){
+        state='idle';playBtn.textContent='\\u25b6 Play';
+        rows.forEach(function(r){r.style.background=''});
+        return;
+      }
+      rows.forEach(function(r,i){r.style.background=i===idx?'rgba(96,165,250,.18)':''});
+      if(rows[idx]&&rows[idx].scrollIntoView)rows[idx].scrollIntoView({block:'center',behavior:'smooth'});
+      var u=new SpeechSynthesisUtterance(sentences[idx]);
+      u.rate=RATE;u.pitch=PITCH;
+      var voices=window.speechSynthesis.getVoices();
+      var picked=voices[+voiceSel.value];
+      if(picked)u.voice=picked;
+      u.onend=function(){idx++;speakNext()};
+      u.onerror=function(){idx++;speakNext()};
+      window.speechSynthesis.speak(u);
+    }
+    playBtn.onclick=function(){
+      if(!window.speechSynthesis){playBtn.textContent='Not supported';return}
+      if(state==='playing'){window.speechSynthesis.pause();state='paused';playBtn.textContent='\\u25b6 Resume';return}
+      if(state==='paused'){window.speechSynthesis.resume();state='playing';playBtn.textContent='\\u23f8 Pause';return}
+      sentences=buildSentences();render(sentences);idx=0;state='playing';playBtn.textContent='\\u23f8 Pause';
+      window.speechSynthesis.cancel();speakNext();
+    };
+    stopBtn.onclick=function(){
+      if(window.speechSynthesis)window.speechSynthesis.cancel();
+      state='idle';idx=sentences.length;playBtn.textContent='\\u25b6 Play';
+      rows.forEach(function(r){r.style.background=''});
+    };
+    onClean(function(){if(window.speechSynthesis)window.speechSynthesis.cancel()});`),
+    remove: cleanup('ttsplayer'),
+  },
+
+  {
+    id: 'linefocusruler',
+    name: 'Line Focus Ruler',
+    tagline: 'A reading band pinned to the screen, not the mouse',
+    description: 'Dims everything except a band held at a fixed height on screen — the page scrolls underneath it rather than the band chasing your cursor, so it works for keyboard or scroll-wheel reading with no mouse movement at all. A different mechanic from Focus Line, which tracks the pointer.',
+    howTo: 'Enable and scroll — the undimmed band stays at the screen position you set and the page moves through it. Set the position, band height and dim strength in settings.',
+    icon: '📏', color: '#a78bfa', category: 'Accessibility', version: '1.0.0',
+    settings: [
+      { key: 'positionPct', label: 'Ruler position (% from top)', type: 'range', min: 10, max: 90, step: 5, default: 40 },
+      { key: 'band', label: 'Band height (px)', type: 'range', min: 30, max: 200, step: 10, default: 80 },
+      { key: 'dim', label: 'Dim strength', type: 'range', min: 0.1, max: 0.9, step: 0.05, default: 0.6 },
+    ],
+    inject: (s) => ext('linefocusruler', `
+    var POS=${+(s.positionPct ?? 40)},H=${+(s.band ?? 80)},D=${+(s.dim ?? 0.6)};
+    var top=document.createElement('div'),bot=document.createElement('div');
+    var base='position:fixed;left:0;right:0;background:rgba(3,5,14,'+D+');z-index:2147482980;pointer-events:none';
+    top.style.cssText=base+';top:0';
+    bot.style.cssText=base+';bottom:0';
+    [top,bot].forEach(function(n){document.documentElement.appendChild(n);onClean(function(){n.remove()})});
+    function layout(){
+      var y=window.innerHeight*(POS/100),half=H/2;
+      top.style.height=Math.max(0,y-half)+'px';
+      bot.style.height=Math.max(0,window.innerHeight-(y+half))+'px';
+    }
+    layout();
+    on(window,'resize',layout);`),
+    remove: cleanup('linefocusruler'),
+  },
+
+  {
+    id: 'dyslexiamode',
+    name: 'Dyslexia-Friendly Mode',
+    tagline: 'Wider spacing and an easier-to-track font, everywhere',
+    description: 'Switches the page to a widely-available humanist font, opens up letter, word and line spacing per common dyslexia-accessibility guidance, and can add a soft cream tint that many readers find easier to track than stark white. Uses fonts already installed on your system rather than downloading one, so it works instantly and offline.',
+    howTo: 'Enable for an easier-to-track version of any page. Tune spacing and toggle the cream background in settings.',
+    icon: '🔤', color: '#fb923c', category: 'Accessibility', version: '1.0.0',
+    settings: [
+      { key: 'letterSpacing', label: 'Letter spacing (em)', type: 'range', min: 0, max: 0.15, step: 0.01, default: 0.05 },
+      { key: 'lineSpacing', label: 'Line height', type: 'range', min: 1.4, max: 2.4, step: 0.1, default: 1.8 },
+      { key: 'tint', label: 'Cream background tint', type: 'toggle', default: true },
+    ],
+    inject: (s) => ext('dyslexiamode', `
+    var LS=${+(s.letterSpacing ?? 0.05)},LH=${+(s.lineSpacing ?? 1.8)},TINT=${s.tint === false ? 'false' : 'true'};
+    css('body,body *{font-family:"Comic Sans MS","Trebuchet MS",Verdana,sans-serif !important;letter-spacing:'+LS+'em !important;word-spacing:'+(LS*2)+'em !important;line-height:'+LH+' !important;}'
+      +(TINT?'html,body{background:#fbf6e9 !important}':''));`),
+    remove: cleanup('dyslexiamode'),
+  },
+
   // ── Productivity ────────────────────────────────────────────────────────
   {
     id: 'sitetimer',
@@ -1164,5 +2064,547 @@ export const EXTENSION_PACK: ExtensionDef[] = [
       }
     });`),
     remove: cleanup('scrollmarks'),
+  },
+
+  // ── Productivity (cont'd) ───────────────────────────────────────────────
+  {
+    id: 'citationgrabber',
+    name: 'Citation Grabber',
+    tagline: 'One click to a ready-to-paste citation',
+    description: 'Reads the page\'s own metadata — Open Graph tags, JSON-LD, byline and publish-date markup — and turns it into APA, MLA, Chicago and BibTeX citations you can copy straight into a paper or reference manager. No page ever has to be typed out by hand again.',
+    howTo: 'Enable, then open the panel on any article or paper — all four formats are ready immediately. Press Copy next to the one you need.',
+    icon: '📚', color: '#0ea5e9', category: 'Productivity', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'includeAccessDate', label: 'Include "accessed" date', type: 'toggle', default: true },
+    ],
+    inject: (s) => ext('citationgrabber', `
+    var INCLUDE_ACCESS=${s.includeAccessDate === false ? 'false' : 'true'};
+    function meta(name){
+      var el=document.querySelector('meta[name="'+name+'"]')||document.querySelector('meta[property="'+name+'"]');
+      return el?el.getAttribute('content'):null;
+    }
+    function jsonLd(){
+      var out={};
+      document.querySelectorAll('script[type="application/ld+json"]').forEach(function(node){
+        try{
+          var data=JSON.parse(node.textContent);
+          var arr=Array.isArray(data)?data:[data];
+          arr.forEach(function(d){
+            if(!d||typeof d!=='object')return;
+            if(d.author&&!out.author){
+              if(typeof d.author==='string')out.author=d.author;
+              else if(d.author.name)out.author=d.author.name;
+              else if(Array.isArray(d.author)&&d.author[0]&&d.author[0].name)out.author=d.author[0].name;
+            }
+            if(d.datePublished&&!out.date)out.date=d.datePublished;
+            if(d.headline&&!out.title)out.title=d.headline;
+          });
+        }catch(e){}
+      });
+      return out;
+    }
+    var ld=jsonLd();
+    var title=ld.title||meta('og:title')||document.title||'Untitled';
+    var author=ld.author||meta('author')||meta('article:author')||'';
+    var dateRaw=ld.date||meta('article:published_time')||meta('date')||meta('publish-date')||'';
+    var site=meta('og:site_name')||location.hostname.replace(/^www\\./,'');
+    var canon=document.querySelector('link[rel=canonical]');
+    var pageUrl=canon?canon.href:location.href;
+    function parseDate(raw){
+      if(!raw)return null;
+      var d=new Date(raw);
+      return isNaN(d.getTime())?null:d;
+    }
+    var pub=parseDate(dateRaw);
+    var today=new Date();
+    var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    function fmtLong(d){return d?MONTHS[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear():'n.d.'}
+    function fmtISO(d){return d?d.toISOString().slice(0,10):'n.d.'}
+    function lastFirst(name){
+      if(!name)return '';
+      var parts=name.trim().split(/\\s+/);
+      if(parts.length<2)return name;
+      var last=parts.pop();
+      return last+', '+parts.join(' ');
+    }
+    var apa=(author?lastFirst(author)+'. ':'')+'('+(pub?pub.getFullYear():'n.d.')+'). '+title+'. '+site+'.'+(INCLUDE_ACCESS?' Retrieved '+fmtLong(today)+', from '+pageUrl:' '+pageUrl);
+    var mla='\\u201c'+title+'.\\u201d '+site+(pub?', '+fmtLong(pub):'')+(author?', by '+author:'')+', '+pageUrl+(INCLUDE_ACCESS?'. Accessed '+fmtLong(today)+'.':'.');
+    var chicago=(author?author+'. ':'')+'\\u201c'+title+'.\\u201d '+site+'. '+(pub?fmtLong(pub):'n.d.')+'. '+pageUrl+(INCLUDE_ACCESS?' (accessed '+fmtLong(today)+').':'.');
+    var bibkey=(author?author.split(/\\s+/).pop().toLowerCase():site.replace(/[^a-z0-9]+/gi,''))+(pub?pub.getFullYear():'nd');
+    var bibtex='@misc{'+bibkey+',\\n  title = {'+title+'},\\n'+(author?'  author = {'+author+'},\\n':'')+'  year = {'+(pub?pub.getFullYear():'n.d.')+'},\\n  howpublished = {'+site+'},\\n  url = {'+pageUrl+'}'+(INCLUDE_ACCESS?',\\n  note = {Accessed: '+fmtISO(today)+'}':'')+'\\n}';
+    var panel=window.AIHubPanel.create({key:'citationgrabber',title:'Citation Grabber',icon:'📚',width:400});
+    var bd=panel.body;
+    [['APA',apa],['MLA',mla],['Chicago',chicago],['BibTeX',bibtex]].forEach(function(f){
+      var box=document.createElement('div');
+      box.style.cssText='margin-bottom:10px;padding:8px;border-radius:8px;background:rgba(255,255,255,.04)';
+      var head=document.createElement('div');head.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:5px';
+      var lbl=document.createElement('span');lbl.style.cssText='font-weight:700;font-size:11px;color:#93c5fd';lbl.textContent=f[0];
+      var copyB=document.createElement('button');copyB.textContent='Copy';copyB.style.cssText='padding:2px 10px;font-size:10px';
+      copyB.onclick=function(){try{navigator.clipboard.writeText(f[1]);copyB.textContent='Copied';setTimeout(function(){copyB.textContent='Copy'},1200)}catch(e){}};
+      head.appendChild(lbl);head.appendChild(copyB);
+      var body=document.createElement('div');
+      body.style.cssText='font-size:11px;font-family:ui-monospace,monospace;white-space:pre-wrap;word-break:break-word;opacity:.85;line-height:1.5';
+      body.textContent=f[1];
+      box.appendChild(head);box.appendChild(body);bd.appendChild(box);
+    });`),
+    remove: cleanup('citationgrabber'),
+  },
+
+  {
+    id: 'pagesnapshotdiff',
+    name: 'Page Snapshot Diff',
+    tagline: 'See what changed since your last visit',
+    description: 'Remembers the text of this page from your last visit and highlights the paragraphs that were added or removed since, right on the page — no watch list to set up, no polling in the background. Every visit rolls the baseline forward, so it always compares against last time you were actually here. Great for docs, pricing pages and changelogs you browse to directly.',
+    howTo: 'Enable and revisit any page you check periodically — the first visit just records a baseline, every visit after that shows added text in green and removed text in struck-through red.',
+    icon: '📸', color: '#22c55e', category: 'Productivity', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'minChars', label: 'Ignore text blocks shorter than (chars)', type: 'range', min: 0, max: 200, step: 10, default: 20 },
+    ],
+    inject: (s) => ext('pagesnapshotdiff', `
+    var MINCHARS=${+(s.minChars ?? 20)};
+    var key='aihub.snapdiff.'+location.origin+location.pathname;
+    function blocks(){
+      var out=[];
+      document.querySelectorAll('p,li,h1,h2,h3,blockquote').forEach(function(n){
+        var t=(n.innerText||'').trim().replace(/\\s+/g,' ');
+        if(t.length>=MINCHARS)out.push(t);
+      });
+      return out;
+    }
+    function load(){try{return JSON.parse(localStorage.getItem(key)||'null')}catch(e){return null}}
+    function save(list){try{localStorage.setItem(key,JSON.stringify({t:Date.now(),blocks:list}))}catch(e){}}
+    function diff(prevList,curList){
+      var prevSet={};prevList.forEach(function(p){prevSet[p]=true});
+      var curSet={};curList.forEach(function(c){curSet[c]=true});
+      return {
+        added: curList.filter(function(c){return !prevSet[c]}),
+        removed: prevList.filter(function(p){return !curSet[p]}),
+      };
+    }
+    var current=blocks();
+    var prevData=load();
+    var panel=window.AIHubPanel.create({key:'pagesnapshotdiff',title:'Snapshot Diff',icon:'📸',width:400});
+    var bd=panel.body;
+    if(!prevData){
+      var info=document.createElement('div');
+      info.style.cssText='font-size:11.5px;opacity:.7;line-height:1.6';
+      info.textContent='First visit recorded ('+current.length+' text blocks). Revisit this page later to see what changed.';
+      bd.appendChild(info);
+    }else{
+      var d=diff(prevData.blocks||[],current);
+      var since=prevData.t?new Date(prevData.t):null;
+      var head=document.createElement('div');
+      head.style.cssText='font-size:11px;opacity:.55;margin-bottom:8px';
+      head.textContent='Compared to your last visit'+(since?' ('+since.toLocaleString()+')':'')+'.';
+      bd.appendChild(head);
+      if(!d.added.length&&!d.removed.length){
+        var same=document.createElement('div');
+        same.style.cssText='font-size:11.5px;opacity:.6';
+        same.textContent='No visible text changes since last visit.';
+        bd.appendChild(same);
+      }else{
+        d.added.forEach(function(t){
+          var row=document.createElement('div');
+          row.style.cssText='padding:6px 8px;margin-bottom:5px;border-radius:8px;background:rgba(52,211,153,.1);border-left:2px solid #34d399;font-size:11.5px;line-height:1.5';
+          row.textContent='+ '+t.slice(0,240);
+          bd.appendChild(row);
+        });
+        d.removed.forEach(function(t){
+          var row=document.createElement('div');
+          row.style.cssText='padding:6px 8px;margin-bottom:5px;border-radius:8px;background:rgba(248,113,113,.1);border-left:2px solid #f87171;font-size:11.5px;line-height:1.5;text-decoration:line-through;opacity:.7';
+          row.textContent='- '+t.slice(0,240);
+          bd.appendChild(row);
+        });
+      }
+    }
+    var btn=document.createElement('button');
+    btn.textContent='Forget baseline';
+    btn.style.cssText='margin-top:8px;background:rgba(255,255,255,.08)';
+    btn.onclick=function(){try{localStorage.removeItem(key)}catch(e){}btn.textContent='Forgotten \\u2713';setTimeout(function(){btn.textContent='Forget baseline'},1200)};
+    bd.appendChild(btn);
+    save(current);`),
+    remove: cleanup('pagesnapshotdiff'),
+  },
+
+  {
+    id: 'pomodorotab',
+    name: 'Pomodoro Tab',
+    tagline: 'A focus timer that lives on the page',
+    description: 'A focus/break timer for this tab: counts down a focus block, then covers this page with a break reminder until the break block ends, and keeps a running total of focused minutes on this site today. It only affects the tab it runs in — a page script has no way to dim or control other tabs, so this is a per-tab timer, not a whole-browser one.',
+    howTo: 'Enable, open the panel and press Start. When the focus block ends this page dims with a break reminder until the break block ends; press Start again anytime to resume.',
+    icon: '🍅', color: '#ef4444', category: 'Productivity', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'focusMin', label: 'Focus length (minutes)', type: 'range', min: 5, max: 60, step: 5, default: 25 },
+      { key: 'breakMin', label: 'Break length (minutes)', type: 'range', min: 1, max: 30, step: 1, default: 5 },
+    ],
+    inject: (s) => ext('pomodorotab', `
+    var FOCUS=${+(s.focusMin ?? 25)}*60, BREAK=${+(s.breakMin ?? 5)}*60;
+    var logKey='aihub.pomodoro.'+location.hostname;
+    function loadLog(){try{return JSON.parse(localStorage.getItem(logKey)||'[]')}catch(e){return []}}
+    function saveLog(list){try{localStorage.setItem(logKey,JSON.stringify(list.slice(-200)))}catch(e){}}
+    var panel=window.AIHubPanel.create({key:'pomodorotab',title:'Pomodoro',icon:'🍅',width:260});
+    var bd=panel.body;
+    var phase='focus',remaining=FOCUS,running=false,cycles=0,sessionStart=null,overlay=null;
+    function showBreakOverlay(){
+      if(overlay)return;
+      overlay=document.createElement('div');
+      overlay.style.cssText='position:fixed;inset:0;z-index:2147483646;background:rgba(2,6,23,.85);display:flex;align-items:center;justify-content:center;color:#e9ebf5;font:600 18px ui-sans-serif,system-ui;flex-direction:column;gap:10px';
+      var t=document.createElement('div');t.textContent='\\u2615 Break time';
+      var s2=document.createElement('div');s2.style.cssText='font-size:13px;opacity:.7;font-weight:400';s2.textContent='Step away from this tab for a bit.';
+      overlay.appendChild(t);overlay.appendChild(s2);
+      document.body.appendChild(overlay);
+      onClean(function(){try{overlay&&overlay.remove()}catch(e){}});
+    }
+    function hideBreakOverlay(){if(overlay){overlay.remove();overlay=null}}
+    var box=document.createElement('div');box.style.cssText='text-align:center';
+    var timeEl=document.createElement('div');timeEl.style.cssText='font-size:32px;font-weight:700;font-family:ui-monospace,monospace;margin-bottom:4px';
+    var phaseEl=document.createElement('div');phaseEl.style.cssText='font-size:11px;opacity:.6;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px';
+    var row=document.createElement('div');row.style.cssText='display:flex;gap:6px;justify-content:center;margin-bottom:10px';
+    var startBtn=document.createElement('button');startBtn.textContent='Start';
+    var resetBtn=document.createElement('button');resetBtn.textContent='Reset';resetBtn.style.cssText='background:rgba(255,255,255,.08)';
+    row.appendChild(startBtn);row.appendChild(resetBtn);
+    var statsEl=document.createElement('div');statsEl.style.cssText='font-size:10.5px;opacity:.5';
+    box.appendChild(timeEl);box.appendChild(phaseEl);box.appendChild(row);box.appendChild(statsEl);
+    bd.appendChild(box);
+    function fmt(sec){var m=Math.floor(sec/60),s3=sec%60;return (m<10?'0':'')+m+':'+(s3<10?'0':'')+s3}
+    function todayTotal(){
+      var today=new Date().toISOString().slice(0,10);
+      return loadLog().filter(function(e){return e.day===today}).reduce(function(a,e){return a+e.dur},0);
+    }
+    function paint(){
+      timeEl.textContent=fmt(remaining);
+      phaseEl.textContent=(phase==='focus'?'Focus':'Break')+' \\u00b7 cycle '+(cycles+1);
+      startBtn.textContent=running?'Pause':'Start';
+      statsEl.textContent=Math.round(todayTotal()/60)+'m focused today on '+location.hostname;
+      panel.setTitle('Pomodoro \\u00b7 '+fmt(remaining));
+    }
+    function tick(){
+      if(!running)return;
+      remaining--;
+      if(remaining<=0){
+        if(phase==='focus'){
+          if(sessionStart)saveLog(loadLog().concat([{day:new Date().toISOString().slice(0,10),dur:FOCUS}]));
+          cycles++;phase='break';remaining=BREAK;showBreakOverlay();
+        }else{
+          phase='focus';remaining=FOCUS;sessionStart=Date.now();hideBreakOverlay();
+        }
+      }
+      paint();
+    }
+    startBtn.onclick=function(){
+      running=!running;
+      if(running&&phase==='focus'&&!sessionStart)sessionStart=Date.now();
+      paint();
+    };
+    resetBtn.onclick=function(){
+      running=false;phase='focus';remaining=FOCUS;sessionStart=null;hideBreakOverlay();paint();
+    };
+    var iv=setInterval(tick,1000);
+    onClean(function(){clearInterval(iv);hideBreakOverlay()});
+    paint();`),
+    remove: cleanup('pomodorotab'),
+  },
+
+  // ── Privacy ─────────────────────────────────────────────────────────────
+  {
+    id: 'cookieinspector',
+    name: 'Cookie Inspector',
+    tagline: 'Every cookie this page can read, in one panel',
+    description: 'Lists every cookie readable by page scripts on the current site with its name and value, and lets you copy or delete any one of them, or wipe the lot in a click. HttpOnly cookies are called out as hidden by design — that protection is the browser working as intended, and no page script (including this one) can see past it.',
+    howTo: 'Enable, then open the panel — it lists cookies for the current site immediately. Press Refresh after a page action sets new ones, or Wipe readable to clear everything this page can see.',
+    icon: '🍪', color: '#f97316', category: 'Privacy', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'mask', label: 'Mask cookie values', type: 'toggle', default: true },
+    ],
+    inject: (s) => ext('cookieinspector', `
+    var MASK=${s.mask === false ? 'false' : 'true'};
+    var panel=window.AIHubPanel.create({key:'cookieinspector',title:'Cookie Inspector',icon:'🍪',width:380});
+    var bd=panel.body;
+    var toolbar=document.createElement('div');toolbar.style.cssText='display:flex;gap:6px;margin-bottom:8px';
+    var refreshBtn=document.createElement('button');refreshBtn.textContent='Refresh';
+    var wipeBtn=document.createElement('button');wipeBtn.textContent='Wipe readable';
+    wipeBtn.style.cssText='background:linear-gradient(135deg,#f87171,#ef4444)';
+    toolbar.appendChild(refreshBtn);toolbar.appendChild(wipeBtn);bd.appendChild(toolbar);
+    var note=document.createElement('div');
+    note.style.cssText='font-size:10.5px;opacity:.55;margin-bottom:8px;line-height:1.5';
+    note.textContent='Showing cookies readable by scripts on '+location.hostname+'. HttpOnly cookies are hidden from JS by design and cannot be listed here.';
+    bd.appendChild(note);
+    var list=document.createElement('div');bd.appendChild(list);
+    function parseCookies(){
+      return document.cookie.split(';').map(function(p){return p.trim()}).filter(Boolean).map(function(p){
+        var i=p.indexOf('=');
+        var name=i===-1?p:p.slice(0,i);
+        var value=i===-1?'':p.slice(i+1);
+        try{value=decodeURIComponent(value)}catch(e){}
+        return {name:name,value:value};
+      });
+    }
+    function wipeOne(name){
+      document.cookie=name+'=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';
+      document.cookie=name+'=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;domain='+location.hostname;
+    }
+    function row(c){
+      var r=document.createElement('div');
+      r.style.cssText='padding:7px 8px;margin-bottom:5px;border-radius:8px;background:rgba(255,255,255,.04);font-size:11.5px';
+      var top=document.createElement('div');top.style.cssText='display:flex;justify-content:space-between;gap:8px;align-items:center';
+      var nm=document.createElement('span');nm.style.cssText='font-weight:600;color:#f3f4fb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      nm.textContent=c.name;
+      var actions=document.createElement('span');actions.style.cssText='display:flex;gap:6px;flex:0 0 auto';
+      var copyB=document.createElement('button');copyB.textContent='copy';copyB.style.cssText='padding:2px 8px;font-size:10px;background:rgba(255,255,255,.08)';
+      copyB.onclick=function(){try{navigator.clipboard.writeText(c.value)}catch(e){}};
+      var delB=document.createElement('button');delB.textContent='del';delB.style.cssText='padding:2px 8px;font-size:10px;background:rgba(248,113,113,.18);color:#fca5a5';
+      delB.onclick=function(){wipeOne(c.name);render()};
+      actions.appendChild(copyB);actions.appendChild(delB);
+      top.appendChild(nm);top.appendChild(actions);
+      var val=document.createElement('div');
+      val.style.cssText='opacity:.6;font-family:ui-monospace,monospace;font-size:10.5px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      val.textContent=MASK?(c.value?c.value.slice(0,4)+'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022':'(empty)'):(c.value||'(empty)');
+      var meta=document.createElement('div');
+      meta.style.cssText='opacity:.4;font-size:10px;margin-top:2px';
+      meta.textContent=location.hostname+' \\u00b7 '+(location.protocol==='https:'?'served over https':'served over http')+' \\u00b7 SameSite/Secure/HttpOnly flags are not exposed to JS';
+      r.appendChild(top);r.appendChild(val);r.appendChild(meta);
+      return r;
+    }
+    function render(){
+      while(list.firstChild)list.removeChild(list.firstChild);
+      var cookies=parseCookies();
+      panel.setTitle('Cookie Inspector \\u00b7 '+cookies.length);
+      if(!cookies.length){
+        var empty=document.createElement('div');empty.style.cssText='opacity:.5;font-size:11.5px;padding:8px 0';
+        empty.textContent='No JS-readable cookies on this page.';list.appendChild(empty);return;
+      }
+      cookies.forEach(function(c){list.appendChild(row(c))});
+    }
+    refreshBtn.onclick=render;
+    wipeBtn.onclick=function(){parseCookies().forEach(function(c){wipeOne(c.name)});render()};
+    render();`),
+    remove: cleanup('cookieinspector'),
+  },
+
+  {
+    id: 'trackermap',
+    name: 'Third-Party Tracker Map',
+    tagline: 'See every domain this page is quietly talking to',
+    description: 'Watches every script, image, iframe and XHR the page loads and plots the third-party domains behind them as a small connected graph, flagging the ones that match a curated list of known ad and analytics vendors. Nothing here is a network call of its own — it only reads the browser\'s own resource timing entries for requests the page already made.',
+    howTo: 'Enable, then browse normally — the graph and list below it fill in as the page fires requests. Known ad/analytics vendors get a red dot and a left border in the list; everything else is a neutral third party.',
+    icon: '🕵️', color: '#ef4444', category: 'Privacy', version: '1.0.0',
+    needsPanel: true,
+    settings: [
+      { key: 'refreshMs', label: 'Refresh interval (ms)', type: 'range', min: 1000, max: 10000, step: 500, default: 3000 },
+    ],
+    inject: (s) => ext('trackermap', `
+    var REFRESH=${+(s.refreshMs ?? 3000)};
+    var KNOWN={
+      'google-analytics.com':'Google Analytics','googletagmanager.com':'Google Tag Manager',
+      'doubleclick.net':'Google Ads','googlesyndication.com':'Google Ads','googleadservices.com':'Google Ads',
+      'facebook.net':'Meta Pixel','connect.facebook.net':'Meta Pixel','hotjar.com':'Hotjar',
+      'segment.io':'Segment','segment.com':'Segment','mixpanel.com':'Mixpanel','amplitude.com':'Amplitude',
+      'criteo.com':'Criteo','taboola.com':'Taboola','outbrain.com':'Outbrain','scorecardresearch.com':'ScorecardResearch',
+      'adsrvr.org':'The Trade Desk','quantserve.com':'Quantcast','clarity.ms':'Microsoft Clarity','bat.bing.com':'Bing Ads',
+      'fullstory.com':'FullStory','intercomcdn.com':'Intercom','intercom.io':'Intercom','newrelic.com':'New Relic',
+      'nr-data.net':'New Relic','sentry.io':'Sentry','cloudflareinsights.com':'Cloudflare Insights','snapchat.com':'Snap Pixel'
+    };
+    function vendorFor(host){
+      for(var k in KNOWN){if(host===k||host.slice(-(k.length+1))==='.'+k)return KNOWN[k]}
+      return null;
+    }
+    var panel=window.AIHubPanel.create({key:'trackermap',title:'Tracker Map',icon:'\\ud83d\\udd75\\ufe0f',width:400});
+    var bd=panel.body;
+    var svgWrap=document.createElement('div');svgWrap.style.cssText='margin-bottom:10px';bd.appendChild(svgWrap);
+    var list=document.createElement('div');bd.appendChild(list);
+    var selfHost=location.hostname;
+    var domains={};
+    function record(url,type){
+      var host;try{host=new URL(url,location.href).hostname}catch(e){return}
+      if(!host||host===selfHost)return;
+      if(!domains[host])domains[host]={count:0,vendor:vendorFor(host)};
+      domains[host].count++;
+    }
+    try{ performance.getEntriesByType('resource').forEach(function(e){record(e.name,e.initiatorType)}) }catch(e){}
+    var po=null;
+    try{
+      po=new PerformanceObserver(function(l){l.getEntries().forEach(function(e){record(e.name,e.initiatorType)});render()});
+      po.observe({type:'resource',buffered:false});
+    }catch(e){}
+    onClean(function(){if(po)try{po.disconnect()}catch(e){}});
+    function draw(){
+      var hosts=Object.keys(domains);
+      var size=240,cx=size/2,cy=size/2,r=size/2-34;
+      var svgNS='http://www.w3.org/2000/svg';
+      var svg=document.createElementNS(svgNS,'svg');
+      svg.setAttribute('viewBox','0 0 '+size+' '+size);svg.setAttribute('width','100%');
+      svg.style.maxWidth=size+'px';svg.style.display='block';svg.style.margin='0 auto';
+      var maxCount=hosts.reduce(function(m,h){return Math.max(m,domains[h].count)},1);
+      hosts.forEach(function(h,i){
+        var ang=(i/Math.max(hosts.length,1))*Math.PI*2-Math.PI/2;
+        var x=cx+Math.cos(ang)*r,y=cy+Math.sin(ang)*r;
+        var line=document.createElementNS(svgNS,'line');
+        line.setAttribute('x1',cx);line.setAttribute('y1',cy);line.setAttribute('x2',x);line.setAttribute('y2',y);
+        line.setAttribute('stroke',domains[h].vendor?'rgba(248,113,113,.5)':'rgba(148,163,184,.35)');
+        line.setAttribute('stroke-width','1');svg.appendChild(line);
+        var rad=6+8*(domains[h].count/maxCount);
+        var dot=document.createElementNS(svgNS,'circle');
+        dot.setAttribute('cx',x);dot.setAttribute('cy',y);dot.setAttribute('r',rad);
+        dot.setAttribute('fill',domains[h].vendor?'#f87171':'#60a5fa');dot.setAttribute('opacity','0.85');
+        var t=document.createElementNS(svgNS,'title');
+        t.textContent=h+(domains[h].vendor?' \\u2014 '+domains[h].vendor:'')+' \\u00b7 '+domains[h].count+' req';
+        dot.appendChild(t);svg.appendChild(dot);
+      });
+      var center=document.createElementNS(svgNS,'circle');
+      center.setAttribute('cx',cx);center.setAttribute('cy',cy);center.setAttribute('r',10);center.setAttribute('fill','#a78bfa');
+      var ct=document.createElementNS(svgNS,'title');ct.textContent=selfHost+' (this page)';center.appendChild(ct);
+      svg.appendChild(center);
+      while(svgWrap.firstChild)svgWrap.removeChild(svgWrap.firstChild);
+      svgWrap.appendChild(svg);
+    }
+    function render(){
+      draw();
+      var hosts=Object.keys(domains).sort(function(a,b){return domains[b].count-domains[a].count});
+      panel.setTitle('Tracker Map \\u00b7 '+hosts.length);
+      while(list.firstChild)list.removeChild(list.firstChild);
+      if(!hosts.length){
+        var e=document.createElement('div');e.style.cssText='opacity:.5;font-size:11.5px';
+        e.textContent='No third-party requests observed yet.';list.appendChild(e);return;
+      }
+      hosts.forEach(function(h){
+        var d=domains[h];
+        var row=document.createElement('div');
+        row.style.cssText='display:flex;justify-content:space-between;gap:8px;padding:6px 8px;margin-bottom:4px;border-radius:8px;background:rgba(255,255,255,.04);font-size:11px'+(d.vendor?';border-left:2px solid #f87171':'');
+        var left=document.createElement('span');left.style.cssText='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px';
+        left.textContent=esc(h)+(d.vendor?' \\u2014 '+esc(d.vendor):'');
+        var right=document.createElement('span');right.style.opacity='.6';right.textContent=d.count+'x';
+        row.appendChild(left);row.appendChild(right);list.appendChild(row);
+      });
+    }
+    render();
+    var iv=setInterval(render,REFRESH);
+    onClean(function(){clearInterval(iv)});`),
+    remove: cleanup('trackermap'),
+  },
+
+  {
+    id: 'formfieldspy',
+    name: 'Form Field Spy',
+    tagline: 'Flags forms that ship your data to another domain',
+    description: 'Watches every form on the page and warns you when one submits to a different domain than the page you are on — the classic "free PDF" trick where an email form quietly ships your address to a marketing SaaS. Cross-domain forms carrying a password, email or phone field get an inline badge and a one-time confirmation before they actually submit. Pure client-side, no telemetry, no network calls of its own.',
+    howTo: 'Enable and browse as normal. Any form heading to a different domain gets a small warning badge above it; submitting one that also asks for an email, phone or password pops a confirmation naming the destination domain before it goes through.',
+    icon: '📝', color: '#eab308', category: 'Privacy', version: '1.0.0',
+    settings: [
+      { key: 'strict', label: 'Warn for every cross-domain form (not just email/password/phone)', type: 'toggle', default: false },
+    ],
+    inject: (s) => ext('formfieldspy', `
+    var STRICT=${s.strict ? 'true' : 'false'};
+    function hasSensitive(form){
+      return !!form.querySelector('input[type=password],input[type=email],input[type=tel],input[name*=email i],input[name*=card i]');
+    }
+    function destHost(form){
+      var action=form.getAttribute('action');if(!action)return null;
+      try{var u=new URL(action,location.href);return u.hostname||null}catch(e){return null}
+    }
+    function crossDomain(form){var h=destHost(form);return !!h&&h!==location.hostname}
+    function badge(form){
+      if(form.__aihubBadged)return;form.__aihubBadged=true;
+      var b=document.createElement('div');
+      b.textContent='\\u26a0 sends to '+destHost(form);
+      b.style.cssText='display:inline-block;margin:4px 0;padding:3px 8px;border-radius:6px;background:rgba(251,191,36,.15);color:#fbbf24;font:600 10.5px ui-sans-serif,system-ui;border:1px solid rgba(251,191,36,.3)';
+      if(form.parentNode)form.parentNode.insertBefore(b,form);
+      onClean(function(){try{b.remove()}catch(e){}});
+    }
+    function scan(){
+      document.querySelectorAll('form').forEach(function(f){
+        if(crossDomain(f)&&(STRICT||hasSensitive(f)))badge(f);
+      });
+    }
+    scan();
+    var mo=new MutationObserver(function(){scan()});
+    mo.observe(document.body||document.documentElement,{childList:true,subtree:true});
+    onClean(function(){mo.disconnect()});
+    var pending=null;
+    function showModal(form,dest){
+      if(pending)return;
+      var ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(2,6,23,.55);display:flex;align-items:center;justify-content:center';
+      var card=document.createElement('div');
+      card.style.cssText='max-width:340px;padding:18px 20px;border-radius:14px;background:#12131f;color:#e9ebf5;font:13px ui-sans-serif,system-ui;border:1px solid rgba(255,255,255,.12);box-shadow:0 20px 60px rgba(0,0,0,.6)';
+      card.innerHTML='<div style="font-weight:700;margin-bottom:8px">\\u26a0 This form sends data elsewhere</div>'+
+        '<div style="opacity:.75;line-height:1.6;margin-bottom:14px">You are on <b>'+esc(location.hostname)+'</b> but this form submits to <b>'+esc(dest)+'</b>. Make sure that is what you expect before continuing.</div>';
+      var row=document.createElement('div');row.style.cssText='display:flex;gap:8px;justify-content:flex-end';
+      var cancel=document.createElement('button');cancel.textContent='Cancel';cancel.style.cssText='background:rgba(255,255,255,.08)';
+      var cont=document.createElement('button');cont.textContent='Continue anyway';
+      row.appendChild(cancel);row.appendChild(cont);card.appendChild(row);ov.appendChild(card);
+      document.body.appendChild(ov);pending=ov;
+      cancel.onclick=function(){ov.remove();pending=null};
+      cont.onclick=function(){
+        form.__aihubApproved=true;ov.remove();pending=null;
+        if(typeof form.requestSubmit==='function')form.requestSubmit();else form.submit();
+      };
+    }
+    on(document,'submit',function(e){
+      var form=e.target;
+      if(!(form&&form.tagName==='FORM'))return;
+      if(form.__aihubApproved)return;
+      if(!crossDomain(form)||!(STRICT||hasSensitive(form)))return;
+      e.preventDefault();e.stopPropagation();
+      showModal(form,destHost(form));
+    },true);`),
+    remove: cleanup('formfieldspy'),
+  },
+
+  {
+    id: 'pwreveal',
+    name: 'Password Field Reveal',
+    tagline: 'A show/hide eye on every password field',
+    description: 'Adds a small eye toggle to every password field on the page so you can check what you actually typed before submitting, without the site having to build that in itself. Fields are automatically re-masked the moment a form submits, so a revealed password never lingers on screen after you have moved on.',
+    howTo: 'Enable, then click the eye icon inside any password field to reveal or re-hide it. It resets to hidden automatically when the form submits.',
+    icon: '👁', color: '#8b5cf6', category: 'Privacy', version: '1.0.0',
+    settings: [
+      { key: 'position', label: 'Icon position', type: 'select', default: 'right', options: [
+        { value: 'right', label: 'Right edge' },
+        { value: 'left', label: 'Left edge' },
+      ] },
+    ],
+    inject: (s) => ext('pwreveal', `
+    var POS=${JSON.stringify(s.position === 'left' ? 'left' : 'right')};
+    function wrap(input){
+      if(input.__aihubEyeWrapped)return;input.__aihubEyeWrapped=true;
+      var parent=input.parentNode;if(!parent)return;
+      var host=document.createElement('span');
+      host.style.cssText='position:relative;display:inline-block;vertical-align:middle;width:'+(input.offsetWidth?input.offsetWidth+'px':'100%');
+      parent.insertBefore(host,input);host.appendChild(input);
+      var btn=document.createElement('button');
+      btn.type='button';btn.textContent='\\ud83d\\udc41';btn.setAttribute('aria-label','Show password');
+      btn.style.cssText='position:absolute;top:50%;'+(POS==='right'?'right:6px':'left:6px')+';transform:translateY(-50%);width:22px;height:22px;padding:0;border:0;background:transparent;color:inherit;opacity:.55;cursor:pointer;font-size:13px;line-height:1;z-index:2';
+      host.appendChild(btn);
+      var padKey=POS==='right'?'paddingRight':'paddingLeft';
+      var prevPad=input.style[padKey];
+      input.style[padKey]='28px';
+      btn.onmousedown=function(e){e.preventDefault()};
+      var revealed=false;
+      btn.onclick=function(){
+        revealed=!revealed;
+        input.type=revealed?'text':'password';
+        btn.style.opacity=revealed?'1':'.55';
+      };
+      if(input.form)on(input.form,'submit',function(){
+        input.type='password';revealed=false;btn.style.opacity='.55';
+      },true);
+      onClean(function(){
+        try{
+          input.type='password';input.style[padKey]=prevPad;
+          if(host.parentNode)host.parentNode.insertBefore(input,host);
+          host.remove();
+        }catch(e){}
+      });
+    }
+    function scan(){document.querySelectorAll('input[type=password]').forEach(wrap)}
+    scan();
+    var mo=new MutationObserver(function(){scan()});
+    mo.observe(document.body||document.documentElement,{childList:true,subtree:true});
+    onClean(function(){mo.disconnect()});`),
+    remove: cleanup('pwreveal'),
   },
 ]

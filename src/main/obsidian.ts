@@ -14,7 +14,7 @@ import { join } from 'path'
  * edge cases are testable without a vault on disk.
  */
 
-export type NoteKind = 'clip' | 'bookmark' | 'answer'
+export type NoteKind = 'clip' | 'bookmark' | 'answer' | 'conversation'
 
 export interface NoteInput {
   kind: NoteKind
@@ -78,6 +78,22 @@ export function buildFrontmatter(fields: Record<string, string | number | boolea
   return lines.join('\n')
 }
 
+/**
+ * Turns a model's free-text reply to "give me some tags" into a clean,
+ * deduplicated tag list — lowercased, `#` stripped, non-tag characters
+ * dropped, capped in count and length. Pure so the parsing (the part most
+ * likely to hit a weird real reply) is testable without a live model; the
+ * network call itself lives next to the other AI-provider orchestration in
+ * main/index.ts, same as ai:categorizeBookmark's heuristic beside it.
+ */
+export function parseTagSuggestions(raw: string, max = 5): string[] {
+  return Array.from(new Set(
+    String(raw || '').split(/[,\n]/)
+      .map(t => t.trim().toLowerCase().replace(/^#/, '').replace(/[^a-z0-9-]/g, ''))
+      .filter(t => t.length > 1 && t.length < 30),
+  )).slice(0, max)
+}
+
 /** ISO date (no time) — what Obsidian's daily-note conventions expect. */
 export function isoDate(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10)
@@ -110,6 +126,7 @@ export function buildNote(input: NoteInput): { fileName: string; markdown: strin
 export function folderFor(kind: NoteKind): string {
   return kind === 'clip' ? 'AIHub/Clippings'
     : kind === 'bookmark' ? 'AIHub/Bookmarks'
+    : kind === 'conversation' ? 'AIHub/Conversations'
     : 'AIHub/AI Answers'
 }
 

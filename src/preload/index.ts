@@ -159,7 +159,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     status:      () => ipcRenderer.invoke('obsidian:status'),
     chooseVault: () => ipcRenderer.invoke('obsidian:chooseVault'),
     clearVault:  () => ipcRenderer.invoke('obsidian:clearVault'),
-    save:        (note: { kind: 'clip' | 'bookmark' | 'answer'; title: string; url?: string; content: string; tags?: string[]; extra?: Record<string, any> }) =>
+    save:        (note: { kind: 'clip' | 'bookmark' | 'answer' | 'conversation'; title: string; url?: string; content: string; tags?: string[]; extra?: Record<string, any> }) =>
       ipcRenderer.invoke('obsidian:save', note),
   },
   chat: {

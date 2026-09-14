@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, X, Send, Loader2, Sparkles, FileText, Trash2, AlertCircle,
-  Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain,
+  Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain, Save,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
@@ -117,6 +117,10 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
   const [siteMemory,    setSiteMemory]    = useState('')
   const [memoryOpen,    setMemoryOpen]    = useState(false)
   const [memoryDraft,   setMemoryDraft]   = useState('')
+  // 'idle' | 'saving' | 'ok' | 'novault' | 'error' — drives the Obsidian
+  // header button's icon/tooltip for a couple of seconds after each click,
+  // the same transient-feedback pattern saveAsArticleBookmark uses below.
+  const [obsidianSave,  setObsidianSave]  = useState<'idle' | 'saving' | 'ok' | 'novault' | 'error'>('idle')
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
   const stopRequestedRef = useRef(false)
@@ -638,6 +642,37 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
     } catch {}
   }
 
+  // Exports the whole visible conversation as one Obsidian note — every turn,
+  // not just the last answer (that's what Download .md / Save to Articles
+  // above are for, and they only ever look at the last page summary).
+  const saveConversationToObsidian = async () => {
+    if (!aiMessages.length || obsidianSave === 'saving') return
+    setObsidianSave('saving')
+    try {
+      const status = await window.electronAPI.obsidian.status()
+      if (!status?.vaultPath) { setObsidianSave('novault'); return }
+      const transcript = aiMessages
+        .filter(m => m.content?.trim())
+        .map(m => {
+          const who = m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Assistant' : 'System'
+          return `**${who}:**\n\n${m.content.trim()}`
+        })
+        .join('\n\n---\n\n')
+      const now = new Date()
+      const res = await window.electronAPI.obsidian.save({
+        kind: 'conversation',
+        title: `Chat — ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`,
+        content: transcript,
+        extra: { messages: aiMessages.length },
+      })
+      setObsidianSave(res?.ok ? 'ok' : 'error')
+    } catch {
+      setObsidianSave('error')
+    } finally {
+      setTimeout(() => setObsidianSave('idle'), 2500)
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
@@ -681,6 +716,23 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
+                {aiMessages.length > 0 && (
+                  <HeaderBtn
+                    onClick={saveConversationToObsidian}
+                    title={
+                      obsidianSave === 'ok' ? 'Saved to Obsidian' :
+                      obsidianSave === 'novault' ? 'No Obsidian vault set — pick one in Settings → Obsidian' :
+                      obsidianSave === 'error' ? 'Could not save to Obsidian' :
+                      obsidianSave === 'saving' ? 'Saving…' :
+                      'Save conversation to Obsidian'
+                    }
+                  >
+                    {obsidianSave === 'saving' ? <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> :
+                     obsidianSave === 'ok' ? <Check size={13} style={{ color: '#34d399' }} /> :
+                     obsidianSave === 'error' || obsidianSave === 'novault' ? <AlertCircle size={13} style={{ color: '#f87171' }} /> :
+                     <Save size={13} />}
+                  </HeaderBtn>
+                )}
                 <HeaderBtn onClick={clearAIMessages} title="Clear chat"><Trash2 size={13} /></HeaderBtn>
                 <HeaderBtn onClick={toggleAIPanel} title="Close (Ctrl+Shift+A)"><X size={14} /></HeaderBtn>
               </div>

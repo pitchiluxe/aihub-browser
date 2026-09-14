@@ -29,7 +29,7 @@ import { createSessionManager, type SessionTab } from './sessions'
 import axios from 'axios'
 import { createSemanticIndex, type SearchDoc } from './semantic'
 import { splitPanes } from '../shared/splitLayout'
-import { writeNote, describeVault, type NoteKind } from './obsidian'
+import { writeNote, describeVault, parseTagSuggestions, type NoteKind } from './obsidian'
 import { contentHash, describeChange, containsKeyword } from './watchDiff'
 import {
   partitionFor, addContainer, removeContainer, DEFAULT_CONTAINERS, newBurnerId, type Container,
@@ -943,6 +943,47 @@ ipcMain.handle('urlbar:showContextMenu', (e, hasText: boolean) => {
 // are always available. App-feature actions (AI, Research, Agent, Annotation,
 // Sphere) are forwarded to the renderer via the 'page-context-action' channel.
 
+// A handful of lowercase tags for a vault note, generated from its own title
+// and content. Same Ollama-first, OpenRouter-fallback-if-enabled, heuristic-
+// last chain as ai:categorizeBookmark above it, just asking for tags instead
+// of a single category. Never blocks the save on a slow or absent model.
+async function suggestTags(title: string, body: string): Promise<string[]> {
+  const heuristic = (): string[] => {
+    const words = title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').split(/\s+/).filter(w => w.length > 3)
+    return Array.from(new Set(words)).slice(0, 3)
+  }
+
+  const { olBase, orKey, orBase, orMdl } = getAIConfig()
+  const prompt = `Suggest 2 to 4 short lowercase tags (single words or hyphenated, no # symbol) that categorize this note. Reply with ONLY the tags separated by commas, nothing else.\n\nTitle: ${title}\n\nContent:\n${body.slice(0, 1500)}`
+
+  try {
+    const ol = await checkOllamaRunning()
+    if (ol.running && ol.models.length > 0) {
+      const pref = getData().settings.aiModel || ''
+      const model = (pref && ol.models.includes(pref)) ? pref : ol.models[0]
+      const { body: respBody } = await httpPost(`${olBase}/api/chat`,
+        { model, messages: [{ role: 'user', content: prompt }], stream: false, options: { temperature: 0.2 } }, {}, 10000)
+      const raw = JSON.parse(respBody)?.message?.content?.trim() || ''
+      const tags = parseTagSuggestions(raw)
+      if (tags.length) return tags
+    }
+  } catch {}
+
+  const routing = getRoutingSettings()
+  if (orKey && routing.fallbackEnabled && routing.fallbackProvider === 'openrouter') {
+    try {
+      const { body: respBody } = await httpPost(`${orBase}/chat/completions`,
+        { model: orMdl, messages: [{ role: 'user', content: prompt }], max_tokens: 40, temperature: 0.2, include_reasoning: false },
+        { Authorization: `Bearer ${toAscii(orKey)}`, 'HTTP-Referer': 'https://aihub-browser.app', 'X-Title': 'AIHub Browser' }, 10000)
+      const raw = stripThinkTags(JSON.parse(respBody)?.choices?.[0]?.message?.content?.trim() || '')
+      const tags = parseTagSuggestions(raw)
+      if (tags.length) return tags
+    } catch {}
+  }
+
+  return heuristic()
+}
+
 // Clip the current page (or just the selected passage) into the Obsidian vault
 // as a markdown note. Runs in the main process because that is where both the
 // page's text and the vault live — the renderer never needs to see either.
@@ -974,12 +1015,13 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
     } catch { body = '' }
   }
 
+  const aiTags = body ? await suggestTags(title, body) : []
   const result = writeNote(vaultPath, {
     kind: 'clip',
     title,
     url,
     content: body || '_(no readable text on this page)_',
-    tags: selection ? ['highlight'] : [],
+    tags: Array.from(new Set([...(selection ? ['highlight'] : []), ...aiTags])),
   })
   if (result.ok) notifyQuiet('Saved to Obsidian', title)
   else notifyQuiet('Could not save to Obsidian', result.error || 'Unknown error')
