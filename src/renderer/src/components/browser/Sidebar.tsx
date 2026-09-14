@@ -6,7 +6,6 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import Favicon from '../common/Favicon'
-import PriceTracker from '../prices/PriceTracker'
 import type { PageType } from '../../../../shared/pageTypes'
 
 interface Props {
@@ -296,9 +295,6 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
       </div>
 
       </div>{/* end scroll region */}
-
-      {/* ── F7: Live Price Tracker ── */}
-      <PriceTracker />
 
       {/* ── Footer ── */}
       <div style={{
