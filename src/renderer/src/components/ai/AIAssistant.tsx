@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot, X, Send, Loader2, Sparkles, FileText, Trash2, AlertCircle,
-  Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain,
+  Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain, Save,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
@@ -12,6 +12,7 @@ import { resolveNavTarget } from '../../services/navIntent'
 import { withFallbackNotice } from '../../services/routeNotice'
 import { streamChat } from '../../services/streamingChat'
 import { PAGE_REFERENCE, REFUSAL, wantedTools, selectBookmarksForPrompt, CHAT_ONLY_NOTE } from '../../services/assistantIntent'
+import { IS_INCOGNITO } from '../../services/incognitoMode'
 import ChatMessage from './ChatMessage'
 import { AttachImageButton, AttachmentStrip, useImageAttachments } from './ImageComposer'
 
@@ -37,6 +38,7 @@ const AI_NEWS_INTENT  = /latest\s+ai|ai\s+news|ai\s+articles?|ai\s+updates?|what
 // why constant text is worth real seconds.
 const FEATURE_MAP = `## AIHub Browser — full feature map (answer any "can the browser do X?" from this)
 - **Tabs**: multi-tab strip with drag-reorder, context menu (duplicate / close others / close right), Ctrl+T new tab.
+- **Incognito windows**: Ctrl+Shift+N (Cmd+Shift+N on Mac) opens a private window whose tabs use a separate in-memory session. No history, Rewind, session restore or AI chat history is saved from it, and its cookies and site data are wiped when the last Incognito window closes. Downloaded files and bookmarks stay. It does not make anyone anonymous to websites, employers or networks.
 - **Bookmark Sphere / Knowledge Graph**: force-directed graph of bookmarks clustered by category, with search, zoom, and per-node actions. Follows the active theme.
 - **Smart Homepage**: universal search, quick-access apps, AI site recommendations learned from browsing patterns.
 - **AI Assistant** (you): local Ollama or cloud OpenRouter, switchable in Settings → AI. Agent tools let you drive tabs, fill forms, read/write files, run approved commands, and build projects.
@@ -115,6 +117,10 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
   const [siteMemory,    setSiteMemory]    = useState('')
   const [memoryOpen,    setMemoryOpen]    = useState(false)
   const [memoryDraft,   setMemoryDraft]   = useState('')
+  // 'idle' | 'saving' | 'ok' | 'novault' | 'error' — drives the Obsidian
+  // header button's icon/tooltip for a couple of seconds after each click,
+  // the same transient-feedback pattern saveAsArticleBookmark uses below.
+  const [obsidianSave,  setObsidianSave]  = useState<'idle' | 'saving' | 'ok' | 'novault' | 'error'>('idle')
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
   const stopRequestedRef = useRef(false)
@@ -348,7 +354,7 @@ Questions about facts or how-to want a good answer. Requests that name a page, a
 - Example — "How do I request a transcript from Kennesaw State University?": give the steps (log into the student portal / use the National Student Clearinghouse), link the KSU registrar transcript page, and include the registrar's phone number. Do not open a tab unless asked.
 
 ## Navigation commands
-Simple "open X" requests are handled by the browser before they ever reach you. If one does reach you, open it with \`open_tab\` using the exact URL from the bookmark list (never substitute a different bookmark), then reply "Opening [Name] ↗". Requests for the Bible, Mail, Notes, History, Downloads, Settings, Extensions, Research, Agents, Watch, Rewind, WiFi or VPN mean AIHub's own pages — open \`aihub://bible\`, \`aihub://mail\`, and so on.
+Simple "open X" requests are handled by the browser before they ever reach you. If one does reach you, open it with \`open_tab\` using the exact URL from the bookmark list (never substitute a different bookmark), then reply "Opening [Name] ↗". Requests for the Bible, Community, Mail, Notes, History, Downloads, Settings, Extensions, Research, Agents, Watch, Rewind, WiFi or VPN mean AIHub's own pages — open \`aihub://bible\`, \`aihub://mail\`, and so on.
 
 ## Answer formatting — ALWAYS follow these
 Your chat renders full GitHub-flavored markdown: tables, fenced code, headings, task lists. Use it.
@@ -636,6 +642,37 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
     } catch {}
   }
 
+  // Exports the whole visible conversation as one Obsidian note — every turn,
+  // not just the last answer (that's what Download .md / Save to Articles
+  // above are for, and they only ever look at the last page summary).
+  const saveConversationToObsidian = async () => {
+    if (!aiMessages.length || obsidianSave === 'saving') return
+    setObsidianSave('saving')
+    try {
+      const status = await window.electronAPI.obsidian.status()
+      if (!status?.vaultPath) { setObsidianSave('novault'); return }
+      const transcript = aiMessages
+        .filter(m => m.content?.trim())
+        .map(m => {
+          const who = m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Assistant' : 'System'
+          return `**${who}:**\n\n${m.content.trim()}`
+        })
+        .join('\n\n---\n\n')
+      const now = new Date()
+      const res = await window.electronAPI.obsidian.save({
+        kind: 'conversation',
+        title: `Chat — ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`,
+        content: transcript,
+        extra: { messages: aiMessages.length },
+      })
+      setObsidianSave(res?.ok ? 'ok' : 'error')
+    } catch {
+      setObsidianSave('error')
+    } finally {
+      setTimeout(() => setObsidianSave('idle'), 2500)
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
@@ -679,6 +716,23 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
+                {aiMessages.length > 0 && (
+                  <HeaderBtn
+                    onClick={saveConversationToObsidian}
+                    title={
+                      obsidianSave === 'ok' ? 'Saved to Obsidian' :
+                      obsidianSave === 'novault' ? 'No Obsidian vault set — pick one in Settings → Obsidian' :
+                      obsidianSave === 'error' ? 'Could not save to Obsidian' :
+                      obsidianSave === 'saving' ? 'Saving…' :
+                      'Save conversation to Obsidian'
+                    }
+                  >
+                    {obsidianSave === 'saving' ? <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> :
+                     obsidianSave === 'ok' ? <Check size={13} style={{ color: '#34d399' }} /> :
+                     obsidianSave === 'error' || obsidianSave === 'novault' ? <AlertCircle size={13} style={{ color: '#f87171' }} /> :
+                     <Save size={13} />}
+                  </HeaderBtn>
+                )}
                 <HeaderBtn onClick={clearAIMessages} title="Clear chat"><Trash2 size={13} /></HeaderBtn>
                 <HeaderBtn onClick={toggleAIPanel} title="Close (Ctrl+Shift+A)"><X size={14} /></HeaderBtn>
               </div>
@@ -706,11 +760,13 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                 <QuickBtn onClick={attachPage} disabled={!hasUrl || isAILoading || !getPageContent} color="purple" icon={<Paperclip size={12} />} label="Attach Page" title="Attach page content" />
                 <QuickBtn
                   onClick={() => { setMemoryDraft(siteMemory); setMemoryOpen(o => !o) }}
-                  disabled={!hasUrl}
+                  // Site memory is written to disk per origin; a private window
+                  // would leave the site behind in it (main refuses it anyway).
+                  disabled={!hasUrl || IS_INCOGNITO}
                   color="green"
                   icon={<Brain size={12} />}
                   label={siteMemory ? 'Memory •' : 'Memory'}
-                  title="What the assistant remembers about this site"
+                  title={IS_INCOGNITO ? 'Site memory is not saved in Incognito windows' : 'What the assistant remembers about this site'}
                 />
               </div>
 
@@ -786,6 +842,23 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Private-window notice — what is and isn't kept, stated plainly */}
+            {IS_INCOGNITO && (
+              <div role="note" style={{
+                margin: '8px 12px 0', padding: '8px 12px', borderRadius: 10, flexShrink: 0,
+                background: 'rgba(148,163,184,0.08)', border: '1px solid rgba(148,163,184,0.2)',
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+              }}>
+                <AlertCircle size={13} style={{ color: 'rgb(var(--ds-text-3))', flexShrink: 0, marginTop: 1 }} />
+                <span style={{ fontSize: 11, color: 'rgb(var(--ds-text-4))', lineHeight: 1.5 }}>
+                  <b style={{ color: 'rgb(var(--ds-text-2))' }}>Incognito:</b> this conversation isn't saved and disappears when the window closes.
+                  {ollamaStatus && !ollamaStatus.running
+                    ? ' Messages you send, and any page you attach, still go to the cloud AI provider.'
+                    : ' Pages are only sent to the AI when you ask.'}
+                </span>
+              </div>
+            )}
 
             {/* Offline notice */}
             {ollamaStatus && !ollamaStatus.running && (

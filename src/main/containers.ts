@@ -40,9 +40,32 @@ export function slugifyContainerId(name: string): string {
   return slug || 'container'
 }
 
+/**
+ * A burner tab: a container that is never written to disk.
+ *
+ * Chromium treats a partition WITHOUT the "persist:" prefix as in-memory only,
+ * so everything a burner tab collects — cookies, storage, the sign-in it just
+ * did — exists for as long as the tab does and is gone afterwards. That is the
+ * whole implementation; the rest is making sure two burners never share a jar,
+ * because "private" tabs that can see each other's logins are not private.
+ */
+export const BURNER_PREFIX = 'burner'
+
+export function isBurnerId(containerId: string | null | undefined): boolean {
+  const id = String(containerId || '')
+  return id === BURNER_PREFIX || id.startsWith(`${BURNER_PREFIX}:`)
+}
+
+/** A fresh burner id. Unique per tab, so no two burners share a session. */
+export function newBurnerId(seed: string | number = Date.now()): string {
+  return `${BURNER_PREFIX}:${String(seed)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 /** Partition string for a container id. Never collides with persist:main. */
 export function partitionFor(containerId: string | null | undefined): string {
   if (!containerId) return DEFAULT_PARTITION
+  // No "persist:" — this is the difference between a burner and a container.
+  if (isBurnerId(containerId)) return `burner-${slugifyContainerId(containerId)}`
   const slug = slugifyContainerId(containerId)
   return `persist:container-${slug}`
 }

@@ -121,9 +121,12 @@ describe('community IPC', () => {
     expect(posted.ok).toBe(true)
 
     const messages = await invoke('community:messages', 'bible-study')
-    expect(messages).toHaveLength(1)
-    expect(messages[0].body).toBe('Peace to you')
-    expect(messages[0].authorHandle).toBe('Grace')
+    // The room opens with a welcome from the guide, so count what Grace wrote
+    // rather than what the channel holds.
+    const mine = messages.filter((m: any) => m.authorHandle === 'Grace')
+    expect(mine).toHaveLength(1)
+    expect(mine[0].body).toBe('Peace to you')
+    expect(messages.some((m: any) => m.isWelcome)).toBe(true)
   })
 
   it('pushes the new message to open windows instead of making them poll', async () => {
@@ -183,7 +186,8 @@ describe('community IPC', () => {
     const status = await invoke('community:status')
     expect(status.state).toBe('ready')
     expect(status.member.id).toBe(first.status.member.id)
-    expect(await invoke('community:messages', 'bible-study')).toHaveLength(1)
+    expect((await invoke('community:messages', 'bible-study'))
+      .filter((m: any) => !m.isWelcome)).toHaveLength(1)
   })
 
   it('exports and re-imports an identity, keeping the same member', async () => {
@@ -337,6 +341,44 @@ describe('community IPC', () => {
       expect(await invoke('community:moderatorStatus')).toMatchObject({ isModerator: true })
     })
 
+    // The guide's switch is drawn when moderatorStatus says yes, and its own
+    // handler used to ask a different question — the raw isAdmin flag. The two
+    // disagreed on any install where that flag was never set, which made the
+    // switch a control that could be seen, focused and clicked while every
+    // press was refused. Whatever decides to draw it must be what decides to
+    // obey it.
+    // Asserted on what the handler returns rather than by asking guide:status
+    // afterwards: that call probes Ollama over the network, which makes the
+    // test depend on whether a model server happens to be running.
+    it('lets whoever may moderate configure the guide', async () => {
+      await invoke('community:join', 'Grace')
+      expect((await invoke('community:moderatorStatus')).isModerator).toBe(true)
+
+      const out = await invoke('community:guide:set', { model: 'llama3.2:3b' })
+      expect(out.ok).toBe(true)
+      expect(out.model).toBe('llama3.2:3b')
+    })
+
+    it('refuses the guide to somebody who may not moderate', async () => {
+      const joined = await invoke('community:join', 'Grace')
+      const me = joined.status.member.id
+      // Hand the room to somebody else so this caller is an ordinary member.
+      const data = await readData()
+      data.members['other'] = {
+        id: 'other', handle: 'Other', handleKey: 'other',
+        avatarSeed: 'other', createdAt: Date.now() - 1000,
+      }
+      data.ownership = { memberId: 'other', email: 'o@e.test', verifiedAt: Date.now() }
+      delete data.members[me].isAdmin
+      writeData(data)
+      await reload()
+
+      expect((await invoke('community:moderatorStatus')).isModerator).toBe(false)
+      const out = await invoke('community:guide:set', { model: 'llama3.2:3b' })
+      expect(out.ok).toBe(false)
+      expect(out.error).toMatch(/owner/i)
+    })
+
     // The renderer decides which buttons to draw. It does not decide who may
     // press them, so the gate has to hold when the call arrives anyway.
     it('refuses the queue and every action to a non-moderator', async () => {
@@ -380,8 +422,12 @@ describe('community IPC', () => {
       expect((await invoke('community:resolveReport', { messageId: 'msg-1', action: 'keep' })).ok)
         .toBe(true)
       expect((await invoke('community:reports')).queue).toHaveLength(0)
-      expect((await readData()).messages[0].deletedAt).toBeUndefined()
+      expect(planted(await readData()).deletedAt).toBeUndefined()
     })
+
+    /** The reported message, by id. Never by index: every channel opens with
+     *  a welcome from the guide, so index 0 is not the message under test. */
+    const planted = (data: any) => data.messages.find((m: any) => m.id === 'msg-1')
 
     it('removes a message and bans on request', async () => {
       await joinAsModerator()
@@ -390,7 +436,7 @@ describe('community IPC', () => {
         { messageId: 'msg-1', action: 'ban', reason: 'harassment' })).ok).toBe(true)
 
       const data = await readData()
-      expect(data.messages[0].deletedAt).toBeTruthy()
+      expect(planted(data).deletedAt).toBeTruthy()
       expect(data.members['other'].bannedAt).toBeTruthy()
       expect(data.members['other'].banReason).toBe('harassment')
     })
@@ -427,7 +473,10 @@ describe('community IPC', () => {
       flushAllJsonStores()
       const data = JSON.parse(fs.readFileSync(join(userDataDir, 'community-data.json'), 'utf8'))
       expect(data.members[id]).toBeUndefined()
-      expect(data.messages).toHaveLength(0)
+      expect(data.messages.filter((m: any) => m.authorId === id)).toHaveLength(0)
+      // The guide's welcomes belong to the community, not to the member who
+      // left — erasing them would empty every room for everyone else.
+      expect(data.messages.every((m: any) => m.isWelcome)).toBe(true)
 
       // Back to onboarding: the key is gone, so there is no identity to resume.
       expect((await invoke('community:status')).state).toBe('unregistered')
@@ -464,10 +513,12 @@ describe('community IPC', () => {
     const posted = await invoke('community:post', {
       channel: 'sports', kind: 'text', body: 'mine',
     })
-    expect(await invoke('community:messages', 'sports')).toHaveLength(1)
+    const own = async () => (await invoke('community:messages', 'sports'))
+      .filter((m: any) => !m.isWelcome)
+    expect(await own()).toHaveLength(1)
 
     const out = await invoke('community:block', posted.message.authorId, true)
     expect(out.ok).toBe(true)
-    expect(await invoke('community:messages', 'sports')).toHaveLength(1)
+    expect(await own()).toHaveLength(1)
   })
 })

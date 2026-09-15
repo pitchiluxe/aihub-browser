@@ -100,7 +100,7 @@ export default function NotesPage({ onNavigate }: { onNavigate: (url: string) =>
           <div className="flex flex-col items-center justify-center h-64 gap-3 text-aihub-muted">
             <StickyNote size={40} className="opacity-20" />
             <p className="text-sm">{q ? 'No notes match your search.' : 'No sticky notes yet.'}</p>
-            {!q && <p className="text-xs opacity-70 max-w-sm text-center">Open any website, turn on Annotation mode, and click "New Note" — your notes are saved automatically and show up here.</p>}
+            {!q && <p className="text-xs opacity-70 max-w-sm text-center">Open any website, turn on the Screen Pen (the pencil), and click its note button — your notes are saved automatically and show up here.</p>}
           </div>
         ) : (
           <div className="space-y-6">

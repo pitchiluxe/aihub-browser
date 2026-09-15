@@ -11,11 +11,26 @@ import { Copy, Check, Download, ExternalLink } from 'lucide-react'
 interface Props {
   content: string
   onNavigate: (url: string) => void
+  /** Optional accent color for theming (e.g., agent color, channel accent) */
+  accent?: string
 }
 
-export default function Markdown({ content, onNavigate }: Props) {
+// Language color mapping for code block headers
+const LANG_COLORS: Record<string, string> = {
+  javascript: '#f7df1e', js: '#f7df1e', typescript: '#3178c6', ts: '#3178c6',
+  tsx: '#3178c6', jsx: '#61dafb', python: '#3776ab', py: '#3776ab',
+  markdown: '#083fa1', md: '#083fa1', html: '#e34c26', css: '#1572b6',
+  json: '#292929', bash: '#4eaa25', sh: '#4eaa25', shell: '#4eaa25',
+  powershell: '#012456', ps1: '#012456', sql: '#e38c00', java: '#b07219',
+  csharp: '#178600', cs: '#178600', cpp: '#f34b7d', 'c++': '#f34b7d',
+  c: '#555555', go: '#00add8', rust: '#dea584', ruby: '#701516',
+  php: '#4f5d95', yaml: '#cb171e', yml: '#cb171e', xml: '#0060ac',
+  csv: '#237346', text: '#666666', txt: '#666666',
+}
+
+export default function Markdown({ content, onNavigate, accent }: Props) {
   return (
-    <div className="aihub-md">
+    <div className="aihub-md" style={accent ? { ['--md-accent' as string]: accent } : undefined}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -37,29 +52,36 @@ export default function Markdown({ content, onNavigate }: Props) {
           ),
 
           table: ({ children }) => (
-            <div style={{ overflowX: 'auto', margin: '8px 0', borderRadius: 10, border: '1px solid var(--ds-border)' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11.5, lineHeight: 1.45 }}>
+            <div style={{
+              overflowX: 'auto', margin: '10px 0', borderRadius: 10,
+              border: '1px solid rgb(var(--ds-accent) / 0.18)',
+              boxShadow: '0 1px 0 rgb(var(--ds-accent) / 0.06) inset',
+            }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11.5, lineHeight: 1.5 }}>
                 {children}
               </table>
             </div>
           ),
           thead: ({ children }) => (
-            <thead style={{ background: 'rgb(var(--ds-accent) / 0.12)' }}>{children}</thead>
+            <thead style={{
+              background: 'linear-gradient(180deg, rgb(var(--ds-accent) / 0.16), rgb(var(--ds-accent) / 0.10))',
+            }}>{children}</thead>
           ),
           th: ({ children }) => (
             <th style={{
-              padding: '7px 10px', textAlign: 'left', fontWeight: 700,
-              color: 'rgb(var(--ds-accent-soft))', borderBottom: '1.5px solid rgb(var(--ds-accent) / 0.25)',
-              whiteSpace: 'nowrap',
+              padding: '8px 11px', textAlign: 'left', fontWeight: 700,
+              color: 'rgb(var(--ds-accent-soft))', borderBottom: '1.5px solid rgb(var(--ds-accent) / 0.28)',
+              whiteSpace: 'nowrap', fontSize: 10.5, letterSpacing: '0.02em',
             }}>{children}</th>
           ),
           td: ({ children }) => (
             <td style={{
-              padding: '6px 10px', color: 'rgb(var(--ds-text-2))',
-              borderBottom: '1px solid var(--ds-glass-sm)', verticalAlign: 'top',
+              padding: '7px 11px', color: 'rgb(var(--ds-text-2))',
+              borderBottom: '1px solid rgb(var(--ds-glass-sm))', verticalAlign: 'top',
             }}>{children}</td>
           ),
-          tr: ({ children }) => <tr>{children}</tr>,
+          tr: ({ children }) => <tr style={{ transition: 'background 0.1s' }}>{children}</tr>,
+          tbody: ({ children }) => <tbody>{children}</tbody>,
 
           code: (props: any) => {
             const { inline, className, children } = props
@@ -72,8 +94,9 @@ export default function Markdown({ content, onNavigate }: Props) {
               return (
                 <code style={{
                   background: 'rgb(var(--ds-accent) / 0.12)', color: 'rgb(var(--ds-accent-soft))',
-                  borderRadius: 5, padding: '1px 5px', fontSize: '0.92em',
+                  borderRadius: 5, padding: '1px 6px', fontSize: '0.9em',
                   fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+                  border: '1px solid rgb(var(--ds-accent) / 0.10)',
                 }}>{text}</code>
               )
             }
@@ -92,29 +115,81 @@ export default function Markdown({ content, onNavigate }: Props) {
           },
           pre: ({ children }) => <>{children}</>,
 
-          h1: ({ children }) => <div style={{ fontSize: 15, fontWeight: 800, color: 'rgb(var(--ds-text-1, var(--ds-text-2)))', margin: '10px 0 4px' }}>{children}</div>,
-          h2: ({ children }) => <div style={{ fontSize: 13.5, fontWeight: 700, color: 'rgb(var(--ds-text-2))', margin: '10px 0 4px' }}>{children}</div>,
-          h3: ({ children }) => <div style={{ fontSize: 12.5, fontWeight: 700, color: 'rgb(var(--ds-text-2))', margin: '8px 0 3px' }}>{children}</div>,
-          h4: ({ children }) => <div style={{ fontSize: 12, fontWeight: 600, color: 'rgb(var(--ds-text-3))', margin: '6px 0 2px' }}>{children}</div>,
+          h1: ({ children }) => (
+            <div style={{
+              fontSize: 16, fontWeight: 800, color: 'rgb(var(--ds-text-1, var(--ds-text-2)))',
+              margin: '12px 0 6px', paddingBottom: 4,
+              borderBottom: '1px solid rgb(var(--ds-glass-sm))',
+            }}>{children}</div>
+          ),
+          h2: ({ children }) => (
+            <div style={{
+              fontSize: 14, fontWeight: 800, color: 'rgb(var(--ds-accent-soft))',
+              margin: '12px 0 5px', letterSpacing: '-0.01em',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <span style={{
+                width: 4, height: 14, borderRadius: 2,
+                background: 'linear-gradient(180deg, rgb(var(--ds-accent)), rgb(var(--ds-accent-2)))',
+                flexShrink: 0,
+              }} />
+              {children}
+            </div>
+          ),
+          h3: ({ children }) => (
+            <div style={{
+              fontSize: 12.5, fontWeight: 700, color: 'rgb(var(--ds-text-1))',
+              margin: '10px 0 4px',
+            }}>{children}</div>
+          ),
+          h4: ({ children }) => (
+            <div style={{
+              fontSize: 12, fontWeight: 700, color: 'rgb(var(--ds-text-3))',
+              margin: '8px 0 3px', textTransform: 'uppercase', letterSpacing: '0.04em',
+            }}>{children}</div>
+          ),
 
-          p:  ({ children }) => <p style={{ margin: '4px 0', lineHeight: 1.55 }}>{children}</p>,
-          ul: ({ children }) => <ul style={{ margin: '4px 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 }}>{children}</ul>,
-          ol: ({ children }) => <ol style={{ margin: '4px 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 }}>{children}</ol>,
-          li: ({ children }) => <li style={{ lineHeight: 1.5 }}>{children}</li>,
+          p:  ({ children }) => <p style={{ margin: '5px 0', lineHeight: 1.6 }}>{children}</p>,
+          ul: ({ children }) => <ul style={{ margin: '5px 0', paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 3 }}>{children}</ul>,
+          ol: ({ children }) => <ol style={{ margin: '5px 0', paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 3 }}>{children}</ol>,
+          li: ({ children }) => <li style={{ lineHeight: 1.55 }}>{children}</li>,
 
           blockquote: ({ children }) => (
             <blockquote style={{
-              margin: '6px 0', padding: '4px 10px',
-              borderLeft: '3px solid rgb(var(--ds-accent) / 0.5)',
-              background: 'rgb(var(--ds-accent) / 0.06)', borderRadius: '0 8px 8px 0',
-              color: 'rgb(var(--ds-text-3))',
+              margin: '8px 0', padding: '8px 12px',
+              borderLeft: '3px solid rgb(var(--ds-accent) / 0.6)',
+              background: 'linear-gradient(90deg, rgb(var(--ds-accent) / 0.08), rgb(var(--ds-accent) / 0.02))',
+              borderRadius: '0 10px 10px 0',
+              color: 'rgb(var(--ds-text-2))',
+              fontStyle: 'italic',
             }}>{children}</blockquote>
           ),
 
-          hr: () => <div style={{ height: 1, background: 'var(--ds-border)', margin: '10px 0' }} />,
+          hr: () => (
+            <div style={{
+              height: 1, margin: '12px 0',
+              background: 'linear-gradient(90deg, transparent, rgb(var(--ds-glass-md)), transparent)',
+            }} />
+          ),
 
-          strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'rgb(var(--ds-text-2))' }}>{children}</strong>,
-          em: ({ children }) => <em>{children}</em>,
+          strong: ({ children }) => (
+            <strong style={{ fontWeight: 700, color: 'rgb(var(--ds-text-1))' }}>{children}</strong>
+          ),
+          em: ({ children }) => <em style={{ color: 'rgb(var(--ds-text-2))' }}>{children}</em>,
+
+          // Task list support (GFM)
+          input: ({ checked, ...props }: any) => (
+            <input
+              type="checkbox"
+              checked={!!checked}
+              readOnly
+              {...props}
+              style={{
+                marginRight: 6, accentColor: 'rgb(var(--ds-accent))',
+                verticalAlign: 'middle',
+              }}
+            />
+          ),
         }}
       >
         {content}
@@ -154,38 +229,67 @@ function CodeBlock({ text, lang, filename }: { text: string; lang: string; filen
     const res = await saveText({ filename: name, content: text }).catch(() => null)
     if (res?.success) { setSaved(true); setTimeout(() => setSaved(false), 2000) }
   }
+
+  // Language color for the header dot
+  const langColor = LANG_COLORS[lang.toLowerCase()] || 'rgb(var(--ds-text-4))'
+  const displayLabel = filename || lang || 'code'
+
   return (
-    <div style={{ margin: '8px 0', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--ds-border)' }}>
+    <div style={{
+      margin: '10px 0', borderRadius: 10, overflow: 'hidden',
+      border: '1px solid rgb(var(--ds-accent) / 0.15)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '4px 10px', background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid var(--ds-glass-sm)',
+        padding: '6px 12px',
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.22))',
+        borderBottom: '1px solid rgb(var(--ds-glass-sm))',
       }}>
-        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgb(var(--ds-text-4))' }}>
-          {filename || lang || 'code'}
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: 7,
+          fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
+          textTransform: 'lowercase', color: 'rgb(var(--ds-text-3))',
+        }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: langColor,
+            boxShadow: `0 0 6px ${langColor}88`,
+          }} />
+          {displayLabel}
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {!!saveText && (
             <button onClick={download} title="Save as a file" style={{
               display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
-              cursor: 'pointer', color: saved ? '#34d399' : 'rgb(var(--ds-text-4))', fontSize: 10, padding: 2,
-            }}>
+              cursor: 'pointer', color: saved ? '#34d399' : 'rgb(var(--ds-text-4))', fontSize: 10,
+              padding: '3px 6px', borderRadius: 6,
+              transition: 'background 0.12s, color 0.12s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--ds-glass-sm))' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
               {saved ? <Check size={11} /> : <Download size={11} />}
               {saved ? 'Saved' : 'Save'}
             </button>
           )}
           <button onClick={copy} title="Copy code" style={{
             display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
-            cursor: 'pointer', color: copied ? '#34d399' : 'rgb(var(--ds-text-4))', fontSize: 10, padding: 2,
-          }}>
+            cursor: 'pointer', color: copied ? '#34d399' : 'rgb(var(--ds-text-4))', fontSize: 10,
+            padding: '3px 6px', borderRadius: 6,
+            transition: 'background 0.12s, color 0.12s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgb(var(--ds-glass-sm))' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
             {copied ? <Check size={11} /> : <Copy size={11} />}
             {copied ? 'Copied' : 'Copy'}
           </button>
         </span>
       </div>
       <pre style={{
-        margin: 0, padding: '8px 10px', overflowX: 'auto',
-        background: 'rgba(0,0,0,0.35)', fontSize: 11, lineHeight: 1.55,
-        fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+        margin: 0, padding: '10px 12px', overflowX: 'auto',
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.38), rgba(0,0,0,0.32))',
+        fontSize: 11.5, lineHeight: 1.6,
+        fontFamily: 'ui-monospace, "Cascadia Code", SFMono-Regular, Consolas, monospace',
         color: 'rgb(var(--ds-text-2))', userSelect: 'text',
       }}>
         <code>{text}</code>

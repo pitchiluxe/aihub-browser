@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Palette, Bot, Shield, ShieldBan, Layers, Info, CheckCircle2, Loader2, RefreshCw, Download, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked, Lock } from 'lucide-react'
+import { Palette, Bot, Shield, ShieldBan, Layers, Info, CheckCircle2, Loader2, RefreshCw, Download, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked, Lock, VenetianMask } from 'lucide-react'
 import ClaudeKitSection from './ClaudeKitSection'
 import { useBibleSettings } from '../../services/bibleSettings'
 import { TRANSLATIONS } from '../../services/bibleService'
@@ -347,6 +347,8 @@ export default function SettingsPage() {
   const [aiKeyInput, setAiKeyInput] = useState('')
   const [aiModelInput, setAiModelInput] = useState('')
   const [aiOllamaUrl, setAiOllamaUrl] = useState('')
+  const [claudeKeyInput, setClaudeKeyInput] = useState('')
+  const [chatGptKeyInput, setChatGptKeyInput] = useState('')
   const [savingAI, setSavingAI] = useState(false)
   const [aiSaved, setAiSaved] = useState(false)
   // OpenRouter catalog — fetched live, never a baked-in list, because the free
@@ -531,8 +533,12 @@ export default function SettingsPage() {
       openrouterKey:   aiKeyInput.trim(),
       openrouterModel: aiModelInput.trim(),
       ollamaUrl:       aiOllamaUrl.trim(),
+      claudeKey:       claudeKeyInput.trim(),
+      chatGptKey:      chatGptKeyInput.trim(),
     })
     setAiKeyInput('')
+    setClaudeKeyInput('')
+    setChatGptKeyInput('')
     setAiCfg(await window.electronAPI.settings.getAIConfig())
     setAiSaved(true)
     setTimeout(() => setAiSaved(false), 2500)
@@ -1015,6 +1021,35 @@ export default function SettingsPage() {
               style={{ userSelect: 'text' }}
             />
           </div>
+          {/* ── Direct provider keys (used as last-tier fallback) ── */}
+          <div>
+            <div className={LBL}>Claude API Key</div>
+            <input
+              type="password"
+              value={claudeKeyInput}
+              onChange={e => setClaudeKeyInput(e.target.value)}
+              placeholder={aiCfg?.hasClaudeKey ? 'Key active — type a new key to replace' : 'sk-ant-api…'}
+              className="w-full bg-aihub-card border border-aihub-border/40 rounded-xl px-3 py-2 text-sm text-aihub-text placeholder:text-aihub-muted/40 outline-none mt-1"
+              style={{ userSelect: 'text' }}
+            />
+            <div className="text-[11px] text-aihub-muted mt-1">
+              Used as a last-resort fallback when both Ollama and OpenRouter can't answer. Get a key at console.anthropic.com.
+            </div>
+          </div>
+          <div>
+            <div className={LBL}>ChatGPT API Key</div>
+            <input
+              type="password"
+              value={chatGptKeyInput}
+              onChange={e => setChatGptKeyInput(e.target.value)}
+              placeholder={aiCfg?.hasChatGptKey ? 'Key active — type a new key to replace' : 'sk-…'}
+              className="w-full bg-aihub-card border border-aihub-border/40 rounded-xl px-3 py-2 text-sm text-aihub-text placeholder:text-aihub-muted/40 outline-none mt-1"
+              style={{ userSelect: 'text' }}
+            />
+            <div className="text-[11px] text-aihub-muted mt-1">
+              Used as a final-tier fallback. Get a key at platform.openai.com/api-keys.
+            </div>
+          </div>
           <button
             onClick={saveAIConfig}
             disabled={savingAI}
@@ -1037,6 +1072,16 @@ export default function SettingsPage() {
             <span className={hasCloud ? 'text-blue-400' : 'text-aihub-muted'}>●</span>
             <span className="text-aihub-muted">{primary === 'ollama' ? 'Fallback' : 'Primary'}:</span>
             <span className="text-aihub-text">OpenRouter — {orLabel(aiCfg?.resolvedModel || aiModelInput)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={aiCfg?.hasClaudeKey ? 'text-purple-400' : 'text-aihub-muted'}>●</span>
+            <span className="text-aihub-muted">Claude:</span>
+            <span className="text-aihub-text">{aiCfg?.hasClaudeKey ? 'Configured' : 'Not set'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={aiCfg?.hasChatGptKey ? 'text-green-400' : 'text-aihub-muted'}>●</span>
+            <span className="text-aihub-muted">ChatGPT:</span>
+            <span className="text-aihub-text">{aiCfg?.hasChatGptKey ? 'Configured' : 'Not set'}</span>
           </div>
           <div className="text-aihub-muted">Automatic fallback: {fallbackOn ? '✓ Enabled' : '✕ Disabled'}</div>
         </div>
@@ -1452,6 +1497,28 @@ export default function SettingsPage() {
       </Section>
 
       <Section icon={<Shield size={15} />} title="Privacy & Data">
+        {/* Deliberately a button and an explanation, not switches: Incognito
+            is private by default, and "clear the private session when the
+            last window closes" is the definition of the feature, not an option. */}
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Incognito</div>
+            <div className="text-xs text-aihub-muted max-w-xl">
+              A private window with its own temporary cookie jar and site storage. No history, Rewind, session
+              restore or AI conversations are saved from it, and its cookies and site data are wiped when the last
+              Incognito window closes. Downloads and bookmarks you save are kept. It does not hide your activity
+              from websites, your network, your employer or your internet provider.
+            </div>
+          </div>
+          <button
+            onClick={() => window.electronAPI.incognito?.openWindow?.()}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm bg-aihub-card hover:bg-aihub-border/40 text-aihub-text transition-all shrink-0"
+            title={`New Incognito Window (${window.electronAPI.platform === 'darwin' ? '⌘' : 'Ctrl'}+Shift+N)`}
+          >
+            <VenetianMask size={13} aria-hidden="true" /> Open Incognito Window
+          </button>
+        </div>
+
         <div className={ROW}>
           <div>
             <div className={LBL}>Encrypted DNS</div>

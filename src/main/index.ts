@@ -1,4 +1,4 @@
-import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, webContents as electronWebContents } from 'electron'
+import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, desktopCapturer, webContents as electronWebContents } from 'electron'
 import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname, basename } from 'path'
 import zlib from 'zlib'
 import http from 'http'
@@ -6,10 +6,12 @@ import https from 'https'
 import dns from 'dns'
 import os from 'os'
 import fs from 'fs'
+import { pathToFileURL, fileURLToPath } from 'url'
 import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
-import { registerCommunityIpc } from './community'
+import { registerCommunityIpc, releaseCommunityWindow, shutdownCommunityBackend } from './community'
+import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
 import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel } from './modelRouting'
@@ -27,13 +29,17 @@ import { createSessionManager, type SessionTab } from './sessions'
 import axios from 'axios'
 import { createSemanticIndex, type SearchDoc } from './semantic'
 import { splitPanes } from '../shared/splitLayout'
-import { writeNote, describeVault, type NoteKind } from './obsidian'
+import { writeNote, describeVault, parseTagSuggestions, type NoteKind } from './obsidian'
 import { contentHash, describeChange, containsKeyword } from './watchDiff'
 import {
-  partitionFor, addContainer, removeContainer, DEFAULT_CONTAINERS, type Container,
+  partitionFor, addContainer, removeContainer, DEFAULT_CONTAINERS, newBurnerId, type Container,
 } from './containers'
+import { createIncognitoManager, canMoveBetweenWindows } from './incognito'
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
+import { createVault } from './vault'
+import { extractPdfText, looksLikePdf } from './pdfText'
+import { registrableDomain } from '../shared/credentialGuard'
 import { parseTradingViewText, describeReading, isChartUrl } from './trading/chartReader'
 import { analyseReading } from './trading/barAnalysis'
 import {
@@ -74,6 +80,12 @@ try { dns.setDefaultResultOrder('ipv4first') } catch {}
 const APP_DIR = join(os.homedir(), '.aihub-browser')
 app.setPath('userData', APP_DIR)
 
+// Community attachments are served over their own scheme. Registering it has
+// to happen here, before app is ready: registerSchemesAsPrivileged is ignored
+// afterwards, and without the privilege Chromium treats every attachment URL
+// as an opaque origin and refuses to render it in an <img>.
+registerAttachmentScheme()
+
 // Point GPU and disk caches to our writable directory so Chromium
 // doesn't fight over temp paths that other processes may have locked.
 app.commandLine.appendSwitch('disk-cache-dir',     join(APP_DIR, 'cache'))
@@ -97,6 +109,22 @@ app.commandLine.appendSwitch('disk-cache-size', String(512 * 1024 * 1024))
 app.commandLine.appendSwitch('enable-features', 'ParallelDownloading')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('enable-zero-copy')
+// HTTP/2: multiplexes multiple requests over a single connection — cuts the
+// TCP handshakes and TLS round-trips dramatically, especially for pages with
+// dozens of assets across the same host.
+app.commandLine.appendSwitch('enable-http2')
+// QUIC (HTTP/3): even faster connection establishment — 0-RTT for known servers,
+// and handles packet loss better than TCP on lossy networks (mobile, spotty WiFi).
+app.commandLine.appendSwitch('enable-quic')
+// More renderer processes = better parallelism for sites with many frames/workers.
+// Default is ~1/4 of cores; bump to 1/2 so complex sites don't queue rendering.
+const CPU_COUNT = require('os').cpus().length
+app.commandLine.appendSwitch('renderer-process-limit', String(Math.max(4, Math.ceil(CPU_COUNT / 2))))
+// Keep DNS entries cached much longer in Chromium's own resolver (30 min vs ~1 min
+// default). First visits still go through Node's async resolver (with system-fallback
+// fallback); this layer caches aggressively on top so repeated internal references
+// to the same host skip DNS entirely.
+app.commandLine.appendSwitch('host-resolver-rules', 'MaxTTL=1800, MinTTL=300')
 
 // ── Single-instance lock — prevent cache conflicts ─────────────────────────
 // If a second instance launches, focus the existing window instead.
@@ -114,8 +142,10 @@ const DL_FILE     = join(APP_DIR, 'downloads.json')
 const AGENTS_FILE = join(APP_DIR, 'agents.json')
 
 const DEFAULT_BOOKMARKS = [
+  { id: 'bm-c',  url: 'aihub://community',                              title: 'Community',        favicon: '', category: 'Social',        addedAt: 0, color: '#34d399' },
   { id: 'bm-b',  url: 'aihub://bible',                                  title: 'Bible',            favicon: '', category: 'Reading',       addedAt: 0, color: '#DC2626' },
   { id: 'bm-m',  url: 'aihub://mail',                                   title: 'Mail',             favicon: '', category: 'Productivity',  addedAt: 0, color: '#EA4335' },
+  { id: 'bm-em', url: 'https://erickomari.vercel.app/',                 title: 'ErickOMari',       favicon: '', category: 'Social',        addedAt: 0, color: '#818cf8' },
   { id: 'bm-g',  url: 'https://www.google.com',                        title: 'Google',           favicon: '', category: 'Search',        addedAt: 0, color: '#4285F4' },
   { id: 'bm-yt', url: 'https://www.youtube.com',                       title: 'YouTube',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#FF0000' },
   { id: 'bm-nf', url: 'https://www.netflix.com',                       title: 'Netflix',          favicon: '', category: 'Entertainment',  addedAt: 0, color: '#E50914' },
@@ -128,12 +158,13 @@ const DEFAULT_BOOKMARKS = [
 // data.json replaces the whole bookmark list, so installs that predate a new
 // pinned default would never see it — seed it once per id and record that in
 // `seededBookmarks`, so a bookmark the user later deletes stays deleted.
-const PINNED_DEFAULT_IDS = ['bm-b', 'bm-m']
+const PINNED_DEFAULT_IDS = ['bm-c', 'bm-b', 'bm-m', 'bm-em']
 
-// Permanent bookmarks: the home grid always keeps a way into the reader, so the
-// Bible tile can't be removed. Matched on url, not id, so a copy the user added
-// by hand is protected too and the seeding above stays consistent with it.
-const UNDELETABLE_BOOKMARK_URLS = ['aihub://bible']
+// Permanent bookmarks: the home grid always keeps a way into the reader and into
+// the Community lounge, so those two tiles can't be removed. Matched on url, not
+// id, so a copy the user added by hand is protected too and the seeding above
+// stays consistent with it.
+const UNDELETABLE_BOOKMARK_URLS = ['aihub://community', 'aihub://bible', 'https://erickomari.vercel.app/']
 
 function seedPinnedBookmarks(d: any): boolean {
   const seeded: string[] = Array.isArray(d.seededBookmarks) ? d.seededBookmarks : []
@@ -201,10 +232,16 @@ function defaultSettings() {
     openrouterBase:  '',
     openrouterModel: '',
     ollamaUrl:       '',
+    // Direct provider keys — used as the LAST tier of fallback when both
+    // local Ollama and OpenRouter can't answer. Empty by default.
+    claudeKey:       '',
+    chatGptKey:      '',
     // Provider routing. Local first: Ollama is private, free and already on
     // the machine, so it answers unless it genuinely can't. OpenRouter is the
     // safety net, defaulted to its free meta-router so a user with no credits
-    // still gets an answer instead of an HTTP 402.
+    // still gets an answer instead of an HTTP 402. Direct Claude / ChatGPT
+    // keys come after, so a free user never pays for a query that a free
+    // model could have answered.
     primaryProvider:  'ollama',
     fallbackEnabled:  true,
     fallbackProvider: 'openrouter',
@@ -252,7 +289,12 @@ function getAIConfig() {
   // Ollama binds 127.0.0.1 only — the mismatch is ECONNREFUSED ::1:11434.
   const olBase  = ((rawOl && validHttpUrl(rawOl)) ? rawOl : 'http://127.0.0.1:11434')
     .replace('://localhost', '://127.0.0.1')
-  return { orKey, orBase, orMdl, olBase }
+  // Direct provider keys. Empty strings = "not configured"; the IPC layer
+  // shows hasKey/hasClaudeKey/hasChatGptKey for the UI without ever echoing
+  // the actual secret.
+  const claudeKey  = s.claudeKey  || ''
+  const chatGptKey = s.chatGptKey || ''
+  return { orKey, orBase, orMdl, olBase, claudeKey, chatGptKey }
 }
 
 /** The provider-routing half of the AI settings, defaulted for old profiles
@@ -547,6 +589,14 @@ let pendingOpenUrl: string | null = extractLaunchUrl(process.argv)
 // a bare page, so all tab state has to be scoped per window instead of global.
 interface AppWin {
   win: BrowserWindow
+  /** The window's renderer webContents id — the key in appWins. */
+  id: number
+  /**
+   * Set by the main process when it created the window, and only then. Every
+   * privacy decision (which session tabs use, whether history is written)
+   * reads this — never a value the renderer supplied.
+   */
+  incognito: boolean
   /** Tab content views owned by THIS window, keyed by renderer tabId */
   views: Map<string, BrowserView>
   activeId: string | null
@@ -597,6 +647,93 @@ function sendTo(ctx: AppWin | undefined, channel: string, ...args: any[]) {
       ctx.win.webContents.send(channel, ...args)
     }
   } catch {}
+}
+
+// ── Incognito ──────────────────────────────────────────────────────────────
+// See src/main/incognito.ts for the session model. The window's renderer gets
+// this switch on its command line so the UI can present itself as private
+// before first paint; the main process never reads it back.
+const INCOGNITO_WINDOW_ARG = '--aihub-incognito-window'
+
+const incognito = createIncognitoManager<Electron.Session>({
+  fromPartition: (partition) => session.fromPartition(partition),
+  onSessionCreated: (ses) => {
+    // Same identity, request filter and permission rules as every other jar —
+    // a private session that behaved differently would be easy to fingerprint.
+    configureContentSession(ses, { privateStats: true })
+    // A VPN the user switched on must cover private tabs too; skipping it here
+    // would send Incognito traffic out on the real IP.
+    if (currentTrafficProxy) ses.setProxy(currentTrafficProxy).catch(() => {})
+  },
+  onSessionEnded: (ended) => {
+    privateAdblockStats = emptyStats()
+    // Diagnostics name the event, never a site.
+    if (ended.failures.length) console.warn(`[aihub] private session ended; incomplete clear steps: ${ended.failures.join(', ')}`)
+  },
+})
+
+/** The in-memory session an Incognito window's tabs and popups must use. */
+function privateSessionFor(ctx: AppWin): { partition: string; session: Electron.Session } {
+  const active = incognito.isIncognitoWindow(ctx.id) ? incognito.current() : null
+  // Unreachable while the window is open; throwing beats silently falling back
+  // to the persistent jar, which is the one outcome this feature exists to stop.
+  if (!active) throw new Error('Incognito window has no private session')
+  return active
+}
+
+/** The session this window's tab content runs in. */
+function tabSessionFor(ctx: AppWin | undefined): Electron.Session {
+  return ctx?.incognito ? privateSessionFor(ctx).session : session.fromPartition('persist:main')
+}
+
+/**
+ * Whether an IPC sender may write browsing activity to disk. Answered from the
+ * main process's own record of which windows it opened as Incognito — never
+ * from anything the renderer claims. A sender that is not a known app window
+ * is refused as well: persistence is granted by identity, not revoked by flag.
+ */
+function mayPersistFrom(e: { sender: Electron.WebContents }): boolean {
+  const ctx = ctxFromEvent(e)
+  return !!ctx && !ctx.incognito && !incognito.isIncognitoWindow(e.sender.id)
+}
+
+/**
+ * Register a handler that persists (or restores) browsing activity. Private
+ * and unrecognised senders get `whenPrivate` instead, which must not touch
+ * disk. Every channel in PRIVATE_BLOCKED_CHANNELS goes through here — enforced
+ * by incognito.test.ts.
+ */
+function handlePersistent(
+  channel: string,
+  handler: (e: Electron.IpcMainInvokeEvent, ...args: any[]) => any,
+  whenPrivate: (e: Electron.IpcMainInvokeEvent, ...args: any[]) => any,
+) {
+  ipcMain.handle(channel, (e, ...args) => (mayPersistFrom(e) ? handler(e, ...args) : whenPrivate(e, ...args)))
+}
+
+/** A normal (persistent) window to hand something to, preferring the focused one. */
+function normalWindowCtx(): AppWin | undefined {
+  const focused = BrowserWindow.getFocusedWindow()
+  const focusedCtx = focused ? appWins.get(focused.webContents.id) : undefined
+  if (focusedCtx && !focusedCtx.incognito) return focusedCtx
+  for (const ctx of appWins.values()) if (!ctx.incognito && !ctx.win.isDestroyed()) return ctx
+  return undefined
+}
+
+function openIncognitoWindow(url?: string): BrowserWindow {
+  const safe = url && /^https?:\/\//i.test(url) ? url : undefined
+  return createAppWindow(safe, { incognito: true }).win
+}
+
+/** Close every Incognito window. The session ends when the last one goes. */
+function closeIncognitoWindows(): number {
+  let n = 0
+  for (const ctx of [...appWins.values()]) {
+    if (!ctx.incognito || ctx.win.isDestroyed()) continue
+    ctx.win.close()
+    n++
+  }
+  return n
 }
 
 // Electron's default UA carries "aihub-browser/x" and "Electron/x" tokens that
@@ -715,6 +852,8 @@ function matchAppShortcut(input: Electron.Input): string | null {
   }
   if (input.alt) return null
   if (key === 't') return input.shift ? 'reopen-tab' : 'new-tab'
+  // Ctrl+Shift+N (Cmd+Shift+N on macOS — `meta` counts as ctrl above).
+  if (key === 'n' && input.shift) return 'new-incognito-window'
   if (key === 'w' && !input.shift) return 'close-tab'
   if (key === 'tab') return input.shift ? 'prev-tab' : 'next-tab'
   if (key === 'l' && !input.shift) return 'focus-url'
@@ -749,6 +888,9 @@ function attachAppShortcuts(wc: Electron.WebContents) {
     const action = matchAppShortcut(input)
     if (!action) return
     e.preventDefault()
+    // Opened here rather than in the renderer: a new window is a main-process
+    // act, and the privacy mode of that window must be decided by main.
+    if (action === 'new-incognito-window') { openIncognitoWindow(); return }
     const page = resolvePageWc(wc)
     switch (action) {
       case 'nav-back':    { try { if (page?.canGoBack())    page.goBack() } catch {} return }
@@ -801,6 +943,47 @@ ipcMain.handle('urlbar:showContextMenu', (e, hasText: boolean) => {
 // are always available. App-feature actions (AI, Research, Agent, Annotation,
 // Sphere) are forwarded to the renderer via the 'page-context-action' channel.
 
+// A handful of lowercase tags for a vault note, generated from its own title
+// and content. Same Ollama-first, OpenRouter-fallback-if-enabled, heuristic-
+// last chain as ai:categorizeBookmark above it, just asking for tags instead
+// of a single category. Never blocks the save on a slow or absent model.
+async function suggestTags(title: string, body: string): Promise<string[]> {
+  const heuristic = (): string[] => {
+    const words = title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').split(/\s+/).filter(w => w.length > 3)
+    return Array.from(new Set(words)).slice(0, 3)
+  }
+
+  const { olBase, orKey, orBase, orMdl } = getAIConfig()
+  const prompt = `Suggest 2 to 4 short lowercase tags (single words or hyphenated, no # symbol) that categorize this note. Reply with ONLY the tags separated by commas, nothing else.\n\nTitle: ${title}\n\nContent:\n${body.slice(0, 1500)}`
+
+  try {
+    const ol = await checkOllamaRunning()
+    if (ol.running && ol.models.length > 0) {
+      const pref = getData().settings.aiModel || ''
+      const model = (pref && ol.models.includes(pref)) ? pref : ol.models[0]
+      const { body: respBody } = await httpPost(`${olBase}/api/chat`,
+        { model, messages: [{ role: 'user', content: prompt }], stream: false, options: { temperature: 0.2 } }, {}, 10000)
+      const raw = JSON.parse(respBody)?.message?.content?.trim() || ''
+      const tags = parseTagSuggestions(raw)
+      if (tags.length) return tags
+    }
+  } catch {}
+
+  const routing = getRoutingSettings()
+  if (orKey && routing.fallbackEnabled && routing.fallbackProvider === 'openrouter') {
+    try {
+      const { body: respBody } = await httpPost(`${orBase}/chat/completions`,
+        { model: orMdl, messages: [{ role: 'user', content: prompt }], max_tokens: 40, temperature: 0.2, include_reasoning: false },
+        { Authorization: `Bearer ${toAscii(orKey)}`, 'HTTP-Referer': 'https://aihub-browser.app', 'X-Title': 'AIHub Browser' }, 10000)
+      const raw = stripThinkTags(JSON.parse(respBody)?.choices?.[0]?.message?.content?.trim() || '')
+      const tags = parseTagSuggestions(raw)
+      if (tags.length) return tags
+    } catch {}
+  }
+
+  return heuristic()
+}
+
 // Clip the current page (or just the selected passage) into the Obsidian vault
 // as a markdown note. Runs in the main process because that is where both the
 // page's text and the vault live — the renderer never needs to see either.
@@ -832,12 +1015,13 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
     } catch { body = '' }
   }
 
+  const aiTags = body ? await suggestTags(title, body) : []
   const result = writeNote(vaultPath, {
     kind: 'clip',
     title,
     url,
     content: body || '_(no readable text on this page)_',
-    tags: selection ? ['highlight'] : [],
+    tags: Array.from(new Set([...(selection ? ['highlight'] : []), ...aiTags])),
   })
   if (result.ok) notifyQuiet('Saved to Obsidian', title)
   else notifyQuiet('Could not save to Obsidian', result.error || 'Unknown error')
@@ -901,13 +1085,25 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       menu.append(new MenuItem({ label: `Ask AI about “${short}”`, click: () => sendAction('ai', { selection: sel }) }))
       menu.append(new MenuItem({ label: `Search Google for “${short}”`, click: () => sendTo(menuCtx, 'open-in-new-tab', `https://www.google.com/search?q=${encodeURIComponent(sel)}`) }))
       menu.append(new MenuItem({ label: 'Save Selection to Obsidian', click: () => { void clipToVault(wc, sel) } }))
+      menu.append(new MenuItem({ label: 'Remember This (Recall)', click: () => sendAction('recall-add', { selection: sel, title: (() => { try { return wc.getTitle() } catch { return '' } })() }) }))
+      if (isWebPage) {
+        menu.append(new MenuItem({ label: 'Share to the Lounge', click: () => sendAction('share-lounge', { selection: sel, title: (() => { try { return wc.getTitle() } catch { return '' } })() }) }))
+      }
     }
 
     // ── Link ──
     if (params.linkURL) {
       sep()
       menu.append(new MenuItem({ label: 'Open Link in New Tab', click: () => sendTo(menuCtx, 'open-in-new-tab', params.linkURL) }))
-      menu.append(new MenuItem({ label: 'Open Link in New Window', click: () => { try { openDetachedWindow(params.linkURL) } catch {} } }))
+      // A link opened from a private page stays private: the new window
+      // inherits this window's mode, it does not fall back to a normal one.
+      menu.append(new MenuItem({
+        label: menuCtx?.incognito ? 'Open Link in New Incognito Window' : 'Open Link in New Window',
+        click: () => { try { openDetachedWindow(params.linkURL, undefined, !!menuCtx?.incognito) } catch {} },
+      }))
+      if (!menuCtx?.incognito && /^https?:\/\//i.test(params.linkURL)) {
+        menu.append(new MenuItem({ label: 'Open Link in Incognito Window', click: () => { try { openIncognitoWindow(params.linkURL) } catch {} } }))
+      }
       menu.append(new MenuItem({ label: 'Copy Link Address', click: () => clipboard.writeText(params.linkURL) }))
     }
 
@@ -1085,12 +1281,19 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   const tabViews = ctx.views
   // A tab in a container gets its own cookie jar, configured exactly like the
   // main one so the only difference is isolation (see configureContentSession).
-  const partition = partitionFor(containerId)
+  // An Incognito window overrides that entirely: whatever container id the
+  // renderer passed, its tabs run in the window's in-memory private session.
+  const partition = ctx.incognito ? privateSessionFor(ctx).partition : partitionFor(containerId)
   configureContentSession(session.fromPartition(partition))
   const view = new BrowserView({
     webPreferences: {
       partition,
       contextIsolation: true,
+      // Chromium ships a PDF viewer, but only when plugins are enabled. Off,
+      // a link to a PDF downloads the file and the tab goes nowhere — the
+      // document leaves the browser, and with it every AI, note and clipping
+      // feature the app has. On, the PDF renders in the tab like any page.
+      plugins: true,
       // Site-facing preload: no IPC, no Node — it only restores the
       // window.chrome members Electron omits, which Google's sign-in gate
       // requires. Safe alongside contextIsolation: it talks to the page
@@ -1177,6 +1380,17 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   wc.on('did-create-window', (childWin) => {
     const cwc = childWin.webContents
     try { cwc.setUserAgent(CHROME_UA) } catch {}
+    // A sign-in popup from a private tab shares the private session, so it
+    // must not outlive it: closing the last Incognito window closes it too.
+    if (ctx.incognito) {
+      const trackPopup = (popup: BrowserWindow) => {
+        const untrack = incognito.trackDisposable(() => { try { if (!popup.isDestroyed()) popup.destroy() } catch {} })
+        popup.once('closed', untrack)
+        // Identity providers occasionally chain a second popup; it is just as private.
+        popup.webContents.on('did-create-window', trackPopup)
+      }
+      trackPopup(childWin)
+    }
     attachContextMenu(cwc)
     // Links clicked inside a popup go to a main-window tab; nested scripted
     // popups (rare, but some IdPs chain them) stay real windows.
@@ -1225,6 +1439,17 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
     try { curUrl = wc.getURL() } catch {}
     if (isCrashPage(curUrl)) { curUrl = ''; title = '' }
     sendTabEvent(ctx, tabId, 'did-stop-loading', { title, url: curUrl })
+  })
+  // Fire AFTER the main frame is fully painted (not just on stop) so the
+  // extract script the renderer runs against the page has a complete DOM to
+  // read. 'did-finish-load' fires once per top-level load, including reloads
+  // and back/forward — exactly the trigger points the AI wants.
+  wc.on('did-finish-load', () => {
+    let title = ''; let curUrl = ''
+    try { title = wc.getTitle() } catch {}
+    try { curUrl = wc.getURL() } catch {}
+    if (isCrashPage(curUrl)) return
+    sendTabEvent(ctx, tabId, 'did-finish-load', { title, url: curUrl })
   })
 
   // ── Renderer crash recovery ───────────────────────────────────────────────
@@ -1282,6 +1507,7 @@ function destroyTabView(ctx: AppWin | undefined, tabId: string) {
   if (!view) return
   if (ctx.activeId === tabId) { ctx.activeId = null; syncActiveBrowserView(ctx) }
   try { if (!ctx.win.isDestroyed()) ctx.win.removeBrowserView(view) } catch {}
+  try { pageHostByWc.delete(view.webContents.id) } catch {}
   try { view.webContents.close() } catch {}
   ctx.views.delete(tabId)
 }
@@ -1297,7 +1523,7 @@ let sharedSetupDone = false
 // support nightmare, so this is written once and applied to each.
 const configuredSessions = new WeakSet<Electron.Session>()
 
-function configureContentSession(ses: Electron.Session): Electron.Session {
+function configureContentSession(ses: Electron.Session, opts: { privateStats?: boolean } = {}): Electron.Session {
   if (configuredSessions.has(ses)) return ses
   configuredSessions.add(ses)
 
@@ -1333,7 +1559,9 @@ function configureContentSession(ses: Electron.Session): Electron.Session {
 
   // One request filter for the whole session — ad blocking and focus mode both
   // resolve through it (Electron only allows a single onBeforeRequest).
-  installRequestFilter(ses)
+  // A private session counts its blocks separately: the global tally is shown
+  // in Settings from any window, and would list the trackers private pages hit.
+  installRequestFilter(ses, !!opts.privateStats)
 
   ses.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(ALLOWED_PERMISSIONS.has(permission))
@@ -1368,6 +1596,40 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   // Configure the persist:main session used by all <webview partition="persist:main"> tags.
   configureContentSession(session.fromPartition('persist:main'))
 
+  // ── Preconnect to the CDNs and origins that appear on most pages ─────────
+  // Warm TCP/TLS handshakes for the top 20 origins before the user navigates
+  // anywhere. These are the Google, Cloudflare, and CDN origins that appear
+  // in analytics, fonts, JS bundles, and ad/track scripts across >80% of
+  // pages. Starting handshakes now means the first real request to any of
+  // these hosts arrives on an already-warmed connection — saving 50-200 ms
+  // per origin on the first page load. A failed preconnect costs essentially
+  // nothing (one TCP SYN to a firewall, dropped immediately).
+  const persistSes = session.fromPartition('persist:main')
+  for (const origin of [
+    'https://www.google.com',
+    'https://www.google-analytics.com',
+    'https://stats.g.doubleclick.net',
+    'https://ssl.google-analytics.com',
+    'https://cdn.jsdelivr.net',
+    'https://cdnjs.cloudflare.com',
+    'https://fonts.googleapis.com',
+    'https://fonts.gstatic.com',
+    'https://static.cloudflareinsights.com',
+    'https://widget.intercom.io',
+    'https://js.intercomcdn.com',
+    'https://connect.facebook.net',
+    'https://platform.twitter.com',
+    'https://cdn.syndication.twimg.com',
+    'https://www.youtube.com',
+    'https://i.ytimg.com',
+    'https://adservice.google.com',
+    'https://pagead2.googlesyndication.com',
+    'https://securepubads.g.doubleclick.net',
+    'https://www.googletagmanager.com',
+  ]) {
+    try { persistSes.preconnect({ url: origin, numSockets: 1 }) } catch {}
+  }
+
   // ── Auto-update (GitHub Releases) — checks on startup + periodically and
   // notifies the renderer when a newer version is published. No-op in dev. ──
   initAutoUpdater(() => mainWindow, safelySend)
@@ -1378,7 +1640,9 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   // N listeners on one session → one download produced N entries. Guard with a
   // WeakSet so each unique Session is hooked exactly once.
   let dlSeq = 0
-  const handleDownload = (_e: any, item: any) => {
+  const handleDownload = (sess: Electron.Session, _e: any, item: Electron.DownloadItem) => {
+    // Classified by the session that started it, which is decided in main.
+    const isPrivate = incognito.isIncognitoSession(sess)
     // File the download by type before the transfer starts — setSavePath is
     // only honoured while the item is still 'progressing'. Unrecognised types
     // keep the default location rather than disappearing into an "Other" bin.
@@ -1400,13 +1664,24 @@ function setupSharedApp(firstWin: BrowserWindow): void {
       state: 'progressing', startedAt: Date.now(), completedAt: null,
     }
     const persist = () => {
+      if (isPrivate) {
+        // A transfer cancelled by the session ending still reports 'done'
+        // afterwards; that row must not reappear in the NEXT private session.
+        if (incognito.current()?.session !== sess) return
+        // The file lands on disk like any download; the record of it does not.
+        // It lives in the private session and is shown only to private windows.
+        const row = incognito.upsertDownload(dl)
+        for (const ctx of appWins.values()) if (ctx.incognito) sendTo(ctx, 'download:update', row)
+        return
+      }
       downloadsStore.update(list => {
         const i = list.findIndex((x: any) => x.id === dl.id)
         if (i !== -1) list[i] = { ...dl }; else list.unshift({ ...dl })
         if (list.length > 500) list.length = 500
       })
-      safelySend('download:update', dl)
+      for (const ctx of appWins.values()) if (!ctx.incognito) sendTo(ctx, 'download:update', dl)
     }
+    if (isPrivate) incognito.trackActiveDownload(dl.id, () => { try { item.cancel() } catch {} })
     // Progress ticks fire many times per second on fast links. The store
     // debounces the disk write, but the renderer broadcast and the array walk
     // are still per-call, so keep the throttle: state transitions and
@@ -1420,6 +1695,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
       if (stateChanged || now - lastProgressWrite >= 500) { lastProgressWrite = now; persist() }
     })
     item.on('done', (_ev, state) => {
+      if (isPrivate) incognito.settleDownload(dl.id)
       dl.state = state; dl.savePath = item.getSavePath()
       dl.completedAt = Date.now(); dl.receivedBytes = item.getReceivedBytes()
       persist()
@@ -1431,7 +1707,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   const hookDownloadSession = (sess: Electron.Session) => {
     if (!sess || hookedSessions.has(sess)) return
     hookedSessions.add(sess)
-    sess.on('will-download', handleDownload)
+    sess.on('will-download', (e, item) => handleDownload(sess, e, item))
   }
 
   // Attach to default session (covers webviews) + mainWindow session
@@ -1474,7 +1750,8 @@ function setupSharedApp(firstWin: BrowserWindow): void {
 // VPN control, annotation, screenshot and recording all included. Used both for
 // the first window at launch and for every tab detached into its own window,
 // so a detached tab is indistinguishable from a freshly opened browser.
-function createAppWindow(initialUrl?: string): AppWin {
+function createAppWindow(initialUrl?: string, opts: { incognito?: boolean } = {}): AppWin {
+  const isIncognito = !!opts.incognito
   // Render web pages in their natural (light) colors. Forcing 'dark' here made
   // every site that honours prefers-color-scheme serve its dark variant, which
   // users found dim and hard to read (e.g. sign-up pages showing near-black).
@@ -1492,6 +1769,9 @@ function createAppWindow(initialUrl?: string): AppWin {
     width: 1440, height: 900, minWidth: 900, minHeight: 600,
     ...(offset ? { x: 60 + offset, y: 40 + offset } : {}),
     show: false, frame: false,
+    // The OS task switcher and taskbar show this, so a private window says so
+    // there too — not only inside its own chrome.
+    title: isIncognito ? 'AIHub Browser — Incognito' : 'AIHub Browser',
     // macOS: keep the native traffic lights but inset them so they sit
     // vertically centered inside the custom tab strip instead of floating
     // over the tabs. Renderer reserves matching left padding (TabBar) and
@@ -1504,16 +1784,26 @@ function createAppWindow(initialUrl?: string): AppWin {
     // DWM frame entirely (square corners, no shadow) and conflicts with
     // setBackgroundMaterial. Mica/acrylic only need the fully transparent
     // backgroundColor to show through.
-    backgroundColor: glassMode ? '#00000000' : '#17182B',
+    // Incognito never uses the glass material: a translucent private window
+    // would show whatever sits behind it, and the solid dark ground is part of
+    // how the window reads as private at a glance.
+    backgroundColor: isIncognito ? '#121218' : glassMode ? '#00000000' : '#17182B',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false, webviewTag: false,
       nodeIntegration: false, contextIsolation: true, webSecurity: false,
+      // Presentation hint for the renderer only (see INCOGNITO_WINDOW_ARG).
+      ...(isIncognito ? { additionalArguments: [INCOGNITO_WINDOW_ARG] } : {}),
     }
   })
 
+  // Captured up front: by the time 'closed' fires the window is already
+  // destroyed and touching win.webContents throws "Object has been destroyed".
+  const winId = win.webContents.id
   const ctx: AppWin = {
     win,
+    id: winId,
+    incognito: isIncognito,
     views: new Map(),
     activeId: null,
     bounds: { x: 0, y: 0, width: 0, height: 0 },
@@ -1521,29 +1811,71 @@ function createAppWindow(initialUrl?: string): AppWin {
     splitId: null,
     splitRatio: 0.5,
   }
-  // Capture the id up front: by the time 'closed' fires the window is already
-  // destroyed and touching win.webContents throws "Object has been destroyed".
-  const winId = win.webContents.id
+  // The private session exists before the window can ask for a single tab.
+  if (isIncognito) {
+    try { incognito.acquire(winId) } catch (err) {
+      // A session that cannot be made private must not become a window that
+      // looks private. Tear it down and say so.
+      try { win.destroy() } catch {}
+      throw err
+    }
+  }
   appWins.set(winId, ctx)
-  if (!mainWindow || mainWindow.isDestroyed()) mainWindow = win
+  // mainWindow anchors app-global dialogs (updater, OAuth). Prefer a normal
+  // window for that role whenever one exists.
+  const mainIsPrivate = !!mainWindow && !mainWindow.isDestroyed() && !!appWins.get(mainWindow.webContents.id)?.incognito
+  if (!mainWindow || mainWindow.isDestroyed() || (mainIsPrivate && !isIncognito)) mainWindow = win
+
+  // Captured before 'closed', because webContents is gone by the time it fires.
+  const communityPeerId = win.webContents.id
+
+  // Closing the last private window cancels private downloads still running
+  // (their session is about to be wiped). Ask first, as Chrome does.
+  win.on('close', (e) => {
+    if (!isIncognito || incognito.windowCount() !== 1 || !incognito.isIncognitoWindow(winId)) return
+    const running = incognito.activeDownloadCount()
+    if (!running) return
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'warning',
+      buttons: ['Cancel downloads and close', 'Keep window open'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'Close Incognito window?',
+      message: `${running} Incognito download${running === 1 ? ' is' : 's are'} still in progress.`,
+      detail: 'Closing the last Incognito window ends the private session, which cancels these downloads. Files that already finished stay on your computer.',
+    })
+    if (choice === 1) e.preventDefault()
+  })
+  if (isIncognito) {
+    // The renderer's <title> must not replace the private title in the taskbar.
+    win.on('page-title-updated', (e) => e.preventDefault())
+  }
 
   win.on('closed', () => {
     ctx.views.forEach(v => { try { v.webContents.close() } catch {} })
     ctx.views.clear()
     ctx.activeId = null
     appWins.delete(winId)
-    // Keep mainWindow pointing at a window that still exists
+    // Last private window gone → the private session is wiped (see incognito.ts).
+    if (isIncognito) void incognito.release(winId)
+    // Nobody clicks Disconnect before closing a window. Without this the room
+    // keeps them in its roster, holding a peer connection with no one behind it.
+    try { releaseCommunityWindow(communityPeerId) } catch {}
+    // Keep mainWindow pointing at a window that still exists, normal first.
     if (mainWindow === win) {
-      const next = appWins.values().next()
-      mainWindow = next.done ? (undefined as unknown as BrowserWindow) : next.value.win
+      const remaining = [...appWins.values()]
+      const next = remaining.find(c => !c.incognito) ?? remaining[0]
+      mainWindow = next ? next.win : (undefined as unknown as BrowserWindow)
     }
   })
 
-  applyTransparency(win, settings.transparency)
+  // Private windows keep the solid ground even when the app uses glass.
+  const transparency = isIncognito ? 'none' : settings.transparency
+  applyTransparency(win, transparency)
   win.on('ready-to-show', () => {
     win.show()
     applyWindowOpacity(win, settings.windowOpacity ?? 1)
-    sendTo(ctx, 'theme:transparency', settings.transparency)
+    sendTo(ctx, 'theme:transparency', transparency)
   })
 
   // Keep the renderer's maximize button in sync when the OS changes the state
@@ -1595,7 +1927,8 @@ function createAppWindow(initialUrl?: string): AppWin {
   // renderer has actually mounted its 'open-in-new-tab' listener — sending any
   // earlier is a silent no-op since nothing is listening yet.
   win.webContents.on('did-finish-load', () => {
-    if (pendingOpenUrl) {
+    // A link from another app opens in normal browsing, never a private window.
+    if (pendingOpenUrl && !isIncognito) {
       sendTo(ctx, 'open-in-new-tab', pendingOpenUrl)
       pendingOpenUrl = null
     }
@@ -1634,23 +1967,77 @@ function createWindow(): void {
 app.on('second-instance', (_event, commandLine) => {
   // The link opens in ONE window — the one we just brought forward. Broadcasting
   // it opened the same page in every open window at once.
-  const target = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  //
+  // That window is always a NORMAL one. A link clicked in another app is not a
+  // private act, and dropping it into an Incognito window would hide it from
+  // history the user expects it in (Chrome behaves the same way).
+  const ctx = normalWindowCtx()
+  const url = extractLaunchUrl(commandLine)
+  if (!ctx && appWins.size) {
+    // Only private windows are open: a normal window has to exist to take it.
+    createAppWindow(url || undefined)
+    return
+  }
+  const target = ctx?.win ?? BrowserWindow.getAllWindows()[0]
   if (target) {
     if (target.isMinimized()) target.restore()
     target.focus()
   }
-  const url = extractLaunchUrl(commandLine)
   if (!url) return
-  const ctx = target ? appWins.get(target.webContents.id) : undefined
   if (ctx) sendTo(ctx, 'open-in-new-tab', url)
-  else safelySend('open-in-new-tab', url) // no window yet — first one to load takes it
+  else pendingOpenUrl = url // no window yet — the first normal one to load takes it
 })
+
+/**
+ * Let getDisplayMedia() work inside the app.
+ *
+ * Chromium's own screen picker belongs to Chrome, not to embedders, so an
+ * Electron app that does nothing here has getDisplayMedia() reject every call.
+ * The handler below is what makes screen sharing possible at all.
+ *
+ * The renderer asks the user which screen or window first (community:screenSources
+ * feeds that chooser) and passes the chosen id through, so the selection is
+ * still a deliberate human act — this never picks a screen on the user's behalf.
+ * A request with no prior choice is denied rather than defaulted to screen 0,
+ * because silently sharing a whole desktop is the one outcome nobody wants.
+ */
+const pendingScreenShare = new Map<number, string>()
+
+/** The renderer records the user's choice here, then calls getDisplayMedia(). */
+ipcMain.handle('community:screenShareChoice', (e, sourceId: string) => {
+  pendingScreenShare.set(e.sender.id, String(sourceId))
+  return { ok: true }
+})
+
+function registerScreenShareHandler(): void {
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    // Resolve the request back to the exact webContents that made it, so one
+    // window's pending choice can never satisfy another window's request.
+    const asker = request.frame ? electronWebContents.fromFrame(request.frame) : null
+    const sourceId = asker ? pendingScreenShare.get(asker.id) : undefined
+    if (asker) pendingScreenShare.delete(asker.id)
+
+    // No prior choice means no share. Defaulting to the first screen would
+    // silently hand over a whole desktop, which is the one outcome nobody wants.
+    if (!sourceId) return callback(undefined as never)
+
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
+    const source = sources.find(s => s.id === sourceId)
+    if (!source) return callback(undefined as never)
+
+    // 'loopback' shares system audio along with a screen on Windows; it is
+    // ignored where the platform cannot do it rather than failing the share.
+    callback({ video: source, audio: 'loopback' })
+  })
+}
 
 app.whenReady().then(() => {
   // Restore the DNS preference before the first navigation, or the session
   // would resolve its first hostnames in plaintext regardless of the setting.
   try { applyDoh(getData().settings?.dohProvider || 'off') } catch {}
   getData()
+  registerAttachmentProtocol()
+  registerScreenShareHandler()
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
   if (isDev) {
     app.on('browser-window-created', (_, w) => {
@@ -1666,7 +2053,16 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 // quitting inside that window would drop the last few navigations or download
 // rows. Flush synchronously here — 'before-quit' still runs on the main thread
 // with the process alive, which an async write would not survive.
-app.on('before-quit', () => { flushAllJsonStores() })
+app.on('before-quit', () => {
+  flushAllJsonStores()
+  // The community's push queue lives in memory too, and a message sitting in it
+  // when the app closes has been written to this disk and to nobody else's.
+  // Fired without awaiting for the same reason the flush above is synchronous:
+  // 'before-quit' will not wait for a promise, so this is a best effort that
+  // usually wins the race against process exit, backed by the queue's own
+  // retry on next launch when it does not.
+  void shutdownCommunityBackend()
+})
 
 // Network service crashes and restarts automatically — this is non-fatal.
 // Without this handler Electron 28+ may surface it as an unhandled event.
@@ -1773,11 +2169,21 @@ async function fetchFreeProxyList(cc: string): Promise<string[]> {
 // (AI requests, update checks, favicons) is deliberately left direct: routing
 // it through a flaky free proxy would stall the UI without protecting anything
 // the user cares about. The VPN exists so websites see the chosen country.
+//
+// The live private session is browsing traffic too. Leaving it off this list
+// would let an Incognito window go out on the real IP while the VPN shows on.
+// A private session created later picks the config up from currentTrafficProxy.
+let currentTrafficProxy: Electron.ProxyConfig | null = null
+
 function trafficSessions(): Electron.Session[] {
-  return [session.fromPartition('persist:main')]
+  const sessions = [session.fromPartition('persist:main')]
+  const privateSession = incognito.current()?.session
+  if (privateSession) sessions.push(privateSession)
+  return sessions
 }
 
 async function applyProxyToTraffic(config: Electron.ProxyConfig): Promise<void> {
+  currentTrafficProxy = config.mode === 'direct' ? null : config
   for (const ses of trafficSessions()) {
     try { await ses.setProxy(config) } catch {}
   }
@@ -1911,6 +2317,8 @@ ipcMain.handle('focus:apply', (_e, blocked: string[] | null) => {
 
 // ── Ad and tracker blocking ────────────────────────────────────────────────
 const adblockStats = emptyStats()
+// Blocks counted in the private session. Reset when that session ends.
+let privateAdblockStats = emptyStats()
 // Host of each tab's top-level document, so a request can be judged in the
 // context of the page that made it (that is what makes "allow on this site"
 // and the never-block-your-own-domain rule work). Kept as a map rather than
@@ -1935,7 +2343,7 @@ function saveAdblockConfig(next: Partial<AdblockConfig>) {
   return adblockConfig()
 }
 
-function installRequestFilter(ses: Electron.Session) {
+function installRequestFilter(ses: Electron.Session, privateStats = false) {
   ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, cb) => {
     try {
       const wcId = (details as any).webContentsId as number | undefined
@@ -1952,7 +2360,7 @@ function installRequestFilter(ses: Electron.Session) {
       )
       if (decision.redirectURL) { cb({ redirectURL: decision.redirectURL }); return }
       if (decision.cancel) {
-        recordBlock(adblockStats, hostOf(details.url), wcId)
+        recordBlock(privateStats ? privateAdblockStats : adblockStats, hostOf(details.url), wcId)
         cb({ cancel: true })
         return
       }
@@ -1961,13 +2369,18 @@ function installRequestFilter(ses: Electron.Session) {
   })
 }
 
-ipcMain.handle('adblock:get', () => ({
-  config: adblockConfig(),
-  stats: { total: adblockStats.total, topDomains: adblockStats.topDomains },
-  listSize: BLOCKLIST_SIZE,
-}))
+ipcMain.handle('adblock:get', (e) => {
+  // Each window sees the tally for its own kind of browsing.
+  const stats = ctxFromEvent(e)?.incognito ? privateAdblockStats : adblockStats
+  return {
+    config: adblockConfig(),
+    stats: { total: stats.total, topDomains: stats.topDomains },
+    listSize: BLOCKLIST_SIZE,
+  }
+})
 ipcMain.handle('adblock:setEnabled', (_e, enabled: boolean) => saveAdblockConfig({ enabled: !!enabled }))
-ipcMain.handle('adblock:countForTab', (_e, wcId: number) => adblockStats.perTab[wcId] || 0)
+ipcMain.handle('adblock:countForTab', (e, wcId: number) =>
+  (ctxFromEvent(e)?.incognito ? privateAdblockStats : adblockStats).perTab[wcId] || 0)
 ipcMain.handle('adblock:toggleSite', (_e, url: string) => {
   const host = hostOf(url)
   if (!host) return adblockConfig()
@@ -2081,8 +2494,11 @@ ipcMain.handle('window:isMaximized', (e) => !!winFrom(e)?.isMaximized())
 // context menu, or "Open Link in New Window". The result is a COMPLETE browser
 // window (tab strip, sidebar, toolbar, AI panel, VPN, annotation, screenshot,
 // recording), identical to launching the app fresh, just opened on this page.
-function openDetachedWindow(url: string, _title?: string) {
-  return createAppWindow(url).win
+//
+// `incognito` is the privacy mode of the window the page comes FROM, as main
+// recorded it — so a private tab moved out stays private.
+function openDetachedWindow(url: string, _title?: string, incognitoMode = false) {
+  return createAppWindow(url, { incognito: incognitoMode }).win
 }
 
 // ── Windows: listing, and moving tabs back between them ────────────────────
@@ -2101,14 +2517,19 @@ function windowLabel(ctx: AppWin, index: number): string {
   return index === 0 ? 'Main window' : `Window ${index + 1}`
 }
 
+// Only windows in the caller's own privacy mode are listed: a tab can never be
+// offered a move across the normal/Incognito boundary.
 function listWindows(callerId?: number) {
+  const caller = callerId !== undefined ? appWins.get(callerId) : undefined
   return [...appWins.entries()]
     .filter(([, ctx]) => !ctx.win.isDestroyed())
+    .filter(([, ctx]) => !caller || canMoveBetweenWindows(caller, ctx))
     .map(([id, ctx], index) => ({
       id,
-      label: windowLabel(ctx, index),
+      label: ctx.incognito ? `Incognito — ${windowLabel(ctx, index)}` : windowLabel(ctx, index),
       tabCount: ctx.views.size,
       isCurrent: id === callerId,
+      incognito: ctx.incognito,
     }))
 }
 
@@ -2118,9 +2539,14 @@ ipcMain.handle('windows:list', (e) => listWindows(e.sender.id))
 // its own copy. The page reloads there rather than being transplanted —
 // Electron cannot move a BrowserView between windows without tearing down its
 // renderer anyway, and a reload is honest about what happens to page state.
-ipcMain.handle('window:sendTabTo', (_e, targetId: number, tab: { url: string; title?: string }) => {
+ipcMain.handle('window:sendTabTo', (e, targetId: number, tab: { url: string; title?: string }) => {
   const target = appWins.get(targetId)
   if (!target || target.win.isDestroyed()) return { success: false, error: 'That window is gone' }
+  // Checked here, not in the renderer's menu: a private page must not be
+  // reloaded into a window that records history, whatever asked for it.
+  if (!canMoveBetweenWindows(ctxFromEvent(e), target)) {
+    return { success: false, error: 'Tabs cannot move between Incognito and normal windows' }
+  }
   if (!tab?.url) return { success: false, error: 'Nothing to move' }
   try {
     sendTo(target, 'open-in-new-tab', tab.url)
@@ -2133,21 +2559,62 @@ ipcMain.handle('window:sendTabTo', (_e, targetId: number, tab: { url: string; ti
 // Ask every other window to hand its tabs to this one and close itself.
 ipcMain.handle('windows:mergeAllInto', (e) => {
   const targetId = e.sender.id
+  const target = ctxFromEvent(e)
   let asked = 0
   for (const [id, ctx] of appWins) {
     if (id === targetId || ctx.win.isDestroyed()) continue
+    if (!canMoveBetweenWindows(ctx, target)) continue
     sendTo(ctx, 'merge-into-window', targetId)
     asked++
   }
   return { success: true, windows: asked }
 })
 
-ipcMain.handle('window:detachTab', (_e, url: string, title?: string) => {
+ipcMain.handle('window:detachTab', (e, url: string, title?: string) => {
   try {
     if (!/^https?:\/\//i.test(url)) return { success: false, error: 'Only web pages can move to their own window' }
-    openDetachedWindow(url, title)
+    const from = ctxFromEvent(e)
+    if (!from) return { success: false, error: 'Unknown window' }
+    openDetachedWindow(url, title, from.incognito)
     return { success: true }
   } catch (e: any) { return { success: false, error: e.message } }
+})
+
+// ── IPC: Incognito ─────────────────────────────────────────────────────────
+// None of these take a privacy flag from the renderer. "Is this window
+// private?" is answered from appWins, which only main writes.
+ipcMain.handle('incognito:openWindow', (_e, url?: string) => {
+  try {
+    openIncognitoWindow(typeof url === 'string' ? url : undefined)
+    return { success: true }
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Could not open an Incognito window' }
+  }
+})
+
+ipcMain.handle('incognito:closeWindows', () => ({ success: true, closed: closeIncognitoWindows() }))
+
+ipcMain.handle('incognito:status', (e) => ({
+  incognito: !!ctxFromEvent(e)?.incognito,
+  windowCount: incognito.windowCount(),
+  activeDownloads: incognito.activeDownloadCount(),
+}))
+
+// The private-window badge's menu. Native for the same reason the tab menu is:
+// an HTML dropdown under the tab strip would be painted over by the page.
+ipcMain.handle('incognito:showMenu', (e) => {
+  const ctx = ctxFromEvent(e)
+  if (!ctx?.incognito) return ''
+  const count = incognito.windowCount()
+  const menu = Menu.buildFromTemplate([
+    { label: 'You’re browsing privately', enabled: false },
+    { type: 'separator' },
+    { label: 'New Incognito Window', accelerator: 'CmdOrCtrl+Shift+N', click: () => { openIncognitoWindow() } },
+    { label: 'Close This Incognito Window', click: () => { if (!ctx.win.isDestroyed()) ctx.win.close() } },
+    ...(count > 1 ? [{ label: `Close All ${count} Incognito Windows`, click: () => { closeIncognitoWindows() } }] : []),
+  ])
+  menu.popup({ window: ctx.win })
+  return ''
 })
 
 // ── IPC: Tab context menu ───────────────────────────────────────────────────
@@ -2164,6 +2631,7 @@ ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: bo
     const otherWindows = listWindows(e.sender.id).filter(w => !w.isCurrent)
     const menu = Menu.buildFromTemplate([
       { label: 'New Tab',                 click: () => done('new-tab') },
+      { label: 'New Incognito Window',    accelerator: 'CmdOrCtrl+Shift+N', click: () => { openIncognitoWindow(); done('') } },
       { label: 'Duplicate Tab',           click: () => done('duplicate') },
       { label: info.isSplit ? 'Leave Split View' : 'Split View with This Tab',
         enabled: info.isBrowser && !info.isActive, click: () => done('split') },
@@ -2203,8 +2671,9 @@ ipcMain.handle('window:setTransparency', (e, mode: string) => {
   const d = getData(); d.settings.transparency = mode; saveData()
   const w = winFrom(e)
   if (w) {
-    applyTransparency(w, mode)
-    safelySend('theme:transparency', mode)
+    // Private windows keep their solid ground (see createAppWindow).
+    if (!ctxFromEvent(e)?.incognito) applyTransparency(w, mode)
+    for (const ctx of appWins.values()) if (!ctx.incognito) sendTo(ctx, 'theme:transparency', mode)
   }
 })
 ipcMain.handle('window:setOpacity', (e, opacity: number) => {
@@ -2214,7 +2683,7 @@ ipcMain.handle('window:setOpacity', (e, opacity: number) => {
 
 registerGoogleIpc(safelySend)
 registerCommunityIpc()
-registerFaviconIpc()
+registerFaviconIpc({ mayRemember: mayPersistFrom })
 
 // ── IPC: Tab content views (BrowserView) ────────────────────────────────────
 ipcMain.handle('tabview:create', (e, tabId: string, url: string, containerId?: string | null) =>
@@ -2323,6 +2792,7 @@ ipcMain.handle('privacy:setDoh', (_e, provider: string) => {
 })
 
 // ── IPC: Site containers ───────────────────────────────────────────────────
+ipcMain.handle('containers:newBurner', () => newBurnerId())
 ipcMain.handle('containers:list', () => {
   const stored = getData().settings?.containers
   return Array.isArray(stored) && stored.length ? stored as Container[] : DEFAULT_CONTAINERS
@@ -2375,11 +2845,21 @@ ipcMain.handle('tabview:getLayout', (e) => {
     const view = ctx.views.get(id)
     try { return view ? view.getBounds() : null } catch { return null }
   }
+  // The window's own content size travels with the layout because region
+  // recording needs it: the selection is made on the page, the stream is of
+  // the whole window, and mapping between them is a ratio of the two.
+  let windowSize: { width: number; height: number } | null = null
+  try {
+    const [width, height] = ctx.win.getContentSize()
+    windowSize = { width, height }
+  } catch {}
+
   return {
     activeId: ctx.activeId,
     splitId: ctx.splitId,
     ratio: ctx.splitRatio,
     content: ctx.bounds,
+    window: windowSize,
     attached: ctx.win.getBrowserViews().length,
     primary: boundsOf(ctx.activeId),
     secondary: boundsOf(ctx.splitId),
@@ -2408,10 +2888,12 @@ ipcMain.handle('tabview:stop', (e, tabId: string) => {
 // renderer fires this the moment a navigation is requested, so the handshake
 // overlaps the React re-render and BrowserView creation that follow instead of
 // happening after them. Purely additive — a failed preconnect costs nothing.
-ipcMain.handle('tabview:preconnect', (_e, url: string) => {
+ipcMain.handle('tabview:preconnect', (e, url: string) => {
   try {
     const origin = new URL(url).origin
-    session.fromPartition('persist:main').preconnect({ url: origin, numSockets: 2 })
+    // Warm the jar the page will actually load in. A private window warming
+    // the normal session would open sockets to its sites from the wrong profile.
+    tabSessionFor(ctxFromEvent(e)).preconnect({ url: origin, numSockets: 2 })
   } catch {}
 })
 ipcMain.handle('tabview:goBack', (e, tabId: string) => {
@@ -2478,6 +2960,40 @@ ipcMain.handle('bookmarks:update', (_e, id: string, u: any) => {
   const d = getData(); const i = d.bookmarks.findIndex((b: any) => b.id === id)
   if (i !== -1) d.bookmarks[i] = { ...d.bookmarks[i], ...u }; saveData(); return d.bookmarks[i]
 })
+// F6: Smart Bookmark Summaries — fetch the page and generate a 3-bullet AI summary
+ipcMain.handle('bookmarks:summarize', async (_e, id: string) => {
+  const d = getData()
+  const bm = d.bookmarks.find((b: any) => b.id === id)
+  if (!bm) return { error: 'Bookmark not found' }
+
+  // Try to fetch page text
+  let pageText = ''
+  try {
+    const res = await fetch(bm.url, { signal: AbortSignal.timeout(8000) })
+    if (res.ok) {
+      const html = await res.text()
+      // Strip HTML tags to get text
+      pageText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 6000)
+    }
+  } catch { /* fetch failed — use URL-only fallback */ }
+
+  // Use the existing ai:summarizePage handler logic
+  const userContent = pageText.length > 100
+    ? `Summarize this web page in 3 concise bullet points. Focus on key takeaways.\n\nURL: ${bm.url}\n\n${pageText}`
+    : `Describe the website at ${bm.url} in 3 bullet points.`
+
+  const r = await runAiRequest([{ role: 'user', content: userContent }], undefined, { maxTokens: 600 })
+  const summary = r.provider === 'none' ? '' : (r.content || '').slice(0, 500)
+
+  if (summary) {
+    const idx = d.bookmarks.findIndex((b: any) => b.id === id)
+    if (idx !== -1) {
+      d.bookmarks[idx] = { ...d.bookmarks[idx], summary, summaryAt: Date.now() }
+      saveData()
+    }
+  }
+  return { summary, provider: r.provider }
+})
 
 // ── IPC: History ───────────────────────────────────────────────────────────
 // history:add runs on EVERY navigation. Re-reading and rewriting the whole
@@ -2494,8 +3010,9 @@ ipcMain.handle('history:deleteItem', (_e, id: string) => {
   historyStore.update(h => h.filter((x: any) => x.id !== id))
   return true
 })
-ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?: string }) => {
-  if (!entry.url || entry.url === 'home' || entry.url.startsWith('aihub://')) return
+// Private windows record nothing — not the row, and not the AI brain's visit.
+handlePersistent('history:add', (_e, entry: { url: string; title: string; favicon?: string }) => {
+  if (!entry?.url || entry.url === 'home' || entry.url.startsWith('aihub://')) return
   historyStore.update(h => {
     // Collapse a re-visit of the same page within 30s (reloads, redirects)
     // into one row. Scanning from the front stops at the first candidate
@@ -2511,6 +3028,36 @@ ipcMain.handle('history:add', (_e, entry: { url: string; title: string; favicon?
   })
   recordVisit(entry.url, entry.title)
   return true
+}, () => false)
+// F2: Semantic History Search — natural language queries over browsing history.
+// Falls back to keyword match when the semantic index has no embeddings yet.
+ipcMain.handle('history:smartSearch', async (_e, query: string) => {
+  const history = historyStore.get()
+  const terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean)
+  if (!terms.length) return { results: history.slice(0, 50) }
+
+  // Use the semantic index for natural language queries (≥3 meaningful words)
+  const semantic = terms.length >= 2
+  if (semantic) {
+    try {
+      const docs: SearchDoc[] = history.map(h => ({
+        id: h.id, title: h.title, url: h.url, text: `${h.title} ${h.url}`, ts: h.ts,
+      }))
+      const { results: semResults } = await semanticIndex.search(query, docs)
+      const byId = new Map(history.map(h => [h.id, h]))
+      const semItems = semResults
+        .map(r => byId.get(r.id))
+        .filter(Boolean)
+        .slice(0, 30)
+      if (semItems.length > 0) return { results: semItems, via: 'semantic' }
+    } catch { /* no semantic index — fall through */ }
+  }
+
+  // Keyword fallback
+  const kwItems = history.filter(h =>
+    terms.every(t => h.title.toLowerCase().includes(t) || h.url.toLowerCase().includes(t))
+  ).slice(0, 50)
+  return { results: kwItems, via: 'keyword' }
 })
 
 // ── IPC: Read the chart the user is actually looking at ───────────────────
@@ -2636,6 +3183,48 @@ ipcMain.handle('trading:readChart', async (e, tabId: string) => {
     readAt: Date.now(),
   }
 })
+
+// ── IPC: Per-symbol trading coach memory ────────────────────────────────────
+// The Trading Coach bot keeps a conversation per instrument so re-opening the
+// same chart (XAUUSD 1D) restores the prior analysis rather than starting over.
+// One JSON file per symbol in userData; debounced writes from the renderer.
+const TRADING_MEMORY_DIR = join(app.getPath('userData'), 'trading-memory')
+
+// Sanitise a symbol into a safe file name: "FX:XAUUSD" → "FX_XAUUSD".
+function safeSymbolFileName(symbol: string): string {
+  return String(symbol || 'unknown').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 80) || 'unknown'
+}
+
+function tradingMemoryPath(symbol: string): string {
+  return join(TRADING_MEMORY_DIR, `${safeSymbolFileName(symbol)}.json`)
+}
+
+ipcMain.handle('trading:getMemory', async (_e, symbol: string) => {
+  try {
+    const path = tradingMemoryPath(symbol)
+    if (!fs.existsSync(path)) return { ok: true, messages: [] }
+    const raw = fs.readFileSync(path, 'utf-8')
+    const parsed = JSON.parse(raw)
+    return { ok: true, messages: Array.isArray(parsed?.messages) ? parsed.messages : [] }
+  } catch (err) {
+    return { ok: false, error: String(err), messages: [] }
+  }
+})
+
+handlePersistent('trading:saveMemory', async (_e, symbol: string, messages: any[]) => {
+  try {
+    if (!fs.existsSync(TRADING_MEMORY_DIR)) {
+      fs.mkdirSync(TRADING_MEMORY_DIR, { recursive: true })
+    }
+    const path = tradingMemoryPath(symbol)
+    // Bound the file: 200 messages is plenty for any one symbol's history.
+    const trimmed = (Array.isArray(messages) ? messages : []).slice(-200)
+    fs.writeFileSync(path, JSON.stringify({ symbol, messages: trimmed, savedAt: Date.now() }, null, 2), 'utf-8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+}, () => ({ ok: true, private: true })) // the coach still answers; it just doesn't remember
 
 // ── IPC: Export / import everything to another computer ───────────────────
 // Sync keeps two machines in step continuously; this is the file you carry.
@@ -2885,15 +3474,17 @@ const chatStore = createManagedJsonStore<{ role: string; content: string }[]>(
   join(APP_DIR, 'chat-history.json'), () => [], { debounceMs: 2500 },
 )
 
-ipcMain.handle('chat:load', () => chatStore.get())
-ipcMain.handle('chat:save', (_e, messages: { role: string; content: string }[]) => {
+// A private window starts with an empty assistant, keeps its conversation in
+// renderer memory only, and cannot save over — or clear — the normal one.
+handlePersistent('chat:load', () => chatStore.get(), () => [])
+handlePersistent('chat:save', (_e, messages: { role: string; content: string }[]) => {
   const clean = (Array.isArray(messages) ? messages : [])
     .filter(m => m && typeof m.content === 'string' && m.role !== 'system')
     .slice(-CHAT_CAP)
   chatStore.set(clean)
   return true
-})
-ipcMain.handle('chat:clear', () => { chatStore.set([]); return true })
+}, () => false)
+handlePersistent('chat:clear', () => { chatStore.set([]); return true }, () => true)
 
 // ── IPC: Sessions and workspaces ───────────────────────────────────────────
 // The renderer owns tab state (a sleeping or crashed view still belongs in the
@@ -2903,9 +3494,11 @@ const sessions = createSessionManager(APP_DIR)
 // it — otherwise opening the app immediately destroys what you wanted back.
 sessions.captureLaunchSnapshot()
 
-ipcMain.handle('session:save', (_e, tabs: SessionTab[], activeIndex: number) => sessions.save(tabs, activeIndex))
-ipcMain.handle('session:getLast', () => sessions.getLast())
-ipcMain.handle('session:getPrevious', () => sessions.getPrevious())
+// Private tabs are never part of crash/restart recovery, and a private window
+// never inherits the normal session's tabs either.
+handlePersistent('session:save', (_e, tabs: SessionTab[], activeIndex: number) => sessions.save(tabs, activeIndex), () => null)
+handlePersistent('session:getLast', () => sessions.getLast(), () => null)
+handlePersistent('session:getPrevious', () => sessions.getPrevious(), () => null)
 ipcMain.handle('workspace:list', () => sessions.listWorkspaces())
 ipcMain.handle('workspace:save', (_e, name: string, tabs: SessionTab[], activeIndex: number) =>
   sessions.saveWorkspace(name, tabs, activeIndex))
@@ -2917,7 +3510,10 @@ ipcMain.handle('workspace:delete', (_e, id: string) => sessions.deleteWorkspace(
 // same in-memory + debounced-write treatment as history.
 const downloadsStore = createManagedJsonStore<any[]>(DL_FILE, () => [])
 
-ipcMain.handle('downloads:getAll',       () => {
+ipcMain.handle('downloads:getAll',       (e) => {
+  // A private window lists the downloads of the private session and nothing
+  // else; the persistent list is never shown to it, nor its rows to others.
+  if (ctxFromEvent(e)?.incognito) return incognito.listDownloads()
   // A download can only be "progressing" while its BrowserView is alive. If any
   // entry is still marked progressing on read, its download died with a previous
   // app session (crash / quit mid-transfer) and will never emit 'done' — left
@@ -2945,7 +3541,138 @@ ipcMain.handle('downloads:getAll',       () => {
   if (changed) downloadsStore.set(dls)
   return dls
 })
-ipcMain.handle('downloads:clear',        () => { downloadsStore.set([]); return true })
+ipcMain.handle('downloads:clear',        (e) => {
+  if (ctxFromEvent(e)?.incognito) { incognito.clearFinishedDownloads(); return true }
+  // Only a normal window may clear the persistent list.
+  if (!mayPersistFrom(e)) return false
+  downloadsStore.set([])
+  return true
+})
+
+// ── IPC: Page Vault ────────────────────────────────────────────
+// Snapshots are taken from the live view, so capture has to run here where the
+// webContents lives. Everything else is bookkeeping the renderer asks for.
+const vault = createVault(APP_DIR)
+
+ipcMain.handle('vault:list',   () => vault.list())
+ipcMain.handle('vault:latestFor', (_e, url: string) => vault.latestFor(url))
+ipcMain.handle('vault:remove', (_e, id: string) => vault.remove(id))
+ipcMain.handle('vault:clear',  () => vault.clear())
+ipcMain.handle('vault:reveal', (_e, p: string) => shell.showItemInFolder(p))
+
+// ── IPC: Recall ──────────────────────────────────────────────────
+// The scheduling and the rules live in the renderer (services/recall.ts, pure
+// and tested); main only holds the book on disk.
+const recallStore = createManagedJsonStore<Record<string, any>>(join(APP_DIR, 'recall.json'), () => ({}))
+ipcMain.handle('recall:get', () => recallStore.get())
+ipcMain.handle('recall:set', (_e, book: Record<string, any>) => { recallStore.set(book || {}); return true })
+
+// ── IPC: Credential guard ─────────────────────────────────────────
+// The sites this person actually uses, which is what a lookalike is measured
+// against. A domain seen once could be the phishing page itself; the repeat
+// visits are what make it evidence of a habit rather than of a single click.
+const KNOWN_DOMAIN_MIN_VISITS = 3
+
+ipcMain.handle('guard:knownDomains', () => {
+  try {
+    const counts = new Map<string, number>()
+    for (const item of historyStore.get() as any[]) {
+      const domain = registrableDomain(String(item?.url || ''))
+      if (!domain) continue
+      counts.set(domain, (counts.get(domain) || 0) + 1)
+    }
+    return [...counts.entries()]
+      .filter(([, n]) => n >= KNOWN_DOMAIN_MIN_VISITS)
+      .map(([domain]) => domain)
+  } catch { return [] }
+})
+
+// ── IPC: PDF text ───────────────────────────────────────────────
+// Chromium renders a PDF inside a plugin, so there is no DOM for the usual
+// page extraction to read. The bytes are fetched again through the tab's own
+// session — not a bare fetch — so a PDF behind a login is readable for exactly
+// as long as the tab that is showing it is.
+ipcMain.handle('pdf:extract', async (e, url: string) => {
+  const target = String(url || '')
+  try {
+    let bytes: Uint8Array
+    if (target.startsWith('file://')) {
+      bytes = new Uint8Array(fs.readFileSync(fileURLToPath(target)))
+    } else if (/^https?:/i.test(target)) {
+      // The asking window's own jar: a private PDF is fetched with private
+      // cookies, and a normal one never with them.
+      const res = await tabSessionFor(ctxFromEvent(e)).fetch(target)
+      if (!res.ok) return { ok: false, error: `The server returned ${res.status}.` }
+      bytes = new Uint8Array(await res.arrayBuffer())
+    } else {
+      return { ok: false, error: 'Not a fetchable address.' }
+    }
+
+    if (!looksLikePdf(bytes)) return { ok: false, error: 'That file is not a PDF.' }
+    const out = extractPdfText(bytes)
+    if (!out.text) {
+      // Say which kind of nothing this is. "No text" reads as a bug; "this is
+      // a scan" is a fact the user can act on.
+      return {
+        ok: false,
+        error: out.encrypted
+          ? 'This PDF is encrypted, so its text cannot be read.'
+          : 'This PDF has no text layer — it is almost certainly a scan.',
+        encrypted: out.encrypted,
+      }
+    }
+    return { ok: true, text: out.text, streams: out.streams, decoded: out.decoded }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) }
+  }
+})
+
+/**
+ * Archive what a tab is showing right now. Returns the snapshot, or null when
+ * the page was not eligible or the capture failed — callers treat a null as
+ * "no copy was taken", never as an error, because the action that triggered
+ * this (bookmarking) must succeed either way.
+ */
+ipcMain.handle('vault:capture', async (e, args: { tabId: string; url: string; title?: string; favicon?: string; origin?: 'auto' | 'manual' }) => {
+  const ctx = ctxFromEvent(e)
+  // The automatic copy taken when a page is bookmarked would archive the page
+  // exactly as the private session saw it — signed in, with private cookies —
+  // to disk. Only an explicit "save a copy" is honoured from a private window.
+  if (ctx?.incognito && args?.origin !== 'manual') return null
+  const wc = ctx?.views.get(args?.tabId)?.webContents
+  if (!wc || wc.isDestroyed()) return null
+  try {
+    return await vault.capture(wc, {
+      url: args.url || wc.getURL(),
+      title: args.title,
+      favicon: args.favicon,
+      origin: args.origin,
+    })
+  } catch { return null }
+})
+
+/**
+ * Open a snapshot in the tab that asked for it. The file:// load is what makes
+ * a dead bookmark usable again — Chromium renders .mhtml natively, so the
+ * archived page comes back with its layout, images and links intact.
+ */
+ipcMain.handle('vault:open', (e, args: { tabId: string; id: string }) => {
+  const snap = vault.list().find(s => s.id === args?.id)
+  if (!snap) return { success: false, error: 'That snapshot is gone.' }
+  if (!fs.existsSync(snap.path)) {
+    vault.remove(snap.id)
+    return { success: false, error: 'The snapshot file was deleted from disk.' }
+  }
+  const wc = ctxFromEvent(e)?.views.get(args.tabId)?.webContents
+  if (!wc || wc.isDestroyed()) return { success: false, error: 'No tab to open it in.' }
+  try {
+    wc.loadURL(pathToFileURL(snap.path).toString())
+    return { success: true, url: snap.url, title: snap.title, createdAt: snap.createdAt }
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) }
+  }
+})
+
 ipcMain.handle('downloads:openFile',     (_e, p: string) => shell.openPath(p))
 ipcMain.handle('downloads:showInFolder', (_e, p: string) => shell.showItemInFolder(p))
 
@@ -2993,6 +3720,8 @@ ipcMain.handle('settings:getAIConfig', () => {
   const s   = getData().settings
   return {
     hasKey:          !!cfg.orKey,
+    hasClaudeKey:    !!cfg.claudeKey,
+    hasChatGptKey:   !!cfg.chatGptKey,
     openrouterBase:  s.openrouterBase  || '',
     openrouterModel: s.openrouterModel || '',
     ollamaUrl:       s.ollamaUrl       || '',
@@ -3011,6 +3740,7 @@ ipcMain.handle('settings:getAIConfig', () => {
 })
 ipcMain.handle('settings:setAIConfig', (_e, cfg: {
   openrouterKey?: string; openrouterBase?: string; openrouterModel?: string; ollamaUrl?: string
+  claudeKey?: string; chatGptKey?: string
   primaryProvider?: string; fallbackEnabled?: boolean; fallbackProvider?: string
 }) => {
   const d = getData()
@@ -3018,6 +3748,8 @@ ipcMain.handle('settings:setAIConfig', (_e, cfg: {
   // receives the current key, so it cannot send it back unchanged.
   const patch: any = { ...cfg }
   if (!cfg.openrouterKey) delete patch.openrouterKey
+  if (!cfg.claudeKey)     delete patch.claudeKey
+  if (!cfg.chatGptKey)    delete patch.chatGptKey
   d.settings = { ...d.settings, ...patch }
   saveData()
   _data = null // flush cache so getAIConfig() picks up new values immediately
@@ -3214,7 +3946,9 @@ ipcMain.handle('siteMemory:get', (_e, url: string) => {
   const k = originKey(url)
   return k ? (getSiteMemory()[k]?.text || '') : ''
 })
-ipcMain.handle('siteMemory:set', (_e, url: string, text: string, title?: string) => {
+// The assistant's `remember` tool writes here on its own initiative, so from a
+// private window it is refused outright rather than trusted to be deliberate.
+handlePersistent('siteMemory:set', (_e, url: string, text: string, title?: string) => {
   try {
     const store = getSiteMemory()
     const k = originKey(url)
@@ -3226,7 +3960,7 @@ ipcMain.handle('siteMemory:set', (_e, url: string, text: string, title?: string)
     safelySend('siteMemory:changed', { origin: k })
     return { ok: true }
   } catch (e: any) { return { ok: false, error: e.message } }
-})
+}, () => ({ ok: false, error: 'Site memory is not saved from Incognito windows.' }))
 ipcMain.handle('siteMemory:getAll', () => getSiteMemory())
 
 // ── Rewind / Time Machine ──────────────────────────────────────────────────
@@ -3299,7 +4033,8 @@ ipcMain.handle('rewind:smartSearch', async (_e, query: string) => {
 
 ipcMain.handle('semantic:stats', () => ({ ...semanticIndex.stats(), total: getRewind().length }))
 
-ipcMain.handle('rewind:add', (_e, entry: { url: string; title?: string; favicon?: string; text?: string }) => {
+// Page text and its embeddings are the most revealing record the app keeps.
+handlePersistent('rewind:add', (_e, entry: { url: string; title?: string; favicon?: string; text?: string }) => {
   try {
     if (!entry?.url || !/^https?:\/\//i.test(entry.url)) return { ok: false }
     const store = getRewind()
@@ -3323,7 +4058,7 @@ ipcMain.handle('rewind:add', (_e, entry: { url: string; title?: string; favicon?
     if (saved) semanticIndex.index({ id: saved.id, title: saved.title, url: saved.url, text: saved.text, ts: saved.ts })
     return { ok: true }
   } catch (e: any) { return { ok: false, error: e.message } }
-})
+}, () => ({ ok: false, private: true }))
 
 ipcMain.handle('rewind:search', (_e, query: string) => {
   const q = String(query || '').toLowerCase().trim()
@@ -4065,6 +4800,123 @@ async function openRouterChat(
   }
 }
 
+// ── Direct provider chat (Claude / ChatGPT) ────────────────────────────────
+
+/** Strip the `data:` prefix from a data URL so only the raw base64 remains. */
+function stripDataUrlPrefix(dataUrl: string): string {
+  return String(dataUrl || '').replace(/^data:[^;]*;base64,/, '')
+}
+
+/** Build Claude API body from renderer messages (which carry `images: string[]`).
+ *  Handles: plain text messages, messages with images, and system messages. */
+function buildClaudeMessages(msgs: any[]): { system?: string; messages: any[] } {
+  const system = msgs.find(m => m.role === 'system')?.content || undefined
+  const conversation = msgs.filter(m => m.role !== 'system')
+  const claudeMessages = conversation.map(m => {
+    if (!Array.isArray(m.images) || m.images.length === 0) {
+      return { role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content || '' }
+    }
+    // Claude's multi-image content blocks
+    const blocks: any[] = [{ type: 'text', text: m.content || '' }]
+    for (const img of m.images) {
+      blocks.push({ type: 'image', source: { type: 'base64', media_type: img.startsWith('data:image/png') ? 'image/png' : 'image/jpeg', data: stripDataUrlPrefix(img) } })
+    }
+    return { role: m.role === 'assistant' ? 'assistant' : 'user', content: blocks }
+  })
+  return { system, messages: claudeMessages }
+}
+
+/** Build ChatGPT API body from renderer messages (images as OpenAI content arrays). */
+function buildChatGptMessages(msgs: any[]): any[] {
+  return msgs.filter(m => m.role !== 'system').map(m => {
+    if (!Array.isArray(m.images) || m.images.length === 0) {
+      return { role: m.role, content: m.content || '' }
+    }
+    // OpenAI's multimodal content array: text first, then image blocks
+    const content: any[] = [{ type: 'text', text: m.content || '' }]
+    for (const img of m.images) {
+      content.push({ type: 'image_url', image_url: { url: img } })
+    }
+    return { role: m.role, content }
+  })
+}
+
+/**
+ * Call Claude directly via the Anthropic /v1/messages endpoint.
+ *
+ * Returns null on a skip-able failure (401 bad key, 429 rate-limit) so the
+ * fallback chain can continue. Throws on a hard failure.
+ */
+async function claudeChat(
+  apiKey: string,
+  messages: any[],
+  maxTokens = 4096,
+): Promise<string | null> {
+  try {
+    const { system, messages: claudeMessages } = buildClaudeMessages(messages)
+    const res = await withNetRetry(() => httpPost(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: maxTokens,
+        ...(system ? { system } : {}),
+        messages: claudeMessages,
+      },
+      {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      30000,
+    ))
+    if (res.status === 200) {
+      const body = JSON.parse(res.body)
+      return body.content?.[0]?.text || null
+    }
+    // 401 = bad key, 429 = rate limit → skip to next provider
+    if (/^HTTP (401|429)/.test(String(res.status))) return null
+    throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`)
+  } catch (e: any) {
+    if (/^HTTP (401|429)/.test(e.message || '')) return null
+    throw e
+  }
+}
+
+/**
+ * Call ChatGPT directly via the OpenAI /v1/chat/completions endpoint.
+ *
+ * Returns null on a skip-able failure (401 bad key, 429 rate-limit) so the
+ * fallback chain can continue. Throws on a hard failure.
+ */
+async function chatGptChat(
+  apiKey: string,
+  messages: any[],
+  maxTokens = 2048,
+): Promise<string | null> {
+  try {
+    const { status, body } = await withNetRetry(() => httpPost(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o-mini',
+        messages: buildChatGptMessages(messages),
+        max_tokens: maxTokens,
+      },
+      { Authorization: `Bearer ${apiKey}` },
+      30000,
+    ))
+    const parsed = JSON.parse(body)
+    if (status === 200) {
+      return parsed.choices?.[0]?.message?.content || null
+    }
+    // 401 = bad key, 429 = rate limit → skip to next provider
+    if (/^HTTP (401|429)/.test(String(status))) return null
+    throw new Error(`HTTP ${status}: ${body.slice(0, 200)}`)
+  } catch (e: any) {
+    if (/^HTTP (401|429)/.test(e.message || '')) return null
+    throw e
+  }
+}
+
 // ── IPC: AI chat ──────────────────────────────────────────────────────────
 // The single entry point every agent and AI feature goes through (§37) —
 // nothing else in the app talks to a provider directly. WHICH provider serves
@@ -4242,6 +5094,62 @@ async function runAiRequest(
     },
   })
 
+  // ── Direct-provider fallback (Claude → ChatGPT) ──────────────────────
+  // routeGenerate already tried Ollama + OpenRouter. If both failed, walk
+  // through the user's direct provider keys — Claude first, then ChatGPT.
+  // Both return null on 401/429 so a bad key can't break the chain.
+  if (!result.ok) {
+    const direct = getAIConfig()
+
+    if (direct.claudeKey) {
+      try {
+        // Reset stream so Claude's tokens don't land spliced after a partial
+        // OpenRouter reply.
+        opts?.onDelta?.('', true)
+        const claudeReply = await claudeChat(direct.claudeKey, messages, opts?.maxTokens ?? 4096)
+        if (claudeReply) {
+          const content = stripThinkTags(claudeReply) || claudeReply
+          if (opts?.onDelta) {
+            try { opts.onDelta(content) } catch {}
+          }
+          return {
+            content,
+            model: 'claude-sonnet-4-20250514',
+            provider: 'claude',
+            fallbackUsed: true,
+            fallbackReason: result.fallbackReason,
+            notice: `Answered by Claude (${result.fallbackReason || 'primary failed'}).`,
+          }
+        }
+      } catch (e: any) {
+        console.log(`[aihub] Claude fallback failed: ${e?.message || e}`)
+      }
+    }
+
+    if (direct.chatGptKey) {
+      try {
+        opts?.onDelta?.('', true)
+        const gptReply = await chatGptChat(direct.chatGptKey, messages, opts?.maxTokens ?? 2048)
+        if (gptReply) {
+          const content = stripThinkTags(gptReply) || gptReply
+          if (opts?.onDelta) {
+            try { opts.onDelta(content) } catch {}
+          }
+          return {
+            content,
+            model: 'gpt-4o-mini',
+            provider: 'chatgpt',
+            fallbackUsed: true,
+            fallbackReason: result.fallbackReason,
+            notice: `Answered by ChatGPT (${result.fallbackReason || 'primary failed'}).`,
+          }
+        }
+      } catch (e: any) {
+        console.log(`[aihub] ChatGPT fallback failed: ${e?.message || e}`)
+      }
+    }
+  }
+
   // The renderer sees the same shape it always did, plus honest routing
   // metadata (§24) — a fallback answer is never passed off as the primary's.
   if (result.ok) {
@@ -4375,11 +5283,20 @@ ipcMain.handle('file:saveVideo', async (_e, { buffer }: { buffer: ArrayBuffer })
 })
 
 // ── Agent store: saved custom agents + archived conversations ─────────────
+// 3-month cleanup: removes conversations older than 90 days on every load.
+const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000
+
 function readAgentsStore(): { customAgents: any[]; conversations: any[] } {
   const s = readJson(AGENTS_FILE, null)
+  const conversations: any[] = (Array.isArray(s?.conversations) ? s.conversations : [])
+    .filter((c: any) => (c.updatedAt || c.createdAt || 0) > Date.now() - THREE_MONTHS_MS)
+  // Persist cleanup so the file shrinks on disk
+  if (conversations.length !== (s?.conversations?.length ?? 0)) {
+    writeJson(AGENTS_FILE, { ...s, conversations })
+  }
   return {
     customAgents:  Array.isArray(s?.customAgents)  ? s.customAgents  : [],
-    conversations: Array.isArray(s?.conversations) ? s.conversations : [],
+    conversations,
   }
 }
 
@@ -4402,7 +5319,7 @@ ipcMain.handle('agents:deleteAgent', (_e, id: string) => {
   return true
 })
 
-ipcMain.handle('agents:saveConversation', (_e, convo: any) => {
+handlePersistent('agents:saveConversation', (_e, convo: any) => {
   if (!convo?.id) return false
   const s = readAgentsStore()
   const i = s.conversations.findIndex(c => c.id === convo.id)
@@ -4413,13 +5330,79 @@ ipcMain.handle('agents:saveConversation', (_e, convo: any) => {
   s.conversations = s.conversations.slice(0, 100)
   writeJson(AGENTS_FILE, s)
   return true
-})
+}, () => false) // the agent runs; its transcript stays in the private window's memory
 
 ipcMain.handle('agents:deleteConversation', (_e, id: string) => {
   const s = readAgentsStore()
   s.conversations = s.conversations.filter(c => c.id !== id)
   writeJson(AGENTS_FILE, s)
   return true
+})
+
+// ── Agent import/export ──────────────────────────────────────────────────────
+ipcMain.handle('agents:exportAgents', async () => {
+  const { customAgents } = readAgentsStore()
+  if (!customAgents.length) return { success: false, error: 'No custom agents to export' }
+  const pkg = {
+    version: 1,
+    exportedAt: Date.now(),
+    agents: customAgents.map(a => ({
+      id: a.id, name: a.name, description: a.description,
+      template: a.template, color: a.color, custom: true,
+    })),
+  }
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Custom Agents',
+    defaultPath: join(os.homedir(), 'Documents', 'aihub-agents-export.json'),
+    filters: [{ name: 'AIHub Agents', extensions: ['json'] }],
+  })
+  if (canceled || !filePath) return { success: false, cancelled: true }
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2), 'utf-8')
+    return { success: true, path: filePath, count: customAgents.length }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('agents:importAgents', async () => {
+  const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Custom Agents',
+    filters: [{ name: 'AIHub Agents', extensions: ['json'] }],
+    properties: ['openFile'],
+  })
+  if (canceled || !filePaths?.length) return { success: false, cancelled: true }
+  try {
+    const raw = fs.readFileSync(filePaths[0], 'utf-8')
+    const pkg = JSON.parse(raw)
+    if (!Array.isArray(pkg.agents)) return { success: false, error: 'Invalid format: expected { agents: [...] }' }
+    const incoming = pkg.agents.filter((a: any) =>
+      a && typeof a.id === 'string' && typeof a.name === 'string',
+    )
+    if (!incoming.length) return { success: false, error: 'No valid agents found in file' }
+
+    const store = readAgentsStore()
+    const now = Date.now()
+    let added = 0, skipped = 0
+    for (const agent of incoming) {
+      const existing = store.customAgents.find(a => a.id === agent.id)
+      if (!existing) {
+        store.customAgents.unshift({ ...agent, updatedAt: now })
+        added++
+      } else if ((existing.updatedAt || 0) < (agent.updatedAt || 0)) {
+        // Incoming is newer — update
+        const idx = store.customAgents.indexOf(existing)
+        store.customAgents[idx] = { ...existing, ...agent, updatedAt: now }
+        added++
+      } else {
+        skipped++
+      }
+    }
+    writeJson(AGENTS_FILE, store)
+    return { success: true, added, skipped, total: store.customAgents.length }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
 })
 
 // ── Agent file-system access ───────────────────────────────────────────────
@@ -5083,6 +6066,181 @@ ipcMain.handle('recorder:getSourceId', (e) => {
   try { return (winFrom(e) ?? mainWindow).getMediaSourceId() } catch { return null }
 })
 
+// The Screen Pen's two captures. Both answer only the app's own UI document —
+// never a tab's page, which could otherwise list the user's screens or
+// photograph the browser chrome around it. winFrom() is not enough for that,
+// because it falls back to the main window for any sender.
+function appUiWindow(e: { sender: Electron.WebContents }): BrowserWindow | null {
+  const win = BrowserWindow.fromWebContents(e.sender)
+  return win && !win.isDestroyed() && win.webContents === e.sender ? win : null
+}
+
+// Screens and windows for the pen's recorder picker. Electron has no browser
+// picker, so the renderer shows its own from this list; the chosen id is then
+// opened with chromeMediaSource constraints. Choosing is the consent step.
+ipcMain.handle('recorder:screenSources', async (e) => {
+  if (!appUiWindow(e)) return { ok: false, error: 'Not available here.', sources: [] }
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+      fetchWindowIcons: false,
+    })
+    return {
+      ok: true,
+      sources: sources.map(s => ({
+        id: s.id,
+        name: s.name,
+        thumbnail: s.thumbnail.isEmpty() ? '' : s.thumbnail.toDataURL(),
+        isScreen: s.id.startsWith('screen:'),
+      })),
+    }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Could not list your screens.', sources: [] }
+  }
+})
+
+// While a recording runs, keep this window's timers at full pace with it
+// minimised or behind the application being recorded — a window recording's
+// bubble is drawn by a timer here, and Chromium otherwise throttles a
+// background page to once a second. Restored the moment the recording ends.
+ipcMain.handle('recorder:setRecordingActive', (e, active: boolean) => {
+  const win = appUiWindow(e)
+  if (!win) return false
+  try { win.webContents.setBackgroundThrottling(!active); return true } catch { return false }
+})
+
+// ── The live camera bubble ──────────────────────────────────────────────
+// While a recording with the camera runs, the presenter sees themselves in a
+// round bubble inside AIHub's own border, in the corner they chose. It is a
+// small child window rather than host HTML because a tab's BrowserView paints
+// over everything in the host page; as a child of the app window it:
+//   - sits over the browser (tabs included) but not over other applications,
+//     and moves, resizes and minimises with the browser;
+//   - is click-through, so it never steals a click meant for the page;
+//   - is NOT hidden from capture: a whole-screen recording is meant to show it
+//     exactly where the presenter sees it (window recordings draw their own).
+type BubbleCorner = 'bottom-right' | 'bottom-left' | 'top-left' | 'top-right'
+let cameraBubble: BrowserWindow | null = null
+let cameraBubbleCorner: BubbleCorner = 'bottom-right'
+
+function cameraBubbleBounds(owner: BrowserWindow, corner: BubbleCorner) {
+  const b = owner.getContentBounds()
+  const size = Math.max(96, Math.min(260, Math.round(Math.min(b.width, b.height) * 0.2)))
+  const margin = 20
+  return {
+    width: size,
+    height: size,
+    x: Math.round(corner.endsWith('right') ? b.x + b.width - size - margin : b.x + margin),
+    y: Math.round(corner.startsWith('bottom') ? b.y + b.height - size - margin : b.y + margin),
+  }
+}
+
+ipcMain.handle('recorder:cameraBubble', (e, opts: { show: boolean; corner?: BubbleCorner }) => {
+  const owner = appUiWindow(e)
+  if (!owner) return false
+  if (!opts?.show) {
+    if (cameraBubble && !cameraBubble.isDestroyed()) cameraBubble.close()
+    cameraBubble = null
+    return true
+  }
+  if (opts.corner) cameraBubbleCorner = opts.corner
+  if (cameraBubble && !cameraBubble.isDestroyed()) {
+    cameraBubble.setBounds(cameraBubbleBounds(owner, cameraBubbleCorner))
+    return true
+  }
+
+  const bubble = new BrowserWindow({
+    ...cameraBubbleBounds(owner, cameraBubbleCorner),
+    parent: owner,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: false,
+    // No edges of any kind: Windows 11 otherwise gives a frameless window a
+    // 1px border and rounded-rectangle corners around the round bubble.
+    hasShadow: false,
+    thickFrame: false,
+    roundedCorners: false,
+    show: false,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
+  })
+  bubble.setIgnoreMouseEvents(true)
+
+  // Stay inside the browser's border as it moves and resizes, and go away with
+  // it when it is minimised.
+  const follow = () => {
+    if (bubble.isDestroyed() || owner.isDestroyed()) return
+    bubble.setBounds(cameraBubbleBounds(owner, cameraBubbleCorner))
+  }
+  const onMinimize = () => { if (!bubble.isDestroyed()) bubble.hide() }
+  const onRestore = () => { if (!bubble.isDestroyed()) { follow(); bubble.showInactive() } }
+  owner.on('move', follow)
+  owner.on('resize', follow)
+  owner.on('maximize', follow)
+  owner.on('unmaximize', follow)
+  owner.on('enter-full-screen', follow)
+  owner.on('leave-full-screen', follow)
+  owner.on('minimize', onMinimize)
+  owner.on('restore', onRestore)
+  const unfollow = () => {
+    if (owner.isDestroyed()) return
+    owner.off('move', follow)
+    owner.off('resize', follow)
+    owner.off('maximize', follow)
+    owner.off('unmaximize', follow)
+    owner.off('enter-full-screen', follow)
+    owner.off('leave-full-screen', follow)
+    owner.off('minimize', onMinimize)
+    owner.off('restore', onRestore)
+  }
+
+  // The bubble page names its state in its title — 'live' once the camera is
+  // showing, 'none' when it could not be opened — so the recorder can say so.
+  bubble.webContents.on('page-title-updated', (_ev, title) => {
+    if ((title === 'live' || title === 'none') && !owner.isDestroyed()) {
+      owner.webContents.send('recorder:cameraBubbleState', title)
+    }
+  })
+  // Shown straight away rather than on ready-to-show: the window is transparent,
+  // so there is nothing unpainted to hide, and a page loaded while hidden holds
+  // its video back until it becomes visible.
+  if (!owner.isMinimized()) bubble.showInactive()
+  bubble.on('closed', () => {
+    unfollow()
+    if (cameraBubble === bubble) cameraBubble = null
+  })
+  // Never outlive the window that asked for it — an orphan would keep the
+  // camera light on.
+  owner.once('closed', () => { if (!bubble.isDestroyed()) bubble.close() })
+
+  if (isDev && process.env['ELECTRON_RENDERER_URL']) void bubble.loadURL(process.env['ELECTRON_RENDERER_URL'] + '/camera-bubble.html')
+  else void bubble.loadFile(join(__dirname, '../renderer/camera-bubble.html'))
+  cameraBubble = bubble
+  return true
+})
+
+// Photograph part of the app window, for the pen on the app's own pages (a
+// tab's page goes through webview:capture instead). capturePage sees this
+// window only — no desktop, no other application.
+ipcMain.handle('recorder:captureWindow', async (e, rect?: { x: number; y: number; width: number; height: number }) => {
+  const win = appUiWindow(e)
+  if (!win) return null
+  try {
+    const bounds = rect && rect.width > 0 && rect.height > 0
+      ? { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
+      : undefined
+    const img = bounds ? await win.webContents.capturePage(bounds) : await win.webContents.capturePage()
+    return img.isEmpty() ? null : img.toDataURL()
+  } catch { return null }
+})
+
 // ── IPC: Live AI news from Hacker News ────────────────────────────────────
 const AI_NEWS_KEYWORDS = [
   'ai ', ' ai', 'llm', 'gpt', 'claude', 'gemini', 'openai', 'anthropic',
@@ -5291,9 +6449,23 @@ ipcMain.handle('bookmarks:import', async () => {
 })
 
 // ── IPC: Capture webview screenshot ──────────────────────────────────────
-ipcMain.handle('webview:capture', async (_e, wcId: number) => {
+// Both of these take a raw webContents id from the renderer. Resolve it only
+// among the SENDER's own tab views: otherwise any window could read or script
+// a page in another window — including a private page from a normal window,
+// or a signed-in normal page from a private one.
+function ownTabWebContents(e: { sender: Electron.WebContents }, wcId: number): Electron.WebContents | null {
+  const ctx = ctxFromEvent(e)
+  if (!ctx || !Number.isInteger(wcId)) return null
+  for (const view of ctx.views.values()) {
+    const wc = view.webContents
+    if (!wc.isDestroyed() && wc.id === wcId) return wc
+  }
+  return null
+}
+
+ipcMain.handle('webview:capture', async (e, wcId: number) => {
   try {
-    const wc = electronWebContents.fromId(wcId)
+    const wc = ownTabWebContents(e, wcId)
     if (!wc) return null
     const img = await wc.capturePage()
     return img.toDataURL()
@@ -5301,9 +6473,9 @@ ipcMain.handle('webview:capture', async (_e, wcId: number) => {
 })
 
 // ── IPC: Execute script inside webview via webContents ────────────────────
-ipcMain.handle('webview:execScript', async (_e, wcId: number, script: string) => {
+ipcMain.handle('webview:execScript', async (e, wcId: number, script: string) => {
   try {
-    const wc = electronWebContents.fromId(wcId)
+    const wc = ownTabWebContents(e, wcId)
     if (!wc) return { ok: false, error: 'webContents not found for id ' + wcId }
     const result = await wc.executeJavaScript(script, true)
     return { ok: true, result }

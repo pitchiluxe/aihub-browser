@@ -1,17 +1,21 @@
-// Spaced repetition for verse memorisation — Leitner boxes, 1 to 5.
+// Spaced repetition for verse memorisation.
 //
-// The whole scheduler is five numbers and two rules, and that is deliberate.
-// SM-2's per-item ease factors are invisible to the person doing the drilling
-// and buy nothing at the scale one reader memorises verses; a fixed daily
-// review of everything drills what is already known cold once the list passes
-// roughly forty verses, which is how people quit.
-//
-// Box level IS the mastery level. The scheduler and the rewards read the same
-// number, so they cannot disagree about how well a verse is known.
+// The scheduling itself lives in shared/leitner — the same five boxes now drive
+// Recall, which reviews highlights from any page. This module is the Bible's
+// vocabulary on top of it: verse references, the Lab's lists, and the stats the
+// rewards read. Box level IS the mastery level, so the scheduler and the
+// rewards cannot disagree about how well a verse is known.
 
-export type Box = 1 | 2 | 3 | 4 | 5
+import {
+  type Box, type Scheduled,
+  DAY_MS, BOX_INTERVAL_DAYS, MAX_BOX, isBox, nextReviewAt,
+  initialSchedule, gradeSchedule, dueKeys, nextDueAt as sharedNextDueAt,
+} from '../../../shared/leitner'
 
-export interface VerseProgress {
+export type { Box }
+export { DAY_MS, BOX_INTERVAL_DAYS, MAX_BOX, isBox, nextReviewAt }
+
+export interface VerseProgress extends Scheduled {
   box: Box
   /** Epoch ms. The verse is due for review at or after this instant. */
   dueAt: number
@@ -22,26 +26,6 @@ export interface VerseProgress {
 
 export type VerseBook = Record<string, VerseProgress>
 
-export const DAY_MS = 86_400_000
-
-/** Days until a verse in each box comes back. */
-export const BOX_INTERVAL_DAYS: Record<Box, number> = {
-  1: 1,
-  2: 3,
-  3: 7,
-  4: 21,
-  5: 60,
-}
-
-export const MAX_BOX: Box = 5
-
-export function isBox(n: unknown): n is Box {
-  return n === 1 || n === 2 || n === 3 || n === 4 || n === 5
-}
-
-export function nextReviewAt(box: Box, now: number): number {
-  return now + BOX_INTERVAL_DAYS[box] * DAY_MS
-}
 
 /**
  * A verse the reader has just added to the Lab.
@@ -51,7 +35,7 @@ export function nextReviewAt(box: Box, now: number): number {
  * something after the first pass.
  */
 export function initialProgress(now: number): VerseProgress {
-  return { box: 1, dueAt: now, reviews: 0 }
+  return initialSchedule(now)
 }
 
 /**
@@ -63,15 +47,7 @@ export function initialProgress(now: number): VerseProgress {
  * gentle-demotion variants all end up re-showing it too late.
  */
 export function grade(current: VerseProgress | undefined, correct: boolean, now: number): VerseProgress {
-  const box = isBox(current?.box) ? (current as VerseProgress).box : 1
-  const reviews = (current?.reviews ?? 0) + 1
-  const next: Box = correct ? (Math.min(MAX_BOX, box + 1) as Box) : 1
-  return {
-    box: next,
-    dueAt: nextReviewAt(next, now),
-    lastResult: correct ? 'pass' : 'fail',
-    reviews,
-  }
+  return gradeSchedule(current, correct, now)
 }
 
 /**
@@ -82,10 +58,7 @@ export function grade(current: VerseProgress | undefined, correct: boolean, now:
  * underneath someone is worse than one that is slightly stale.
  */
 export function dueVerses(verses: VerseBook, now: number): string[] {
-  return Object.entries(verses || {})
-    .filter(([, p]) => p && typeof p.dueAt === 'number' && p.dueAt <= now)
-    .sort((a, b) => a[1].dueAt - b[1].dueAt || a[0].localeCompare(b[0]))
-    .map(([ref]) => ref)
+  return dueKeys(verses, now)
 }
 
 /** Everything in the Lab, most recently due first — the "all verses" list. */
@@ -98,8 +71,7 @@ export function allVerses(verses: VerseBook): string[] {
 
 /** When the next verse comes back, or null when the Lab is empty. */
 export function nextDueAt(verses: VerseBook): number | null {
-  const times = Object.values(verses || {}).map(p => p?.dueAt).filter((t): t is number => typeof t === 'number')
-  return times.length ? Math.min(...times) : null
+  return sharedNextDueAt(verses)
 }
 
 export interface LabStats {

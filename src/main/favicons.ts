@@ -1,5 +1,5 @@
 import { join } from 'path'
-import { app, ipcMain, net } from 'electron'
+import { app, ipcMain, net, type IpcMainInvokeEvent } from 'electron'
 import { createManagedJsonStore } from './jsonStore'
 import { hostOf, faviconSourceUrl } from '../shared/favicon'
 
@@ -113,8 +113,14 @@ function fetchIcon(host: string): Promise<string | null> {
   return work
 }
 
-/** A data URI for this URL's icon, or null when there isn't one. */
-export async function faviconFor(rawUrl: string): Promise<string | null> {
+/**
+ * A data URI for this URL's icon, or null when there isn't one.
+ *
+ * `remember: false` still reads the cache but never writes to it. The cache is
+ * keyed by host and kept on disk, so writing an entry for a site visited in an
+ * Incognito window would leave a durable list of those sites behind.
+ */
+export async function faviconFor(rawUrl: string, opts: { remember?: boolean } = {}): Promise<string | null> {
   const host = hostOf(rawUrl)
   if (!host) return null
 
@@ -123,16 +129,22 @@ export async function faviconFor(rawUrl: string): Promise<string | null> {
   if (fresh(entry, now)) return entry.data
 
   const data = await fetchIcon(host)
-  cache().update(c => { c[host] = { data, ts: now } })
+  if (opts.remember !== false) cache().update(c => { c[host] = { data, ts: now } })
   return data
 }
 
-export function registerFaviconIpc(): void {
-  cache()
+export interface FaviconIpcOptions {
+  /** Whether icons fetched for this sender may be written to the disk cache. */
+  mayRemember?: (e: IpcMainInvokeEvent) => boolean
+}
 
-  ipcMain.handle('favicon:get', async (_e, url: string) => {
+export function registerFaviconIpc(options: FaviconIpcOptions = {}): void {
+  cache()
+  const remember = (e: IpcMainInvokeEvent) => (options.mayRemember ? options.mayRemember(e) : true)
+
+  ipcMain.handle('favicon:get', async (e, url: string) => {
     try {
-      return { ok: true, data: await faviconFor(String(url ?? '')) }
+      return { ok: true, data: await faviconFor(String(url ?? ''), { remember: remember(e) }) }
     } catch {
       // Never let an icon take a render down with it.
       return { ok: true, data: null }
@@ -141,11 +153,12 @@ export function registerFaviconIpc(): void {
 
   /** Resolve several at once — the homepage asks for every bookmark it draws,
    *  and one round trip beats forty. */
-  ipcMain.handle('favicon:getMany', async (_e, urls: string[]) => {
+  ipcMain.handle('favicon:getMany', async (e, urls: string[]) => {
     const list = Array.isArray(urls) ? urls.slice(0, 500) : []
     const out: Record<string, string | null> = {}
+    const keep = remember(e)
     await Promise.all(list.map(async url => {
-      try { out[url] = await faviconFor(String(url ?? '')) } catch { out[url] = null }
+      try { out[url] = await faviconFor(String(url ?? ''), { remember: keep }) } catch { out[url] = null }
     }))
     return { ok: true, icons: out }
   })

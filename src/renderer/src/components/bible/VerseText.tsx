@@ -87,7 +87,8 @@ export default function VerseText({ showNumbers = true, bookId, chapter, verses,
               tabIndex={0}
               onClick={() => onSelectVerse(ref)}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectVerse(ref) } }}
-              className="cursor-pointer rounded-[3px] transition-colors"
+              title={`Read ${ref} in full`}
+              className="cursor-pointer rounded-[3px] transition-all hover:shadow-sm"
               style={{
                 background: color ? HIGHLIGHT_COLORS[color] ?? color : undefined,
                 boxShadow: selected ? '0 0 0 2px rgba(251,191,36,0.85)' : undefined,

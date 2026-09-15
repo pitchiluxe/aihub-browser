@@ -405,6 +405,55 @@ body[data-theme="paper"] {
   box-shadow: 0 1px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
+/* ── Incognito window ─────────────────────────────────────────────────
+   The window already wears the Graphite palette (effectiveThemeId); these
+   make the chrome itself read as private: a deeper strip, a quiet dashed
+   rule under it, and a labelled badge. Deliberately not red or alarming —
+   private browsing is a normal mode, not a warning state. */
+.ds-incognito-root .ds-tabbar {
+  background: linear-gradient(180deg, #0b0b0f 0%, #121218 100%);
+  border-bottom: 1px dashed rgba(161, 161, 170, 0.28);
+}
+.ds-incognito-root .ds-navbar {
+  background: linear-gradient(180deg, #121218 0%, #15151c 100%);
+}
+.ds-incognito-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 24px; padding: 0 10px; margin: 0 6px 0 4px;
+  border-radius: 999px; cursor: pointer;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+  color: #e4e4e7;
+  background: rgba(161, 161, 170, 0.12);
+  border: 1px solid rgba(161, 161, 170, 0.30);
+  transition: background 0.15s, border-color 0.15s;
+}
+.ds-incognito-badge:hover { background: rgba(161, 161, 170, 0.22); border-color: rgba(212, 212, 216, 0.45); }
+.ds-incognito-badge:focus-visible { outline: 2px solid #d4d4d8; outline-offset: 2px; }
+
+/* Normal windows: the button that opens Incognito. Themed like the rest of
+   the tab strip (not graphite) so it reads as an action, not a state. */
+.ds-new-incognito-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 24px; padding: 0 10px; margin: 0 6px 0 4px;
+  border-radius: 999px; cursor: pointer; white-space: nowrap;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+  color: rgb(var(--ds-text-3));
+  background: transparent;
+  border: 1px solid rgb(var(--ds-accent) / 0.22);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.ds-new-incognito-btn:hover {
+  color: rgb(var(--ds-accent-soft));
+  background: rgb(var(--ds-accent) / 0.10);
+  border-color: rgb(var(--ds-accent) / 0.40);
+}
+.ds-new-incognito-btn:focus-visible { outline: 2px solid rgb(var(--ds-accent-soft)); outline-offset: 2px; }
+/* Narrow windows keep the icon and drop the words. */
+@media (max-width: 1100px) {
+  .ds-new-incognito-btn span { display: none; }
+  .ds-new-incognito-btn { padding: 0 7px; }
+}
+
 /* ── Tab ── */
 .ds-tab {
   display: flex;

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Plus, Home, Minus, Square } from 'lucide-react'
+import { X, Plus, Home, Minus, Square, Wand2, VenetianMask } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore, Tab } from '../../store/browserStore'
+import { IS_INCOGNITO } from '../../services/incognitoMode'
 
 // macOS keeps its native traffic lights (inset into the tab strip by the main
 // process via titleBarStyle 'hiddenInset'); the strip reserves room for them
@@ -172,11 +173,18 @@ export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compa
         </AnimatePresence>
 
         {/* New tab button */}
-        <NewTabBtn onClick={() => addTab()} />
+        <NewTabBtn onClick={() => addTab()} title={IS_INCOGNITO ? 'New Incognito tab (Ctrl+T)' : 'New tab (Ctrl+T)'} />
+
+        {/* Tab Curator — AI groups open tabs by topic (F3) */}
+        <CuratorBtn />
 
         {/* Draggable filler — collapses to 0 once tabs fill the strip */}
         <div style={{ flex: '1 0 12px', minWidth: 12, alignSelf: 'stretch' }} className="drag-region" />
       </div>}
+
+      {/* Private-window indicator. Pinned beside the window controls so it is
+          visible however many tabs are open, in both strip layouts. */}
+      {IS_INCOGNITO ? <IncognitoBadge /> : <NewIncognitoWindowBtn />}
 
       {/* Window controls — pinned right, always visible regardless of tab
           count. macOS uses its native traffic lights (left inset) instead. */}
@@ -323,11 +331,49 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
   )
 }
 
-function NewTabBtn({ onClick }: { onClick: () => void }) {
+// Says "private" in words, not just with an icon, and opens the Incognito menu
+// (new window / close) natively so it is never hidden behind page content.
+function IncognitoBadge() {
+  return (
+    <button
+      type="button"
+      onClick={() => window.electronAPI.incognito?.showMenu?.()}
+      className="ds-incognito-badge no-drag shrink-0 self-center"
+      title="You're browsing privately. Click for Incognito options."
+      aria-label="Incognito window — you're browsing privately. Open Incognito options."
+    >
+      <VenetianMask size={13} aria-hidden="true" />
+      <span>Incognito</span>
+    </button>
+  )
+}
+
+// The way INTO Incognito from a normal window, in the spot where a private
+// window shows its badge. Worded as an action ("New Incognito window") so it
+// can't be mistaken for the badge that says the current window is private.
+function NewIncognitoWindowBtn() {
+  const shortcut = IS_MAC ? '⌘+Shift+N' : 'Ctrl+Shift+N'
+  return (
+    <button
+      type="button"
+      onClick={() => window.electronAPI.incognito?.openWindow?.()}
+      className="ds-new-incognito-btn no-drag shrink-0 self-center"
+      title={`Open a new Incognito window (${shortcut})`}
+      aria-label={`Open a new Incognito window (${shortcut})`}
+    >
+      <VenetianMask size={13} aria-hidden="true" />
+      <span>New Incognito window</span>
+    </button>
+  )
+}
+
+function NewTabBtn({ onClick, title }: { onClick: () => void; title?: string }) {
   const [hovered, setHovered] = useState(false)
   return (
     <button
       onClick={onClick}
+      title={title}
+      aria-label={title}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className="shrink-0 no-drag flex items-center justify-center"
@@ -342,6 +388,55 @@ function NewTabBtn({ onClick }: { onClick: () => void }) {
       }}
     >
       <Plus size={12} />
+    </button>
+  )
+}
+
+function CuratorBtn() {
+  const [hovered, setHovered] = useState(false)
+  const { isCuratorOpen, setCuratorOpen, tabs } = useBrowserStore(useShallow(s => ({
+    isCuratorOpen: s.isCuratorOpen,
+    setCuratorOpen: s.setCuratorOpen,
+    tabs: s.tabs,
+  })))
+  const browserTabs = tabs.filter(t => t.pageType === 'browser')
+  const disabled = browserTabs.length < 2
+  return (
+    <button
+      onClick={() => !disabled && setCuratorOpen(!isCuratorOpen)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      disabled={disabled}
+      className="shrink-0 no-drag flex items-center justify-center"
+      title={disabled
+        ? 'Open more tabs to enable AI Tab Curator (F3)'
+        : 'AI Tab Curator — group tabs by topic (F3)'}
+      style={{
+        width: 28, height: 26, marginBottom: 2,
+        borderRadius: 9, marginLeft: 2,
+        border: `1px solid ${isCuratorOpen
+          ? 'rgb(var(--ds-accent) / 0.45)'
+          : hovered
+            ? 'rgb(var(--ds-accent) / 0.28)'
+            : 'transparent'}`,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        color: isCuratorOpen
+          ? 'rgb(var(--ds-accent-soft))'
+          : hovered
+            ? 'rgb(var(--ds-accent-soft))'
+            : disabled
+              ? 'rgb(var(--ds-text-5))'
+              : 'rgb(var(--ds-text-4))',
+        background: isCuratorOpen
+          ? 'rgb(var(--ds-accent) / 0.16)'
+          : hovered
+            ? 'rgb(var(--ds-accent) / 0.10)'
+            : 'transparent',
+        boxShadow: hovered ? '0 0 12px rgb(var(--ds-accent) / 0.18)' : 'none',
+        transition: 'all 0.15s',
+      }}
+    >
+      <Wand2 size={12} />
     </button>
   )
 }
