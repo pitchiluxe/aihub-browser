@@ -3,8 +3,11 @@ import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, RotateCw, Home, Bookmark, Bot,
   Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe, Camera, Video, Square, X,
-  Crop, Monitor, BookOpen, GitCompare,
+  Crop, Monitor, BookOpen, GitCompare, AppWindow,
 } from 'lucide-react'
+import { penSession } from '../../services/screenPen/penSession'
+import { usePenSession } from './screenPen/usePenSession'
+import PenRecordingBadge from './screenPen/PenRecordingBadge'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import { addBookmarkWithAI } from '../../services/bookmarkService'
@@ -66,11 +69,22 @@ export default function NavigationBar({
   const inputRef = useRef<HTMLInputElement>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const showBmToast = (msg: string) => {
+  // Centered over the omnibox rather than beside the action group, where it
+  // would sit on top of the recording badge it is talking about.
+  const [bmToastCentered, setBmToastCentered] = useState(false)
+  const showBmToast = (msg: string, ms = 2200, centered = false) => {
     setBmToast(msg)
+    setBmToastCentered(centered)
     if (toastTimer.current) clearTimeout(toastTimer.current)
-    toastTimer.current = setTimeout(() => setBmToast(''), 2200)
+    toastTimer.current = setTimeout(() => setBmToast(''), ms)
   }
+
+  // A screen recording runs with or without the pen open. While the pen is
+  // up it shows the recorder's messages itself; otherwise they land here.
+  const penRecording = usePenSession().recordingStartedAt !== null
+  useEffect(() => penSession.onToast(message => {
+    if (!useBrowserStore.getState().isAnnotationMode) showBmToast(message, 4200, true)
+  }), [])
 
   const displayUrl    = activeTab?.url === 'home' || !activeTab?.url ? '' : activeTab.url
   const isSecure      = activeTab?.url?.startsWith('https://')
@@ -394,7 +408,10 @@ export default function NavigationBar({
         <div
           className="no-drag"
           style={{
-            position: 'absolute', top: '50%', right: 130, transform: 'translateY(-50%)',
+            position: 'absolute', top: '50%',
+            ...(bmToastCentered
+              ? { left: '50%', transform: 'translate(-50%, -50%)', maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis' }
+              : { right: 130, transform: 'translateY(-50%)' }),
             zIndex: 60, pointerEvents: 'none',
             background: 'rgba(139,92,246,0.95)', color: '#fff',
             borderRadius: 8, padding: '5px 12px', fontSize: 11.5, fontWeight: 700,
@@ -591,7 +608,9 @@ export default function NavigationBar({
           onRegion={() => void beginRegionCapture('screenshot')}
         />
 
-        {isRecording ? (
+        {penRecording ? (
+          <PenRecordingBadge />
+        ) : isRecording ? (
           <button
             onClick={stopRecording}
             title="Stop recording"
@@ -607,13 +626,22 @@ export default function NavigationBar({
           </button>
         ) : (
           <CaptureButton
-            title="Record tab"
+            title="Record"
             icon={<Video size={13} />}
-            disabled={isSpecialPage || !activeTabId}
+            // A screen or window can be recorded from anywhere, even an app
+            // page with no tab to record — only the tab options need a tab.
+            disabled={(isSpecialPage || !activeTabId) && !penSession.canRecord()}
+            optionsDisabled={isSpecialPage || !activeTabId}
             wholeLabel="Whole tab"
             regionLabel="Select an area…"
             onWhole={() => void startRecording()}
             onRegion={() => void beginRegionCapture('recording')}
+            extra={penSession.canRecord() ? {
+              icon: <AppWindow size={13} />,
+              label: 'Screen or window…',
+              hint: 'Anywhere, with camera + mic',
+              onClick: () => penSession.toggleRecording(),
+            } : undefined}
           />
         )}
 
@@ -671,14 +699,17 @@ function AIButton({ onClick, active }: { onClick: () => void; active?: boolean }
  * bothering. Neither option is buried behind a modifier key, because neither
  * is secondary.
  */
-function CaptureButton({ title, icon, disabled, wholeLabel, regionLabel, onWhole, onRegion }: {
+function CaptureButton({ title, icon, disabled, optionsDisabled, wholeLabel, regionLabel, onWhole, onRegion, extra }: {
   title: string
   icon: React.ReactNode
   disabled?: boolean
+  /** Disable the whole/region rows while keeping the menu (and `extra`) usable. */
+  optionsDisabled?: boolean
   wholeLabel: string
   regionLabel: string
   onWhole: () => void
   onRegion: () => void
+  extra?: { icon: React.ReactNode; label: string; hint?: string; onClick: () => void }
 }) {
   const [open, setOpen] = useState(false)
   const [anchor, setAnchor] = useState({ top: 52, right: 14 })
@@ -734,8 +765,14 @@ function CaptureButton({ title, icon, disabled, wholeLabel, regionLabel, onWhole
             boxShadow: '0 18px 50px rgba(0,0,0,0.45)',
             backdropFilter: 'blur(18px)',
           }}>
-            <MenuRow icon={<Monitor size={13} />} label={wholeLabel} onClick={() => pick(onWhole)} />
-            <MenuRow icon={<Crop size={13} />} label={regionLabel} onClick={() => pick(onRegion)} />
+            <MenuRow icon={<Monitor size={13} />} label={wholeLabel} disabled={optionsDisabled} onClick={() => pick(onWhole)} />
+            <MenuRow icon={<Crop size={13} />} label={regionLabel} disabled={optionsDisabled} onClick={() => pick(onRegion)} />
+            {extra && (
+              <>
+                <div style={{ height: 1, margin: '4px 6px', background: 'var(--ds-border-sm)' }} />
+                <MenuRow icon={extra.icon} label={extra.label} hint={extra.hint} onClick={() => pick(extra.onClick)} />
+              </>
+            )}
           </div>
         </>,
         document.body,
@@ -744,24 +781,31 @@ function CaptureButton({ title, icon, disabled, wholeLabel, regionLabel, onWhole
   )
 }
 
-function MenuRow({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+function MenuRow({ icon, label, hint, disabled, onClick }: {
+  icon: React.ReactNode; label: string; hint?: string; disabled?: boolean; onClick: () => void
+}) {
   const [hovered, setHovered] = useState(false)
+  const lit = hovered && !disabled
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 9, width: '100%',
-        padding: '8px 10px', borderRadius: 9, cursor: 'pointer',
-        background: hovered ? 'rgb(var(--ds-accent) / 0.12)' : 'transparent',
-        border: 'none', textAlign: 'left',
-        color: hovered ? 'rgb(var(--ds-text-2))' : 'rgb(var(--ds-text-3))',
+        padding: '8px 10px', borderRadius: 9, cursor: disabled ? 'default' : 'pointer',
+        background: lit ? 'rgb(var(--ds-accent) / 0.12)' : 'transparent',
+        border: 'none', textAlign: 'left', opacity: disabled ? 0.35 : 1,
+        color: lit ? 'rgb(var(--ds-text-2))' : 'rgb(var(--ds-text-3))',
         fontSize: 12.5, fontWeight: 550,
       }}
     >
       <span style={{ display: 'flex', color: 'rgb(var(--ds-accent-soft))' }}>{icon}</span>
-      {label}
+      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {label}
+        {hint && <span style={{ fontSize: 10.5, fontWeight: 500, color: 'rgb(var(--ds-text-4))' }}>{hint}</span>}
+      </span>
     </button>
   )
 }

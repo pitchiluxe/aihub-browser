@@ -492,6 +492,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   recorder: {
     getSourceId: (): Promise<string | null> => ipcRenderer.invoke('recorder:getSourceId'),
+    screenSources: (): Promise<{ ok: boolean; error?: string; sources: { id: string; name: string; thumbnail: string; isScreen: boolean }[] }> =>
+      ipcRenderer.invoke('recorder:screenSources'),
+    captureWindow: (rect?: { x: number; y: number; width: number; height: number }): Promise<string | null> =>
+      ipcRenderer.invoke('recorder:captureWindow', rect),
+    setRecordingActive: (active: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('recorder:setRecordingActive', active),
+    cameraBubble: (opts: { show: boolean; corner?: string }): Promise<boolean> =>
+      ipcRenderer.invoke('recorder:cameraBubble', opts),
+    onCameraBubbleState: (cb: (state: 'live' | 'none') => void) => {
+      const handler = (_e: any, state: 'live' | 'none') => cb(state)
+      ipcRenderer.on('recorder:cameraBubbleState', handler)
+      return () => ipcRenderer.removeListener('recorder:cameraBubbleState', handler)
+    },
   },
   tabs: {
     showContextMenu: (info: { tabId?: string; isBrowser: boolean; hasRight: boolean; count: number; canSleep?: boolean }): Promise<string> =>

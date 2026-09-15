@@ -59,6 +59,7 @@ const AddBookmarkModal = lazy(() => import('./components/homepage/AddBookmarkMod
 import UpdateNotification from './components/browser/UpdateNotification'
 import AnnotationCanvas from './components/browser/AnnotationCanvas'
 import HostAnnotationCanvas from './components/browser/HostAnnotationCanvas'
+import ScreenPenHost from './components/browser/screenPen/ScreenPenHost'
 import FindBar from './components/browser/FindBar'
 import VaultRestoreBar from './components/browser/VaultRestoreBar'
 import CredentialGuardBar from './components/browser/CredentialGuardBar'
@@ -1132,9 +1133,12 @@ export default function App() {
               <FindBar key={activeTabId} tabId={activeTabId} onClose={() => setFindOpen(false)} />
             )}
 
-            {/* Guest tabs get the injected canvas (inside the BrowserView);
-                the app's own pages (Bible, Notes, home…) have no BrowserView,
-                so they get a host-rendered overlay instead. */}
+            {/* The Screen Pen. Guest tabs get it injected (inside the
+                BrowserView); the app's own pages (Bible, Notes, home…) have no
+                BrowserView, so the same runtime mounts over them instead.
+                ScreenPenHost owns the screen recorder and is always mounted:
+                a recording runs anywhere, with or without the pen open. */}
+            <ScreenPenHost />
             {isAnnotationMode && (needsTabView(activeTab)
               ? <AnnotationCanvas />
               : <HostAnnotationCanvas />)}

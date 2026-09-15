@@ -6066,6 +6066,181 @@ ipcMain.handle('recorder:getSourceId', (e) => {
   try { return (winFrom(e) ?? mainWindow).getMediaSourceId() } catch { return null }
 })
 
+// The Screen Pen's two captures. Both answer only the app's own UI document —
+// never a tab's page, which could otherwise list the user's screens or
+// photograph the browser chrome around it. winFrom() is not enough for that,
+// because it falls back to the main window for any sender.
+function appUiWindow(e: { sender: Electron.WebContents }): BrowserWindow | null {
+  const win = BrowserWindow.fromWebContents(e.sender)
+  return win && !win.isDestroyed() && win.webContents === e.sender ? win : null
+}
+
+// Screens and windows for the pen's recorder picker. Electron has no browser
+// picker, so the renderer shows its own from this list; the chosen id is then
+// opened with chromeMediaSource constraints. Choosing is the consent step.
+ipcMain.handle('recorder:screenSources', async (e) => {
+  if (!appUiWindow(e)) return { ok: false, error: 'Not available here.', sources: [] }
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+      fetchWindowIcons: false,
+    })
+    return {
+      ok: true,
+      sources: sources.map(s => ({
+        id: s.id,
+        name: s.name,
+        thumbnail: s.thumbnail.isEmpty() ? '' : s.thumbnail.toDataURL(),
+        isScreen: s.id.startsWith('screen:'),
+      })),
+    }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Could not list your screens.', sources: [] }
+  }
+})
+
+// While a recording runs, keep this window's timers at full pace with it
+// minimised or behind the application being recorded — a window recording's
+// bubble is drawn by a timer here, and Chromium otherwise throttles a
+// background page to once a second. Restored the moment the recording ends.
+ipcMain.handle('recorder:setRecordingActive', (e, active: boolean) => {
+  const win = appUiWindow(e)
+  if (!win) return false
+  try { win.webContents.setBackgroundThrottling(!active); return true } catch { return false }
+})
+
+// ── The live camera bubble ──────────────────────────────────────────────
+// While a recording with the camera runs, the presenter sees themselves in a
+// round bubble inside AIHub's own border, in the corner they chose. It is a
+// small child window rather than host HTML because a tab's BrowserView paints
+// over everything in the host page; as a child of the app window it:
+//   - sits over the browser (tabs included) but not over other applications,
+//     and moves, resizes and minimises with the browser;
+//   - is click-through, so it never steals a click meant for the page;
+//   - is NOT hidden from capture: a whole-screen recording is meant to show it
+//     exactly where the presenter sees it (window recordings draw their own).
+type BubbleCorner = 'bottom-right' | 'bottom-left' | 'top-left' | 'top-right'
+let cameraBubble: BrowserWindow | null = null
+let cameraBubbleCorner: BubbleCorner = 'bottom-right'
+
+function cameraBubbleBounds(owner: BrowserWindow, corner: BubbleCorner) {
+  const b = owner.getContentBounds()
+  const size = Math.max(96, Math.min(260, Math.round(Math.min(b.width, b.height) * 0.2)))
+  const margin = 20
+  return {
+    width: size,
+    height: size,
+    x: Math.round(corner.endsWith('right') ? b.x + b.width - size - margin : b.x + margin),
+    y: Math.round(corner.startsWith('bottom') ? b.y + b.height - size - margin : b.y + margin),
+  }
+}
+
+ipcMain.handle('recorder:cameraBubble', (e, opts: { show: boolean; corner?: BubbleCorner }) => {
+  const owner = appUiWindow(e)
+  if (!owner) return false
+  if (!opts?.show) {
+    if (cameraBubble && !cameraBubble.isDestroyed()) cameraBubble.close()
+    cameraBubble = null
+    return true
+  }
+  if (opts.corner) cameraBubbleCorner = opts.corner
+  if (cameraBubble && !cameraBubble.isDestroyed()) {
+    cameraBubble.setBounds(cameraBubbleBounds(owner, cameraBubbleCorner))
+    return true
+  }
+
+  const bubble = new BrowserWindow({
+    ...cameraBubbleBounds(owner, cameraBubbleCorner),
+    parent: owner,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: false,
+    // No edges of any kind: Windows 11 otherwise gives a frameless window a
+    // 1px border and rounded-rectangle corners around the round bubble.
+    hasShadow: false,
+    thickFrame: false,
+    roundedCorners: false,
+    show: false,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
+  })
+  bubble.setIgnoreMouseEvents(true)
+
+  // Stay inside the browser's border as it moves and resizes, and go away with
+  // it when it is minimised.
+  const follow = () => {
+    if (bubble.isDestroyed() || owner.isDestroyed()) return
+    bubble.setBounds(cameraBubbleBounds(owner, cameraBubbleCorner))
+  }
+  const onMinimize = () => { if (!bubble.isDestroyed()) bubble.hide() }
+  const onRestore = () => { if (!bubble.isDestroyed()) { follow(); bubble.showInactive() } }
+  owner.on('move', follow)
+  owner.on('resize', follow)
+  owner.on('maximize', follow)
+  owner.on('unmaximize', follow)
+  owner.on('enter-full-screen', follow)
+  owner.on('leave-full-screen', follow)
+  owner.on('minimize', onMinimize)
+  owner.on('restore', onRestore)
+  const unfollow = () => {
+    if (owner.isDestroyed()) return
+    owner.off('move', follow)
+    owner.off('resize', follow)
+    owner.off('maximize', follow)
+    owner.off('unmaximize', follow)
+    owner.off('enter-full-screen', follow)
+    owner.off('leave-full-screen', follow)
+    owner.off('minimize', onMinimize)
+    owner.off('restore', onRestore)
+  }
+
+  // The bubble page names its state in its title — 'live' once the camera is
+  // showing, 'none' when it could not be opened — so the recorder can say so.
+  bubble.webContents.on('page-title-updated', (_ev, title) => {
+    if ((title === 'live' || title === 'none') && !owner.isDestroyed()) {
+      owner.webContents.send('recorder:cameraBubbleState', title)
+    }
+  })
+  // Shown straight away rather than on ready-to-show: the window is transparent,
+  // so there is nothing unpainted to hide, and a page loaded while hidden holds
+  // its video back until it becomes visible.
+  if (!owner.isMinimized()) bubble.showInactive()
+  bubble.on('closed', () => {
+    unfollow()
+    if (cameraBubble === bubble) cameraBubble = null
+  })
+  // Never outlive the window that asked for it — an orphan would keep the
+  // camera light on.
+  owner.once('closed', () => { if (!bubble.isDestroyed()) bubble.close() })
+
+  if (isDev && process.env['ELECTRON_RENDERER_URL']) void bubble.loadURL(process.env['ELECTRON_RENDERER_URL'] + '/camera-bubble.html')
+  else void bubble.loadFile(join(__dirname, '../renderer/camera-bubble.html'))
+  cameraBubble = bubble
+  return true
+})
+
+// Photograph part of the app window, for the pen on the app's own pages (a
+// tab's page goes through webview:capture instead). capturePage sees this
+// window only — no desktop, no other application.
+ipcMain.handle('recorder:captureWindow', async (e, rect?: { x: number; y: number; width: number; height: number }) => {
+  const win = appUiWindow(e)
+  if (!win) return null
+  try {
+    const bounds = rect && rect.width > 0 && rect.height > 0
+      ? { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
+      : undefined
+    const img = bounds ? await win.webContents.capturePage(bounds) : await win.webContents.capturePage()
+    return img.isEmpty() ? null : img.toDataURL()
+  } catch { return null }
+})
+
 // ── IPC: Live AI news from Hacker News ────────────────────────────────────
 const AI_NEWS_KEYWORDS = [
   'ai ', ' ai', 'llm', 'gpt', 'claude', 'gemini', 'openai', 'anthropic',

@@ -1613,27 +1613,29 @@
       <section id="notes">
         <div class="sec-head"><span class="node" style="background:var(--emerald)"></span><h2>Annotation &amp; sticky notes</h2><span class="sec-line"></span></div>
         <div class="body-col">
-          <p>Click the pencil in the toolbar to draw directly on any web page. A floating toolbar appears — drag it anywhere, or minimize it.</p>
+          <p>Click the pencil in the toolbar to open the <strong>Screen Pen</strong> on any page. Its toolbar runs down the side of the page — drag it by the grip at the top and it stays where you put it.</p>
+          <p>The pen opens in <em>Click</em> mode, so the page keeps working underneath. Pick a tool and it switches to <em>Draw</em>: a blue frame and a label show that clicks now go to the pen. Press <kbd>Esc</kbd> (or the mode chip) to hand the page back — your marks stay on screen either way.</p>
           <div class="tbl-scroll">
             <table>
-              <thead><tr><th>Tool</th><th>Key</th><th>Notes</th></tr></thead>
+              <thead><tr><th>Control</th><th>What it does</th></tr></thead>
               <tbody>
-                <tr><td>Pen</td><td><kbd>P</kbd></td><td>Freehand, smoothed</td></tr>
-                <tr><td>Highlighter</td><td><kbd>H</kbd></td><td>Translucent wide stroke</td></tr>
-                <tr><td>Arrow</td><td><kbd>A</kbd></td><td>Point at things</td></tr>
-                <tr><td>Rectangle</td><td><kbd>R</kbd></td><td>Box things out</td></tr>
-                <tr><td>Ellipse</td><td><kbd>E</kbd></td><td>Circle things</td></tr>
-                <tr><td>Text</td><td><kbd>T</kbd></td><td>Click, type, Enter to place</td></tr>
-                <tr><td>Eraser</td><td><kbd>X</kbd></td><td>Rub strokes away</td></tr>
-                <tr><td>Undo / redo</td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td></td></tr>
-                <tr><td>Pointer mode</td><td>—</td><td>Click through to use the page normally</td></tr>
-                <tr><td>Save</td><td>—</td><td>Exports page + drawings as one PNG</td></tr>
+                <tr><td>Pen</td><td>Freehand</td></tr>
+                <tr><td>Highlighter</td><td>Wide translucent stroke — the text underneath stays readable</td></tr>
+                <tr><td>Arrow / Box</td><td>Point at, or frame, the thing that matters</td></tr>
+                <tr><td>Eraser</td><td>Cuts through marks so the page shows as it was</td></tr>
+                <tr><td>Colors</td><td>Five, from the strip under the tools</td></tr>
+                <tr><td>Undo / Clear</td><td>Remove the last mark, or all of them</td></tr>
+                <tr><td>Camera</td><td>Photographs the page with your marks on it (the toolbar hides for the shot)</td></tr>
+                <tr><td>Record</td><td>Records a screen or window you pick, with your webcam in a round bubble and your microphone</td></tr>
+                <tr><td>Camera bubble / corner</td><td>Turn the webcam bubble on or off, and move it to another corner of the browser — even mid-recording. While recording you see yourself live in the bubble, inside the browser window</td></tr>
+                <tr><td>Note</td><td>Pins a sticky note to the page (see below)</td></tr>
+                <tr><td>Draw / Click</td><td>Whether clicks go to the pen or to the page</td></tr>
               </tbody>
             </table>
           </div>
 
           <h3 style="margin-top:26px">Sticky notes that actually come back <span class="pill new">new</span></h3>
-          <p>Click <em>New Note</em> in the annotation toolbar to pin a note to the page. Give it a title, type freely, pick from six pastel colors, drag it anywhere, minimize it.</p>
+          <p>Click the note button on the pen's toolbar to pin a note to the page. Notes you made with the earlier annotation toolbar are still there. Give it a title, type freely, pick from six pastel colors, drag it anywhere, minimize it.</p>
           <ul>
             <li><strong>They persist.</strong> Notes are saved into the app itself, not into the website's storage — clearing site data won't lose them.</li>
             <li><strong>They return.</strong> Re-open annotation mode on that page and your notes reappear exactly where you left them.</li>
@@ -1662,7 +1664,8 @@
           <ul>
             <li><strong>Screenshots</strong> are cropped exactly &mdash; the still you dragged on is the source.</li>
             <li><strong>Recordings</strong> keep rolling on the live page; the region you drew is what gets written to the file.</li>
-            <li><strong>Annotated screenshot</strong> &mdash; draw first, then hit <em>Save</em> in the annotation toolbar; drawings are composited onto the real pixels.</li>
+            <li><strong>Annotated screenshot</strong> &mdash; draw with the Screen Pen, then hit its camera button; the page is photographed with your marks on it.</li>
+            <li><strong>Screen or window&hellip;</strong> &mdash; the third option in the record menu records anything on your computer, not just this tab, with your webcam bubble and microphone. It doesn't need the pen open and keeps running as you switch tabs or minimise the browser; the red timer in the nav bar stops it. With the camera on, you see yourself in a round bubble in the corner of the browser window — recording the entire screen captures that bubble exactly where you see it, and recording a single window draws it into that window's corner.</li>
             <li>Recordings save as <code>.webm</code>, with audio and a live timer while they run.</li>
           </ul>
           <div class="note">If the browser cannot work out where the page sits inside the window &mdash; mid-resize, for instance &mdash; a region recording falls back to the whole tab and says so, rather than writing a video cropped to the wrong place.</div>

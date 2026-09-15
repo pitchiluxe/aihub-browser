@@ -92,6 +92,12 @@ export default defineConfig({
     build: {
       sourcemap: false,
       rollupOptions: {
+        // The app, plus the Screen Pen's live camera bubble, which main opens
+        // in its own small window while a recording runs.
+        input: {
+          index:        resolve('src/renderer/index.html'),
+          cameraBubble: resolve('src/renderer/camera-bubble.html'),
+        },
         // Split vendor libraries individually so the initial paint only pays for
         // what the homepage needs. Each listed chunk loads lazily when first used.
         output: {
