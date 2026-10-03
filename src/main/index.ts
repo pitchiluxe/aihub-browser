@@ -14,14 +14,16 @@ import { registerCommunityIpc, releaseCommunityWindow, shutdownCommunityBackend 
 import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
 import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
-import { pickAgentModel, orderFreeModels, suggestFasterModel } from './modelRouting'
+import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt } from './modelRouting'
+import { invokeLookupCallback } from './networkLookup'
+import { normalizeOllamaBase, ollamaBaseCandidates } from './ollamaConnection'
 import {
   normalizeModels, filterModels, modelExists as catalogHasModel,
   classifyOpenRouterStatus,
   OPENROUTER_FREE_AUTO, type CatalogModel, type ModelFilter,
 } from './openRouterCatalog'
 import {
-  routeGenerate, summarizeOpenRouterSkips,
+  routeGenerate, selectOllamaModel, summarizeOpenRouterSkips,
   type RoutingSettings, type OpenRouterFailure,
 } from './aiRouting'
 import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
@@ -231,7 +233,9 @@ function defaultSettings() {
     // that *web pages* render in their natural light colors — that must not be
     // read here as the app's own default, or the app would start light.
     theme: 'dark',
-    aiModel: 'llama3', transparency: 'none', glassIntensity: 'medium',
+    // Empty means use the first model actually installed in this Ollama
+    // instance; never assume the generic `llama3` tag exists on a machine.
+    aiModel: '', transparency: 'none', glassIntensity: 'medium',
     sidebarVisible: true, searchEngine: 'google',
     // AI API config — set via Settings page or baked from .env.local at build time
     openrouterKey:   '',
@@ -270,10 +274,6 @@ function defaultSettings() {
 function saveData() { writeJson(DATA_FILE, _data) }
 
 // ── Dynamic AI config ──────────────────────────────────────────────────────
-function validHttpUrl(url: string): boolean {
-  try { const u = new URL(url); return u.protocol === 'http:' || u.protocol === 'https:' } catch { return false }
-}
-
 // Priority: stored settings → build-time env vars (from .env.local via vite define)
 // Strip non-ASCII — HTTP headers only allow bytes 0-255
 function toAscii(s: string) { return s.replace(/[^\x00-\x7F]/g, '') }
@@ -290,11 +290,8 @@ function getAIConfig() {
   const orBase  = (s.openrouterBase  || process.env.ANTHROPIC_BASE_URL   || 'https://openrouter.ai/api').replace(/\/$/, '') + '/v1'
   const orMdl   = s.openrouterModel  || process.env.ANTHROPIC_MODEL      || OR_DEFAULT_MODEL
   // Validate stored Ollama URL — bad values (e.g. "::1:11434") cause ECONNREFUSED
-  const rawOl   = s.ollamaUrl || process.env.NEXT_PUBLIC_OLLAMA_BASE_URL || ''
-  // Force IPv4: on Windows, Node resolves "localhost" to ::1 (IPv6) first, but
-  // Ollama binds 127.0.0.1 only — the mismatch is ECONNREFUSED ::1:11434.
-  const olBase  = ((rawOl && validHttpUrl(rawOl)) ? rawOl : 'http://127.0.0.1:11434')
-    .replace('://localhost', '://127.0.0.1')
+  const rawOl   = s.ollamaUrl || process.env.OLLAMA_HOST || process.env.NEXT_PUBLIC_OLLAMA_BASE_URL || ''
+  const olBase  = normalizeOllamaBase(rawOl)
   // Direct provider keys. Empty strings = "not configured"; the IPC layer
   // shows hasKey/hasClaudeKey/hasChatGptKey for the UI without ever echoing
   // the actual secret.
@@ -308,12 +305,18 @@ function getAIConfig() {
 function getRoutingSettings(preferredOllamaModel?: string): RoutingSettings {
   const s = getData().settings
   const { orMdl } = getAIConfig()
+  const primaryProvider = s.primaryProvider === 'openrouter' ? 'openrouter' : 'ollama'
+  const configuredFallback = s.fallbackProvider
+  const fallbackProvider = configuredFallback === 'none'
+    ? 'none'
+    : (configuredFallback === 'ollama' || configuredFallback === 'openrouter') && configuredFallback !== primaryProvider
+      ? configuredFallback
+      : primaryProvider === 'ollama' ? 'openrouter' : 'ollama'
   return {
-    primaryProvider:  s.primaryProvider === 'openrouter' ? 'openrouter' : 'ollama',
+    primaryProvider,
     ollamaModel:      preferredOllamaModel || s.aiModel || '',
     fallbackEnabled:  s.fallbackEnabled !== false,
-    fallbackProvider: s.fallbackProvider === 'none' ? 'none'
-      : s.fallbackProvider === 'ollama' ? 'ollama' : 'openrouter',
+    fallbackProvider,
     openRouterModel:  orMdl,
   }
 }
@@ -331,19 +334,34 @@ const DNS_CACHE_TTL = 5 * 60_000
 function fallbackLookup(
   hostname: string,
   options: any,
-  callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void
+  callback: (...args: any[]) => void
 ): void {
+  const all = typeof options === 'object' && options?.all === true
+  const requestedFamily = typeof options === 'number' ? options : options?.family || 0
+  const deliver = (error: NodeJS.ErrnoException | null, addresses: { address: string; family: number }[]) =>
+    invokeLookupCallback(callback, all, error, addresses)
+
   dns.lookup(hostname, options, (err, address, family) => {
-    if (!err && address) return callback(null, address as string, family as number)
+    const addresses = Array.isArray(address)
+      ? address
+      : address ? [{ address, family: family || 4 }] : []
+    if (!err && addresses.length) return deliver(null, addresses)
+
     const cached = dnsCache.get(hostname)
-    if (cached && Date.now() - cached.ts < DNS_CACHE_TTL) return callback(null, cached.addr, 4)
+    if (requestedFamily !== 6 && cached && Date.now() - cached.ts < DNS_CACHE_TTL) {
+      return deliver(null, [{ address: cached.addr, family: 4 }])
+    }
+    if (requestedFamily === 6) {
+      return deliver(err || Object.assign(new Error('No IPv6 address records'), { code: 'ENOTFOUND' }), [])
+    }
+
     publicResolver.resolve4(hostname)
       .then(addrs => {
-        if (!addrs.length) return callback(err, '', 4)
+        if (!addrs.length) return deliver(err || Object.assign(new Error('No address records'), { code: 'ENOTFOUND' }), [])
         dnsCache.set(hostname, { addr: addrs[0], ts: Date.now() })
-        callback(null, addrs[0], 4)
+        deliver(null, addrs.map(addr => ({ address: addr, family: 4 })))
       })
-      .catch(() => callback(err, '', 4)) // surface the ORIGINAL getaddrinfo error
+      .catch(() => deliver(err || Object.assign(new Error('Name resolution failed'), { code: 'ENOTFOUND' }), []))
   })
 }
 
@@ -416,15 +434,13 @@ function httpPost(url: string, data: object, headers: Record<string, string> = {
 // gap really does mean it stalled. One 120s socket timeout for both was killing
 // healthy generations before they ever produced a byte.
 //
-// The first-token budget is 120s, not the 420s it used to be. Seven minutes
-// was chosen to let a cold 7B model finish loading, but it turned "this model
-// is too heavy for this machine" into seven minutes of a spinner followed by
-// an OpenRouter error the user could do nothing about. A model that cannot
-// start answering in two minutes here is not going to be usable for chat, so
-// hand the turn to the fallback while the user is still watching.
+// The first-token budget starts at 180s and scales with prompt size, capped at
+// four minutes. A cold CPU-bound 7B model can spend over two minutes loading
+// and evaluating the prompt before its first token; shorter budgets abandon
+// viable local work, while the cap keeps an unusable model from hanging chat.
 function ollamaChatStream(
   base: string, model: string, messages: any[],
-  idleTimeoutMs = 120000, firstTokenTimeoutMs = 120000,
+  idleTimeoutMs = 120000, firstTokenTimeoutMs?: number,
   onDelta?: (text: string, reset?: boolean) => void,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -440,17 +456,19 @@ function ollamaChatStream(
     // turns (tool manual + history + page text) routinely pass 8k; plain chat
     // stays at the cheap default rather than allocating a window it won't use.
     const promptChars = messages.reduce((n, m) => n + String(m?.content || '').length, 0)
+    const firstTokenBudgetMs = firstTokenTimeoutMs ?? firstTokenTimeoutForPrompt(promptChars)
     const needed = Math.ceil(promptChars / 3.5) + 1536 // + room for the reply
     const numCtx = needed <= 8192 ? 8192 : needed <= 12288 ? 12288 : 16384
     const body = JSON.stringify({
       model, messages, stream: true, keep_alive: '30m', options: { num_ctx: numCtx },
     })
-    const req = http.request({
+    const requestLib = parsed.protocol === 'https:' ? https : http
+    const req = requestLib.request({
       hostname: parsed.hostname,
-      port:     parsed.port || 80,
-      path:     parsed.pathname,
+      port:     parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path:     parsed.pathname + parsed.search,
       method:   'POST',
-      timeout:  firstTokenTimeoutMs,
+      timeout:  firstTokenBudgetMs,
       headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
     }, (res) => {
       if ((res.statusCode ?? 0) >= 400) {
@@ -496,7 +514,7 @@ function ollamaChatStream(
         // No advice here — the caller knows what is installed and appends a
         // named model. "Try a smaller model" is not an instruction when the
         // user has eight of them.
-        : `timeout — Ollama took over ${Math.round(firstTokenTimeoutMs / 1000)}s to start replying. Ollama is running; the model just cannot process a prompt this size here in time. Without a usable GPU it is prompt processing, not generation, that runs out of budget — the model produces nothing at all rather than answering slowly.`))
+        : `timeout — Ollama took over ${Math.round(firstTokenBudgetMs / 1000)}s to start replying. Ollama is running; the model could not finish processing this prompt within the local time budget.`))
     })
     req.write(body)
     req.end()
@@ -509,7 +527,7 @@ function ollamaChatStream(
 // A "not running" result probes up to 4 endpoints — cache it briefly so a user
 // without Ollama isn't stalled on repeated timeouts before the cloud fallback.
 interface OllamaModelInfo { name: string; tools: boolean; params: number; cloud: boolean }
-interface OllamaProbe { running: boolean; models: string[]; info?: OllamaModelInfo[] }
+interface OllamaProbe { running: boolean; models: string[]; info?: OllamaModelInfo[]; base?: string }
 let ollamaProbeCache: { at: number; value: OllamaProbe } | null = null
 // Positive results expire quickly (a model list can change as the user pulls
 // models). A NEGATIVE result is cached far longer: when Ollama isn't installed
@@ -517,7 +535,7 @@ let ollamaProbeCache: { at: number; value: OllamaProbe } | null = null
 // was re-paid on essentially every chat message before falling back to the
 // cloud. Settings' explicit "check again" passes force=true.
 const OLLAMA_PROBE_TTL = 5000
-const OLLAMA_MISS_TTL  = 60000
+const OLLAMA_MISS_TTL  = 5000
 
 async function checkOllamaRunning(force = false): Promise<OllamaProbe> {
   if (!force && ollamaProbeCache) {
@@ -527,8 +545,7 @@ async function checkOllamaRunning(force = false): Promise<OllamaProbe> {
   const { olBase } = getAIConfig()
   // Try both the configured base AND a 127.0.0.1 fallback to handle systems
   // where 'localhost' resolves differently in packaged Electron.
-  const bases = [olBase, 'http://127.0.0.1:11434']
-  const uniqueBases = [...new Set(bases)]
+  const uniqueBases = ollamaBaseCandidates(olBase)
 
   const cache = (value: OllamaProbe) => {
     ollamaProbeCache = { at: Date.now(), value }
@@ -558,9 +575,9 @@ async function checkOllamaRunning(force = false): Promise<OllamaProbe> {
               cloud: !!m?.remote_host,
             }
           })
-          .filter((e: OllamaModelInfo) => e.name && !/embed/i.test(e.name))
+          .filter((e: OllamaModelInfo) => e.name && !/embed/i.test(e.name) && !e.cloud)
         const models = entries.map(e => e.name)
-        if (models.length) return cache({ running: true, models, info: entries })
+        if (models.length) return cache({ running: true, models, info: entries, base })
       }
     } catch { /* fall through to the liveness probe */ }
 
@@ -571,10 +588,15 @@ async function checkOllamaRunning(force = false): Promise<OllamaProbe> {
     // whose actual models were fine.
     try {
       const { status } = await httpGet(`${base}/api/version`, 1500)
-      if (status >= 200 && status < 400) return cache({ running: true, models: [] })
+      if (status >= 200 && status < 400) return cache({ running: true, models: [], base })
     } catch { /* try next base */ }
   }
   return cache({ running: false, models: [] })
+}
+
+async function resolveInstalledOllamaModel(preferred = ''): Promise<string> {
+  const status = await checkOllamaRunning()
+  return selectOllamaModel(status.models, preferred)
 }
 
 // ── Default-browser launch URL ──────────────────────────────────────────────
@@ -990,6 +1012,93 @@ async function suggestTags(title: string, body: string): Promise<string[]> {
   return heuristic()
 }
 
+interface PageSideInfo {
+  summary: string
+  keyTakeaways: string[]
+  author: string
+  publishedDate: string
+  pageType: string
+  entities: string[]
+  concepts: string[]
+  links: Array<{ text: string; url: string }>
+}
+
+async function extractPageSideInfo(pageText: string, url: string): Promise<PageSideInfo> {
+  const empty: PageSideInfo = {
+    summary: '', keyTakeaways: [], author: '', publishedDate: '', pageType: '',
+    entities: [], concepts: [], links: [],
+  }
+  try {
+    const result = await runAiRequest(
+      [{ role: 'system', content: ENTITY_EXTRACTION_SYSTEM }, { role: 'user', content: buildEntityExtractionPrompt(pageText, url) }],
+      undefined, { maxTokens: 1000 },
+    )
+    if (result.provider === 'none') return empty
+    const json = (result.content || '').match(/\{[\s\S]*\}/)?.[0]
+    if (!json) return empty
+    const parsed = JSON.parse(json)
+    return {
+      summary: typeof parsed.summary === 'string' ? parsed.summary.trim().slice(0, 700) : '',
+      keyTakeaways: Array.isArray(parsed.keyTakeaways)
+        ? parsed.keyTakeaways.slice(0, 5).map((item: unknown) => String(item).replace(/\s+/g, ' ').trim()).filter(Boolean)
+        : [],
+      author: typeof parsed.author === 'string' ? parsed.author.replace(/\s+/g, ' ').trim().slice(0, 120) : '',
+      publishedDate: typeof parsed.publishedDate === 'string' ? parsed.publishedDate.replace(/\s+/g, ' ').trim().slice(0, 80) : '',
+      pageType: typeof parsed.pageType === 'string' ? parsed.pageType.replace(/\s+/g, ' ').trim().slice(0, 80) : '',
+      entities: Array.isArray(parsed.entities) ? parsed.entities.slice(0, 15).map(String) : [],
+      concepts: Array.isArray(parsed.concepts) ? parsed.concepts.slice(0, 10).map(String) : [],
+      links: Array.isArray(parsed.links)
+        ? parsed.links.slice(0, 10).filter((link: any) => link?.url).map((link: any) => ({ text: String(link.text || ''), url: String(link.url) }))
+        : [],
+    }
+  } catch (error) {
+    console.warn('[obsidian] Local page side-info extraction failed:', error)
+    return empty
+  }
+}
+
+function appendPageSideInfo(
+  markdown: string,
+  pageText: string,
+  url: string,
+  info: PageSideInfo,
+  generator?: { provider: string; model: string },
+): string {
+  const clean = (value: string) => value.replace(/[\r\n]+/g, ' ').trim()
+  let site = url
+  try { site = new URL(url).hostname.replace(/^www\./, '') } catch {}
+  const readingMinutes = Math.max(1, Math.ceil(pageText.split(/\s+/).filter(Boolean).length / 220))
+  const lines = [
+    '## Page side information',
+    '',
+    `- **Site:** ${site}`,
+    `- **Reading time:** ${readingMinutes} min`,
+    ...(generator && generator.provider !== 'none'
+      ? [`- **Generated by:** ${generator.provider}${generator.model ? ` (${generator.model})` : ''}`]
+      : []),
+    ...(info.pageType ? [`- **Page type:** ${clean(info.pageType)}`] : []),
+    ...(info.author ? [`- **Author:** ${clean(info.author)}`] : []),
+    ...(info.publishedDate ? [`- **Published:** ${clean(info.publishedDate)}`] : []),
+    ...(info.summary ? ['', `**Summary:** ${clean(info.summary)}`] : []),
+    ...(info.keyTakeaways.length ? ['', '### Key takeaways', ...info.keyTakeaways.map(item => `- ${clean(item)}`)] : []),
+    ...(info.entities.length ? ['', `**People, products & technologies:** ${info.entities.map(clean).join(', ')}`] : []),
+    ...(info.concepts.length ? [`**Topics:** ${info.concepts.map(clean).join(', ')}`] : []),
+    ...(info.links.length ? [
+      '', '### Related links',
+      ...info.links.map(link => {
+        let href = ''
+        try {
+          const parsed = new URL(link.url)
+          if (parsed.protocol === 'http:' || parsed.protocol === 'https:') href = parsed.href
+        } catch {}
+        const label = clean(link.text || link.url).replace(/[\[\]]/g, '')
+        return href ? `- [${label}](${href})` : ''
+      }).filter(Boolean),
+    ] : []),
+  ]
+  return `${markdown.trim()}\n\n${lines.join('\n')}\n`
+}
+
 // Clip the current page (or just the selected passage) into the Obsidian vault
 // as a markdown note. Runs in the main process because that is where both the
 // page's text and the vault live — the renderer never needs to see either.
@@ -1019,11 +1128,13 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
 
   const pageText = body || '_(no readable text on this page)_'
   let markdown = ''
+  let generator: { provider: string; model: string } | undefined
   try {
     const converted = await runAiRequest(
       [{ role: 'system', content: MARKDOWN_CONVERSION_SYSTEM }, { role: 'user', content: buildMarkdownPrompt(pageText, url) }],
       undefined, { maxTokens: 2000 },
     )
+    generator = { provider: converted.provider, model: converted.model }
     if (converted.provider !== 'none' && !/^ERROR:/i.test(converted.content || '')) {
       markdown = (converted.content || '').trim()
     }
@@ -1031,16 +1142,20 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
     console.warn('[obsidian] AI clip conversion failed; saving readable page text:', error)
   }
 
-  const frontmatter = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] || ''
+  const sideInfo = await extractPageSideInfo(pageText, url)
+  const clipMarkdown = appendPageSideInfo(markdown || `# ${title}\n\n${pageText}`, pageText, url, sideInfo, generator)
+
+  const frontmatter = clipMarkdown.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] || ''
   const convertedTitle = frontmatter.match(/^title:\s*"?([^"\r\n]+)"?/m)?.[1]?.trim()
   const convertedCategory = frontmatter.match(/^category:\s*"?([^"\r\n]+)"?/m)?.[1]?.trim()
   const noteTitle = convertedTitle || title
   const noteCategory = convertedCategory || detectCategoryFromContent(pageText) || detectCategoryFromUrl(url)
-  const noteContent = markdown
-    ? markdown.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, '').trim()
-    : `# ${noteTitle}\n\n${pageText}`
+  const noteContent = clipMarkdown.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, '').trim()
   const aiTags = body ? await suggestTags(noteTitle, pageText) : []
-  const tags = Array.from(new Set([...(selection ? ['highlight'] : []), ...aiTags]))
+  const sideTags = [...sideInfo.entities, ...sideInfo.concepts]
+    .map(tag => tag.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 30))
+    .filter(Boolean)
+  const tags = Array.from(new Set([...(selection ? ['highlight'] : []), ...aiTags, ...sideTags])).slice(0, 12)
 
   try {
     const createdAt = Date.now()
@@ -1984,7 +2099,9 @@ function createWindow(): void {
   setTimeout(async () => {
     try {
       const { olBase } = getAIConfig()
-      const recs = await generateRecommendations(olBase, getData().settings.aiModel || 'llama3')
+      const model = await resolveInstalledOllamaModel(getData().settings.aiModel || '')
+      if (!model) return
+      const recs = await generateRecommendations(olBase, model)
       saveRecommendations(recs)
       safelySend('brain:recommendations', recs)
     } catch {}
@@ -3022,7 +3139,8 @@ ipcMain.handle('bookmarks:summarize', async (_e, id: string) => {
     ? `Summarize this web page in 3 concise bullet points. Focus on key takeaways.\n\nURL: ${bm.url}\n\n${pageText}`
     : `Describe the website at ${bm.url} in 3 bullet points.`
 
-  const r = await runAiRequest([{ role: 'user', content: userContent }], undefined, { maxTokens: 600 })
+  const summaryModel = await resolveInstalledOllamaModel('llama3.2:3b')
+  const r = await runAiRequest([{ role: 'user', content: userContent.slice(0, 3500) }], summaryModel, { maxTokens: 600 })
   const summary = r.provider === 'none' ? '' : (r.content || '').slice(0, 500)
 
   if (summary) {
@@ -3553,13 +3671,22 @@ ipcMain.handle('ai:convertToMarkdown', async (_e, url: string, pageText: string)
   // Pull category/tags straight out of the frontmatter the model wrote, so a
   // model that followed instructions needs no further heuristics at all.
   const fm = markdown.match(/^---\n([\s\S]*?)\n---/)?.[1] || ''
-  let category = fm.match(/^category:\s*"?([^"\n]+)"?/m)?.[1]?.trim() || ''
+  const rawCategory = fm.match(/^category:\s*"?([^"\n]+)"?/m)?.[1]?.trim() || ''
+  const categoryOptions = [
+    'Development', 'Finance', 'AI', 'Trading', 'Education', 'Business', 'Personal', 'News', 'Tools',
+    'Science', 'Entertainment', 'Sports', 'Music', 'Art', 'Travel', 'Health', 'Shopping', 'Social',
+    'Gaming', 'Design', 'Productivity',
+  ]
+  let category = rawCategory.split(/[|,]/).map(value => value.trim())
+    .map(value => categoryOptions.find(option => option.toLowerCase() === value.toLowerCase()))
+    .find((value): value is string => !!value) || ''
   let tags: string[] = []
   const tagsLine = fm.match(/^tags:\s*\[(.*)\]/m)?.[1]
   if (tagsLine) tags = tagsLine.split(',').map(t => t.trim().replace(/^"|"$/g, '')).filter(Boolean)
 
   if (!category) category = detectCategoryFromContent(text)
   if (category === 'General') category = urlCategory
+  if (fm && category) markdown = markdown.replace(/^category:.*$/m, `category: "${category}"`)
 
   if (!markdown) {
     // AI unavailable or declined — a plain note is still a saved page,
@@ -3568,34 +3695,17 @@ ipcMain.handle('ai:convertToMarkdown', async (_e, url: string, pageText: string)
     markdown = `---\ntitle: "${title}"\nurl: "${url}"\ncategory: "${category}"\n---\n\n# ${title}\n\n${text.slice(0, 6000)}\n`
   }
 
-  // Best-effort entity/concept/link extraction — a parse failure just means
-  // fewer cross-links in the graph, never a thrown error for the clip itself.
-  let entities: string[] = []
-  let concepts: string[] = []
-  let links: Array<{ text: string; url: string }> = []
-  try {
-    const ent = await runAiRequest(
-      [{ role: 'system', content: ENTITY_EXTRACTION_SYSTEM }, { role: 'user', content: buildEntityExtractionPrompt(text, url) }],
-      undefined, { maxTokens: 800 },
-    )
-    if (ent.provider !== 'none') {
-      const json = (ent.content || '').match(/\{[\s\S]*\}/)?.[0]
-      if (json) {
-        const parsed = JSON.parse(json)
-        entities = Array.isArray(parsed.entities) ? parsed.entities.slice(0, 15).map(String) : []
-        concepts = Array.isArray(parsed.concepts) ? parsed.concepts.slice(0, 10).map(String) : []
-        links = Array.isArray(parsed.links)
-          ? parsed.links.slice(0, 10).filter((l: any) => l?.url).map((l: any) => ({ text: String(l.text || ''), url: String(l.url) }))
-          : []
-      }
-    }
-  } catch { /* best-effort — note is already usable without these */ }
+  // Best-effort local enrichment: failures do not discard the converted note.
+  const sideInfo = await extractPageSideInfo(text, url)
+  const { entities, concepts, links } = sideInfo
 
   // Entities/concepts become tags too (not just metadata): tags are what
   // markdownGraphService cross-links notes on, so folding them in here is
   // what actually wires "detect entities → create relational connections".
   const slug = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 30)
   tags = Array.from(new Set([...tags, ...entities.map(slug), ...concepts.map(slug)].filter(Boolean))).slice(0, 8)
+
+  markdown = appendPageSideInfo(markdown, text, url, sideInfo, { provider: convo.provider, model: convo.model })
 
   return { markdown, entities, concepts, links, category, tags }
 })
@@ -3861,9 +3971,14 @@ ipcMain.handle('settings:getAIConfig', () => {
     openrouterModel: s.openrouterModel || '',
     ollamaUrl:       s.ollamaUrl       || '',
     // Provider routing
-    primaryProvider:  s.primaryProvider  === 'openrouter' ? 'openrouter' : 'ollama',
+    primaryProvider:  s.primaryProvider === 'openrouter' ? 'openrouter' : 'ollama',
     fallbackEnabled:  s.fallbackEnabled !== false,
-    fallbackProvider: s.fallbackProvider === 'none' ? 'none' : s.fallbackProvider === 'ollama' ? 'ollama' : 'openrouter',
+    fallbackProvider: s.fallbackProvider === 'none'
+      ? 'none'
+      : (s.fallbackProvider === 'ollama' || s.fallbackProvider === 'openrouter')
+        && s.fallbackProvider !== (s.primaryProvider === 'openrouter' ? 'openrouter' : 'ollama')
+        ? s.fallbackProvider
+        : s.primaryProvider === 'openrouter' ? 'ollama' : 'openrouter',
     // Resolved values (from env or settings) — shown as placeholders
     // Enough to tell WHICH key is loaded, not enough to be one. A leading
     // slice showed the first 12 characters, which is more of the secret than
@@ -3881,7 +3996,21 @@ ipcMain.handle('settings:setAIConfig', (_e, cfg: {
   const d = getData()
   // An empty key means "leave it alone", not "erase it" — Settings never
   // receives the current key, so it cannot send it back unchanged.
-  const patch: any = { ...cfg }
+  const primaryProvider = cfg.primaryProvider === 'openrouter'
+    ? 'openrouter'
+    : cfg.primaryProvider === 'ollama'
+      ? 'ollama'
+      : d.settings.primaryProvider === 'openrouter' ? 'openrouter' : 'ollama'
+  const fallbackProvider = cfg.fallbackProvider === 'none'
+    ? 'none'
+    : (cfg.fallbackProvider === 'ollama' || cfg.fallbackProvider === 'openrouter') && cfg.fallbackProvider !== primaryProvider
+      ? cfg.fallbackProvider
+      : primaryProvider === 'ollama' ? 'openrouter' : 'ollama'
+  const patch: any = {
+    ...cfg,
+    primaryProvider,
+    fallbackProvider,
+  }
   if (!cfg.openrouterKey) delete patch.openrouterKey
   if (!cfg.claudeKey)     delete patch.claudeKey
   if (!cfg.chatGptKey)    delete patch.chatGptKey
@@ -3933,7 +4062,8 @@ ipcMain.handle('brain:getRecommendations',    () => getStoredRecommendations())
 ipcMain.handle('brain:getProfile',            () => buildProfile())
 ipcMain.handle('brain:refreshRecommendations', async () => {
   const { olBase } = getAIConfig()
-  const model = getData().settings.aiModel || 'llama3'
+  const model = await resolveInstalledOllamaModel(getData().settings.aiModel || '')
+  if (!model) return []
   const recs = await generateRecommendations(olBase, model)
   saveRecommendations(recs)
   safelySend('brain:recommendations', recs)
@@ -5071,15 +5201,8 @@ async function runAiRequest(
   const { olBase, orKey, orBase } = getAIConfig()
   const settings = getRoutingSettings(preferredModel)
 
-  // preferCloud is a capability requirement from the caller, not a user
-  // preference (§19): extension/theme generation needs strict JSON, which
-  // small local models fumble. It flips the primary for this one request and
-  // leaves the local model as the fallback, so a user with no key still gets
-  // an answer rather than an error.
-  if (opts?.preferCloud && orKey) {
-    settings.primaryProvider  = 'openrouter'
-    settings.fallbackProvider = 'ollama'
-  }
+  // preferCloud can shape the OpenRouter candidate list if cloud fallback is
+  // needed, but does not bypass the app-wide Ollama-first route.
 
   // Cache-only. Awaiting the catalog here put a network round-trip — up to 6s
   // on a cold cache — in front of every single chat message, including the
@@ -5090,7 +5213,7 @@ async function runAiRequest(
   if (orKey) warmOpenRouterCatalog(orBase)
   const catalog = orKey ? cachedOpenRouterCatalog() : []
 
-  let probe: { running: boolean; models: string[]; info?: OllamaModelInfo[] } = { running: false, models: [] }
+  let probe: { running: boolean; models: string[]; info?: OllamaModelInfo[]; base?: string } = { running: false, models: [] }
 
   const result = await routeGenerate(settings, {
     log: line => console.log(`[aihub] ${line}`),
@@ -5104,6 +5227,7 @@ async function runAiRequest(
           return { available: false, models: [], error: e?.message || String(e) }
         }
       },
+
       async generate(model: string) {
         const configured = settings.ollamaModel
         // A turn that has to drive tools gets routed to a model that actually
@@ -5132,17 +5256,28 @@ async function runAiRequest(
             chosen = agent
           }
         }
+        if (!carriesImages && slowModels.has(chosen)) {
+          const faster = suggestFasterModel(probe.info || [], chosen)
+          if (faster) {
+            console.log(`[aihub] ${chosen} previously timed out — using smaller local model ${faster}`)
+            chosen = faster
+          }
+        }
         // The routed model gets one chance: if this machine can't produce a
         // first token for it in time, remember that, drop back to the model
         // the user actually configured, and answer with that instead of
         // failing the turn.
-        const attempts = chosen === model ? [chosen] : [chosen, model]
+        const attempts = chosen === model
+          ? [chosen]
+          : [chosen, ...(slowModels.has(model) ? [] : [model])]
         let lastError = ''
-        for (const attempt of attempts) {
+        let fasterRetryAdded = false
+        for (let attemptIndex = 0; attemptIndex < attempts.length; attemptIndex++) {
+          const attempt = attempts[attemptIndex]
           // An upgrade the user did not ask for gets a shorter leash still:
           // fall back to the configured model while there is patience left,
           // rather than burning the full budget twice.
-          const isRoutedUpgrade = attempts.length > 1 && attempt !== model
+          const isRoutedUpgrade = attempts.length > 1 && attempt !== model && !slowModels.has(model)
           try {
             // Wipe anything the previous attempt streamed before this one
             // starts, or a timed-out model's half-answer would sit spliced in
@@ -5154,7 +5289,7 @@ async function runAiRequest(
               : looksVisionCapable(attempt) ? forOllama(messages)
               : withoutImages(messages)
             const raw = await ollamaChatStream(
-              olBase, attempt, payload, 120000, isRoutedUpgrade ? 60000 : 120000, opts?.onDelta,
+              probe.base || olBase, attempt, payload, 120000, isRoutedUpgrade ? 60000 : undefined, opts?.onDelta,
             )
             const content = stripThinkTags(raw)
             if (content) return { ok: true as const, value: content }
@@ -5168,15 +5303,21 @@ async function runAiRequest(
             // model is small enough — either is actionable, "unavailable" is
             // not.
             if (/timeout/i.test(msg)) {
+              slowModels.add(attempt)
               const faster = suggestFasterModel(probe.info || [], attempt)
+              if (attempt !== model && !slowModels.has(model)) {
+                console.warn(`[aihub] ${attempt} timed out on this machine — falling back to ${model}`)
+                continue
+              }
+              if (faster && !fasterRetryAdded && !attempts.includes(faster)) {
+                attempts.splice(attemptIndex + 1, 0, faster)
+                fasterRetryAdded = true
+                console.warn(`[aihub] ${attempt} timed out — retrying once with smaller local model ${faster}`)
+                continue
+              }
               lastError += faster
                 ? `\n\n${faster} is installed and smaller — switch to it in Settings → AI.`
                 : '\n\nNo smaller model is installed. Pull a lighter one (ollama pull llama3.2:3b) or use a shorter prompt.'
-            }
-            if (/timeout/i.test(msg) && attempt !== model) {
-              slowModels.add(attempt)
-              console.warn(`[aihub] ${attempt} timed out on this machine — falling back to ${model} and not routing to it again`)
-              continue
             }
           }
           break
@@ -5228,6 +5369,14 @@ async function runAiRequest(
       },
     },
   })
+
+  // If this profile remembered a model from a different Ollama installation,
+  // keep the first installed local model selected after it successfully
+  // answers. This prevents repeat fallback attempts on every subsequent turn.
+  if (result.ok && result.provider === 'ollama' && getData().settings.aiModel !== result.model) {
+    getData().settings.aiModel = result.model
+    saveData()
+  }
 
   // ── Direct-provider fallback (Claude → ChatGPT) ──────────────────────
   // routeGenerate already tried Ollama + OpenRouter. If both failed, walk
@@ -5354,13 +5503,14 @@ ipcMain.handle('ai:chat', async (
 ipcMain.handle('ai:summarizePage', async (_e, pageText: string, url: string) => {
   // Build prompt — use real extracted page text if available, else URL-based summary
   const userContent = pageText && pageText.length > 100
-    ? `Summarize the following web page content in 3-5 concise bullet points. Focus on key takeaways, what the page is about, and who it's for.\n\nURL: ${url}\n\nPAGE CONTENT:\n${pageText.slice(0, 6000)}`
+    ? `Summarize the following web page content in 3-5 concise bullet points. Focus on key takeaways, what the page is about, and who it's for.\n\nURL: ${url}\n\nPAGE CONTENT:\n${pageText.slice(0, 3500)}`
     : `Summarize the website at ${url} in 3-5 concise bullet points. Focus on what it does and who it's for.`
 
   // Same router as every other AI feature (§37) — summarizing used to carry
   // its own copy of the Ollama-then-cloud logic, which meant turning fallback
   // off in Settings silently didn't apply here.
-  const r = await runAiRequest([{ role: 'user', content: userContent }], undefined, { maxTokens: 800 })
+  const summaryModel = await resolveInstalledOllamaModel('llama3.2:3b')
+  const r = await runAiRequest([{ role: 'user', content: userContent }], summaryModel, { maxTokens: 800 })
   return r.provider === 'none'
     ? { summary: `Unable to summarize.\n\n${r.content}` }
     : { summary: r.content, provider: r.provider, model: r.model, fallbackUsed: r.fallbackUsed }

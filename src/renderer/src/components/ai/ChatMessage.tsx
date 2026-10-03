@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, Copy, X } from 'lucide-react'
 import Markdown from './Markdown'
+import { cleanNarration } from '../../services/agentTools'
 
 // One chat bubble, used by every chat surface in the app — the assistant
 // panel, Agent Mode, Research. Before this existed each page had its own
@@ -37,11 +38,12 @@ export default function ChatMessage({
   const [hovered, setHovered] = useState(false)
   const [zoomed, setZoomed] = useState<string | null>(null)
   const isUser = role === 'user'
+  const displayContent = isUser ? content : cleanNarration(content)
 
   const copy = () => {
     // The markdown source, not the rendered DOM: pasting into a document or
     // another chat should give back the table, not its flattened text.
-    navigator.clipboard?.writeText(content).then(() => {
+    navigator.clipboard?.writeText(displayContent).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     }).catch(() => {})
@@ -76,7 +78,7 @@ export default function ChatMessage({
           overflow: 'hidden', wordBreak: 'break-word', overflowWrap: 'break-word',
         }}>
           {!!images?.length && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: content ? 8 : 0 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: displayContent ? 8 : 0 }}>
               {images.map((src, i) => (
                 <img
                   key={i}
@@ -92,16 +94,16 @@ export default function ChatMessage({
             </div>
           )}
 
-          {!!content && (isUser
-            ? <span>{content}</span>
-            : <Markdown content={content} onNavigate={onNavigate || (() => {})} />)}
+          {!!displayContent && (isUser
+            ? <span>{displayContent}</span>
+            : <Markdown content={displayContent} onNavigate={onNavigate || (() => {})} />)}
 
           {children}
         </div>
 
         {/* The copy button sits under the bubble rather than inside it, so it
             can never overlap a table or a code block's own copy control. */}
-        {copyable && !!content && (
+        {copyable && !!displayContent && (
           <button
             onClick={copy}
             title="Copy this message"

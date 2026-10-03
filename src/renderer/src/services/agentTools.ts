@@ -25,6 +25,7 @@ const ACTIONS_MARKER_RE = /#{2,}\s*ACTIONS?\s*#{2,}/i
 // so all of these have to be recognised as protocol — never shown as text.
 const PROTOCOL_TAGS = [
   'action', 'actions', 'tool', 'tools', 'tool_call', 'tool_calls', 'toolcall',
+  'dots_function_call', 'dots_function_calls',
   'tool_code', 'function_call', 'functioncall', 'invoke', 'antml:invoke',
   'think', 'thinking', 'thought', 'reasoning', 'scratchpad', 'internal',
 ].join('|')

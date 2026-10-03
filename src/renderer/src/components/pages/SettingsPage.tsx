@@ -571,8 +571,10 @@ export default function SettingsPage() {
 
   const aiModels = ollamaStatus?.models || []
   const hasCloud = !!(aiCfg?.hasKey ?? aiCfg?.resolvedKey)
-  const primary    = aiCfg?.primaryProvider || 'ollama'
+  const primary = aiCfg?.primaryProvider === 'openrouter' ? 'openrouter' : 'ollama'
   const fallbackOn = aiCfg?.fallbackEnabled !== false
+  const fallbackProvider = aiCfg?.fallbackProvider || (primary === 'ollama' ? 'openrouter' : 'ollama')
+  const usesOpenRouter = primary === 'openrouter' || (fallbackOn && fallbackProvider === 'openrouter')
   // Filtering is client-side: the whole catalog is already here, and a
   // round-trip per dropdown change would be a needless stall.
   const filteredOr = orModels.filter(m => matchesFilter(m, orFilter))
@@ -836,8 +838,7 @@ export default function SettingsPage() {
       {/* AI */}
       <Section icon={<Bot size={15} />} title="Ollama Models">
         <p className="text-xs text-aihub-muted mb-3">
-          Local models live on your device — private, free, and used first.
-          Routing between local and cloud is configured in AI Configuration below.
+          Local models run through the Ollama service on this computer. Ollama is the default primary; choose the primary and fallback in AI Configuration below.
         </p>
         <div className="py-3">
           <div className={LBL}>Install AI Model</div>
@@ -859,49 +860,47 @@ export default function SettingsPage() {
       {/* AI API Config */}
       <Section icon={<Bot size={15} />} title="AI Configuration">
         <p className="text-xs text-aihub-muted mb-4">
-          Local Ollama answers first. OpenRouter takes over only when Ollama is
-          unavailable — or never, if you turn automatic fallback off.
+          Choose your preferred primary provider. New installations use local Ollama first, with OpenRouter available as a fallback.
         </p>
 
         {/* ── Primary ─────────────────────────────────────────────── */}
         <div className="text-[11px] font-semibold tracking-wider text-aihub-muted uppercase mb-2">Primary AI</div>
         <div className={ROW}>
-          <div><div className={LBL}>Provider</div></div>
-          <select
-            value={primary}
-            onChange={e => updateAI({ primaryProvider: e.target.value })}
+          <div>
+            <div className={LBL}>Provider</div>
+            <div className="text-xs text-aihub-muted">Ollama is the default; either provider can be primary</div>
+          </div>
+          <select value={primary}
+            onChange={e => {
+              const next = e.target.value === 'openrouter' ? 'openrouter' : 'ollama'
+              updateAI({ primaryProvider: next, fallbackProvider: next === 'ollama' ? 'openrouter' : 'ollama' })
+            }}
             className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none">
-            <option value="ollama">Local Ollama</option>
+            <option value="ollama">Ollama</option>
             <option value="openrouter">OpenRouter</option>
           </select>
         </div>
         <div className={ROW}>
           <div>
             <div className={LBL}>Model</div>
-            {primary === 'ollama' && !aiModels.length && (
+            {!aiModels.length && (
               <div className="text-xs text-aihub-muted">No installed models detected</div>
             )}
           </div>
-          {primary === 'ollama'
-            ? <select value={settings.aiModel || ''} onChange={e => update('aiModel', e.target.value)}
-                className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none max-w-[60%]">
-                <option value="">First available</option>
-                {aiModels.map((m: string) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            : <ModelPicker value={aiModelInput} models={filteredOr} all={orModels} onChange={id => { setAiModelInput(id); updateAI({ openrouterModel: id }) }} />}
+          <select value={settings.aiModel || ''} onChange={e => update('aiModel', e.target.value)}
+            className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none max-w-[60%]">
+            <option value="">First available</option>
+            {aiModels.map((m: string) => <option key={m} value={m}>{m}</option>)}
+          </select>
         </div>
         <div className={ROW}>
           <div><div className={LBL}>Status</div></div>
           <div className="flex items-center gap-2">
-            {primary === 'ollama'
-              ? (checkingAI
-                  ? <Loader2 size={13} className="animate-spin text-aihub-muted" />
-                  : ollamaStatus?.running
-                    ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 size={12} /> Connected</span>
-                    : <span className="text-xs text-amber-400">Not detected</span>)
-              : (hasCloud
-                  ? <span className="flex items-center gap-1 text-xs text-blue-400"><CheckCircle2 size={12} /> Configured</span>
-                  : <span className="text-xs text-amber-400">No API key</span>)}
+            {checkingAI
+              ? <Loader2 size={13} className="animate-spin text-aihub-muted" />
+              : ollamaStatus?.running
+                ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 size={12} /> Connected</span>
+                : <span className="text-xs text-amber-400">Not detected</span>}
             <button onClick={checkAI} disabled={checkingAI} title="Re-check Ollama status"
               className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-aihub-card transition-all">
               <RefreshCw size={11} className={checkingAI ? 'animate-spin' : ''} />
@@ -910,11 +909,13 @@ export default function SettingsPage() {
         </div>
 
         {/* ── Fallback ────────────────────────────────────────────── */}
-        <div className="text-[11px] font-semibold tracking-wider text-aihub-muted uppercase mt-6 mb-2">Fallback AI</div>
+        <div className="text-[11px] font-semibold tracking-wider text-aihub-muted uppercase mt-6 mb-2">
+          {primary === 'ollama' ? 'Fallback AI' : 'Ollama Fallback'}
+        </div>
         <div className={ROW}>
           <div>
             <div className={LBL}>Automatic fallback</div>
-            <div className="text-xs text-aihub-muted">Switch providers when the primary genuinely fails</div>
+            <div className="text-xs text-aihub-muted">Switch to the other provider when the primary cannot answer</div>
           </div>
           <BibleToggle on={fallbackOn} onClick={() => updateAI({ fallbackEnabled: !fallbackOn })} />
         </div>
@@ -923,36 +924,31 @@ export default function SettingsPage() {
             <div className={ROW}>
               <div><div className={LBL}>Provider</div></div>
               <select
-                value={aiCfg?.fallbackProvider || 'openrouter'}
+                value={fallbackProvider}
                 onChange={e => updateAI({ fallbackProvider: e.target.value })}
                 className="bg-aihub-card border border-aihub-border/40 rounded-lg px-3 py-1.5 text-sm text-aihub-text outline-none">
-                <option value="openrouter">OpenRouter</option>
-                <option value="ollama">Local Ollama</option>
+                <option value={primary === 'ollama' ? 'openrouter' : 'ollama'}>{primary === 'ollama' ? 'OpenRouter' : 'Ollama'}</option>
                 <option value="none">None</option>
               </select>
             </div>
-            {aiCfg?.fallbackProvider !== 'ollama' && aiCfg?.fallbackProvider !== 'none' && (
-              <div className={ROW}>
-                <div><div className={LBL}>Model</div></div>
-                <ModelPicker value={aiModelInput} models={filteredOr} all={orModels}
-                  onChange={id => { setAiModelInput(id); updateAI({ openrouterModel: id }) }} />
-              </div>
-            )}
             <div className={ROW}>
               <div><div className={LBL}>Status</div></div>
-              {aiCfg?.fallbackProvider === 'ollama'
-                ? (ollamaStatus?.running
-                    ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 size={12} /> Connected</span>
-                    : <span className="text-xs text-amber-400">Not detected</span>)
-                : hasCloud
-                  ? <span className="flex items-center gap-1 text-xs text-blue-400"><CheckCircle2 size={12} /> Configured</span>
-                  : <span className="text-xs text-amber-400">No API key</span>}
+              {hasCloud
+                ? <span className="flex items-center gap-1 text-xs text-blue-400"><CheckCircle2 size={12} /> Configured</span>
+                : <span className="text-xs text-amber-400">No API key</span>}
             </div>
           </>
         )}
 
         {/* ── OpenRouter catalog ──────────────────────────────────── */}
         <div className="text-[11px] font-semibold tracking-wider text-aihub-muted uppercase mt-6 mb-2">OpenRouter Models</div>
+        {usesOpenRouter && (
+          <div className={ROW}>
+            <div><div className={LBL}>OpenRouter model</div></div>
+            <ModelPicker value={aiModelInput} models={filteredOr} all={orModels}
+              onChange={id => { setAiModelInput(id); updateAI({ openrouterModel: id }) }} />
+          </div>
+        )}
         <div className={ROW}>
           <div>
             <div className={LBL}>Model filter</div>
@@ -1012,6 +1008,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <div className={LBL}>Ollama URL</div>
+            <div className="text-xs text-aihub-muted mb-1">Connects to the background Ollama service on this computer. Default: http://127.0.0.1:11434</div>
             <input
               type="text"
               value={aiOllamaUrl}
@@ -1065,12 +1062,12 @@ export default function SettingsPage() {
           <div className="font-semibold text-aihub-text">AI Routing</div>
           <div className="flex items-center gap-2">
             <span className={ollamaStatus?.running ? 'text-green-400' : 'text-aihub-muted'}>●</span>
-            <span className="text-aihub-muted">{primary === 'ollama' ? 'Primary' : 'Fallback'}:</span>
+            <span className="text-aihub-muted">{primary === 'ollama' ? 'Primary' : fallbackOn && fallbackProvider === 'ollama' ? 'Fallback' : 'Not used'}:</span>
             <span className="text-aihub-text">Local Ollama — {settings.aiModel || 'first available'}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={hasCloud ? 'text-blue-400' : 'text-aihub-muted'}>●</span>
-            <span className="text-aihub-muted">{primary === 'ollama' ? 'Fallback' : 'Primary'}:</span>
+            <span className="text-aihub-muted">{primary === 'openrouter' ? 'Primary' : fallbackOn && fallbackProvider === 'openrouter' ? 'Fallback' : 'Not used'}:</span>
             <span className="text-aihub-text">OpenRouter — {orLabel(aiCfg?.resolvedModel || aiModelInput)}</span>
           </div>
           <div className="flex items-center gap-2">
