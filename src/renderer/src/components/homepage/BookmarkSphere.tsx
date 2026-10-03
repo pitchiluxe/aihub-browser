@@ -11,7 +11,7 @@ import Favicon from '../common/Favicon'
 // The node look is shared with the Bible verse graph so the two read as one
 // product; only the motion below belongs to this graph.
 import {
-  drawGraphNode, drawSpawnRipple, hexToRgba, HUB_THRESHOLD, LABEL_ZOOM, NODE_STYLE,
+  drawGraphNode, drawSpawnRipple, graphNodeColor, hexToRgba, HUB_THRESHOLD, LABEL_ZOOM, NODE_STYLE,
 } from '../graph/nodeStyle'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -21,6 +21,8 @@ interface ExtNode extends SimulationNodeDatum {
   size: number
   color: string
   connections: number
+  driftPhase: number
+  driftSpeed: number
 }
 
 interface ExtLink extends SimulationLinkDatum<ExtNode> {
@@ -36,52 +38,23 @@ interface Props {
   onClose?: () => void
 }
 
-// ── Multi-color palette — each category gets a visually distinct vivid hue ───
-const CATEGORY_COLORS: Record<string, string> = {
-  AI:            '#a78bfa',  // violet
-  Development:   '#38bdf8',  // sky blue
-  Finance:       '#4ade80',  // green
-  Trading:       '#fb923c',  // orange
-  Education:     '#fbbf24',  // amber
-  Business:      '#e879f9',  // fuchsia
-  Entertainment: '#f43f5e',  // rose
-  Personal:      '#f87171',  // red
-  News:          '#34d399',  // emerald
-  Tools:         '#60a5fa',  // blue
-  Search:        '#4285F4',  // google blue
-  Social:        '#f472b6',  // pink
-  Shopping:      '#fb7185',  // rose-pink
-  Travel:        '#2dd4bf',  // teal
-  Health:        '#86efac',  // light green
-  Science:       '#c4b5fd',  // lavender
-  Sports:        '#fdba74',  // peach
-  Gaming:        '#a3e635',  // lime
-  Music:         '#f9a8d4',  // pink
-  Art:           '#fcd34d',  // yellow
-  default:       '#94a3b8',  // slate (neutral fallback)
-}
-
-// Hash any unknown category string to a stable vivid color
-const VIVID_RING = [
-  '#f43f5e','#fb923c','#fbbf24','#4ade80','#2dd4bf',
-  '#38bdf8','#818cf8','#e879f9','#f472b6','#a3e635',
-]
-function resolveColor(bm: { color?: string; category?: string }): string {
-  if (bm.color && bm.color !== '#60a5fa' && bm.color !== '#a78bfa') return bm.color
-  const cat = bm.category || ''
-  if (CATEGORY_COLORS[cat]) return CATEGORY_COLORS[cat]
-  if (!cat) return CATEGORY_COLORS.default
-  let h = 0
-  for (let i = 0; i < cat.length; i++) h = cat.charCodeAt(i) + ((h << 5) - h)
-  return VIVID_RING[Math.abs(h) % VIVID_RING.length]
-}
-
 const GRAPH_BG     = '#060A13'   // fallback when CSS vars are unavailable
 const MIN_ZOOM     = 0.04
 const MAX_ZOOM     = 10
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function nodeRadius(size: number) { return Math.max(4, Math.round(size * 0.42)) }
+
+function graphPosition(node: ExtNode, now: number, drifting = true) {
+  const x = node.x ?? 0
+  const y = node.y ?? 0
+  if (!drifting) return { x, y }
+  const t = now / 1000
+  return {
+    x: x + Math.sin(t * node.driftSpeed + node.driftPhase) * 6,
+    y: y + Math.cos(t * node.driftSpeed * 0.8 + node.driftPhase * 1.3) * 6,
+  }
+}
 
 // ── Theme bridge ─────────────────────────────────────────────────────────────
 // The canvas can't use CSS vars directly, so the active theme (themeService
@@ -170,12 +143,16 @@ function buildGraphData(bookmarks: Bookmark[]): { nodes: ExtNode[]; links: ExtLi
 
   const nodes: ExtNode[] = bookmarks.map(bm => {
     const conn = counts[bm.id] ?? 0
+    let seed = 0
+    for (let i = 0; i < bm.id.length; i++) seed = (seed * 31 + bm.id.charCodeAt(i)) | 0
     return {
       id:          bm.id,
       bookmark:    bm,
       size:        18 + (conn / maxConn) * 34,
-      color:       resolveColor(bm),
+      color:       graphNodeColor(bm.id),
       connections: conn,
+      driftPhase:  (Math.abs(seed) % 1000) / 1000 * Math.PI * 2,
+      driftSpeed:  0.4 + (Math.abs(seed >> 8) % 50) / 100,
     }
   })
 
@@ -277,8 +254,9 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     // Per-category atmosphere glows — each cluster emits its own color
     for (const node of nodesRef.current) {
       if (node.x == null || node.y == null || node.connections < HUB_THRESHOLD) continue
-      const sx = node.x * k + tx
-      const sy = node.y * k + ty
+      const position = graphPosition(node, now, draggingRef.current !== node)
+      const sx = position.x * k + tx
+      const sy = position.y * k + ty
       const auraR = 80 * k
       // Skip auras fully outside the viewport, and fill only the gradient's
       // bounding box — a fullscreen fillRect per hub was the single most
@@ -328,6 +306,8 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       const src = l.source as ExtNode
       const tgt = l.target as ExtNode
       if (src.x == null || tgt.x == null) continue
+      const srcPos = graphPosition(src, now, draggingRef.current !== src)
+      const tgtPos = graphPosition(tgt, now, draggingRef.current !== tgt)
       // Timelapse: an edge only exists once BOTH its endpoints have been revealed
       if (tlModeRef.current && (!tlVisibleRef.current.has(src.id) || !tlVisibleRef.current.has(tgt.id))) continue
 
@@ -350,8 +330,8 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
         if (p <= 0) continue
         growth = p >= 1 ? 1 : 1 - Math.pow(1 - p, 3) // easeOutCubic
       }
-      const ex = src.x! + (tgt.x! - src.x!) * growth
-      const ey = src.y! + (tgt.y! - src.y!) * growth
+      const ex = srcPos.x + (tgtPos.x - srcPos.x) * growth
+      const ey = srcPos.y + (tgtPos.y - srcPos.y) * growth
 
       if (dimmed) {
         // Light surfaces need a touch more alpha for the hairline to survive
@@ -360,18 +340,18 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
         ctx.lineWidth   = 0.5 / k
       } else {
         // Gradient edge from src color → tgt color
-        const grd = ctx.createLinearGradient(src.x!, src.y!, tgt.x!, tgt.y!)
-        const alpha = touching ? 0.9 : (bothMatch && matchSet ? 0.35 : 0.22)
+        const grd = ctx.createLinearGradient(srcPos.x, srcPos.y, tgtPos.x, tgtPos.y)
+        const alpha = touching ? 0.52 : (bothMatch && matchSet ? 0.24 : 0.14)
         // Growing edges run slightly hot so the draw-on reads as energy flow
         const boost = growth < 1 ? 1.6 : 1
         grd.addColorStop(0, hexToRgba(src.color, Math.min(1, alpha * boost)))
         grd.addColorStop(1, hexToRgba(tgt.color, Math.min(1, alpha * boost)))
         ctx.strokeStyle = grd
-        ctx.lineWidth   = (touching ? 1.8 : bothMatch && matchSet ? 1.1 : 1) / k
+        ctx.lineWidth   = (touching ? 1.8 : bothMatch && matchSet ? 1 : 0.8) / k
       }
 
       ctx.beginPath()
-      ctx.moveTo(src.x!, src.y!)
+      ctx.moveTo(srcPos.x, srcPos.y)
       ctx.lineTo(ex, ey)
       ctx.stroke()
 
@@ -388,8 +368,9 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     for (let ni = 0; ni < nodes.length; ni++) {
       const node    = nodes[ni]
       if (tlModeRef.current && !tlVisibleRef.current.has(node.id)) continue
-      const nx      = node.x ?? 0
-      const ny      = node.y ?? 0
+      const position = graphPosition(node, now, draggingRef.current !== node)
+      const nx      = position.x
+      const ny      = position.y
       const r       = nodeRadius(node.size)
       const col     = node.color
       const isSel   = node.id === selId
@@ -479,7 +460,8 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
         ctx.shadowColor = theme.bg || GRAPH_BG
         ctx.shadowBlur  = NODE_STYLE.labelBlur
         ctx.fillStyle   = node.id === selId ? node.color : theme.label
-        ctx.fillText(label, node.x ?? 0, (node.y ?? 0) + r + 13 / k)
+        const position = graphPosition(node, now, draggingRef.current !== node)
+        ctx.fillText(label, position.x, position.y + r + 13 / k)
         ctx.restore()
         ctx.globalAlpha = 1
       }
@@ -505,11 +487,13 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     const { x: tx, y: ty, k } = txRef.current
     const gx = (cx - rect.left - tx) / k
     const gy = (cy - rect.top  - ty) / k
+    const now = performance.now()
     for (let i = nodesRef.current.length - 1; i >= 0; i--) {
       const n  = nodesRef.current[i]
       const r  = nodeRadius(n.size) + 7
-      const dx = (n.x ?? 0) - gx
-      const dy = (n.y ?? 0) - gy
+      const position = graphPosition(n, now, draggingRef.current !== n)
+      const dx = position.x - gx
+      const dy = position.y - gy
       if (dx * dx + dy * dy <= r * r) return n
     }
     return null
@@ -527,7 +511,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     setZoom(newK)
   }, [])
 
-  const fitView = useCallback(() => {
+  const fitView = useCallback((openingScale?: number) => {
     const canvas = canvasRef.current
     const nodes  = nodesRef.current
     if (!canvas || nodes.length === 0) return
@@ -541,7 +525,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
       (H - pad * 2) / Math.max(Math.max(...ys) - Math.min(...ys), 1),
       1.6
     )
-    const k = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitK))
+    const k = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, openingScale ?? fitK))
     txRef.current = {
       k,
       x: W / 2 - k * ((Math.min(...xs) + Math.max(...xs)) / 2),
@@ -663,7 +647,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
     const ticks = Math.min(300, Math.max(120, n * 6))
     for (let i = 0; i < ticks; i++) sim.tick()
 
-    fitView()
+    fitView(0.67)
 
     // Entrance camera: start pulled back around the canvas center, dolly in
     // to the fitted view while the node cascade plays.
@@ -942,7 +926,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
               <ZoomOut size={13} />
             </button>
             <button
-              onClick={fitView}
+              onClick={() => fitView()}
               title="Zoom to fit"
               className="h-8 px-2.5 text-xs text-slate-500 hover:text-slate-300 transition-colors border-x border-white/[0.08] tabular-nums"
             >
@@ -960,7 +944,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
           {/* Fit + replay entrance */}
           <div className="flex items-center h-8 rounded-xl overflow-hidden" style={PANEL}>
             <button
-              onClick={fitView}
+              onClick={() => fitView()}
               title="Center & fit graph"
               className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/8 transition-all"
             >
@@ -1141,18 +1125,19 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
         <div className="absolute bottom-6 left-4 rounded-xl px-3 py-2.5" style={PANEL}>
           <div className="text-[10px] text-slate-600 font-bold mb-2 uppercase tracking-widest">Categories</div>
           <div className="space-y-1.5">
-            {activeCategories.map(cat => (
-              <div key={cat} className="flex items-center gap-2">
-                <span
-                  className="w-2 h-2 rounded-full shrink-0 block"
-                  style={{
-                    background:  CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.default,
-                    boxShadow:   `0 0 5px ${CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.default}`,
-                  }}
-                />
-                <span className="text-xs text-slate-400">{cat}</span>
-              </div>
-            ))}
+            {activeCategories.map(cat => {
+              const representative = bookmarks.find(bookmark => bookmark.category === cat)
+              const color = representative ? graphNodeColor(representative.id) : graphNodeColor(cat)
+              return (
+                <div key={cat} className="flex items-center gap-2">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0 block"
+                    style={{ background: color, boxShadow: `0 0 5px ${color}` }}
+                  />
+                  <span className="text-xs text-slate-400">{cat}</span>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

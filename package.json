@@ -1,6 +1,6 @@
 {
   "name": "aihub-browser",
-  "version": "1.65.0",
+  "version": "1.65.1",
   "description": "AIHub — Next-Generation AI-Powered Browser",
   "main": "./out/main/index.js",
   "homepage": ".",
@@ -40,6 +40,7 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "three": "^0.186.1",
     "ws": "^8.21.0",
     "zustand": "^4.5.2"
   },

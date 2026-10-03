@@ -40,6 +40,7 @@ const BriefPage      = lazy(() => import('./components/pages/BriefPage'))
 const BiblePage      = lazy(() => import('./components/pages/BiblePage'))
 const BibleStudyPage = lazy(() => import('./components/pages/BibleStudyPage'))
 const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
+const ObsidianGraphView = lazy(() => import('./components/pages/ObsidianGraphView'))
 
 import type { PageType } from '../../shared/pageTypes'
 
@@ -1100,6 +1101,7 @@ export default function App() {
                     {tab.pageType === 'study'      && <BibleStudyPage />}
                     {tab.pageType === 'community'  && <CommunityPage />}
                     {tab.pageType === 'community-lists' && <CommunityListsPage />}
+                    {tab.pageType === 'obsidian-graph' && <ObsidianGraphView onNavigate={navigate} />}
                   </Suspense>
                 </div>
               )

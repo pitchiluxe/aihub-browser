@@ -17,8 +17,10 @@ import HolidayLayer from './HolidayLayer'
 import FocusWidget from './FocusWidget'
 import Favicon from '../common/Favicon'
 
-// Code-split: the sphere pulls in d3 (~100KB+) — load it only when opened
-const BookmarkSphere = React.lazy(() => import('./BookmarkSphere'))
+// Split the graph from Home's initial chunk, then warm it during idle time so
+// the user's first click does not wait for the graph module to download.
+const loadBookmarkSphere = () => import('./BookmarkSphere')
+const BookmarkSphere = React.lazy(loadBookmarkSphere)
 
 interface Recommendation { url: string; title: string; reason: string; category: string; score: number; favicon: string }
 interface Props { onNavigate: (url: string) => void }
@@ -69,6 +71,11 @@ export default function HomePage({ onNavigate }: Props) {
       ? (cb: () => void) => (window as any).requestIdleCallback(cb, { timeout: 3000 })
       : (cb: () => void) => setTimeout(cb, 800)
     idle(() => loadRecommendations())
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadBookmarkSphere() }, 700)
+    return () => window.clearTimeout(timer)
   }, [])
 
   useEffect(() => {
@@ -228,6 +235,8 @@ export default function HomePage({ onNavigate }: Props) {
         {/* ── Feature shortcuts ── */}
         <motion.div className="flex justify-center gap-2.5 px-6 pb-5 flex-wrap"
           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+          <FeaturePill icon={<Network size={13} />} label="Obsidian" color="#8b5cf6"
+            onClick={() => onNavigate('aihub://obsidian-graph')} />
           <FeaturePill icon={<FlaskConical size={13} />} label="Research Mode" color="#38bdf8"
             onClick={() => (window as any).electronAPI?._openPage?.('research') ?? onNavigate('aihub://research')} />
           <FeaturePill icon={<Bot size={13} />} label="Agent Mode" color="#a78bfa"
@@ -235,7 +244,9 @@ export default function HomePage({ onNavigate }: Props) {
           <FeaturePill icon={<Newspaper size={13} />} label="AI News" color="#fb923c"
             onClick={() => onNavigate('https://news.ycombinator.com')} />
           <FeaturePill icon={<Network size={13} />} label="Bookmark Sphere" color="#34d399"
-            onClick={() => setView('sphere')} />
+            onClick={() => setView('sphere')}
+            onPointerEnter={() => { void loadBookmarkSphere() }}
+            onFocus={() => { void loadBookmarkSphere() }} />
           <FeaturePill icon={<Search size={13} />} label="History Search" color="#c084fc"
             onClick={() => onNavigate('aihub://history')} />
         </motion.div>
@@ -407,9 +418,18 @@ export default function HomePage({ onNavigate }: Props) {
 }
 
 // ── Feature pill ─────────────────────────────────────────────────────────────
-function FeaturePill({ icon, label, color, onClick }: { icon: React.ReactNode; label: string; color: string; onClick: () => void }) {
+function FeaturePill({ icon, label, color, onClick, onPointerEnter, onFocus }: {
+  icon: React.ReactNode
+  label: string
+  color: string
+  onClick: () => void
+  onPointerEnter?: () => void
+  onFocus?: () => void
+}) {
   return (
     <button onClick={onClick} className="feature-pill no-drag" style={{ '--pill-color': color } as any}
+      onPointerEnter={onPointerEnter}
+      onFocus={onFocus}
       onMouseEnter={e => {
         const el = e.currentTarget as HTMLElement
         el.style.background = `${color}18`

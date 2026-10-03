@@ -8,16 +8,16 @@ uninstall/reinstall needed.
 ## How it works
 
 - `package.json` → `build.publish` points at `github: pitchiluxe/aihub-browser`.
-- CI (`.github/workflows/build-windows.yml`, `build-macos.yml`) builds on a
-  `v*` tag and runs `electron-builder --publish always`, which uploads the
-  installer, its `.blockmap`, and the update manifest (`latest.yml` /
-  `latest-mac.yml`) to a **draft** GitHub Release for that tag.
+- CI (`.github/workflows/release.yml`) verifies the project, builds Windows,
+   macOS and Linux on a `v*` tag, then publishes the GitHub Release only after
+   every platform build succeeds. Each build uploads its installer, `.blockmap`
+   and update manifest (`latest.yml`, `latest-mac.yml` or `latest-linux.yml`).
 - The app (`src/main/updater.ts`) reads that manifest, compares versions, and
   drives the in-app toast (`UpdateNotification.tsx`): Download → progress →
   "Restart to update".
 
-electron-updater **ignores draft/pre-release** entries, so nothing reaches users
-until you publish the release — that's the review gate.
+electron-updater **ignores draft/pre-release** entries. The release workflow
+publishes automatically after its verification and all platform builds pass.
 
 ## Cutting a release
 
@@ -29,11 +29,9 @@ until you publish the release — that's the review gate.
    git tag v1.3.1
    git push origin v1.3.1
    ```
-4. The Windows and macOS workflows run and publish artifacts to a **draft**
-   release named `v1.3.1`.
-5. Open **GitHub → Releases**, review the draft, add notes, and click
-   **Publish release**.
-6. Within a few hours (or on next launch) installed Windows apps show
+4. The release workflow verifies, builds all three platforms, uploads their
+   artifacts and publishes `v1.3.1` once every build succeeds.
+5. Within a few hours (or on next launch) installed Windows apps show
    *"Update available — Download"*, then *"Restart to update"*.
 
 ## Platform support

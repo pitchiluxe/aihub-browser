@@ -23,7 +23,7 @@ export interface NavTarget {
 // nothing at all.
 const IN_APP_PAGES = [
   'settings', 'history', 'downloads', 'wifi', 'vpn', 'research', 'agents',
-  'extensions', 'mail', 'notes', 'manual', 'rewind', 'watch', 'bible', 'study',
+  'extensions', 'mail', 'notes', 'obsidian-graph', 'manual', 'rewind', 'watch', 'bible', 'study',
 ] as const
 
 export function pageTypeForUrl(url: string | undefined): PageType {
@@ -39,6 +39,7 @@ const BUILT_IN_APPS: { pageType: PageType; title: string; aliases: string[] }[] 
   { pageType: 'bible',      title: 'Bible',      aliases: ['bible', 'holy bible', 'bible reader', 'scripture', 'scriptures', 'kjv'] },
   { pageType: 'mail',       title: 'Mail',       aliases: ['mail', 'email', 'e-mail', 'inbox', 'gmail'] },
   { pageType: 'notes',      title: 'Notes',      aliases: ['notes', 'note', 'notepad', 'my notes'] },
+  { pageType: 'obsidian-graph', title: 'Obsidian Graph', aliases: ['obsidian', 'obsidian graph', 'graph view', 'knowledge graph', 'my graph', 'vault graph'] },
   { pageType: 'settings',   title: 'Settings',   aliases: ['settings', 'preferences', 'options'] },
   { pageType: 'history',    title: 'History',    aliases: ['history', 'browsing history'] },
   { pageType: 'downloads',  title: 'Downloads',  aliases: ['downloads', 'download manager'] },

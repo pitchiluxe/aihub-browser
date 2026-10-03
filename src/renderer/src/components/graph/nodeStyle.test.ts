@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { drawGraphNode, drawSpawnRipple, hexToRgba, NODE_STYLE, HUB_THRESHOLD, LABEL_ZOOM } from './nodeStyle'
+import { drawGraphNode, drawSpawnRipple, graphNodeColor, GRAPH_NODE_PALETTE, hexToRgba, NODE_STYLE, HUB_THRESHOLD, LABEL_ZOOM } from './nodeStyle'
 
 /** Records what was painted, so a node's look can be asserted without a GPU. */
 function fakeCtx() {
@@ -56,6 +56,15 @@ describe('hexToRgba', () => {
     for (const bad of ['', 'red', '#12', 'rgb(1,2,3)', undefined as any]) {
       expect(hexToRgba(bad, 1)).toBe('rgba(148,163,184,1)')
     }
+  })
+})
+
+describe('graphNodeColor', () => {
+  it('returns a stable shared palette colour for each graph node id', () => {
+    expect(graphNodeColor('bookmark-42')).toBe(graphNodeColor('bookmark-42'))
+    expect(GRAPH_NODE_PALETTE).toContain(graphNodeColor('bookmark-42') as typeof GRAPH_NODE_PALETTE[number])
+    expect(new Set(Array.from({ length: GRAPH_NODE_PALETTE.length }, (_, i) => graphNodeColor(`node-${i}`))).size)
+      .toBeGreaterThan(1)
   })
 })
 
@@ -183,5 +192,11 @@ describe('both graphs share one design', () => {
     }
     expect(HUB_THRESHOLD).toBe(2)
     expect(LABEL_ZOOM).toBeGreaterThan(0)
+  })
+
+  it('uses the same stable per-id palette in bookmark and Obsidian graphs', () => {
+    const obsidian = read('pages/ObsidianGraphView.tsx')
+    expect(sphere).toContain('graphNodeColor(bm.id)')
+    expect(obsidian).toContain('graphNodeColor(node.id)')
   })
 })

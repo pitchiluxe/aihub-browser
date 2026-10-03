@@ -8,6 +8,8 @@ import { useBrowserStore } from '../../store/browserStore'
 import Favicon from '../common/Favicon'
 import type { PageType } from '../../../../shared/pageTypes'
 
+const preloadObsidianGraph = () => import('../pages/ObsidianGraphView')
+
 interface Props {
   onNavigate: (url: string) => void
   onOpenPage: (pageType: PageType) => void
@@ -23,6 +25,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { icon: Home,         label: 'Home',        page: null,           type: 'home'       },
+  { icon: BookMarked,   label: 'Obsidian',    page: 'obsidian-graph', type: 'obsidian-graph', accent: '#8b5cf6' },
   { icon: Sunrise,      label: 'Morning Brief', page: 'brief',       type: 'brief',      accent: '#fdba74' },
   { icon: FlaskConical, label: 'Research',     page: 'research',     type: 'research',   accent: '#38bdf8' },
   { icon: Bot,          label: 'Agent Mode',   page: 'agents',       type: 'agents',     accent: '#a78bfa' },
@@ -50,6 +53,11 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
   // F6: local state for hover summary affordance
   const [hoveredSummaryId, setHoveredSummaryId] = useState<string | null>(null)
   const [summarizingId, setSummarizingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void preloadObsidianGraph() }, 700)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   // Narrow subscription — avoids re-rendering on unrelated store churn
   const { isSidebarOpen, bookmarks, setAddBookmarkOpen, tabs, activeTabId, updateBookmark } = useBrowserStore(
@@ -143,6 +151,8 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
             <button
               key={type}
               onClick={() => page ? onOpenPage(page) : onNavigate('home')}
+              onPointerEnter={type === 'obsidian-graph' ? () => { void preloadObsidianGraph() } : undefined}
+              onFocus={type === 'obsidian-graph' ? () => { void preloadObsidianGraph() } : undefined}
               className="ds-sidebar-item"
               style={active ? {
                 color: activeColor,

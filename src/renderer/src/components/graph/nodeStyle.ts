@@ -25,6 +25,18 @@ export const LABEL_ZOOM = 0.62
 /** Default label ink for a dark canvas. */
 export const LABEL_INK = 'rgba(226,232,240,0.9)'
 
+/** Stable jewel tones shared by bookmark and Obsidian graph nodes. */
+export const GRAPH_NODE_PALETTE = [
+  '#4de2c5', '#ff7b72', '#f7c65a', '#69aefc', '#d28cff', '#a6df67', '#ff9f5a', '#58d6e6',
+  '#f17dbb', '#c3e66b', '#88a6ff', '#ffcf7a', '#7be0a6', '#ee8bd2', '#f28f6b', '#6bd0ff',
+] as const
+
+export function graphNodeColor(id: string): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0
+  return GRAPH_NODE_PALETTE[Math.abs(hash) % GRAPH_NODE_PALETTE.length]
+}
+
 export const NODE_STYLE = {
   /** Radius multipliers for the core disc. */
   selectedScale: 1.2,

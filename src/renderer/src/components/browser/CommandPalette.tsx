@@ -93,7 +93,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
   }
 
   const pageIcon: Record<string, React.ReactNode> = {
-    research: <FlaskConical size={15} />, agents: <Bot size={15} />, notes: <StickyNote size={15} />,
+    research: <FlaskConical size={15} />, agents: <Bot size={15} />, notes: <StickyNote size={15} />, 'obsidian-graph': <BookMarked size={15} />,
     rewind: <History size={15} />, watch: <BellRing size={15} />, history: <History size={15} />, downloads: <Download size={15} />, extensions: <Puzzle size={15} />,
     wifi: <Wifi size={15} />, vpn: <Shield size={15} />, mail: <Mail size={15} />,
     manual: <BookOpen size={15} />, settings: <Settings size={15} />,
@@ -182,7 +182,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       }, 'workspace save group set of tabs project')
 
     const pages: [PageType, string][] = [
-      ['research', 'Research Mode'], ['agents', 'Agent Mode'], ['notes', 'Sticky Notes'],
+      ['obsidian-graph', 'Obsidian Graph — your saved markdown knowledge map'], ['research', 'Research Mode'], ['agents', 'Agent Mode'], ['notes', 'Sticky Notes'],
       ['rewind', 'Rewind — search what you\'ve read'], ['watch', 'Watch & Ping — track a page for changes'],
       ['bible', 'Bible — read, highlight and study'], ['study', 'Bible Study — daily verse, courses and memorisation'], ['history', 'History'], ['downloads', 'Downloads'],
       ['vault', 'Page Vault — copies of the pages you bookmarked'],

@@ -30,6 +30,12 @@ import axios from 'axios'
 import { createSemanticIndex, type SearchDoc } from './semantic'
 import { splitPanes } from '../shared/splitLayout'
 import { writeNote, describeVault, parseTagSuggestions, type NoteKind } from './obsidian'
+import { saveMarkdown, listMarkdown, getMarkdown, deleteMarkdown, pruneMarkdown } from './markdownStore'
+import {
+  MARKDOWN_CONVERSION_SYSTEM, buildMarkdownPrompt,
+  ENTITY_EXTRACTION_SYSTEM, buildEntityExtractionPrompt,
+  detectCategoryFromUrl, detectCategoryFromContent,
+} from './ai-prompts'
 import { contentHash, describeChange, containsKeyword } from './watchDiff'
 import {
   partitionFor, addContainer, removeContainer, DEFAULT_CONTAINERS, newBurnerId, type Container,
@@ -989,10 +995,6 @@ async function suggestTags(title: string, body: string): Promise<string[]> {
 // page's text and the vault live — the renderer never needs to see either.
 async function clipToVault(wc: Electron.WebContents, selection?: string) {
   const vaultPath = getData().settings?.obsidianVault || ''
-  if (!vaultPath) {
-    notifyQuiet('No Obsidian vault yet', 'Pick your vault folder in Settings → Obsidian, then try again.')
-    return
-  }
   let title = 'Web page'
   let url = ''
   try { url = wc.getURL(); title = wc.getTitle() || url } catch {}
@@ -1015,16 +1017,54 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
     } catch { body = '' }
   }
 
-  const aiTags = body ? await suggestTags(title, body) : []
-  const result = writeNote(vaultPath, {
-    kind: 'clip',
-    title,
-    url,
-    content: body || '_(no readable text on this page)_',
-    tags: Array.from(new Set([...(selection ? ['highlight'] : []), ...aiTags])),
-  })
-  if (result.ok) notifyQuiet('Saved to Obsidian', title)
-  else notifyQuiet('Could not save to Obsidian', result.error || 'Unknown error')
+  const pageText = body || '_(no readable text on this page)_'
+  let markdown = ''
+  try {
+    const converted = await runAiRequest(
+      [{ role: 'system', content: MARKDOWN_CONVERSION_SYSTEM }, { role: 'user', content: buildMarkdownPrompt(pageText, url) }],
+      undefined, { maxTokens: 2000 },
+    )
+    if (converted.provider !== 'none' && !/^ERROR:/i.test(converted.content || '')) {
+      markdown = (converted.content || '').trim()
+    }
+  } catch (error) {
+    console.warn('[obsidian] AI clip conversion failed; saving readable page text:', error)
+  }
+
+  const frontmatter = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] || ''
+  const convertedTitle = frontmatter.match(/^title:\s*"?([^"\r\n]+)"?/m)?.[1]?.trim()
+  const convertedCategory = frontmatter.match(/^category:\s*"?([^"\r\n]+)"?/m)?.[1]?.trim()
+  const noteTitle = convertedTitle || title
+  const noteCategory = convertedCategory || detectCategoryFromContent(pageText) || detectCategoryFromUrl(url)
+  const noteContent = markdown
+    ? markdown.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, '').trim()
+    : `# ${noteTitle}\n\n${pageText}`
+  const aiTags = body ? await suggestTags(noteTitle, pageText) : []
+  const tags = Array.from(new Set([...(selection ? ['highlight'] : []), ...aiTags]))
+
+  try {
+    const createdAt = Date.now()
+    const filePath = await saveMarkdown({
+      title: noteTitle, url, category: noteCategory, tags, content: noteContent, createdAt,
+    })
+    pruneMarkdown()
+
+    if (!vaultPath) {
+      notifyQuiet('Saved to Knowledge Graph', noteTitle)
+      return
+    }
+
+    const result = writeNote(vaultPath, {
+      kind: 'clip', title: noteTitle, url, content: noteContent, tags,
+      extra: { category: noteCategory },
+    })
+    if (result.ok) notifyQuiet('Saved to Obsidian', noteTitle)
+    else notifyQuiet('Saved to Knowledge Graph', `${noteTitle}. Vault save failed: ${result.error || 'Unknown error'}`)
+    console.info(`[obsidian] Clip stored at ${filePath}`)
+  } catch (error: any) {
+    console.error('[obsidian] Could not save clip:', error)
+    notifyQuiet('Could not save page', error?.message || 'Unknown error')
+  }
 }
 
 // A notification that never steals focus or plays a sound — this is a
@@ -3463,6 +3503,101 @@ ipcMain.handle('obsidian:save', (_e, note: {
 }) => {
   const vaultPath = getData().settings?.obsidianVault || ''
   return writeNote(vaultPath, note)
+})
+
+// ── IPC: Web Clipper — Knowledge Graph markdown store ──────────────────────
+// A clipped page lives in its own directory (markdownStore.ts), independent
+// of the optional Obsidian vault above: every install gets a working
+// knowledge base with zero setup, and pointing an Obsidian vault at it is a
+// bonus, not a prerequisite. The AI pass (ai:convertToMarkdown) is what turns
+// raw page text into the clean note + entities these handlers persist.
+ipcMain.handle('markdown:getAll', () => listMarkdown())
+
+ipcMain.handle('markdown:get', (_e, id: string) => getMarkdown(id))
+
+ipcMain.handle('markdown:delete', (_e, id: string) => deleteMarkdown(id))
+
+ipcMain.handle('markdown:save', async (_e, note: {
+  title: string; url: string; category: string; tags: string[]; content: string; createdAt?: number
+}) => {
+  const createdAt = note.createdAt ?? Date.now()
+  const category = note.category || 'General'
+  const tags = Array.isArray(note.tags) ? note.tags : []
+  const filePath = await saveMarkdown({
+    title: note.title || note.url, url: note.url || '', category, tags,
+    content: note.content || '', createdAt,
+  })
+  // Keep the clip directory bounded — same per-URL and total-size limits as
+  // the page vault, so a habit of clipping the same article repeatedly can't
+  // quietly grow the store without end.
+  pruneMarkdown()
+  return { id: basename(filePath, '.md'), filePath, title: note.title || note.url, url: note.url || '', category, tags, createdAt }
+})
+
+// Converts raw page text into a clean Markdown note (frontmatter + body) and,
+// in a second pass, the entities/concepts/links used to cross-link it with
+// other clipped notes in the graph view. Both calls go through runAiRequest,
+// same router as every other AI feature — never a direct provider call.
+ipcMain.handle('ai:convertToMarkdown', async (_e, url: string, pageText: string) => {
+  const text = String(pageText || '').trim()
+  const urlCategory = detectCategoryFromUrl(url)
+  if (!text) return { markdown: '', entities: [], concepts: [], links: [], category: urlCategory, tags: [] }
+
+  const convo = await runAiRequest(
+    [{ role: 'system', content: MARKDOWN_CONVERSION_SYSTEM }, { role: 'user', content: buildMarkdownPrompt(text, url) }],
+    undefined, { maxTokens: 2000 },
+  )
+  let markdown = convo.provider === 'none' ? '' : (convo.content || '').trim()
+  if (/^ERROR:/i.test(markdown)) markdown = ''
+
+  // Pull category/tags straight out of the frontmatter the model wrote, so a
+  // model that followed instructions needs no further heuristics at all.
+  const fm = markdown.match(/^---\n([\s\S]*?)\n---/)?.[1] || ''
+  let category = fm.match(/^category:\s*"?([^"\n]+)"?/m)?.[1]?.trim() || ''
+  let tags: string[] = []
+  const tagsLine = fm.match(/^tags:\s*\[(.*)\]/m)?.[1]
+  if (tagsLine) tags = tagsLine.split(',').map(t => t.trim().replace(/^"|"$/g, '')).filter(Boolean)
+
+  if (!category) category = detectCategoryFromContent(text)
+  if (category === 'General') category = urlCategory
+
+  if (!markdown) {
+    // AI unavailable or declined — a plain note is still a saved page,
+    // better than the clip silently failing.
+    const title = (url || 'Untitled page').replace(/"/g, "'")
+    markdown = `---\ntitle: "${title}"\nurl: "${url}"\ncategory: "${category}"\n---\n\n# ${title}\n\n${text.slice(0, 6000)}\n`
+  }
+
+  // Best-effort entity/concept/link extraction — a parse failure just means
+  // fewer cross-links in the graph, never a thrown error for the clip itself.
+  let entities: string[] = []
+  let concepts: string[] = []
+  let links: Array<{ text: string; url: string }> = []
+  try {
+    const ent = await runAiRequest(
+      [{ role: 'system', content: ENTITY_EXTRACTION_SYSTEM }, { role: 'user', content: buildEntityExtractionPrompt(text, url) }],
+      undefined, { maxTokens: 800 },
+    )
+    if (ent.provider !== 'none') {
+      const json = (ent.content || '').match(/\{[\s\S]*\}/)?.[0]
+      if (json) {
+        const parsed = JSON.parse(json)
+        entities = Array.isArray(parsed.entities) ? parsed.entities.slice(0, 15).map(String) : []
+        concepts = Array.isArray(parsed.concepts) ? parsed.concepts.slice(0, 10).map(String) : []
+        links = Array.isArray(parsed.links)
+          ? parsed.links.slice(0, 10).filter((l: any) => l?.url).map((l: any) => ({ text: String(l.text || ''), url: String(l.url) }))
+          : []
+      }
+    }
+  } catch { /* best-effort — note is already usable without these */ }
+
+  // Entities/concepts become tags too (not just metadata): tags are what
+  // markdownGraphService cross-links notes on, so folding them in here is
+  // what actually wires "detect entities → create relational connections".
+  const slug = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 30)
+  tags = Array.from(new Set([...tags, ...entities.map(slug), ...concepts.map(slug)].filter(Boolean))).slice(0, 8)
+
+  return { markdown, entities, concepts, links, category, tags }
 })
 
 // ── IPC: Conversation history ──────────────────────────────────────────────

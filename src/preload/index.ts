@@ -162,6 +162,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     save:        (note: { kind: 'clip' | 'bookmark' | 'answer' | 'conversation'; title: string; url?: string; content: string; tags?: string[]; extra?: Record<string, any> }) =>
       ipcRenderer.invoke('obsidian:save', note),
   },
+  // Web Clipper's own note store — the Knowledge Graph tab's data source,
+  // independent of whether an Obsidian vault is configured above.
+  markdown: {
+    getAll: ()               => ipcRenderer.invoke('markdown:getAll'),
+    save:   (note: { title: string; url: string; category: string; tags: string[]; content: string; createdAt?: number }) =>
+      ipcRenderer.invoke('markdown:save', note),
+    get:    (id: string)     => ipcRenderer.invoke('markdown:get', id),
+    delete: (id: string)     => ipcRenderer.invoke('markdown:delete', id),
+  },
   chat: {
     load:  () => ipcRenderer.invoke('chat:load'),
     save:  (messages: { role: string; content: string }[]) => ipcRenderer.invoke('chat:save', messages),
@@ -461,6 +470,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getLatestNews:      ()                       => ipcRenderer.invoke('ai:getLatestNews'),
     webSearch:          (query:string)           => ipcRenderer.invoke('ai:webSearch', query),
     fetchPage:          (url:string)             => ipcRenderer.invoke('ai:fetchPage', url),
+    // Web Clipper — raw page text in, clean Markdown + entities/tags out.
+    convertToMarkdown:  (url:string, pageText:string) => ipcRenderer.invoke('ai:convertToMarkdown', url, pageText),
   },
   vpn: {
     getStatus:   () => ipcRenderer.invoke('vpn:getStatus'),
