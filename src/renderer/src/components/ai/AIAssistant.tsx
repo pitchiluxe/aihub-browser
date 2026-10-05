@@ -14,6 +14,7 @@ import { streamChat } from '../../services/streamingChat'
 import { PAGE_REFERENCE, REFUSAL, wantedTools, selectBookmarksForPrompt, CHAT_ONLY_NOTE } from '../../services/assistantIntent'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
 import ChatMessage from './ChatMessage'
+import StreamingMarkdown from './StreamingMarkdown'
 import { AttachImageButton, AttachmentStrip, useImageAttachments } from './ImageComposer'
 
 interface Props {
@@ -965,11 +966,7 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                       color: 'rgb(var(--ds-text-2))', userSelect: 'text', WebkitUserSelect: 'text',
                       overflow: 'hidden', wordBreak: 'break-word', overflowWrap: 'break-word',
                     }}>
-                      {/* Plain text, not Markdown: a half-received document has
-                          unbalanced fences and list markers, and re-parsing it
-                          on every token both flickers and costs more than the
-                          streaming saves. The finished message renders fully. */}
-                      <span style={{ whiteSpace: 'pre-wrap' }}>{streamText}</span>
+                      <StreamingMarkdown text={streamText} onNavigate={url => addTab(url, 'browser')} />
                       <span style={{
                         display: 'inline-block', width: 6, height: 12, marginLeft: 2, verticalAlign: 'text-bottom',
                         background: 'rgb(var(--ds-accent-soft))', animation: 'aiDotBounce 1.1s ease-in-out infinite',

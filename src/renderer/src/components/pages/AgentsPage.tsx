@@ -11,6 +11,7 @@ import { parseActionsBlock, describeAction, executeAction, cleanNarration, AGENT
 import { withFallbackNotice } from '../../services/routeNotice'
 import { streamChat } from '../../services/streamingChat'
 import ChatMessage from '../ai/ChatMessage'
+import StreamingMarkdown from '../ai/StreamingMarkdown'
 import { AttachImageButton, AttachmentStrip, useImageAttachments } from '../ai/ImageComposer'
 
 interface Agent {
@@ -899,15 +900,16 @@ export default function AgentsPage() {
                       <Bot size={12} />
                     </div>
                     {streamText ? (
-                      // Plain text while streaming: a half-received reply has
-                      // unbalanced markdown, and re-parsing it every token
-                      // costs more than the streaming buys.
-                      <div className="px-3 py-2 rounded-xl text-[13px] leading-relaxed max-w-[85%]"
+                      <div className="px-3 py-2 rounded-xl text-[13px] leading-relaxed max-w-[85%] min-w-0"
                         style={{
                           background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)',
-                          color: 'rgb(var(--ds-text-2))', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                          color: 'rgb(var(--ds-text-2))', wordBreak: 'break-word', overflow: 'hidden',
                         }}>
-                        {streamText}
+                        <StreamingMarkdown
+                          text={streamText}
+                          accent={selected.color}
+                          onNavigate={url => useBrowserStore.getState().addTab(url, 'browser')}
+                        />
                       </div>
                     ) : (
                       <div className="px-3 py-2 rounded-xl flex gap-1 items-center"

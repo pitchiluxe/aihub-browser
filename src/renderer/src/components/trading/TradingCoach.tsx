@@ -23,6 +23,7 @@ import { buildTradingCoachSystemPrompt, detectInstrumentFamily, type InstrumentF
 import { streamChat } from '../../services/streamingChat'
 import { extractTradePlans, mergeBracket, type RawTradePlan } from '../../services/tradePlanBlocks'
 import ChatMessage from '../ai/ChatMessage'
+import StreamingMarkdown from '../ai/StreamingMarkdown'
 import TradePlanCard from '../ai/TradePlanCard'
 
 interface ChatMsg { role: 'user' | 'assistant'; content: string }
@@ -455,7 +456,7 @@ export default function TradingCoach() {
                       color: 'rgb(var(--ds-text-2))', userSelect: 'text', WebkitUserSelect: 'text',
                       overflow: 'hidden', wordBreak: 'break-word', overflowWrap: 'break-word',
                     }}>
-                      <span style={{ whiteSpace: 'pre-wrap' }}>{streamText}</span>
+                      <StreamingMarkdown text={streamText} onNavigate={() => {}} />
                       <span style={{
                         display: 'inline-block', width: 6, height: 12, marginLeft: 2, verticalAlign: 'text-bottom',
                         background: GOLD, animation: 'aiDotBounce 1.1s ease-in-out infinite',
