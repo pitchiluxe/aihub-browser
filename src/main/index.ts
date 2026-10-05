@@ -1,4 +1,4 @@
-import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, desktopCapturer, webContents as electronWebContents } from 'electron'
+import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, desktopCapturer, safeStorage, webContents as electronWebContents } from 'electron'
 import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname, basename } from 'path'
 import zlib from 'zlib'
 import http from 'http'
@@ -18,6 +18,7 @@ import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutF
 import { invokeLookupCallback } from './networkLookup'
 import { normalizeOllamaBase, ollamaBaseCandidates } from './ollamaConnection'
 import { ollamaLaunchCommand, parseLoadedModels, type LoadedModel } from './ollamaLauncher'
+import { createSecretStore, stripSecrets } from './secretStore'
 import {
   normalizeModels, filterModels, modelExists as catalogHasModel,
   classifyOpenRouterStatus,
@@ -215,6 +216,17 @@ function writeJson(f: string, d: any) {
   }
 }
 
+// API keys are kept out of data.json — see secretStore.ts.
+const secretStore = createSecretStore(join(APP_DIR, 'secrets.enc'), {
+  available: () => safeStorage.isEncryptionAvailable(),
+  encrypt: plain => safeStorage.encryptString(plain),
+  decrypt: data => safeStorage.decryptString(data),
+})
+// Linux reports encryption unavailable until the app is ready, so the stored
+// keys are merged in on the first getData() after it becomes available.
+let secretsMerged = false
+let warnedPlaintextKeys = false
+
 let _data: any = null
 function getData(): any {
   if (!_data) {
@@ -222,7 +234,16 @@ function getData(): any {
     _data = s
       ? { ...{ bookmarks: DEFAULT_BOOKMARKS, settings: defaultSettings() }, ...s, settings: { ...defaultSettings(), ...(s.settings || {}) } }
       : { bookmarks: DEFAULT_BOOKMARKS.map(b => ({ ...b, addedAt: Date.now() })), settings: defaultSettings() }
+    secretsMerged = false
     if (seedPinnedBookmarks(_data)) saveData()
+  }
+  if (!secretsMerged && secretStore.available()) {
+    secretsMerged = true
+    // Keys still in data.json (written by v1.66.0 and earlier) win over the
+    // store: they are the user's latest edit. Saving moves them into it.
+    const { secrets: plaintext } = stripSecrets(_data.settings)
+    _data.settings = { ..._data.settings, ...secretStore.load(), ...plaintext }
+    if (Object.keys(plaintext).length) saveData()
   }
   return _data
 }
@@ -272,7 +293,22 @@ function defaultSettings() {
     dohProvider: 'off',
   }
 }
-function saveData() { writeJson(DATA_FILE, _data) }
+function saveData() {
+  const { clean, secrets } = stripSecrets(_data.settings || {})
+  // Only strip once the stored keys are in memory — otherwise this save
+  // would delete keys it never loaded.
+  if (secretsMerged && secretStore.save(secrets)) {
+    writeJson(DATA_FILE, { ..._data, settings: clean })
+    return
+  }
+  // No OS keychain (e.g. Linux without libsecret): keep working, in plaintext
+  // as before, rather than losing the user's keys.
+  if (Object.keys(secrets).length && !warnedPlaintextKeys) {
+    warnedPlaintextKeys = true
+    console.warn('[aihub] OS secure storage unavailable — API keys remain in data.json')
+  }
+  writeJson(DATA_FILE, _data)
+}
 
 // ── Dynamic AI config ──────────────────────────────────────────────────────
 // Priority: stored settings → build-time env vars (from .env.local via vite define)
