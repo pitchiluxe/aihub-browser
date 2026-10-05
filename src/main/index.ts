@@ -958,8 +958,8 @@ function attachAppShortcuts(wc: Electron.WebContents) {
     if (action === 'new-incognito-window') { openIncognitoWindow(); return }
     const page = resolvePageWc(wc)
     switch (action) {
-      case 'nav-back':    { try { if (page?.canGoBack())    page.goBack() } catch {} return }
-      case 'nav-forward': { try { if (page?.canGoForward()) page.goForward() } catch {} return }
+      case 'nav-back':    { try { if (page?.navigationHistory.canGoBack())    page.navigationHistory.goBack() } catch {} return }
+      case 'nav-forward': { try { if (page?.navigationHistory.canGoForward()) page.navigationHistory.goForward() } catch {} return }
       case 'zoom-in':     { try { page?.setZoomLevel(Math.min(page.getZoomLevel() + 0.5, 8)) } catch {} return }
       case 'zoom-out':    { try { page?.setZoomLevel(Math.max(page.getZoomLevel() - 0.5, -7)) } catch {} return }
       case 'zoom-reset':  { try { page?.setZoomLevel(0) } catch {} return }
@@ -972,7 +972,7 @@ function attachAppShortcuts(wc: Electron.WebContents) {
     if (action === 'focus-url' || action === 'find-in-page' || action === 'command-palette') ctx?.win.webContents.focus()
     // Paste-and-Go carries the clipboard text with it so the renderer doesn't
     // need a separate clipboard round-trip.
-    if (action === 'paste-and-go') { sendTo(ctx, 'urlbar-paste-and-go', clipboard.readText().trim()); return }
+    if (action === 'paste-and-go') { void clipboard.readText().then(t => sendTo(ctx, 'urlbar-paste-and-go', t.trim())).catch(() => {}); return }
     sendTo(ctx, 'app-shortcut', action)
   })
 }
@@ -981,8 +981,8 @@ function attachAppShortcuts(wc: Electron.WebContents) {
 // the focused host input directly; "Paste and Go" ships the clipboard text
 // back to the renderer, which navigates with the same smart URL/search logic
 // as pressing Enter.
-ipcMain.handle('urlbar:showContextMenu', (e, hasText: boolean) => {
-  const clip = clipboard.readText().trim()
+ipcMain.handle('urlbar:showContextMenu', async (e, hasText: boolean) => {
+  const clip = (await clipboard.readText().catch(() => '')).trim()
   // Scoped to the window whose address bar was right-clicked. This used to
   // broadcast: pasting a link in a detached window navigated the tab it was
   // detached FROM as well, because every window received the same event and
@@ -1256,10 +1256,10 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
     // ── Navigation (browsing tabs only) ──
     if (onPage) {
       let canBack = false, canFwd = false
-      try { canBack = wc.canGoBack() } catch {}
-      try { canFwd = wc.canGoForward() } catch {}
-      menu.append(new MenuItem({ label: 'Back',    enabled: canBack, accelerator: 'Alt+Left',  click: () => { try { wc.goBack() } catch {} } }))
-      menu.append(new MenuItem({ label: 'Forward', enabled: canFwd,  accelerator: 'Alt+Right', click: () => { try { wc.goForward() } catch {} } }))
+      try { canBack = wc.navigationHistory.canGoBack() } catch {}
+      try { canFwd = wc.navigationHistory.canGoForward() } catch {}
+      menu.append(new MenuItem({ label: 'Back',    enabled: canBack, accelerator: 'Alt+Left',  click: () => { try { wc.navigationHistory.goBack() } catch {} } }))
+      menu.append(new MenuItem({ label: 'Forward', enabled: canFwd,  accelerator: 'Alt+Right', click: () => { try { wc.navigationHistory.goForward() } catch {} } }))
       menu.append(new MenuItem({ label: 'Reload',  accelerator: 'Ctrl+R', click: () => { try { wc.reload() } catch {} } }))
       menu.append(new MenuItem({ label: 'Hard Reload (Clear Cache)', click: () => { try { wc.reloadIgnoringCache() } catch {} } }))
     }
@@ -1304,14 +1304,14 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       if (!menuCtx?.incognito && /^https?:\/\//i.test(params.linkURL)) {
         menu.append(new MenuItem({ label: 'Open Link in Incognito Window', click: () => { try { openIncognitoWindow(params.linkURL) } catch {} } }))
       }
-      menu.append(new MenuItem({ label: 'Copy Link Address', click: () => clipboard.writeText(params.linkURL) }))
+      menu.append(new MenuItem({ label: 'Copy Link Address', click: () => { void clipboard.writeText(params.linkURL).catch(() => {}) } }))
     }
 
     // ── Image ──
     if (isImage && params.srcURL) {
       sep()
       menu.append(new MenuItem({ label: 'Copy Image', click: () => { try { wc.copyImageAt(params.x, params.y) } catch {} } }))
-      menu.append(new MenuItem({ label: 'Copy Image Address', click: () => clipboard.writeText(params.srcURL) }))
+      menu.append(new MenuItem({ label: 'Copy Image Address', click: () => { void clipboard.writeText(params.srcURL).catch(() => {}) } }))
       menu.append(new MenuItem({ label: 'Save Image As…', click: () => { try { wc.downloadURL(params.srcURL) } catch {} } }))
       menu.append(new MenuItem({ label: 'Open Image in New Tab', click: () => sendTo(menuCtx, 'open-in-new-tab', params.srcURL) }))
     }
@@ -1332,7 +1332,7 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
     if (onPage && isWebPage) {
       sep()
       menu.append(new MenuItem({ label: 'Create QR Code for this Page', click: () => sendAction('qr') }))
-      menu.append(new MenuItem({ label: 'Copy Page URL', click: () => clipboard.writeText(pageUrl) }))
+      menu.append(new MenuItem({ label: 'Copy Page URL', click: () => { void clipboard.writeText(pageUrl).catch(() => {}) } }))
       menu.append(new MenuItem({ label: 'Save Page to Obsidian', click: () => { void clipToVault(wc) } }))
       menu.append(new MenuItem({ label: 'Translate this Page', click: () => sendTo(menuCtx, 'open-in-new-tab', `https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(pageUrl)}`) }))
       menu.append(new MenuItem({ label: 'Print…', accelerator: 'Ctrl+P', click: () => { try { wc.print() } catch {} } }))
@@ -1376,6 +1376,21 @@ function sendTabEvent(ctx: AppWin | undefined, tabId: string, type: string, payl
 // z-index control from the renderer side. Overlays that must appear above tab
 // content (e.g. AddBookmarkModal) call tabview:setOverlayHidden(true) to detach
 // the view instead.
+/**
+ * capturePage with one retry. Chromium can reject a capture taken while the
+ * compositor is still producing a view's first frame ("UnknownVizError",
+ * seen on Electron 44 right after a navigation); a moment later it succeeds.
+ */
+async function capturePageRetry(wc: Electron.WebContents, rect?: Electron.Rectangle): Promise<Electron.NativeImage> {
+  try {
+    return rect ? await wc.capturePage(rect) : await wc.capturePage()
+  } catch {
+    await new Promise(r => setTimeout(r, 250))
+    try { wc.invalidate() } catch {}
+    return rect ? await wc.capturePage(rect) : await wc.capturePage()
+  }
+}
+
 /** This window's tab views currently attached — contentView may hold other children. */
 function attachedViews(ctx: AppWin): WebContentsView[] {
   const ours = new Set<unknown>(ctx.views.values())
@@ -2116,8 +2131,8 @@ function createAppWindow(initialUrl?: string, opts: { incognito?: boolean } = {}
     const page = ctx.activeId ? ctx.views.get(ctx.activeId)?.webContents : undefined
     if (!page) return
     try {
-      if (cmd === 'browser-backward' && page.canGoBack()) page.goBack()
-      else if (cmd === 'browser-forward' && page.canGoForward()) page.goForward()
+      if (cmd === 'browser-backward' && page.navigationHistory.canGoBack()) page.navigationHistory.goBack()
+      else if (cmd === 'browser-forward' && page.navigationHistory.canGoForward()) page.navigationHistory.goForward()
     } catch {}
   })
 
@@ -2861,7 +2876,7 @@ ipcMain.handle('tabs:showContextMenu', (e, info: { tabId?: string; isBrowser: bo
       { type: 'separator' },
       { label: 'Reload',                  enabled: info.isBrowser, click: () => done('reload') },
       { label: 'Copy Page URL',           enabled: info.isBrowser && !!tabWc, click: () => {
-          try { const u = tabWc!.getURL(); if (u) clipboard.writeText(u) } catch {}
+          try { const u = tabWc!.getURL(); if (u) void clipboard.writeText(u).catch(() => {}) } catch {}
           done('')
         } },
       { label: muted ? 'Unmute Tab' : 'Mute Tab', enabled: info.isBrowser && !!tabWc, click: () => {
@@ -2947,7 +2962,7 @@ ipcMain.handle('tabview:captureFullPage', async (e, tabId: string) => {
     view.setBounds({ ...original, height })
     // Give the page a beat to paint the newly revealed area.
     await new Promise(r => setTimeout(r, 350))
-    const image = await wc.capturePage()
+    const image = await capturePageRetry(wc)
     const buffer = image.toPNG()
     view.setBounds(original)
 
@@ -3108,18 +3123,18 @@ ipcMain.handle('tabview:preconnect', (e, url: string) => {
 })
 ipcMain.handle('tabview:goBack', (e, tabId: string) => {
   const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
-  try { if (wc?.canGoBack()) wc.goBack() } catch {}
+  try { if (wc?.navigationHistory.canGoBack()) wc.navigationHistory.goBack() } catch {}
 })
 ipcMain.handle('tabview:goForward', (e, tabId: string) => {
   const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
-  try { if (wc?.canGoForward()) wc.goForward() } catch {}
+  try { if (wc?.navigationHistory.canGoForward()) wc.navigationHistory.goForward() } catch {}
 })
 ipcMain.handle('tabview:reload', (e, tabId: string) => {
   try { ctxFromEvent(e)?.views.get(tabId)?.webContents.reload() } catch {}
 })
 ipcMain.handle('tabview:getNavState', (e, tabId: string) => {
   const wc = ctxFromEvent(e)?.views.get(tabId)?.webContents
-  try { return { canGoBack: wc?.canGoBack() ?? false, canGoForward: wc?.canGoForward() ?? false } }
+  try { return { canGoBack: wc?.navigationHistory.canGoBack() ?? false, canGoForward: wc?.navigationHistory.canGoForward() ?? false } }
   catch { return { canGoBack: false, canGoForward: false } }
 })
 // Runs a script inside a tab's page and returns its completion value — the
@@ -3337,7 +3352,7 @@ ipcMain.handle('trading:readChart', async (e, tabId: string) => {
       const bracket = plan.direction === 'none' ? buildBracketPlan(levelSet) : []
 
       let shot: string | undefined
-      try { shot = (await wc.capturePage()).resize({ width: 900 }).toDataURL() } catch {}
+      try { shot = (await capturePageRetry(wc)).resize({ width: 900 }).toDataURL() } catch {}
 
       return {
         ok: true,
@@ -3380,7 +3395,7 @@ ipcMain.handle('trading:readChart', async (e, tabId: string) => {
   // the chart rather than taken on trust.
   let screenshot: string | undefined
   try {
-    const image = await wc.capturePage()
+    const image = await capturePageRetry(wc)
     screenshot = image.resize({ width: 900 }).toDataURL()
   } catch {}
 
@@ -6700,7 +6715,7 @@ ipcMain.handle('recorder:captureWindow', async (e, rect?: { x: number; y: number
     const bounds = rect && rect.width > 0 && rect.height > 0
       ? { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
       : undefined
-    const img = bounds ? await win.webContents.capturePage(bounds) : await win.webContents.capturePage()
+    const img = await capturePageRetry(win.webContents, bounds || undefined)
     return img.isEmpty() ? null : img.toDataURL()
   } catch { return null }
 })
@@ -6931,7 +6946,7 @@ ipcMain.handle('webview:capture', async (e, wcId: number) => {
   try {
     const wc = ownTabWebContents(e, wcId)
     if (!wc) return null
-    const img = await wc.capturePage()
+    const img = await capturePageRetry(wc)
     return img.toDataURL()
   } catch { return null }
 })
