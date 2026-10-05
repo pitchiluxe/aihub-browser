@@ -17,6 +17,7 @@ import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt } from './modelRouting'
 import { invokeLookupCallback } from './networkLookup'
 import { normalizeOllamaBase, ollamaBaseCandidates } from './ollamaConnection'
+import { ollamaLaunchCommand, parseLoadedModels, type LoadedModel } from './ollamaLauncher'
 import {
   normalizeModels, filterModels, modelExists as catalogHasModel,
   classifyOpenRouterStatus,
@@ -971,6 +972,17 @@ ipcMain.handle('urlbar:showContextMenu', (e, hasText: boolean) => {
 // are always available. App-feature actions (AI, Research, Agent, Annotation,
 // Sphere) are forwarded to the renderer via the 'page-context-action' channel.
 
+// Small background helpers (tags, bookmark category) give Ollama a short
+// budget and have a heuristic behind them. When Ollama is primary and RUNNING,
+// a miss means "busy" — this machine is CPU-only and serves one request at a
+// time — not "down", so the heuristic answers instead of the cloud. Same rule
+// routeGenerate applies to chat: abandon local only for a real failure.
+async function sideCallMayUseCloud(routing: RoutingSettings): Promise<boolean> {
+  if (routing.primaryProvider === 'openrouter') return true
+  if (!routing.fallbackEnabled || routing.fallbackProvider !== 'openrouter') return false
+  return !(await checkOllamaRunning()).running
+}
+
 // A handful of lowercase tags for a vault note, generated from its own title
 // and content. Same Ollama-first, OpenRouter-fallback-if-enabled, heuristic-
 // last chain as ai:categorizeBookmark above it, just asking for tags instead
@@ -998,7 +1010,7 @@ async function suggestTags(title: string, body: string): Promise<string[]> {
   } catch {}
 
   const routing = getRoutingSettings()
-  if (orKey && routing.fallbackEnabled && routing.fallbackProvider === 'openrouter') {
+  if (orKey && await sideCallMayUseCloud(routing)) {
     try {
       const { body: respBody } = await httpPost(`${orBase}/chat/completions`,
         { model: orMdl, messages: [{ role: 'user', content: prompt }], max_tokens: 40, temperature: 0.2, include_reasoning: false },
@@ -2190,6 +2202,8 @@ app.whenReady().then(() => {
   // would resolve its first hostnames in plaintext regardless of the setting.
   try { applyDoh(getData().settings?.dohProvider || 'off') } catch {}
   getData()
+  // Off the startup path: launching the window never waits on Ollama.
+  setTimeout(() => { void autoStartOllama() }, 1500)
   registerAttachmentProtocol()
   registerScreenShareHandler()
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
@@ -4086,6 +4100,103 @@ ipcMain.handle('ollama:pull', async (_e, model: string) => {
   } catch (e: any) { return { success: false, error: e.message } }
 })
 
+// ── Ollama: keep it running, and show that it is ──────────────────────────
+// "Local first" only holds if the local server is actually up. Ollama is not
+// always started at login, and when it isn't, every request quietly went to
+// OpenRouter. So: start it (the desktop app, so its tray icon is visible),
+// and give the toolbar a live view of what it is doing and who answered.
+
+let aiInFlight = 0
+let lastAiRoute: { provider: string; model: string; fallbackUsed: boolean; notice?: string; at: number } | null = null
+let ollamaStartPromise: Promise<{ ok: boolean; kind?: string; error?: string }> | null = null
+let lastOllamaAutoStart = 0
+
+function usesOllama(): boolean {
+  const r = getRoutingSettings()
+  return r.primaryProvider === 'ollama' || (r.fallbackEnabled && r.fallbackProvider === 'ollama')
+}
+
+/** Start Ollama if it isn't running; resolves once its API answers (or 25s pass). */
+function startOllama(): Promise<{ ok: boolean; kind?: string; error?: string }> {
+  if (ollamaStartPromise) return ollamaStartPromise
+  ollamaStartPromise = (async () => {
+    if ((await checkOllamaRunning(true)).running) return { ok: true }
+    const cmd = ollamaLaunchCommand(process.platform, process.env, p => fs.existsSync(p))
+    if (!cmd) return { ok: false, error: 'Ollama is not installed. Get it from ollama.com/download.' }
+    try {
+      const child = spawn(cmd.command, cmd.args, { detached: true, stdio: 'ignore', windowsHide: cmd.kind === 'serve' })
+      child.on('error', () => {})
+      child.unref()
+    } catch (e: any) {
+      return { ok: false, error: `Could not start Ollama: ${e?.message || e}` }
+    }
+    console.log(`[aihub] [OLLAMA] Starting (${cmd.kind}): ${cmd.command} ${cmd.args.join(' ')}`)
+    for (let i = 0; i < 25; i++) {
+      await new Promise(r => setTimeout(r, 1000))
+      if ((await checkOllamaRunning(true)).running) {
+        console.log('[aihub] [OLLAMA] Started')
+        return { ok: true, kind: cmd.kind }
+      }
+    }
+    return { ok: false, error: 'Ollama was launched but did not answer within 25 seconds.' }
+  })().finally(() => {
+    ollamaStartPromise = null
+    void broadcastAiStatus()
+  })
+  return ollamaStartPromise
+}
+
+/** Auto-start, rate-limited so a broken install isn't relaunched on every request. */
+async function autoStartOllama(): Promise<boolean> {
+  if (getData().settings?.autoStartOllama === false || !usesOllama()) return false
+  if (Date.now() - lastOllamaAutoStart < 60_000) return false
+  lastOllamaAutoStart = Date.now()
+  return (await startOllama()).ok
+}
+
+async function aiStatusSnapshot() {
+  const probe = await checkOllamaRunning()
+  let loaded: LoadedModel[] = []
+  if (probe.running && probe.base) {
+    try { loaded = parseLoadedModels((await httpGet(`${probe.base}/api/ps`, 2000)).body) } catch {}
+  }
+  const routing = getRoutingSettings()
+  return {
+    running: probe.running,
+    starting: !!ollamaStartPromise,
+    installed: probe.running || !!ollamaLaunchCommand(process.platform, process.env, p => fs.existsSync(p)),
+    base: probe.base || getAIConfig().olBase,
+    modelCount: probe.models.length,
+    configuredModel: selectOllamaModel(probe.models, routing.ollamaModel) || routing.ollamaModel,
+    loaded,
+    generating: aiInFlight > 0,
+    primaryProvider: routing.primaryProvider,
+    fallbackEnabled: routing.fallbackEnabled,
+    fallbackProvider: routing.fallbackProvider,
+    autoStart: getData().settings?.autoStartOllama !== false,
+    lastRoute: lastAiRoute,
+  }
+}
+
+async function broadcastAiStatus() {
+  try { safelySend('ai:status', await aiStatusSnapshot()) } catch {}
+}
+
+ipcMain.handle('ollama:live', () => aiStatusSnapshot())
+ipcMain.handle('ollama:start', () => startOllama())
+// One click from the toolbar: make local Ollama the primary provider again,
+// keeping whatever the user chose about fallback.
+ipcMain.handle('ai:useOllamaPrimary', async () => {
+  const d = getData()
+  const fb = d.settings.fallbackProvider === 'none' ? 'none' : 'openrouter'
+  d.settings = { ...d.settings, primaryProvider: 'ollama', fallbackProvider: fb }
+  saveData()
+  void autoStartOllama()
+  const snap = await aiStatusSnapshot()
+  safelySend('ai:status', snap)
+  return snap
+})
+
 // ── IPC: WiFi ──────────────────────────────────────────────────────────────
 ipcMain.handle('wifi:scan', async () => {
   if (process.platform !== 'win32') return { networks: [], error: 'WiFi scan only on Windows' }
@@ -4882,7 +4993,7 @@ ipcMain.handle('ai:categorizeBookmark', async (_e, url: string, title: string) =
   // This is a one-word classification with a URL heuristic behind it, so
   // "fallback off" has to mean off here too, not just in chat.
   const routing = getRoutingSettings()
-  if (orKey && routing.fallbackEnabled && routing.fallbackProvider === 'openrouter') {
+  if (orKey && await sideCallMayUseCloud(routing)) {
     try {
       const { body } = await httpPost(`${orBase}/chat/completions`,
         { model: orMdl, messages: [{ role: 'user', content: prompt }], max_tokens: 20, temperature: 0, include_reasoning: false },
@@ -5195,10 +5306,31 @@ async function chatGptChat(
 // must never be auto-selected again this session.
 const slowModels = new Set<string>()
 
-async function runAiRequest(
+type AiRequestOpts = { preferCloud?: boolean; needsTools?: boolean; maxTokens?: number; onDelta?: (text: string, reset?: boolean) => void }
+
+// Every AI feature funnels through here, which makes it the one place to
+// record what the toolbar shows: "generating" while a request is open, and
+// which provider actually answered the last one.
+async function runAiRequest(messages: any[], preferredModel?: string, opts?: AiRequestOpts) {
+  aiInFlight++
+  if (aiInFlight === 1) void broadcastAiStatus()
+  try {
+    const result = await runAiRequestRouted(messages, preferredModel, opts)
+    lastAiRoute = {
+      provider: result.provider, model: result.model, fallbackUsed: !!result.fallbackUsed,
+      notice: (result as any).notice, at: Date.now(),
+    }
+    return result
+  } finally {
+    aiInFlight--
+    void broadcastAiStatus()
+  }
+}
+
+async function runAiRequestRouted(
   messages: any[],
   preferredModel?: string,
-  opts?: { preferCloud?: boolean; needsTools?: boolean; maxTokens?: number; onDelta?: (text: string, reset?: boolean) => void },
+  opts?: AiRequestOpts,
 ) {
   const { olBase, orKey, orBase } = getAIConfig()
   const settings = getRoutingSettings(preferredModel)
@@ -5224,6 +5356,9 @@ async function runAiRequest(
       async health() {
         try {
           probe = await checkOllamaRunning()
+          // Not running? Start it once rather than silently sending this
+          // request (and every one after it) to the cloud.
+          if (!probe.running && await autoStartOllama()) probe = await checkOllamaRunning(true)
           return { available: probe.running, models: probe.models }
         } catch (e: any) {
           return { available: false, models: [], error: e?.message || String(e) }

@@ -908,6 +908,14 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        <div className={ROW}>
+          <div>
+            <div className={LBL}>Start Ollama automatically</div>
+            <div className="text-xs text-aihub-muted">Launch the Ollama app (tray icon) when the browser opens or a request finds it stopped</div>
+          </div>
+          <BibleToggle on={settings.autoStartOllama !== false} onClick={() => update('autoStartOllama', settings.autoStartOllama === false)} />
+        </div>
+
         {/* ── Fallback ────────────────────────────────────────────── */}
         <div className="text-[11px] font-semibold tracking-wider text-aihub-muted uppercase mt-6 mb-2">
           {primary === 'ollama' ? 'Fallback AI' : 'Ollama Fallback'}

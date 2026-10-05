@@ -201,6 +201,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ollama: {
     status: () => ipcRenderer.invoke('ollama:status'),
     pull:   (m:string) => ipcRenderer.invoke('ollama:pull', m),
+    live:   () => ipcRenderer.invoke('ollama:live'),
+    start:  () => ipcRenderer.invoke('ollama:start'),
+    usePrimary: () => ipcRenderer.invoke('ai:useOllamaPrimary'),
+    onStatus: (cb: (s: any) => void) => {
+      const h = (_: any, s: any) => cb(s)
+      ipcRenderer.on('ai:status', h)
+      return () => { ipcRenderer.removeListener('ai:status', h) }
+    },
   },
   community: {
     status:   ()                        => ipcRenderer.invoke('community:status'),
