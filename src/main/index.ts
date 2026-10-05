@@ -1118,10 +1118,7 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
         if (!root) return ''
         const clone = root.cloneNode(true)
         clone.querySelectorAll('script,style,noscript,svg,iframe').forEach(n => n.remove())
-        return (clone.innerText || '').replace(/
-{3,}/g, '
-
-').trim().slice(0, 20000)
+        return (clone.innerText || '').replace(/\\n{3,}/g, '\\n\\n').trim().slice(0, 20000)
       })()`)
     } catch { body = '' }
   }
@@ -1162,7 +1159,7 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
     const filePath = await saveMarkdown({
       title: noteTitle, url, category: noteCategory, tags, content: noteContent, createdAt,
     })
-    pruneMarkdown()
+    void pruneMarkdown()
 
     if (!vaultPath) {
       notifyQuiet('Saved to Knowledge Graph', noteTitle)
@@ -3629,9 +3626,14 @@ ipcMain.handle('obsidian:save', (_e, note: {
 // knowledge base with zero setup, and pointing an Obsidian vault at it is a
 // bonus, not a prerequisite. The AI pass (ai:convertToMarkdown) is what turns
 // raw page text into the clean note + entities these handlers persist.
-ipcMain.handle('markdown:getAll', () => listMarkdown())
+// The configured Obsidian vault is listed alongside the clips: on a second
+// computer the clip folder starts empty, and the vault is where the user's
+// existing notes (and every clip, when a vault is set) actually live.
+const graphVault = () => getData().settings?.obsidianVault || undefined
 
-ipcMain.handle('markdown:get', (_e, id: string) => getMarkdown(id))
+ipcMain.handle('markdown:getAll', () => listMarkdown(graphVault()))
+
+ipcMain.handle('markdown:get', (_e, id: string) => getMarkdown(id, graphVault()))
 
 ipcMain.handle('markdown:delete', (_e, id: string) => deleteMarkdown(id))
 
@@ -3648,7 +3650,7 @@ ipcMain.handle('markdown:save', async (_e, note: {
   // Keep the clip directory bounded — same per-URL and total-size limits as
   // the page vault, so a habit of clipping the same article repeatedly can't
   // quietly grow the store without end.
-  pruneMarkdown()
+  void pruneMarkdown()
   return { id: basename(filePath, '.md'), filePath, title: note.title || note.url, url: note.url || '', category, tags, createdAt }
 })
 

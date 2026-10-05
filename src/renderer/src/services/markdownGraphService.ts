@@ -6,7 +6,10 @@
  * graph.
  */
 
-/** A saved markdown note from the main process store. */
+/** Browser clip (deletable) or a note from the user's Obsidian vault (read-only). */
+export type NoteOrigin = 'clip' | 'vault'
+
+/** A saved markdown note from the main process store (see main/markdownStore.ts ListedNote). */
 export interface MarkdownNote {
   id: string
   filePath: string
@@ -14,7 +17,10 @@ export interface MarkdownNote {
   url: string
   category: string
   tags: string[]
+  /** Lower-cased [[wikilink]] targets. Absent on notes saved by older builds' IPC. */
+  links?: string[]
   createdAt: number
+  origin?: NoteOrigin
 }
 
 /** Graph node data for the visualization. */
@@ -28,6 +34,7 @@ export interface GraphNode {
   connections: number
   tags: string[]
   createdAt: number
+  origin: NoteOrigin
 }
 
 /** Graph link (edge) data. */
@@ -83,18 +90,20 @@ function resolveColor(category: string): string {
 }
 
 /**
- * Build graph nodes and links from markdown notes.
+ * Build graph nodes and links from markdown notes. Pure and synchronous so
+ * the view can derive it in a useMemo and tests can call it directly.
  *
- * Combines two relationship strategies:
- * 1. Category grouping (star clusters - like BookmarkSphere)
- * 2. Entity-based cross-links (shared tags, URL references, same domain)
+ * Three relationship kinds, strongest first:
+ * 1. [[wikilinks]] — an explicit link the user wrote (vault notes)
+ * 2. Category star clusters, anchors joined in a ring (same shape as BookmarkSphere)
+ * 3. Shared tags — the AI-detected entities/concepts of clipped pages
  */
-export async function buildMarkdownGraphData(notes: MarkdownNote[]): Promise<GraphData> {
+export function buildMarkdownGraph(notes: MarkdownNote[]): GraphData {
   const counts: Record<string, number> = {}
   const links: GraphLink[] = []
   const seen = new Set<string>()
-
   const addLink = (a: MarkdownNote, b: MarkdownNote, strength: number) => {
+    if (a.id === b.id) return
     const key = [a.id, b.id].sort().join('|')
     if (seen.has(key)) return
     seen.add(key)
@@ -103,97 +112,54 @@ export async function buildMarkdownGraphData(notes: MarkdownNote[]): Promise<Gra
     counts[b.id] = (counts[b.id] ?? 0) + 1
   }
 
-  // ── Strategy 1: Category star clusters ──────────────────────────────────────
-  // Group by category; first note in each group is the cluster anchor
-  const categoryGroups = new Map<string, MarkdownNote[]>()
-  for (const note of notes) {
-    const cat = note.category || 'General'
-    if (!categoryGroups.has(cat)) categoryGroups.set(cat, [])
-    categoryGroups.get(cat)!.push(note)
+  // Wikilinks resolve the way Obsidian does: by file name, case-insensitive.
+  const byName = new Map<string, MarkdownNote>()
+  for (const n of notes) {
+    const stem = (n.filePath.split(/[\\/]/).pop() || '').replace(/\.md$/i, '').toLowerCase()
+    if (stem && !byName.has(stem)) byName.set(stem, n)
+    const title = n.title.toLowerCase()
+    if (title && !byName.has(title)) byName.set(title, n)
+  }
+  for (const n of notes) for (const target of n.links ?? []) {
+    const hit = byName.get(target)
+    if (hit) addLink(n, hit, 0.7)
   }
 
-  const categoryAnchors: MarkdownNote[] = []
-  for (const members of categoryGroups.values()) {
-    if (members.length === 0) continue
-    const anchor = members[0]
-    categoryAnchors.push(anchor)
-    for (let i = 1; i < members.length; i++) addLink(anchor, members[i], 0.55)
+  const byCat = new Map<string, MarkdownNote[]>()
+  for (const n of notes) {
+    const cat = n.category || 'General'
+    if (!byCat.has(cat)) byCat.set(cat, [])
+    byCat.get(cat)!.push(n)
   }
-
-  // Link category anchors in a ring
-  if (categoryAnchors.length > 1) {
-    for (let i = 0; i < categoryAnchors.length; i++) {
-      addLink(categoryAnchors[i], categoryAnchors[(i + 1) % categoryAnchors.length], 0.18)
-    }
+  const anchors: MarkdownNote[] = []
+  for (const members of byCat.values()) {
+    anchors.push(members[0])
+    for (let i = 1; i < members.length; i++) addLink(members[0], members[i], 0.5)
   }
+  if (anchors.length > 1) for (let i = 0; i < anchors.length; i++) addLink(anchors[i], anchors[(i + 1) % anchors.length], 0.15)
 
-  // ── Strategy 2: Entity/tag cross-links ──────────────────────────────────────
-  // Notes that share tags get linked
-  const tagGroups = new Map<string, MarkdownNote[]>()
-  for (const note of notes) {
-    for (const tag of note.tags) {
-      if (!tagGroups.has(tag)) tagGroups.set(tag, [])
-      tagGroups.get(tag)!.push(note)
-    }
+  const byTag = new Map<string, MarkdownNote[]>()
+  for (const n of notes) for (const t of n.tags) {
+    if (!byTag.has(t)) byTag.set(t, [])
+    byTag.get(t)!.push(n)
   }
-
-  // For each tag with 2+ notes, link them (but don't over-connect)
-  for (const members of tagGroups.values()) {
+  for (const members of byTag.values()) {
     if (members.length < 2) continue
-    // Connect first to others (star pattern within tag)
-    const anchor = members[0]
-    for (let i = 1; i < Math.min(members.length, 6); i++) {
-      addLink(anchor, members[i], 0.35)
-    }
+    for (let i = 1; i < Math.min(members.length, 6); i++) addLink(members[0], members[i], 0.3)
   }
 
-  // ── Strategy 3: Domain-based links ─────────────────────────────────────────
-  // Notes from the same domain get weakly linked
-  const domainGroups = new Map<string, MarkdownNote[]>()
-  for (const note of notes) {
-    try {
-      const domain = new URL(note.url).hostname.replace('www.', '')
-      if (!domainGroups.has(domain)) domainGroups.set(domain, [])
-      domainGroups.get(domain)!.push(note)
-    } catch {}
-  }
-
-  for (const members of domainGroups.values()) {
-    if (members.length < 2) continue
-    for (let i = 0; i < members.length - 1; i++) {
-      for (let j = i + 1; j < Math.min(members.length, i + 3); j++) {
-        addLink(members[i], members[j], 0.15)
-      }
-    }
-  }
-
-  // ── Strategy 4: URL references within content ──────────────────────────────
-  // Could be expanded later to parse markdown content for [text](url) links
-  // that point to other saved notes
-
-  // ── Build nodes ─────────────────────────────────────────────────────────────
   const maxConn = Math.max(1, ...Object.values(counts))
-
-  const nodes: GraphNode[] = notes.map(note => {
-    const conn = counts[note.id] ?? 0
-    // Size based on connections (hub nodes get bigger)
-    const baseSize = 18
-    const connSize = (conn / maxConn) * 34
+  const nodes: GraphNode[] = notes.map(n => {
+    const conn = counts[n.id] ?? 0
     return {
-      id: note.id,
-      title: note.title,
-      url: note.url,
-      category: note.category,
-      color: resolveColor(note.category),
-      size: baseSize + connSize,
-      connections: conn,
-      tags: note.tags,
-      createdAt: note.createdAt,
+      id: n.id, title: n.title, url: n.url, category: n.category || 'General',
+      color: resolveColor(n.category), size: 18 + (conn / maxConn) * 34, connections: conn,
+      tags: n.tags, createdAt: n.createdAt, origin: n.origin ?? 'clip',
     }
   })
-
   return { nodes, links }
 }
+
 
 /**
  * Fetch all markdown notes from the main process.

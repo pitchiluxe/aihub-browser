@@ -5,8 +5,8 @@ import {
 } from 'd3-force'
 import { Search, ZoomIn, ZoomOut, Crosshair, X, Trash2, ExternalLink, Orbit, Loader2, Tag, Globe2 } from 'lucide-react'
 import {
-  fetchMarkdownNotes, deleteMarkdownNote, getMarkdownNote,
-  type MarkdownNote, type GraphNode, type GraphLink,
+  fetchMarkdownNotes, deleteMarkdownNote, getMarkdownNote, buildMarkdownGraph,
+  type MarkdownNote, type GraphNode,
 } from '../../services/markdownGraphService'
 import { drawGraphNode, graphNodeColor, hexToRgba, HUB_THRESHOLD, LABEL_ZOOM } from '../graph/nodeStyle'
 import Markdown from '../ai/Markdown'
@@ -90,6 +90,12 @@ export default function ObsidianGraphView({ onNavigate }: Props) {
   const [deleting, setDeleting] = useState(false)
 
   const zoomLabel = `${Math.round(zoom * 100)}%`
+  const vaultCount = notes.filter(n => n.origin === 'vault').length
+  const clipCount = notes.length - vaultCount
+  const noteSummary = [
+    `${clipCount} clipped ${clipCount === 1 ? 'page' : 'pages'}`,
+    ...(vaultCount ? [`${vaultCount} vault ${vaultCount === 1 ? 'note' : 'notes'}`] : []),
+  ].join(' · ')
   const selectedHost = selected?.url ? (() => {
     try { return new URL(selected.url).hostname.replace(/^www\./, '') } catch { return selected.url }
   })() : ''
@@ -98,12 +104,24 @@ export default function ObsidianGraphView({ onNavigate }: Props) {
   useEffect(() => { modeRef.current = mode }, [mode])
 
   const load = useCallback(async () => {
-    setLoading(true)
     const n = await fetchMarkdownNotes()
-    setNotes(n)
+    // Same set as before → keep the old array so the simulation isn't rebuilt
+    // (and every node re-scattered) just because the window regained focus.
+    setNotes(prev => prev.length === n.length && prev.every((p, i) => p.id === n[i].id && p.title === n[i].title) ? prev : n)
     setLoading(false)
   }, [])
-  useEffect(() => { load() }, [load])
+  // Pages are clipped from other tabs (right-click → Save Page to Obsidian)
+  // and vault notes change in Obsidian itself, so re-read on focus.
+  useEffect(() => {
+    load()
+    const onFocus = () => { void load() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [load])
 
   // Live theme switching, same bridge BookmarkSphere uses.
   useEffect(() => {
@@ -113,53 +131,7 @@ export default function ObsidianGraphView({ onNavigate }: Props) {
     return () => obs.disconnect()
   }, [])
 
-  const graphData = useMemo(() => {
-    const counts: Record<string, number> = {}
-    const links: GraphLink[] = []
-    const seen = new Set<string>()
-    const addLink = (a: MarkdownNote, b: MarkdownNote, strength: number) => {
-      const key = [a.id, b.id].sort().join('|')
-      if (seen.has(key)) return
-      seen.add(key)
-      links.push({ source: a.id, target: b.id, strength })
-      counts[a.id] = (counts[a.id] ?? 0) + 1
-      counts[b.id] = (counts[b.id] ?? 0) + 1
-    }
-    // Category star-clusters, same shape as BookmarkSphere.
-    const byCat = new Map<string, MarkdownNote[]>()
-    for (const n of notes) {
-      const cat = n.category || 'General'
-      if (!byCat.has(cat)) byCat.set(cat, [])
-      byCat.get(cat)!.push(n)
-    }
-    const anchors: MarkdownNote[] = []
-    for (const members of byCat.values()) {
-      anchors.push(members[0])
-      for (let i = 1; i < members.length; i++) addLink(members[0], members[i], 0.5)
-    }
-    if (anchors.length > 1) for (let i = 0; i < anchors.length; i++) addLink(anchors[i], anchors[(i + 1) % anchors.length], 0.15)
-    // Shared-tag cross-links — the AI-detected entities/concepts become the
-    // relational connection points the feature asked for.
-    const byTag = new Map<string, MarkdownNote[]>()
-    for (const n of notes) for (const t of n.tags) {
-      if (!byTag.has(t)) byTag.set(t, [])
-      byTag.get(t)!.push(n)
-    }
-    for (const members of byTag.values()) {
-      if (members.length < 2) continue
-      for (let i = 1; i < Math.min(members.length, 6); i++) addLink(members[0], members[i], 0.3)
-    }
-    const maxConn = Math.max(1, ...Object.values(counts))
-    const nodes: GraphNode[] = notes.map(n => {
-      const conn = counts[n.id] ?? 0
-      return {
-        id: n.id, title: n.title, url: n.url, category: n.category,
-        color: '', size: 18 + (conn / maxConn) * 34, connections: conn,
-        tags: n.tags, createdAt: n.createdAt,
-      }
-    })
-    return { nodes, links }
-  }, [notes])
+  const graphData = useMemo(() => buildMarkdownGraph(notes), [notes])
 
   // Give every saved page a stable color independent of its category.
   const coloredNodes = useMemo(() => {
@@ -409,7 +381,7 @@ export default function ObsidianGraphView({ onNavigate }: Props) {
     setContent(null)
     setContentLoading(true)
     const raw = await getMarkdownNote(node.id)
-    setContent(raw ? raw.replace(/^---\n[\s\S]*?\n---\n*/, '') : '*Could not load this note.*')
+    setContent(raw ? raw.replace(/^﻿?---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n)*/, '') : '*Could not load this note.*')
     setContentLoading(false)
   }
 
@@ -438,7 +410,7 @@ export default function ObsidianGraphView({ onNavigate }: Props) {
           <div>
             <div className="text-sm font-bold" style={{ color: 'rgb(var(--ds-text-1))' }}>Knowledge Graph</div>
             <div className="text-[11px]" style={{ color: 'rgb(var(--ds-text-4))' }}>
-              {notes.length} clipped {notes.length === 1 ? 'page' : 'pages'}
+              {noteSummary}
             </div>
           </div>
         </div>
@@ -513,12 +485,18 @@ export default function ObsidianGraphView({ onNavigate }: Props) {
         )}
 
         {!loading && notes.length === 0 && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none px-6 text-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
             <Orbit size={28} style={{ color: 'rgb(var(--ds-text-4))' }} />
-            <div className="text-sm font-semibold" style={{ color: 'rgb(var(--ds-text-2))' }}>No clipped pages yet</div>
-            <div className="text-[12px] max-w-xs" style={{ color: 'rgb(var(--ds-text-4))' }}>
-              Use the clip button (scissors icon) in the address bar to save any page here as Markdown.
+            <div className="text-sm font-semibold" style={{ color: 'rgb(var(--ds-text-2))' }}>Your knowledge graph is empty</div>
+            <div className="text-[12px] max-w-sm" style={{ color: 'rgb(var(--ds-text-4))' }}>
+              Right-click any web page and choose <b>Save Page to Obsidian</b> — it becomes a Markdown note here.
+              Already use Obsidian? Connect your vault and its notes appear as nodes.
             </div>
+            <button onClick={() => onNavigate('aihub://settings')}
+              className="mt-1 flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold"
+              style={{ background: 'rgb(var(--ds-accent) / 0.18)', color: 'rgb(var(--ds-accent-soft))', border: '1px solid rgb(var(--ds-accent) / 0.3)' }}>
+              Connect Obsidian vault
+            </button>
           </div>
         )}
 
@@ -585,11 +563,14 @@ export default function ObsidianGraphView({ onNavigate }: Props) {
                   <ExternalLink size={13} /> Open source
                 </button>
               )}
-              <button onClick={() => removeNote(selected)} disabled={deleting}
-                className="flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold"
-                style={{ background: 'rgba(239,68,68,0.14)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
-                {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Delete
-              </button>
+              {/* Vault notes belong to the user's Obsidian — read-only here. */}
+              {selected.origin !== 'vault' && (
+                <button onClick={() => removeNote(selected)} disabled={deleting}
+                  className="flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold"
+                  style={{ background: 'rgba(239,68,68,0.14)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
+                  {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Delete
+                </button>
+              )}
             </div>
           </section>
         )}

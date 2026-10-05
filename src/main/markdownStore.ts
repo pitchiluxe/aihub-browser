@@ -1,5 +1,5 @@
 import fs from 'fs'
-import { join } from 'path'
+import { join, resolve, relative, isAbsolute } from 'path'
 
 /** App data directory (same as data.json, history.json, etc.) */
 const APP_DIR = join(process.env.HOME || process.env.USERPROFILE || '', '.aihub-browser')
@@ -113,210 +113,238 @@ export async function saveMarkdown(note: MarkdownNote): Promise<string> {
   }
 }
 
-/** List all saved markdown files. Returns array of { id, filePath, title, url, category, tags, createdAt } */
-export function listMarkdown(): Array<{
+// ── Reading notes back ─────────────────────────────────────────────────────
+// The graph shows two sources: pages clipped by the browser (MARKDOWN_DIR,
+// always present) and — when the user has pointed Settings at one — their
+// Obsidian vault. The vault is what makes the graph useful on a second
+// computer: the clip folder is per-machine and starts empty, the vault is
+// the knowledge the user already has (and often syncs between machines).
+
+/** Where a listed note lives. Vault notes are read-only to the browser. */
+export type NoteOrigin = 'clip' | 'vault'
+
+export interface ListedNote {
+  /** Clip: file stem (stable, matches older builds). Vault: `vault:<relative/path.md>`. */
   id: string
   filePath: string
   title: string
   url: string
   category: string
   tags: string[]
+  /** Lower-cased [[wikilink]] targets (basename, no alias/heading). */
+  links: string[]
   createdAt: number
-}> {
-  ensureDir()
-
-  if (!fs.existsSync(MARKDOWN_DIR)) return []
-
-  const files = fs.readdirSync(MARKDOWN_DIR).filter(f => f.endsWith('.md'))
-  const results: Array<{
-    id: string
-    filePath: string
-    title: string
-    url: string
-    category: string
-    tags: string[]
-    createdAt: number
-  }> = []
-
-  for (const file of files) {
-    const filePath = join(MARKDOWN_DIR, file)
-    try {
-      const content = fs.readFileSync(filePath, 'utf-8')
-      const frontmatch = content.match(/^---\n([\s\S]*?)\n---$/m)
-      let title = 'Untitled'
-      let url = ''
-      let category = 'General'
-      let tags: string[] = []
-      let createdAt = Date.now()
-
-      if (frontmatch) {
-        const fmText = frontmatch[1]
-        const fmParts = fmText.split('\n')
-        for (const line of fmParts) {
-          const ml = line.trim()
-          if (ml.startsWith('title:')) {
-            const val = ml.slice('title:'.length).trim()
-            title = val.replace(/^"|"$/g, '').trim()
-          } else if (ml.startsWith('url:')) {
-            const val = ml.slice('url:'.length).trim()
-            url = val.replace(/^"|"$/g, '').trim()
-          } else if (ml.startsWith('category:')) {
-            const val = ml.slice('category:'.length).trim()
-            category = val.replace(/^"|"$/g, '').trim()
-          } else if (ml.startsWith('tags:')) {
-            // Parse tags: yamlValue or simple comma-separated
-            const after = ml.slice('tags:'.length).trim()
-            if (after.startsWith('[')) {
-              // JSON array
-              try {
-                tags = JSON.parse(after)
-              } catch {}
-            } else {
-              // Comma-separated
-              tags = after.split(',').map(t => t.trim()).filter(t => t.length > 0)
-            }
-          } else if (ml.startsWith('created:')) {
-            const val = ml.slice('created:'.length).trim()
-            createdAt = new Date(val).getTime()
-          }
-        }
-      }
-
-      // Extract title from first H1 if frontmatter title is empty
-      if (title === 'Untitled') {
-        const h1match = content.match(/^#\s+(.+)$/m)
-        if (h1match) title = h1match[1].trim()
-      }
-
-      results.push({
-        id: file.replace('.md', ''),
-        filePath,
-        title,
-        url,
-        category,
-        tags,
-        createdAt,
-      })
-    } catch {
-      // Skip corrupt files
-    }
-  }
-
-  // Sort newest first
-  results.sort((a, b) => b.createdAt - a.createdAt)
-  return results
+  origin: NoteOrigin
 }
 
-/** Get a specific markdown file by ID. Returns the markdown content or null. */
-export function getMarkdown(id: string): string | null {
-  ensureDir()
+const VAULT_PREFIX = 'vault:'
+/** Bounds on a vault walk — a huge vault must not stall the main process. */
+const VAULT_MAX_FILES = 2000
+const VAULT_MAX_DEPTH = 8
+const VAULT_MAX_FILE_BYTES = 2 * 1024 * 1024
+/**
+ * Tags the browser stamps on every note it writes (see obsidian.ts buildNote).
+ * Linking on them would join every note to every other into one big star.
+ */
+const GENERIC_TAGS = new Set(['aihub', 'clip', 'bookmark', 'conversation', 'answer', 'highlight'])
 
-  // id corresponds to the filename without .md extension
-  const filePath = join(MARKDOWN_DIR, `${id}.md`)
+const FRONTMATTER = /^﻿?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/
+
+function unquote(value: string): string {
+  const v = value.trim()
+  if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) return v.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+  if (v.length >= 2 && v.startsWith("'") && v.endsWith("'")) return v.slice(1, -1).replace(/''/g, "'")
+  return v
+}
+
+/** Minimal YAML reader for the flat frontmatter notes actually use: scalars, inline [a, b] and block `- item` lists. */
+function parseFrontmatter(text: string): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {}
+  let listKey = ''
+  for (const line of text.split(/\r?\n/)) {
+    const item = line.match(/^\s+-\s+(.*)$/) || (listKey ? line.match(/^-\s+(.*)$/) : null)
+    if (item && listKey) {
+      (out[listKey] as string[]).push(unquote(item[1]))
+      continue
+    }
+    const kv = line.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
+    if (!kv) { listKey = ''; continue }
+    const key = kv[1].toLowerCase()
+    const raw = kv[2].trim()
+    if (!raw) { out[key] = []; listKey = key; continue }
+    listKey = ''
+    out[key] = raw.startsWith('[') && raw.endsWith(']')
+      ? raw.slice(1, -1).split(',').map(unquote).filter(Boolean)
+      : unquote(raw)
+  }
+  return out
+}
+
+function asList(value: string | string[] | undefined): string[] {
+  if (Array.isArray(value)) return value
+  // Obsidian also accepts `tags: a, b` and `tags: a b`.
+  return value ? value.split(/[,\s]+/) : []
+}
+
+function asText(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? (value[0] || '') : (value || '')
+}
+
+function normalizeTag(tag: string): string {
+  return tag.trim().replace(/^#/, '').toLowerCase().replace(/\s+/g, '-')
+}
+
+/** Parse one note's metadata. Pure: no filesystem access. */
+export function parseNoteMeta(content: string, fileName: string, fallbackTime: number):
+  Pick<ListedNote, 'title' | 'url' | 'category' | 'tags' | 'links' | 'createdAt'> {
+  const fmMatch = content.match(FRONTMATTER)
+  const fm = fmMatch ? parseFrontmatter(fmMatch[1]) : {}
+  const body = fmMatch ? content.slice(fmMatch[0].length) : content
+
+  const stem = fileName.replace(/\.md$/i, '')
+  const title = asText(fm.title).trim() || body.match(/^#\s+(.+)$/m)?.[1].trim() || stem
+  const url = (asText(fm.url) || asText(fm.source)).trim()
+  const category = asText(fm.category).trim() || 'General'
+  const tags = Array.from(new Set(asList(fm.tags).map(normalizeTag)))
+    .filter(t => t && t.length <= 40 && !GENERIC_TAGS.has(t))
+
+  const stamp = Date.parse(asText(fm.created) || asText(fm.date))
+  const createdAt = Number.isFinite(stamp) ? stamp : fallbackTime
+
+  const links: string[] = []
+  for (const m of body.matchAll(/\[\[([^\]|#^]+)/g)) {
+    const target = m[1].trim().split('/').pop()!.replace(/\.md$/i, '').trim().toLowerCase()
+    if (target && !links.includes(target)) links.push(target)
+  }
+  return { title, url, category, tags, links, createdAt }
+}
+
+async function readNote(filePath: string, fileName: string, id: string, origin: NoteOrigin): Promise<ListedNote | null> {
   try {
-    if (!fs.existsSync(filePath)) return null
-    return fs.readFileSync(filePath, 'utf-8')
+    const stat = await fs.promises.stat(filePath)
+    if (!stat.isFile() || stat.size > VAULT_MAX_FILE_BYTES) return null
+    const content = await fs.promises.readFile(filePath, 'utf-8')
+    return { id, filePath, origin, ...parseNoteMeta(content, fileName, stat.mtimeMs) }
   } catch {
-    return null
+    return null // unreadable / vanished mid-scan — skip, never fail the list
   }
 }
 
-/** Delete a markdown file by ID. Returns true on success. */
-export function deleteMarkdown(id: string): boolean {
-  ensureDir()
+/** Every `.md` file in a vault, as forward-slash relative paths. Skips `.obsidian`, `.trash`, `.git`, … */
+async function walkVault(vaultPath: string): Promise<string[]> {
+  const found: string[] = []
+  const walk = async (dir: string, rel: string, depth: number): Promise<void> => {
+    if (depth > VAULT_MAX_DEPTH || found.length >= VAULT_MAX_FILES) return
+    let entries: fs.Dirent[]
+    try { entries = await fs.promises.readdir(dir, { withFileTypes: true }) } catch { return }
+    for (const entry of entries) {
+      if (found.length >= VAULT_MAX_FILES) return
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
+      const childRel = rel ? `${rel}/${entry.name}` : entry.name
+      if (entry.isDirectory()) await walk(join(dir, entry.name), childRel, depth + 1)
+      else if (entry.isFile() && /\.md$/i.test(entry.name)) found.push(childRel)
+    }
+  }
+  await walk(vaultPath, '', 0)
+  return found
+}
 
-  const filePath = join(MARKDOWN_DIR, `${id}.md`)
+/**
+ * All notes for the graph, newest first: browser clips plus (optionally) the
+ * Obsidian vault. A vault note whose url was also clipped is dropped — the
+ * browser writes every clip to both places when a vault is set.
+ */
+export async function listMarkdown(vaultPath?: string, clipDir = MARKDOWN_DIR): Promise<ListedNote[]> {
+  let clipFiles: string[] = []
+  try { clipFiles = (await fs.promises.readdir(clipDir)).filter(f => /\.md$/i.test(f)) } catch { /* no clips yet */ }
+  const clips = (await Promise.all(clipFiles.map(f =>
+    readNote(join(clipDir, f), f, f.replace(/\.md$/i, ''), 'clip')))).filter((n): n is ListedNote => !!n)
+
+  let vaultNotes: ListedNote[] = []
+  if (vaultPath) {
+    const clippedUrls = new Set(clips.map(n => urlKey(n.url)).filter(Boolean))
+    const rels = await walkVault(vaultPath)
+    vaultNotes = (await Promise.all(rels.map(rel =>
+      readNote(join(vaultPath, ...rel.split('/')), rel.split('/').pop()!, VAULT_PREFIX + rel, 'vault'))))
+      .filter((n): n is ListedNote => !!n && !(n.url && clippedUrls.has(urlKey(n.url))))
+  }
+
+  return [...clips, ...vaultNotes].sort((a, b) => b.createdAt - a.createdAt)
+}
+
+/**
+ * Map a renderer-supplied id to a file path, or null. Ids cross the IPC
+ * boundary, so they are treated as hostile: a clip id must be a bare file
+ * stem, a vault id must stay inside the vault and name a `.md` file.
+ */
+export function resolveNotePath(id: string, vaultPath?: string, clipDir = MARKDOWN_DIR): string | null {
+  const raw = String(id || '')
+  if (raw.startsWith(VAULT_PREFIX)) {
+    if (!vaultPath) return null
+    const rel = raw.slice(VAULT_PREFIX.length)
+    if (!/\.md$/i.test(rel) || isAbsolute(rel)) return null
+    const root = resolve(vaultPath)
+    const full = resolve(root, rel)
+    const inside = relative(root, full)
+    if (!inside || inside.startsWith('..') || isAbsolute(inside)) return null
+    return full
+  }
+  if (!raw || /[\\/:]/.test(raw) || raw.includes('..')) return null
+  return join(clipDir, `${raw}.md`)
+}
+
+/** A note's full markdown, or null. */
+export function getMarkdown(id: string, vaultPath?: string, clipDir = MARKDOWN_DIR): string | null {
+  const filePath = resolveNotePath(id, vaultPath, clipDir)
+  if (!filePath) return null
+  try { return fs.readFileSync(filePath, 'utf-8') } catch { return null }
+}
+
+/**
+ * Delete a clip. Vault notes are refused: the vault belongs to the user's
+ * Obsidian, and a browser graph view is not the place to destroy it.
+ */
+export function deleteMarkdown(id: string, clipDir = MARKDOWN_DIR): boolean {
+  if (String(id || '').startsWith(VAULT_PREFIX)) return false
+  const filePath = resolveNotePath(id, undefined, clipDir)
+  if (!filePath) return false
   try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath)
-      return true
-    }
-    return false
+    if (!fs.existsSync(filePath)) return false
+    fs.unlinkSync(filePath)
+    return true
   } catch {
     return false
   }
 }
 
-/** Prune old markdown files based on limits. Returns number of files deleted. */
-export function pruneMarkdown(maxPerFile = 3, maxTotalBytes = 500 * 1024 * 1024): number {
-  ensureDir()
-
-  const files = listMarkdown()
-  const byKey = new Map<string, { files: string[]; totalBytes: number }>()
-
-  // Group by urlKey (url normalized)
-  for (const file of files) {
-    // Parse the url from frontmatter or derive from file path
-    const content = fs.readFileSync(file.filePath, 'utf-8')
-    const fmMatch = content.match(/^---\n([\s\S]*?)\n---$/m)
-    let url = ''
-    if (fmMatch) {
-      const fmParts = fmMatch[1].split('\n')
-      for (const line of fmParts) {
-        if (line.startsWith('url:')) {
-          const val = line.slice('url:'.length).trim()
-          url = val.replace(/^"|"$/g, '').trim()
-          break
-        }
-      }
-    }
-    const key = urlKey(url)
-    if (!byKey.has(key)) byKey.set(key, { files: [], totalBytes: 0 })
-    byKey.get(key)!.files.push(file.filePath)
-  }
-
-  // Rule 1: No more than maxPerFile per URL
+/**
+ * Keep the clip folder bounded: at most `maxPerUrl` clips per page (newest
+ * kept), then oldest-first until under `maxTotalBytes`. Never touches the vault.
+ */
+export async function pruneMarkdown(maxPerUrl = 3, maxTotalBytes = 500 * 1024 * 1024): Promise<number> {
+  const clips = await listMarkdown() // newest first
   const doomed = new Set<string>()
-  for (const [_key, info] of byKey.entries()) {
-    if (info.files.length > maxPerFile) {
-      // Sort by createdAt descending, keep the newest maxPerFile
-      const sorted = info.files.map(f => {
-        const content = fs.readFileSync(f, 'utf-8')
-        const fmMatch = content.match(/^---\n([\s\S]*?)\n---$/m)
-        let createdAt = 0
-        if (fmMatch) {
-          const fmParts = fmMatch[1].split('\n')
-          for (const line of fmParts) {
-            if (line.startsWith('created:')) {
-              createdAt = new Date(line.slice('created:'.length).trim()).getTime()
-            }
-          }
-        }
-        return { file: f, createdAt }
-      })
-      sorted.sort((a, b) => b.createdAt - a.createdAt)
-      for (let i = maxPerFile; i < sorted.length; i++) {
-        doomed.add(sorted[i].file)
-      }
-    }
+  const perUrl = new Map<string, number>()
+  for (const note of clips) {
+    const key = urlKey(note.url)
+    if (!key) continue
+    const seen = (perUrl.get(key) ?? 0) + 1
+    perUrl.set(key, seen)
+    if (seen > maxPerUrl) doomed.add(note.filePath)
   }
 
-  // Rule 2: Total size under limit
-  const allSurvivors = files.filter(f => !doomed.has(f.filePath))
-  let totalBytes = allSurvivors.reduce((sum, f) => {
-    try { return sum + fs.statSync(f.filePath).size } catch { return sum }
-  }, 0)
-
-  for (const f of allSurvivors) {
-    if (totalBytes <= maxTotalBytes) break
-    doomed.add(f.filePath)
-    totalBytes -= fs.statSync(f.filePath).size || 0
+  const sizeOf = (p: string) => { try { return fs.statSync(p).size } catch { return 0 } }
+  const survivors = clips.filter(n => !doomed.has(n.filePath))
+  let total = survivors.reduce((sum, n) => sum + sizeOf(n.filePath), 0)
+  for (let i = survivors.length - 1; i >= 0 && total > maxTotalBytes; i--) {
+    total -= sizeOf(survivors[i].filePath)
+    doomed.add(survivors[i].filePath)
   }
 
-  // Delete doomed files
   let deleted = 0
-  for (const path of doomed) {
-    try {
-      if (fs.existsSync(path)) {
-        fs.unlinkSync(path)
-        deleted++
-      }
-    } catch {}
+  for (const filePath of doomed) {
+    try { fs.unlinkSync(filePath); deleted++ } catch { /* already gone */ }
   }
-
-  // Rebuild the store file (remove entries for deleted files)
-  // The store is in-memory in the main process; just prune the directory
-
   return deleted
 }
 
@@ -326,32 +354,4 @@ function urlKey(url: string): string {
   if (!raw) return ''
   const withoutHash = raw.split('#')[0]
   return withoutHash.replace(/\/+$/, '').toLowerCase()
-}
-
-/** Extract tags from markdown frontmatter tags field */
-export function extractTags(frontmatterText: string): string[] {
-  const tagsMatch = frontmatterText.match(/^tags:\s*(.+)$/m)
-  if (!tagsMatch) return []
-
-  const after = tagsMatch[1].trim()
-  if (after.startsWith('[')) {
-    try {
-      return JSON.parse(after).map((t: string) => String(t).trim()).filter(Boolean)
-    } catch {}
-  }
-  return after.split(',').map(t => t.trim()).filter(t => t.length > 0 && t.length < 30)
-}
-
-/** Extract category from frontmatter */
-export function extractCategory(frontmatterText: string): string {
-  const catMatch = frontmatterText.match(/^category:\s*(.+)$/m)
-  return catMatch ? catMatch[1].trim() : 'General'
-}
-
-/** Extract title from frontmatter */
-export function extractTitle(frontmatterText: string): string {
-  const titleMatch = frontmatterText.match(/^title:\s*(.+)$/m)
-  if (!titleMatch) return 'Untitled'
-  const val = titleMatch[1].trim()
-  return val.replace(/^"|"$/g, '').trim()
 }
