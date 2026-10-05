@@ -1,4 +1,4 @@
-import { app, BrowserWindow, BrowserView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, desktopCapturer, safeStorage, webContents as electronWebContents } from 'electron'
+import { app, BrowserWindow, WebContentsView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, desktopCapturer, safeStorage, webContents as electronWebContents } from 'electron'
 import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname, basename } from 'path'
 import zlib from 'zlib'
 import http from 'http'
@@ -663,7 +663,7 @@ interface AppWin {
    */
   incognito: boolean
   /** Tab content views owned by THIS window, keyed by renderer tabId */
-  views: Map<string, BrowserView>
+  views: Map<string, WebContentsView>
   activeId: string | null
   bounds: { x: number; y: number; width: number; height: number }
   /** True while a host HTML overlay (a modal) must paint above tab content */
@@ -1363,11 +1363,11 @@ async function savePageAs(wc: Electron.WebContents) {
   } catch {}
 }
 
-// ── Tab content views (BrowserView) ────────────────────────────────────────
-// Electron 28 predates WebContentsView (needs v30+). BrowserView gives the
-// identical fix for the <webview> guest-viewport desync bug: the main process
-// owns sizing directly via setBounds(), so there's no GuestViewContainer
-// ResizeObserver/FrameMsg_Resize round-trip for window.innerHeight to lose sync with.
+// ── Tab content views (WebContentsView) ────────────────────────────────────
+// Each tab is a WebContentsView child of the window's contentView (the
+// replacement for BrowserView, which Electron 35+ removes). The main process
+// owns sizing directly via setBounds(), so there's no <webview>
+// GuestViewContainer resize round-trip for window.innerHeight to lose sync with.
 function sendTabEvent(ctx: AppWin | undefined, tabId: string, type: string, payload?: any) {
   sendTo(ctx, 'tabview:event', tabId, type, payload)
 }
@@ -1376,6 +1376,12 @@ function sendTabEvent(ctx: AppWin | undefined, tabId: string, type: string, payl
 // z-index control from the renderer side. Overlays that must appear above tab
 // content (e.g. AddBookmarkModal) call tabview:setOverlayHidden(true) to detach
 // the view instead.
+/** This window's tab views currently attached — contentView may hold other children. */
+function attachedViews(ctx: AppWin): WebContentsView[] {
+  const ours = new Set<unknown>(ctx.views.values())
+  return ctx.win.contentView.children.filter(child => ours.has(child)) as WebContentsView[]
+}
+
 function syncActiveBrowserView(ctx: AppWin | undefined) {
   if (!ctx || ctx.win.isDestroyed()) return
   const hidden = ctx.overlayHidden
@@ -1389,15 +1395,15 @@ function syncActiveBrowserView(ctx: AppWin | undefined) {
   // Detach any view that should no longer be on screen. Electron keeps every
   // added BrowserView attached until told otherwise, so a stale split partner
   // would keep painting over the window after the split ended.
-  for (const attached of ctx.win.getBrowserViews()) {
+  for (const attached of attachedViews(ctx)) {
     if (attached !== primary && attached !== secondary) {
-      try { ctx.win.removeBrowserView(attached) } catch {}
+      try { ctx.win.contentView.removeChildView(attached) } catch {}
     }
   }
 
   if (!primary) return
 
-  const nudge = (view: BrowserView) => {
+  const nudge = (view: WebContentsView) => {
     // A view that was detached is treated as hidden by Chromium; on re-attach
     // it can show a blank or stale frame until something forces a paint.
     const wc = view.webContents
@@ -1407,10 +1413,10 @@ function syncActiveBrowserView(ctx: AppWin | undefined) {
     }
   }
 
-  const alreadyAttached = new Set(ctx.win.getBrowserViews())
-  const place = (view: BrowserView, bounds: { x: number; y: number; width: number; height: number }) => {
+  const alreadyAttached = new Set(attachedViews(ctx))
+  const place = (view: WebContentsView, bounds: { x: number; y: number; width: number; height: number }) => {
     const reattaching = !alreadyAttached.has(view)
-    if (reattaching) { try { ctx.win.addBrowserView(view) } catch {} }
+    if (reattaching) { try { ctx.win.contentView.addChildView(view) } catch {} }
     const next = {
       x: Math.round(bounds.x), y: Math.round(bounds.y),
       width: Math.max(0, Math.round(bounds.width)), height: Math.max(0, Math.round(bounds.height)),
@@ -1485,7 +1491,7 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   // renderer passed, its tabs run in the window's in-memory private session.
   const partition = ctx.incognito ? privateSessionFor(ctx).partition : partitionFor(containerId)
   configureContentSession(session.fromPartition(partition))
-  const view = new BrowserView({
+  const view = new WebContentsView({
     webPreferences: {
       partition,
       contextIsolation: true,
@@ -1706,7 +1712,7 @@ function destroyTabView(ctx: AppWin | undefined, tabId: string) {
   const view = ctx.views.get(tabId)
   if (!view) return
   if (ctx.activeId === tabId) { ctx.activeId = null; syncActiveBrowserView(ctx) }
-  try { if (!ctx.win.isDestroyed()) ctx.win.removeBrowserView(view) } catch {}
+  try { if (!ctx.win.isDestroyed()) ctx.win.contentView.removeChildView(view) } catch {}
   try { pageHostByWc.delete(view.webContents.id) } catch {}
   try { view.webContents.close() } catch {}
   ctx.views.delete(tabId)
@@ -3064,7 +3070,7 @@ ipcMain.handle('tabview:getLayout', (e) => {
     ratio: ctx.splitRatio,
     content: ctx.bounds,
     window: windowSize,
-    attached: ctx.win.getBrowserViews().length,
+    attached: attachedViews(ctx).length,
     primary: boundsOf(ctx.activeId),
     secondary: boundsOf(ctx.splitId),
   }

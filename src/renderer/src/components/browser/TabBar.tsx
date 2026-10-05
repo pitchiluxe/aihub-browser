@@ -305,6 +305,8 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
 
       {/* Close */}
       <button
+        aria-label={`Close tab: ${tab.title || 'New tab'}`}
+        title="Close tab (Ctrl+W)"
         onClick={e => { e.stopPropagation(); onClose() }}
         className="shrink-0 flex items-center justify-center rounded-md no-drag"
         style={{
