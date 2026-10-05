@@ -1991,7 +1991,7 @@ function createAppWindow(initialUrl?: string, opts: { incognito?: boolean } = {}
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false, webviewTag: false,
-      nodeIntegration: false, contextIsolation: true, webSecurity: false,
+      nodeIntegration: false, contextIsolation: true, webSecurity: true,
       // Presentation hint for the renderer only (see INCOGNITO_WINDOW_ARG).
       ...(isIncognito ? { additionalArguments: [INCOGNITO_WINDOW_ARG] } : {}),
     }
