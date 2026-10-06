@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Sparkles, LayoutGrid, Network, RefreshCw, Zap, Clock, X,
   ChevronLeft, ChevronRight, Download, Upload, Eye, EyeOff,
-  FlaskConical, Bot, Newspaper, Search,
+  FlaskConical, Bot, Newspaper, Search, Disc3,
 } from 'lucide-react'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { useBrowserStore } from '../../store/browserStore'
@@ -249,6 +249,8 @@ export default function HomePage({ onNavigate }: Props) {
             onFocus={() => { void loadBookmarkSphere() }} />
           <FeaturePill icon={<Search size={13} />} label="History Search" color="#c084fc"
             onClick={() => onNavigate('aihub://history')} />
+          <FeaturePill icon={<Disc3 size={13} />} label="AIHub DJ" color="#f43f5e"
+            onClick={() => onNavigate('aihub://dj')} />
         </motion.div>
 
         {/* ── Focus session — sits under the shortcut pills ── */}

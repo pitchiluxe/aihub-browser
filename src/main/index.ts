@@ -12,6 +12,7 @@ import { recordVisit, generateRecommendations, saveRecommendations, getStoredRec
 import { registerGoogleIpc } from './google'
 import { registerCommunityIpc, releaseCommunityWindow, shutdownCommunityBackend } from './community'
 import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
+import { registerMediaScheme, registerMediaProtocol, registerDjIpc } from './dj/library'
 import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt } from './modelRouting'
@@ -95,6 +96,8 @@ app.setPath('userData', APP_DIR)
 // afterwards, and without the privilege Chromium treats every attachment URL
 // as an opaque origin and refuses to render it in an <img>.
 registerAttachmentScheme()
+// AIHub DJ streams local audio over aihub-media:// (token-gated, range-capable).
+registerMediaScheme()
 
 // Point GPU and disk caches to our writable directory so Chromium
 // doesn't fight over temp paths that other processes may have locked.
@@ -2262,6 +2265,8 @@ app.whenReady().then(() => {
   // Off the startup path: launching the window never waits on Ollama.
   setTimeout(() => { void autoStartOllama() }, 1500)
   registerAttachmentProtocol()
+  registerMediaProtocol()
+  registerDjIpc()
   registerScreenShareHandler()
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
   if (isDev) {
@@ -4699,6 +4704,30 @@ ipcMain.handle('gospel:search', async (_e, query?: string) => {
     return { ok: true, query: q, videos, cached: false }
   } catch (e: any) {
     return { ok: false, query: q, videos: [], error: e?.message || 'network' }
+  }
+})
+
+// -- AIHub DJ: YouTube search ---------------------------------------------------
+// Same key-less search page read as the Gospel room, any query. Only public,
+// embeddable videos are played, in YouTube's own embedded player.
+const djYtCache = new Map<string, { at: number; videos: YouTubeVideo[] }>()
+
+ipcMain.handle('dj:youtubeSearch', async (_e, query: string, limit = 20) => {
+  const q = typeof query === 'string' ? query.trim().slice(0, 200) : ''
+  if (!q) return { ok: false, videos: [], error: 'empty' }
+  const n = Math.max(1, Math.min(40, Number(limit) || 20))
+  const cached = djYtCache.get(q)
+  if (cached && Date.now() - cached.at < GOSPEL_TTL_MS) return { ok: true, videos: cached.videos.slice(0, n) }
+  try {
+    const { status, body } = await withNetRetry(() => httpGet(searchUrl(q), 12000), 2, 600)
+    if (status !== 200) return { ok: false, videos: [], error: `HTTP ${status}` }
+    const videos = parseSearchResults(body, 40)
+    if (!videos.length) return { ok: false, videos: [], error: 'no-results' }
+    if (djYtCache.size > 200) djYtCache.clear()
+    djYtCache.set(q, { at: Date.now(), videos })
+    return { ok: true, videos: videos.slice(0, n) }
+  } catch (e: any) {
+    return { ok: false, videos: [], error: e?.message || 'network' }
   }
 })
 

@@ -281,6 +281,8 @@
       <a href="#command">Command palette</a>
       <a href="#rewind">Rewind</a>
       <a href="#watch">Watch &amp; Ping</a>
+      <div class="rail-grp">New in 1.69</div>
+      <a href="#dj">AIHub DJ</a>
       <div class="rail-grp">New in 1.61</div>
       <a href="#reading-mode">AI Reading Mode</a>
       <a href="#semantic-history">Semantic History Search</a>
@@ -841,6 +843,49 @@
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <!-- ══ NEW IN 1.69 ══════════════════════════════════════════════════════ -->
+
+      <section id="dj">
+        <div class="sec-head"><span class="node" style="background:var(--rose)"></span><h2>AIHub DJ <span class="pill new">new</span></h2><span class="sec-line"></span></div>
+        <p class="sec-sub">A two-deck DJ console built into the browser — your own music, YouTube, and an AI DJ that runs on your local Ollama model.</p>
+        <div class="body-col">
+          <p>Open it from the red <strong>AIHub DJ</strong> button on the homepage, by typing <code>aihub://dj</code> in the address bar, or by searching "dj" in the command palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>). The console keeps playing while you browse in other tabs.</p>
+
+          <h3 style="margin-top:24px">Play your first song</h3>
+          <ol class="steps">
+            <li><div><strong>Find your music.</strong> The browser along the bottom opens your <em>Music</em> folder. The tree on the left reaches Desktop, Downloads, every drive, and any folder you add under <em>My Folders</em>. Type in the search box to filter; press <kbd>Enter</kbd> to search every sub-folder too.</div></li>
+            <li><div><strong>Load a deck.</strong> Drag a song onto a deck — the record, the turntable, or the title strip all accept it and glow green. You can also double-click a song, press <em>A</em> / <em>B</em> on its row, or drag an audio file straight from Windows Explorer or the desktop.</div></li>
+            <li><div><strong>Press play.</strong> The big green ▶ starts the deck; the record spins and the tonearm drops. <strong>CUE</strong> (orange) sets a cue point while stopped and jumps back to it while playing.</div></li>
+            <li><div><strong>Mix.</strong> Load the other deck, press <strong>SYNC</strong> to match its tempo and beats, and slide the crossfader across.</div></li>
+          </ol>
+
+          <h3 style="margin-top:28px">What the console does</h3>
+          <div class="grid g2" style="margin-top:12px">
+            <div class="feat"><h4><span class="dot" style="background:var(--rose)"></span>Turntables</h4><p>Hold the record to stop and scratch; drag its outer rim while playing to nudge the tempo. Pitch fader with 8 / 12 / 16 / 50 % ranges and key lock.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Waveforms &amp; BPM</h4><p>Each song is analysed when it loads: tempo, beat grid, a full-track waveform (click to jump) and a scrolling view of both decks for beat-matching by eye.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Mixer</h4><p>Gain, 3-band EQ (fully left kills the band), channel faders with level meters, master volume and a constant-power crossfader.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Stems</h4><p>Mute Vocal, Instru, Bass, Kick or HiHat, or jump to (Acapella) / (Instrumental). Separation works on frequency bands and centre-panned vocals, so it is a fast approximation rather than studio isolation.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Effects, loops &amp; cues</h4><p>Flanger, Echo (beat-synced), Filter, Reverb and Phaser with strength and speed knobs; a quick filter knob; beat-sized auto loops with /2 and X2; three hot cues (right-click to clear).</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--rose)"></span>Record &amp; headphones</h4><p><strong>REC</strong> records your mix and saves it as a <code>.webm</code> file. The 🎧 button sends pre-listen to a second sound card or headset.</p></div>
+          </div>
+
+          <h3 style="margin-top:28px">YouTube</h3>
+          <p>Pick <em>YouTube</em> under <em>Online</em> in the browser, search for an artist, song or mix, and drag a result onto a deck. YouTube songs play in YouTube's own embedded player, so play, cue, seek, loops, volume, the crossfader and Automix all work. EQ, effects, stems and waveforms only apply to your local files, and tempo changes snap to YouTube's speed steps.</p>
+
+          <h3 style="margin-top:28px">AI DJ</h3>
+          <p>Open the <strong>AI DJ</strong> tab on the right of the browser and describe a vibe — "sunset afro-house for a rooftop party" — or tap a suggestion.</p>
+          <ul>
+            <li><strong>Build set</strong> asks your AI model (local Ollama by default) to pick and order songs, finds each one on YouTube, and adds them to the Sidelist.</li>
+            <li><strong>AI DJ</strong> builds the set and turns on <strong>Automix</strong>, which loads the next song, matches its tempo when it can, and crossfades it in.</li>
+            <li><strong>Keep it going</strong> adds more songs, continuing from the last one, whenever the Sidelist runs low.</li>
+          </ul>
+          <div class="note">The AI only names songs. Every track it plays is a real YouTube search result — if a pick can't be found it is skipped and listed in the AI DJ log.</div>
+
+          <h3 style="margin-top:28px">Make it yours</h3>
+          <p>The palette button in the console's top bar switches between eight skins — Silver, Midnight, Neon Club, Gold, Ocean, Ruby, Forest and Arctic. The <strong>− / +</strong> control sets the console size; it always fits the tab without scrolling. Both are remembered.</p>
         </div>
       </section>
 

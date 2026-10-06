@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // 'darwin' | 'win32' | 'linux' — lets the renderer adapt chrome layout
@@ -154,6 +154,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     add:    (name: string, color: string) => ipcRenderer.invoke('containers:add', name, color),
     remove: (id: string) => ipcRenderer.invoke('containers:remove', id),
     clear:  (id: string) => ipcRenderer.invoke('containers:clear', id),
+  },
+  // AIHub DJ — local music library. Audio is served as aihub-media://<token>.
+  dj: {
+    roots:         () => ipcRenderer.invoke('dj:roots'),
+    list:          (dir: string) => ipcRenderer.invoke('dj:list', dir),
+    search:        (dir: string, query: string) => ipcRenderer.invoke('dj:search', dir, query),
+    meta:          (token: string) => ipcRenderer.invoke('dj:meta', token),
+    pickFolder:    () => ipcRenderer.invoke('dj:pickFolder'),
+    saveRecording: (data: ArrayBuffer, ext: string) => ipcRenderer.invoke('dj:saveRecording', data, ext),
+    youtubeSearch: (query: string, limit?: number) => ipcRenderer.invoke('dj:youtubeSearch', query, limit),
+    // Audio files dropped from the desktop: File.path is gone in modern Electron.
+    pathForFile:   (file: File) => { try { return webUtils.getPathForFile(file) } catch { return '' } },
+    registerFile:  (path: string) => ipcRenderer.invoke('dj:registerFile', path),
   },
   obsidian: {
     status:      () => ipcRenderer.invoke('obsidian:status'),

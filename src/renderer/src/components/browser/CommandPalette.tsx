@@ -5,7 +5,7 @@ import {
   Home, FlaskConical, Sparkles, StickyNote, History, Download, Puzzle, Wifi,
   Shield, Mail, BookOpen, Settings, Globe, ArrowRight, CornerDownLeft, GitCompare, BellRing,
   Smartphone, Laptop, BookMarked, Layers, Columns2, PictureInPicture2, Camera, CopyMinus,
-  GraduationCap, Archive, Brain, Table, Receipt, Sunrise, Flame, VenetianMask, X,
+  GraduationCap, Archive, Brain, Table, Receipt, Sunrise, Flame, VenetianMask, X, Disc3,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
@@ -97,7 +97,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
     rewind: <History size={15} />, watch: <BellRing size={15} />, history: <History size={15} />, downloads: <Download size={15} />, extensions: <Puzzle size={15} />,
     wifi: <Wifi size={15} />, vpn: <Shield size={15} />, mail: <Mail size={15} />,
     manual: <BookOpen size={15} />, settings: <Settings size={15} />,
-    bible: <BookMarked size={15} />, study: <GraduationCap size={15} />,
+    bible: <BookMarked size={15} />, study: <GraduationCap size={15} />, dj: <Disc3 size={15} />,
     vault: <Archive size={15} />, recall: <Brain size={15} />, ledger: <Receipt size={15} />, brief: <Sunrise size={15} />,
   }
 
@@ -190,6 +190,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       ['ledger', 'Ledger — what you spent, from your receipts'],
       ['brief', 'Morning Brief — what happened while you were away'],
       ['extensions', 'Extensions'], ['wifi', 'Free WiFi'], ['vpn', 'VPN / Proxy'], ['mail', 'Mail'],
+      ['dj', 'AIHub DJ — mix and play your music'],
       ['manual', 'User Manual'], ['settings', 'Settings'],
     ]
     out.push({ id: 'go-home', label: 'Home', group: 'Go to', icon: <Home size={15} />, run: () => { addTab('home', 'browser'); close() }, keywords: 'start new tab' })

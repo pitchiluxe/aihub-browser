@@ -23,7 +23,7 @@ export interface NavTarget {
 // nothing at all.
 const IN_APP_PAGES = [
   'settings', 'history', 'downloads', 'wifi', 'vpn', 'research', 'agents',
-  'extensions', 'mail', 'notes', 'obsidian-graph', 'manual', 'rewind', 'watch', 'bible', 'study',
+  'extensions', 'mail', 'notes', 'obsidian-graph', 'manual', 'rewind', 'watch', 'bible', 'study', 'dj',
 ] as const
 
 export function pageTypeForUrl(url: string | undefined): PageType {
@@ -51,6 +51,7 @@ const BUILT_IN_APPS: { pageType: PageType; title: string; aliases: string[] }[] 
   { pageType: 'manual',     title: 'Manual',     aliases: ['manual', 'user manual', 'help', 'docs'] },
   { pageType: 'wifi',       title: 'Free WiFi',  aliases: ['wifi', 'wi-fi', 'free wifi'] },
   { pageType: 'vpn',        title: 'VPN',        aliases: ['vpn', 'proxy'] },
+  { pageType: 'dj',         title: 'AIHub DJ',   aliases: ['dj', 'aihub dj', 'dj mixer', 'mixer', 'dj software', 'turntables', 'virtual dj'] },
 ]
 
 // Last-resort destinations so a site the user never bookmarked (or has since

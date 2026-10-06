@@ -192,7 +192,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     const id = `tab-${++tabN}`
     const isHome = url === 'home' && pageType === 'browser'
     set(s => ({
-      tabs: [...s.tabs, { id, url, title: isHome ? 'New Tab' : pageType !== 'browser' ? pageType.charAt(0).toUpperCase() + pageType.slice(1) : url, favicon: '', isLoading: false, isHome, pageType, containerId }],
+      tabs: [...s.tabs, { id, url, title: isHome ? 'New Tab' : pageType === 'dj' ? 'AIHub DJ' : pageType !== 'browser' ? pageType.charAt(0).toUpperCase() + pageType.slice(1) : url, favicon: '', isLoading: false, isHome, pageType, containerId }],
       activeTabId: id,
       canGoBack: false,
       canGoForward: false,
