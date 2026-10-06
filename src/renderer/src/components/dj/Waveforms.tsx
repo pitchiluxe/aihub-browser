@@ -62,9 +62,11 @@ export function OverviewWave({ deck, height = 34 }: { deck: Deck; height?: numbe
         ctx.fillStyle = '#fff'
         ctx.fillRect((deck.time / dur) * w - 1, 0, 2, h)
       }
-      ctx.fillStyle = 'rgba(255,255,255,0.55)'
-      ctx.font = 'bold 11px Inter, Arial'
-      ctx.fillText(dur ? 'YOUTUBE STREAM' : 'Loading from YouTube…', 4, 9)
+      if (h >= 16) {
+        ctx.fillStyle = 'rgba(255,255,255,0.55)'
+        ctx.font = 'bold 11px Inter, Arial'
+        ctx.fillText(dur ? 'YOUTUBE STREAM' : 'Loading from YouTube…', 4, 9)
+      }
       return
     }
     if (!env || !dur) {
@@ -145,7 +147,12 @@ export function OverviewWave({ deck, height = 34 }: { deck: Deck; height?: numbe
 /** Seconds of real time visible across the zoomed view. */
 const ZOOM_SECONDS = 12
 
-export function ZoomWave({ decks }: { decks: Deck[] }) {
+export function ZoomWave({ decks, compact = false, seconds = ZOOM_SECONDS }: {
+  decks: Deck[]
+  /** One deck inside its track strip: no lane letter, YouTube note instead of a blank lane. */
+  compact?: boolean
+  seconds?: number
+}) {
   const cvRef = useRef<HTMLCanvasElement>(null)
   useRaf(() => {
     const cv = cvRef.current
@@ -164,7 +171,7 @@ export function ZoomWave({ decks }: { decks: Deck[] }) {
       const col = DECK_COLORS[deck.id]
       // Track-seconds per pixel: a faster deck scrolls faster, so two synced
       // decks show beat lines at the same spacing.
-      const spp = (ZOOM_SECONDS * deck.rate) / w
+      const spp = (seconds * deck.rate) / w
       const t0 = deck.time - center * spp
 
       if (env && deck.track) {
@@ -223,7 +230,13 @@ export function ZoomWave({ decks }: { decks: Deck[] }) {
       }
       ctx.fillStyle = 'rgba(255,255,255,0.35)'
       ctx.font = 'bold 11px Inter, Arial'
-      ctx.fillText(deck.id, 4, top + 11)
+      if (!compact) ctx.fillText(deck.id, 4, top + 11)
+      else if (deck.isYouTube) {
+        // A YouTube stream's audio never reaches the page, so there is no
+        // waveform to draw — say so rather than leave the strip looking broken.
+        ctx.fillStyle = 'rgba(255,255,255,0.45)'
+        ctx.fillText(deck.duration ? 'YouTube stream · EQ, FX, stems & waveform are for local files' : 'Loading from YouTube…', 6, mid + 4)
+      }
     })
 
     ctx.fillStyle = '#ffffff'
@@ -234,5 +247,5 @@ export function ZoomWave({ decks }: { decks: Deck[] }) {
     ctx.fill()
   })
 
-  return <canvas ref={cvRef} className="dj-zoomwave" />
+  return <canvas ref={cvRef} className={compact ? 'dj-stripwave' : 'dj-zoomwave'} />
 }

@@ -7,7 +7,7 @@ import { ArrowUpFromLine, Play, Pause, Square, Lock } from 'lucide-react'
 import type { Deck, StemKey } from './engine/DjEngine'
 import { FX_LABELS, type FxType } from './engine/effects'
 import { Knob, LedButton, VFader, fmtTime, useDeck, useRaf } from './controls'
-import { OverviewWave } from './Waveforms'
+import { OverviewWave, ZoomWave } from './Waveforms'
 import Platter from './Platter'
 
 export const TRACK_MIME = 'application/x-aihub-dj-track'
@@ -94,8 +94,9 @@ export function DeckInfo({ deck, onDropTrack }: { deck: Deck; onDropTrack: DeckD
             : <span className="dj-dim">- Drag a song on this deck to load it</span>}
         </div>
         {deck.error && <div className="dj-err">{deck.error}</div>}
-        {deck.isYouTube && !deck.error && <div className="dj-yt-note">YouTube · EQ, FX &amp; stems apply to local files</div>}
-        <OverviewWave deck={deck} />
+        {/* Live, scrolling waveform around the playhead, then the whole song for seeking */}
+        <div className="dj-stripwave-wrap"><ZoomWave decks={[deck]} compact seconds={6} /></div>
+        <OverviewWave deck={deck} height={10} />
       </div>
       {deck.id === 'A' ? readout : cover}
     </div>

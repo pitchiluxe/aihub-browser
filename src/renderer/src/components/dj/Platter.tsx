@@ -21,6 +21,7 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
   const armAngle = useRef(-20)
 
   const loaded = !!deck.track
+  const cover = deck.track?.cover
   const c = size / 2
 
   useRaf(() => {
@@ -97,6 +98,7 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
             <stop offset="55%" stopColor="rgba(255,255,255,0)" />
             <stop offset="100%" stopColor="rgba(255,255,255,0.10)" />
           </linearGradient>
+          <clipPath id={`disc-clip-${deck.id}`}><circle cx={c} cy={c} r={c * 0.9} /></clipPath>
           <radialGradient id={`labelgloss-${deck.id}`} cx="35%" cy="25%" r="75%">
             <stop offset="0%" stopColor="rgba(255,255,255,0.55)" />
             <stop offset="35%" stopColor="rgba(255,255,255,0.12)" />
@@ -114,17 +116,31 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
           {/* Record */}
           <circle cx={c} cy={c} r={c * 0.92} fill={`url(#vinyl-${deck.id})`} />
           {grooves}
-          {/* Label */}
-          <circle cx={c} cy={c} r={c * 0.36} fill="#d71920" />
-          <circle cx={c} cy={c} r={c * 0.36} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth={1.5} />
-          <rect x={c - 2.5} y={c - c * 0.35} width={5} height={c * 0.27} rx={2} fill="#fff" />
-          <text x={c} y={c + c * 0.1} textAnchor="middle" fontSize={c * 0.12} fontWeight={800} fill="#fff" fontFamily="Inter, Arial, sans-serif" letterSpacing={0.5}>AIHub</text>
-          <text x={c} y={c + c * 0.24} textAnchor="middle" fontSize={c * 0.1} fontWeight={800} fill="#ffd2d2" fontFamily="Inter, Arial, sans-serif" letterSpacing={2}>DJ</text>
+          {cover ? (
+            <>
+              {/* The song's artwork printed across the record, spinning with it */}
+              <image href={cover} x={c - c * 0.9} y={c - c * 0.9} width={c * 1.8} height={c * 1.8}
+                preserveAspectRatio="xMidYMid slice" clipPath={`url(#disc-clip-${deck.id})`} />
+              <circle cx={c} cy={c} r={c * 0.9} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={2} />
+              <circle cx={c} cy={c} r={c * 0.12} fill="rgba(0,0,0,0.25)" />
+              {/* Marker so the spin reads even on a plain cover */}
+              <rect x={c - 2.5} y={c - c * 0.42} width={5} height={c * 0.24} rx={2} fill="#fff" stroke="rgba(0,0,0,0.4)" strokeWidth={0.6} />
+            </>
+          ) : (
+            <>
+              {/* Label */}
+              <circle cx={c} cy={c} r={c * 0.36} fill="#d71920" />
+              <circle cx={c} cy={c} r={c * 0.36} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth={1.5} />
+              <rect x={c - 2.5} y={c - c * 0.35} width={5} height={c * 0.27} rx={2} fill="#fff" />
+              <text x={c} y={c + c * 0.1} textAnchor="middle" fontSize={c * 0.12} fontWeight={800} fill="#fff" fontFamily="Inter, Arial, sans-serif" letterSpacing={0.5}>AIHub</text>
+              <text x={c} y={c + c * 0.24} textAnchor="middle" fontSize={c * 0.1} fontWeight={800} fill="#ffd2d2" fontFamily="Inter, Arial, sans-serif" letterSpacing={2}>DJ</text>
+            </>
+          )}
         </g>
         {/* Fixed sheen — stays put while the record spins under it */}
         <circle cx={c} cy={c} r={c * 0.92} fill={`url(#sheen-${deck.id})`} pointerEvents="none" />
         {/* Glossy label: a soft highlight that does not turn with the record */}
-        <circle cx={c} cy={c} r={c * 0.36} fill={`url(#labelgloss-${deck.id})`} pointerEvents="none" />
+        {!cover && <circle cx={c} cy={c} r={c * 0.36} fill={`url(#labelgloss-${deck.id})`} pointerEvents="none" />}
         <circle cx={c} cy={c} r={c * 0.035} fill="#d9dce0" stroke="#555" strokeWidth={0.5} pointerEvents="none" />
         {/* Tonearm */}
         <g ref={armRef} pointerEvents="none">
