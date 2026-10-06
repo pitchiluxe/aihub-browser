@@ -1,0 +1,105 @@
+/*
+ * AIHub DJ — video monitor, YouTube queue, AI DJ take-over / taste view,
+ * settings & shortcuts menu, and the deck strip's source badges and 👍 / 👎.
+ */
+
+/* ── Mixer: MIXER / VIDEO switch, video monitor, auto-fade ── */
+.aihub-dj .dj-mixer-switch { display: inline-flex; gap: 1px; padding: 1px; background: #1b1c20; border-radius: 3px; }
+.aihub-dj .dj-mixer-switch button { padding: 0 7px; height: 14px; border: 0; border-radius: 2px; background: transparent; color: #8b9099; font-size: 10.5px; font-weight: 800; letter-spacing: 0.6px; line-height: 14px; }
+.aihub-dj .dj-mixer-switch button.on { background: #2b2d33; color: #fbbf24; }
+.aihub-dj .dj-mixer-video { height: 158px; padding: 3px 0; }
+.aihub-dj .dj-video { position: relative; width: 100%; height: 100%; border-radius: 4px; overflow: hidden; background: #000; border: 1px solid #000; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+.aihub-dj .dj-video canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.aihub-dj .dj-video-size { position: absolute; top: 4px; right: 4px; width: 22px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.2); border-radius: 3px; background: rgba(0,0,0,0.55); color: #fff; opacity: 0.7; }
+.aihub-dj .dj-video-size:hover { opacity: 1; }
+.aihub-dj .dj-row-decks > .dj-bigscreen { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; gap: 6px; padding: 6px; background: #050506; border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); }
+.aihub-dj .dj-bigscreen .dj-video { flex: 1; min-height: 0; }
+.aihub-dj .dj-bigscreen-xf { display: flex; align-items: center; justify-content: center; gap: 10px; color: #e5e7eb; font-weight: 800; font-size: 13px; }
+.aihub-dj .dj-bigscreen-xf .dj-hfader-slot { background: #3a3d44; box-shadow: inset 0 1px 2px #000, 0 0 0 1px rgba(255,255,255,0.12); }
+.aihub-dj .dj-fade-btn { width: 22px; height: 18px; }
+.aihub-dj .dj-limited { opacity: 0.45; filter: grayscale(0.7); }
+.aihub-dj .dj-limited > * { pointer-events: none; }
+
+/* ── Deck strip: source badges and 👍 / 👎 ── */
+.aihub-dj .dj-title-line { display: flex; align-items: center; gap: 5px; }
+.aihub-dj .dj-title-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aihub-dj .dj-src-badge { flex: none; display: inline-flex; align-items: center; gap: 2px; height: 14px; padding: 0 4px; border-radius: 3px; background: #b91c1c; color: #fff; font-size: 9.5px; font-weight: 800; }
+.aihub-dj .dj-src-badge.dj-src-direct { background: #6b7280; }
+.aihub-dj .dj-src-badge.dj-src-video { background: #7c3aed; }
+.aihub-dj .dj-opinion { flex: none; display: inline-flex; gap: 2px; }
+.aihub-dj .dj-opinion button { width: 18px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #3a3d44; border-radius: 3px; background: #1d1e22; color: #9ca3af; }
+.aihub-dj .dj-opinion button:hover { color: #fff; border-color: #6b7280; }
+.aihub-dj .dj-opinion button.on-like { color: #22c55e; border-color: #22c55e; }
+.aihub-dj .dj-opinion button.on-dislike { color: #ef4444; border-color: #ef4444; }
+
+/* ── Top bar extras ── */
+.aihub-dj .dj-top-automix { height: 24px; padding: 0 10px; border: 1px solid #000; border-radius: 4px; background: linear-gradient(#4a4d52, #2c2e32); color: #d6d8db; font-weight: 800; font-size: 11.5px; letter-spacing: 0.8px; }
+.aihub-dj .dj-top-automix.dj-on { color: #fff; background: linear-gradient(#22c55e, #15803d); }
+.aihub-dj .dj-settings-menu { width: 330px; max-height: 70vh; overflow: auto; }
+.aihub-dj .dj-settings-menu .dj-out-title { margin-top: 8px; color: #fbbf24; letter-spacing: 0.5px; }
+.aihub-dj .dj-settings-menu .dj-out-title:first-child { margin-top: 0; }
+.aihub-dj .dj-set-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; font-size: 12.5px; color: #d1d5db; cursor: pointer; }
+.aihub-dj label.dj-set-row { justify-content: flex-start; }
+.aihub-dj .dj-set-row input { accent-color: #f97316; }
+.aihub-dj .dj-seg { display: inline-flex; gap: 2px; }
+.aihub-dj .dj-out-menu .dj-seg button { width: auto; padding: 2px 6px; border: 1px solid #3a3d44; border-radius: 3px; font-size: 11.5px; }
+.aihub-dj .dj-keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; color: #d1d5db; }
+.aihub-dj .dj-keys kbd { padding: 0 5px; border: 1px solid #4b5563; border-bottom-width: 2px; border-radius: 3px; background: #26282d; color: #f3f4f6; font: 600 11px Inter, Arial; white-space: nowrap; text-align: center; }
+.aihub-dj .dj-tips { margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.45; color: #9ca3af; }
+.aihub-dj .dj-tips li { margin-bottom: 3px; }
+
+/* ── Library: YouTube actions ── */
+.aihub-dj .dj-td.dj-c-act button.dj-fav-on { color: #f43f5e; visibility: visible; }
+.aihub-dj .dj-queue-all { color: #fca5a5; }
+
+/* ── YouTube queue ── */
+.aihub-dj .dj-queue { flex: 1; min-height: 0; flex-direction: column; gap: 6px; padding: 6px; }
+.aihub-dj .dj-queue-bar, .aihub-dj .dj-queue-actions { display: flex; align-items: center; gap: 4px; }
+.aihub-dj .dj-queue-select, .aihub-dj .dj-queue-name { flex: 1; min-width: 0; height: 24px; padding: 0 6px; border: 1px solid #000; border-radius: 4px; background: #0d0e10; color: #f3f4f6; font-size: 12.5px; outline: none; }
+.aihub-dj .dj-queue-play { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 26px; border: 1px solid #000; border-radius: 4px; background: linear-gradient(#ef4444, #991b1b); color: #fff; font-size: 12.5px; font-weight: 800; }
+.aihub-dj .dj-queue-play.dj-on { background: linear-gradient(#f97316, #9a3412); }
+.aihub-dj .dj-queue-play:disabled { opacity: 0.45; }
+.aihub-dj .dj-queue-actions .dj-icon-btn { width: 26px; height: 26px; border: 1px solid #000; background: #26282d; }
+.aihub-dj .dj-queue-actions .dj-icon-btn.on { color: #fbbf24; }
+.aihub-dj .dj-queue-actions .dj-icon-btn:disabled { opacity: 0.4; }
+.aihub-dj .dj-queue-list { flex: 1; min-height: 0; overflow: auto; }
+.aihub-dj .dj-queue-item { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 4px; border-top: 2px solid transparent; cursor: grab; }
+.aihub-dj .dj-queue-item:hover { background: #2a2c31; }
+.aihub-dj .dj-queue-item.dj-queue-drop { border-top-color: #ef4444; }
+.aihub-dj .dj-queue-item.dj-queue-next { background: rgba(239,68,68,0.16); }
+.aihub-dj .dj-queue-item.dj-queue-done { opacity: 0.45; }
+.aihub-dj .dj-queue-item img, .aihub-dj .dj-queue-ph { flex: none; width: 40px; height: 24px; object-fit: cover; border-radius: 2px; background: #111; display: inline-flex; align-items: center; justify-content: center; color: #ef4444; }
+.aihub-dj .dj-queue-t { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.aihub-dj .dj-queue-t b { font-size: 12px; font-weight: 600; color: #f3f4f6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aihub-dj .dj-queue-t small { font-size: 11px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aihub-dj .dj-queue-acts { flex: none; display: flex; gap: 2px; }
+.aihub-dj .dj-queue-acts button { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 3px; background: transparent; color: #9ca3af; visibility: hidden; }
+.aihub-dj .dj-queue-item:hover .dj-queue-acts button, .aihub-dj .dj-queue-acts button.dj-fav-on { visibility: visible; }
+.aihub-dj .dj-queue-acts button.dj-fav-on { color: #f43f5e; }
+.aihub-dj .dj-queue-acts button:hover { background: #3b82f6; color: #fff; }
+
+/* ── AI DJ: take over + taste ── */
+.aihub-dj .dj-ai-views { display: flex; gap: 2px; padding: 1px; background: #16171a; border-radius: 4px; }
+.aihub-dj .dj-ai-views button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 20px; border: 0; border-radius: 3px; background: transparent; color: #9ca3af; font-size: 11.5px; font-weight: 700; }
+.aihub-dj .dj-ai-views button.on { background: #34363c; color: #fff; }
+.aihub-dj .dj-ai-takeover { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; border: 1px solid #000; border-radius: 4px; background: linear-gradient(#f59e0b, #b45309); color: #fff; font-size: 12.5px; font-weight: 800; letter-spacing: 0.3px; }
+.aihub-dj .dj-ai-takeover.dj-on { background: linear-gradient(#f97316, #9a3412); }
+.aihub-dj .dj-ai-takeover:disabled { opacity: 0.6; }
+.aihub-dj .dj-taste { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #d1d5db; }
+.aihub-dj .dj-taste-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.aihub-dj .dj-taste-stats span { padding: 3px 6px; background: #16171a; border-radius: 3px; color: #9ca3af; }
+.aihub-dj .dj-taste-stats b { color: #f3f4f6; }
+.aihub-dj .dj-taste-h { font-weight: 800; font-size: 11px; letter-spacing: 0.6px; color: #fbbf24; text-transform: uppercase; }
+.aihub-dj .dj-taste-chips { display: flex; flex-wrap: wrap; gap: 3px; }
+.aihub-dj .dj-taste-chips button, .aihub-dj .dj-taste-chips span { padding: 1px 7px; border: 1px solid #3a3d44; border-radius: 10px; background: #26282d; color: #e5e7eb; font-size: 11.5px; }
+.aihub-dj .dj-taste-chips button:hover { border-color: #a855f7; }
+.aihub-dj .dj-taste-chips .dj-dim { border: 0; background: none; padding: 0; }
+.aihub-dj .dj-taste-avoid span { color: #fca5a5; border-color: #7f1d1d; }
+.aihub-dj .dj-taste-list { display: flex; flex-direction: column; gap: 1px; }
+.aihub-dj .dj-taste-row { display: flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden; }
+.aihub-dj .dj-taste-row span { overflow: hidden; text-overflow: ellipsis; }
+.aihub-dj .dj-taste-row .ok { color: #22c55e; flex: none; }
+.aihub-dj .dj-taste-row .skip { color: #f97316; flex: none; }
+.aihub-dj .dj-taste-row .dim { color: #6b7280; flex: none; }
+.aihub-dj .dj-taste-reset { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid #7f1d1d; border-radius: 4px; background: transparent; color: #fca5a5; font-size: 11.5px; }
+.aihub-dj .dj-dim { color: #8b9099; }

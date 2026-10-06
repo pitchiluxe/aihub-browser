@@ -14,6 +14,7 @@ import crypto from 'crypto'
 import { Readable } from 'stream'
 import { parseId3, id3TagSize } from './id3'
 import { isAudioFile, matchesQuery, parseRange } from './media'
+import { registerYouTubeDeckIpc } from './youtubeDeck'
 
 export const MEDIA_SCHEME = 'aihub-media'
 
@@ -21,6 +22,8 @@ const MIME: Record<string, string> = {
   '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.oga': 'audio/ogg',
   '.flac': 'audio/flac', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.opus': 'audio/ogg',
   '.webm': 'audio/webm', '.weba': 'audio/webm',
+  // Music videos: the deck plays their sound, the monitor shows the picture.
+  '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.mkv': 'video/x-matroska',
 }
 
 const MAX_SEARCH_RESULTS = 500
@@ -210,6 +213,7 @@ export function registerMediaProtocol(): void {
 
 // ── IPC ─────────────────────────────────────────────────────────────────────
 export function registerDjIpc(): void {
+  registerYouTubeDeckIpc()
   ipcMain.handle('dj:roots', () => roots())
   ipcMain.handle('dj:list', (_e, dir: string) => listDir(dir))
   ipcMain.handle('dj:search', (_e, dir: string, query: string) => searchDir(dir, query))

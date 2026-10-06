@@ -167,6 +167,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Audio files dropped from the desktop: File.path is gone in modern Electron.
     pathForFile:   (file: File) => { try { return webUtils.getPathForFile(file) } catch { return '' } },
     registerFile:  (path: string) => ipcRenderer.invoke('dj:registerFile', path),
+    // YouTube decks: a hidden player window per deck, captured into the mixer.
+    yt: {
+      load:     (deck: string, id: string) => ipcRenderer.invoke('dj:yt:load', deck, id),
+      streamId: (deck: string) => ipcRenderer.invoke('dj:yt:streamId', deck),
+      state:    (deck: string) => ipcRenderer.invoke('dj:yt:state', deck),
+      cmd:      (deck: string, cmd: string, value?: unknown) => ipcRenderer.invoke('dj:yt:cmd', deck, cmd, value),
+      unload:   (deck: string) => ipcRenderer.invoke('dj:yt:unload', deck),
+    },
   },
   obsidian: {
     status:      () => ipcRenderer.invoke('obsidian:status'),

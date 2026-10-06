@@ -55,9 +55,13 @@ export function parsePicks(reply: string): SongPick[] {
   return out
 }
 
-export function buildPrompt(vibe: string, count: number, avoid: string[], following?: SongPick): string {
+export function buildPrompt(vibe: string, count: number, avoid: string[], following?: SongPick, taste?: string): string {
   return [
-    `You are a professional DJ building a set. Vibe: "${vibe}".`,
+    vibe
+      ? `You are a professional DJ building a set. Vibe: "${vibe}".`
+      : 'You are a professional DJ playing for one listener whose taste you know well. Build the set around it.',
+    taste ? `What you know about the listener (learnt from what they play, finish, skip and like):\n${taste}` : '',
+    taste ? 'Mix their favourites with songs they would likely love but have not played; follow their taste, not the charts.' : '',
     following ? `The set continues straight after "${following.artist} - ${following.title}".` : '',
     `Pick ${count} real, well-known released songs that fit, in the order you would play them,`,
     'so energy and tempo flow smoothly from one to the next.',
@@ -67,9 +71,9 @@ export function buildPrompt(vibe: string, count: number, avoid: string[], follow
   ].filter(Boolean).join('\n')
 }
 
-export async function planSet(vibe: string, count: number, avoid: string[], following?: SongPick): Promise<SetPlan> {
+export async function planSet(vibe: string, count: number, avoid: string[], following?: SongPick, taste?: string): Promise<SetPlan> {
   const ai = (window as any).electronAPI.ai
-  const r = await ai.chat([{ role: 'user', content: buildPrompt(vibe, count, avoid, following) }])
+  const r = await ai.chat([{ role: 'user', content: buildPrompt(vibe, count, avoid, following, taste) }])
   if (!r || r.provider === 'error' || r.provider === 'none' || !r.content) {
     throw new Error('The AI model is not answering — check that Ollama is running.')
   }

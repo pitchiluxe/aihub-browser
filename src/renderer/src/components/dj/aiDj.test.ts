@@ -22,6 +22,12 @@ describe('AI DJ reply parsing', () => {
     expect(p).toContain('JSON')
     expect(p).toContain('A - B')
   })
+  it('builds a set from the learnt taste when no vibe is given', () => {
+    const p = buildPrompt('', 8, [], undefined, 'Artists they love most: Fally Ipupa.')
+    expect(p).toContain('whose taste you know well')
+    expect(p).toContain('Fally Ipupa')
+    expect(p).not.toContain('Vibe:')
+  })
 })
 
 describe('YouTube helpers', () => {

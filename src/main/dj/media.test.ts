@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseRange, matchesQuery, isAudioFile } from './media'
+import { parseRange, matchesQuery, isAudioFile, isVideoFile } from './media'
 
 describe('dj media helpers', () => {
   it('parses byte ranges', () => {
@@ -19,10 +19,17 @@ describe('dj media helpers', () => {
     expect(matchesQuery('anything.mp3', '   ')).toBe(true)
   })
 
-  it('recognises audio extensions only', () => {
+  it('recognises playable media extensions only', () => {
     expect(isAudioFile('a.MP3')).toBe(true)
     expect(isAudioFile('a.flac')).toBe(true)
+    expect(isAudioFile('clip.mp4')).toBe(true)
     expect(isAudioFile('a.exe')).toBe(false)
     expect(isAudioFile('mp3')).toBe(false)
+  })
+
+  it('tells music videos apart from audio', () => {
+    expect(isVideoFile('Clip.MP4')).toBe(true)
+    expect(isVideoFile('live.mkv')).toBe(true)
+    expect(isVideoFile('song.mp3')).toBe(false)
   })
 })

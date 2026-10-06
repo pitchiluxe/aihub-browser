@@ -3,12 +3,13 @@
  * and the turntable with its transport and pitch fader. Deck B mirrors A.
  */
 import React, { useEffect, useRef, useState } from 'react'
-import { ArrowUpFromLine, Play, Pause, Square, Lock } from 'lucide-react'
+import { ArrowUpFromLine, Play, Pause, Square, Lock, ThumbsUp, ThumbsDown, Youtube, Film } from 'lucide-react'
 import type { Deck, StemKey } from './engine/DjEngine'
 import { FX_LABELS, type FxType } from './engine/effects'
 import { Knob, LedButton, VFader, fmtTime, useDeck, useRaf } from './controls'
 import { OverviewWave, ZoomWave } from './Waveforms'
 import Platter from './Platter'
+import { recordTaste } from './taste'
 
 export const TRACK_MIME = 'application/x-aihub-dj-track'
 
@@ -67,6 +68,25 @@ export function dropProps(onDropTrack: DeckDrop) {
   }
 }
 
+/** Thumbs up / down on the loaded song — the strongest signal the AI DJ learns from. */
+function Opinion({ deck }: { deck: Deck }) {
+  const t = deck.track
+  const [given, setGiven] = useState<{ token: string; v: 'like' | 'dislike' } | null>(null)
+  if (!t) return null
+  const mine = given?.token === t.token ? given.v : null
+  const rate = (v: 'like' | 'dislike') => {
+    if (mine === v) return
+    setGiven({ token: t.token, v })
+    recordTaste({ kind: v, artist: t.artist, title: t.title, youtubeId: t.youtubeId })
+  }
+  return (
+    <span className="dj-opinion">
+      <button type="button" className={mine === 'like' ? 'on-like' : ''} onClick={() => rate('like')} title="I like this — the AI DJ plays more like it"><ThumbsUp size={10} /></button>
+      <button type="button" className={mine === 'dislike' ? 'on-dislike' : ''} onClick={() => rate('dislike')} title="Not for me — the AI DJ steers away from it"><ThumbsDown size={10} /></button>
+    </span>
+  )
+}
+
 export function DeckInfo({ deck, onDropTrack }: { deck: Deck; onDropTrack: DeckDrop }) {
   useDeck(deck)
   const t = deck.track
@@ -89,9 +109,14 @@ export function DeckInfo({ deck, onDropTrack }: { deck: Deck; onDropTrack: DeckD
       {deck.id === 'A' ? cover : readout}
       <div className="dj-lcd dj-title-box">
         <div className="dj-title-line">
-          {t
-            ? <><b>{t.artist ? `${t.artist} - ` : ''}</b>{t.title}</>
-            : <span className="dj-dim">- Drag a song on this deck to load it</span>}
+          {t?.youtubeId && <span className={`dj-src-badge ${deck.fullControl ? '' : 'dj-src-direct'}`} title={deck.fullControl ? 'YouTube — full mixer control' : 'YouTube — direct playback, volume only'}><Youtube size={9} />{deck.adPlaying ? 'AD' : deck.loading ? '…' : ''}</span>}
+          {t?.video && <span className="dj-src-badge dj-src-video" title="Music video"><Film size={9} /></span>}
+          <span className="dj-title-text">
+            {t
+              ? <><b>{t.artist ? `${t.artist} - ` : ''}</b>{t.title}</>
+              : <span className="dj-dim">- Drag a song on this deck to load it</span>}
+          </span>
+          <Opinion deck={deck} />
         </div>
         {deck.error && <div className="dj-err">{deck.error}</div>}
         {/* Live, scrolling waveform around the playhead, then the whole song for seeking */}
@@ -118,7 +143,8 @@ export function DeckPads({ deck, onDropTrack }: { deck: Deck; onDropTrack: DeckD
   const instrumental = !s.vocal && s.instru
   const loopLabel = deck.loopBeats >= 1 ? String(deck.loopBeats) : `1/${Math.round(1 / deck.loopBeats)}`
   return (
-    <div className={`dj-pads dj-panel ${deck.id === 'B' ? 'dj-mirror' : ''}`} {...dropProps(onDropTrack)}>
+    <div className={`dj-pads dj-panel ${deck.id === 'B' ? 'dj-mirror' : ''} ${deck.fullControl ? '' : 'dj-limited'}`} {...dropProps(onDropTrack)}
+      title={deck.fullControl ? undefined : 'This YouTube video plays directly from YouTube, so stems and effects cannot reach it'}>
       {/* Stems */}
       <div className="dj-section dj-stems">
         <div className="dj-section-title">STEMS</div>
@@ -234,9 +260,9 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
       <div className="dj-transport">
         <button type="button" className="dj-tbtn dj-cue" onClick={() => deck.cue()} disabled={!deck.track} title="CUE">CUE</button>
         <button type="button" className="dj-tbtn" onClick={() => deck.stop()} disabled={!deck.track} title="Stop"><Square size={16} fill="currentColor" /></button>
-        <button type="button" className={`dj-tbtn dj-play ${deck.playing ? 'dj-playing' : ''}`} onClick={() => deck.toggle()} disabled={!deck.track}
-          title={deck.playing ? 'Pause' : 'Play'} aria-label={deck.playing ? 'Pause' : 'Play'}>
-          {deck.playing ? <Pause size={22} fill="currentColor" strokeWidth={0} /> : <Play size={22} fill="currentColor" strokeWidth={0} />}
+        <button type="button" className={`dj-tbtn dj-play ${deck.active ? 'dj-playing' : ''}`} onClick={() => deck.toggle()} disabled={!deck.track}
+          title={deck.active ? 'Pause' : 'Play'} aria-label={deck.active ? 'Pause' : 'Play'}>
+          {deck.active ? <Pause size={22} fill="currentColor" strokeWidth={0} /> : <Play size={22} fill="currentColor" strokeWidth={0} />}
         </button>
         <button type="button" className={`dj-mini dj-keylock ${deck.keyLock ? 'dj-on dj-on-blue' : ''}`} onClick={() => deck.setKeyLock(!deck.keyLock)} title="Key lock — keep pitch when changing tempo">
           <Lock size={10} />

@@ -2,9 +2,17 @@
 import path from 'path'
 
 export const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.ogg', '.oga', '.flac', '.m4a', '.aac', '.opus', '.webm', '.weba'])
+/** Music videos play on a deck too; the console's monitor shows their picture. */
+export const VIDEO_EXTENSIONS = new Set(['.mp4', '.m4v', '.mov', '.mkv'])
 
+/** Anything a deck can play: audio files and music videos. */
 export function isAudioFile(name: string): boolean {
-  return AUDIO_EXTENSIONS.has(path.extname(name).toLowerCase())
+  const ext = path.extname(name).toLowerCase()
+  return AUDIO_EXTENSIONS.has(ext) || VIDEO_EXTENSIONS.has(ext)
+}
+
+export function isVideoFile(name: string): boolean {
+  return VIDEO_EXTENSIONS.has(path.extname(name).toLowerCase())
 }
 
 /** Every query word must appear somewhere in the file name. */

@@ -36,6 +36,8 @@ export function parseFileName(name: string): { artist: string; title: string } {
   return m ? { artist: m[1].trim(), title: m[2].trim() } : { artist: '', title: base }
 }
 
+const VIDEO_EXT = new Set(['mp4', 'm4v', 'mov', 'mkv'])
+
 export function toTrack(raw: RawTrack, meta?: TrackMeta): DjTrack {
   const fromName = parseFileName(raw.name)
   const t: DjTrack = {
@@ -49,6 +51,7 @@ export function toTrack(raw: RawTrack, meta?: TrackMeta): DjTrack {
     cover: meta?.cover,
     tagBpm: meta?.bpm,
     key: meta?.key,
+    video: VIDEO_EXT.has(raw.ext),
   }
   registry.set(raw.token, t)
   return t
@@ -169,17 +172,22 @@ export function cleanVideoTitle(title: string, channel: string): { artist: strin
 
 export function ytTrack(v: YouTubeVideo): DjTrack {
   const { artist, title } = cleanVideoTitle(v.title, v.channel)
+  return ytTrackFrom({ id: v.id, title, artist, cover: v.thumbnail, duration: parseDuration(v.duration), name: v.title })
+}
+
+/** A playable deck track for a YouTube video, registered so it can be dragged. */
+export function ytTrackFrom(v: { id: string; title: string; artist: string; cover?: string; duration?: number; name?: string }): DjTrack {
   const t: DjTrack = {
     token: `yt-${v.id}`,
     path: `https://www.youtube.com/watch?v=${v.id}`,
-    name: v.title,
+    name: v.name ?? `${v.artist ? `${v.artist} - ` : ''}${v.title}`,
     size: 0,
-    title,
-    artist,
+    title: v.title,
+    artist: v.artist,
     album: 'YouTube',
-    cover: v.thumbnail,
+    cover: v.cover,
     youtubeId: v.id,
-    durationHint: parseDuration(v.duration),
+    durationHint: v.duration,
   }
   registry.set(t.token, t)
   return t

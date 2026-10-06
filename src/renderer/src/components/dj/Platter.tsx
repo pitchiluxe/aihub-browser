@@ -2,8 +2,10 @@
  * Turntable: a 33⅓ rpm platter whose rotation is derived from the track
  * position, so scratching, seeking and pitch all move it truthfully.
  *
- * Touching the record (inner area) holds it like vinyl: playback pauses and
- * dragging scrubs. Dragging the outer rim while playing nudges the tempo
+ * Touching the record (inner area) holds it like vinyl: it stops under the
+ * hand and moving it scratches — the scratch voice plays the audio at the
+ * hand's speed and direction, forwards and backwards. Letting go spins the
+ * record back up. Dragging the outer rim while playing nudges the tempo
  * (pitch bend) to beat-match by hand.
  */
 import React, { useRef } from 'react'
@@ -16,7 +18,7 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
   useDeck(deck)
   const discRef = useRef<SVGGElement>(null)
   const armRef = useRef<SVGGElement>(null)
-  const drag = useRef<{ mode: 'scratch' | 'bend'; last: number; lastT: number; wasPlaying: boolean } | null>(null)
+  const drag = useRef<{ mode: 'scratch' | 'bend'; last: number; lastT: number; pos: number } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const armAngle = useRef(-20)
 
@@ -47,10 +49,9 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
   const onDown = (e: React.PointerEvent) => {
     if (!loaded || e.button !== 0) return
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-    const playing = deck.playing
-    const mode = playing && radiusAt(e) > 0.8 ? 'bend' : 'scratch'
-    drag.current = { mode, last: angleAt(e), lastT: performance.now(), wasPlaying: playing }
-    if (mode === 'scratch' && playing) deck.pause()
+    const mode = deck.playing && radiusAt(e) > 0.8 ? 'bend' : 'scratch'
+    drag.current = { mode, last: angleAt(e), lastT: performance.now(), pos: deck.time }
+    if (mode === 'scratch') deck.grab()
   }
   const onMove = (e: React.PointerEvent) => {
     const d = drag.current
@@ -63,15 +64,18 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
     const dt = Math.max(1, now - d.lastT)
     d.last = a
     d.lastT = now
-    if (d.mode === 'scratch') deck.seek(deck.time + delta / DEG_PER_SEC)
-    else deck.setBend((delta / dt) * 0.35) // deg/ms → ±bend
+    if (d.mode === 'scratch') {
+      d.pos += delta / DEG_PER_SEC
+      deck.scratchTo(d.pos)
+    } else deck.setBend((delta / dt) * 0.35) // deg/ms → ±bend
   }
+  /** Hand off the record — also when the pointer is lost (window blur, capture stolen). */
   const onUp = () => {
     const d = drag.current
     drag.current = null
     if (!d) return
     if (d.mode === 'bend') deck.setBend(0)
-    else if (d.wasPlaying) void deck.play()
+    else deck.release()
   }
 
   const grooves: React.ReactElement[] = []
@@ -84,8 +88,8 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
 
   return (
     <div className="dj-platter" style={{ width: size, height: size }}>
-      <svg ref={svgRef} width={size} height={size} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-        style={{ cursor: loaded ? 'grab' : 'default', touchAction: 'none' }}>
+      <svg ref={svgRef} width={size} height={size} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onUp}
+        style={{ cursor: loaded ? (deck.held ? 'grabbing' : 'grab') : 'default', touchAction: 'none' }}>
         <defs>
           <radialGradient id={`vinyl-${deck.id}`} cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="#2a2a2e" />

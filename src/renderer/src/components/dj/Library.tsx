@@ -3,11 +3,14 @@
  * list with tags/length/BPM, a cover-flow of the selection, and the sidelist
  * that feeds Automix.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   ChevronRight, ChevronDown, Folder as FolderIcon, FolderOpen, HardDrive, Music, Monitor, Download,
-  FileText, Video, Home, Plus, Search, X, ListMusic, Shuffle, Trash2, Loader2, FolderPlus, Youtube, Sparkles, Images,
+  FileText, Video, Home, Plus, Search, X, ListMusic, Shuffle, Trash2, Loader2, FolderPlus, Youtube, Sparkles, Images, ListPlus, Heart, ArrowLeftRight,
 } from 'lucide-react'
+import QueuePanel from './QueuePanel'
+import { addToList, isFavorite, queueStore, toggleFavorite } from './ytQueue'
+import { recordTaste } from './taste'
 import AiDjPanel from './AiDjPanel'
 import type { DeckId, DjTrack } from './engine/DjEngine'
 import { cachedTrack, onTrackCacheChange } from './engine/trackCache'
@@ -35,9 +38,11 @@ interface Props {
   setSidelist: (fn: (s: DjTrack[]) => DjTrack[]) => void
   automix: boolean
   setAutomix: (on: boolean) => void
+  mixNow: (t: DjTrack) => void
+  say: (m: string) => void
 }
 
-export default function Library({ onLoad, sidelist, setSidelist, automix, setAutomix }: Props) {
+export default function Library({ onLoad, sidelist, setSidelist, automix, setAutomix, mixNow, say }: Props) {
   const [roots, setRoots] = useState<{ places: Folder[]; drives: Folder[] }>({ places: [], drives: [] })
   const [mine, setMine] = useState<Folder[]>(savedFolders)
   const [current, setCurrent] = useState<Folder | null>(null)
@@ -51,7 +56,9 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
   const [source, setSource] = useState<'local' | 'youtube'>('local')
   const [ytTracks, setYtTracks] = useState<DjTrack[]>([])
   const [ytQuery, setYtQuery] = useState('')
-  const [sideTab, setSideTab] = useState<'list' | 'ai'>('list')
+  const [sideTab, setSideTab] = useState<'list' | 'queue' | 'ai'>('list')
+  // Re-render rows when a song is queued or hearted elsewhere.
+  useSyncExternalStore(queueStore.subscribe, queueStore.get)
   const [showCovers, setShowCovers] = useState(() => {
     try { return localStorage.getItem(COVERS_KEY) !== '0' } catch { return true }
   })
@@ -105,6 +112,7 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
     setLoading(true)
     setError(null)
     setYtQuery(q.trim())
+    recordTaste({ kind: 'search', query: q.trim() })
     try {
       const list = await searchYouTube(q.trim(), 30)
       setYtTracks(list)
@@ -207,6 +215,17 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
     saveFolders(next)
   }
 
+  const queue = (t: DjTrack) => {
+    const n = addToList([t])
+    say(n ? `Queued ${t.title}` : `${t.title} is already in the queue`)
+    if (n) recordTaste({ kind: 'queue', artist: t.artist, title: t.title, youtubeId: t.youtubeId })
+  }
+  const heart = (t: DjTrack) => {
+    const on = toggleFavorite(t)
+    say(on ? `♥ ${t.title} added to Favorites` : `${t.title} removed from Favorites`)
+    if (on) recordTaste({ kind: 'favorite', artist: t.artist, title: t.title, youtubeId: t.youtubeId })
+  }
+
   const toggleSort = (key: SortKey) =>
     setSort(s => (s?.key === key ? (s.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }))
 
@@ -264,6 +283,12 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
             title={showCovers ? 'Hide covers — more room for the list' : 'Show covers'}>
             <Images size={13} />
           </button>
+          {source === 'youtube' && ytTracks.length > 0 && (
+            <button type="button" className="dj-icon-btn dj-queue-all" title="Add every result to the YouTube queue"
+              onClick={() => { const n = addToList(ytTracks); say(n ? `${n} songs added to the queue` : 'Already in the queue') }}>
+              <ListPlus size={13} />
+            </button>
+          )}
           <span className="dj-count">
             {loading ? <Loader2 size={12} className="dj-spin" /> : null}
             {source === 'youtube'
@@ -313,7 +338,18 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
                 <span className="dj-td dj-c-act">
                   <button type="button" onClick={e => { e.stopPropagation(); onLoad(t, 'A') }} title="Load on deck A">A</button>
                   <button type="button" onClick={e => { e.stopPropagation(); onLoad(t, 'B') }} title="Load on deck B">B</button>
-                  <button type="button" onClick={e => { e.stopPropagation(); setSidelist(s => [...s, t]) }} title="Add to sidelist"><Plus size={11} /></button>
+                  {t.youtubeId ? (
+                    <>
+                      <button type="button" onClick={e => { e.stopPropagation(); mixNow(t) }} title="Mix it in now"><ArrowLeftRight size={11} /></button>
+                      <button type="button" onClick={e => { e.stopPropagation(); queue(t) }} title="Add to the YouTube queue"><ListPlus size={11} /></button>
+                      <button type="button" className={isFavorite(t.youtubeId) ? 'dj-fav-on' : ''} onClick={e => { e.stopPropagation(); heart(t) }}
+                        title={isFavorite(t.youtubeId) ? 'Remove from favourites' : 'Add to favourites'}>
+                        <Heart size={11} fill={isFavorite(t.youtubeId) ? 'currentColor' : 'none'} />
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={e => { e.stopPropagation(); setSidelist(s => [...s, t]) }} title="Add to the set list"><Plus size={11} /></button>
+                  )}
                 </span>
               </div>
             ))}
@@ -327,8 +363,11 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
         onDragOver={e => { if (e.dataTransfer.types.includes(TRACK_MIME)) e.preventDefault() }}
         onDrop={e => { const t = trackByToken(e.dataTransfer.getData(TRACK_MIME)); if (t) setSidelist(s => [...s, t]) }}>
         <div className="dj-side-head">
-          <button type="button" className={`dj-side-tab ${sideTab === 'list' ? 'on' : ''}`} onClick={() => setSideTab('list')}>
-            <ListMusic size={12} /> SIDELIST <span className="dj-side-n">{sidelist.length}</span>
+          <button type="button" className={`dj-side-tab ${sideTab === 'list' ? 'on' : ''}`} onClick={() => setSideTab('list')} title="Set list — the songs Automix plays next">
+            <ListMusic size={12} /> SET <span className="dj-side-n">{sidelist.length}</span>
+          </button>
+          <button type="button" className={`dj-side-tab ${sideTab === 'queue' ? 'on' : ''}`} onClick={() => setSideTab('queue')} title="YouTube queue and playlists">
+            <Youtube size={12} /> QUEUE
           </button>
           <button type="button" className={`dj-side-tab ${sideTab === 'ai' ? 'on' : ''}`} onClick={() => setSideTab('ai')}>
             <Sparkles size={12} /> AI DJ
@@ -337,6 +376,7 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
             <button type="button" className="dj-icon-btn" onClick={() => setSidelist(() => [])} title="Clear"><Trash2 size={12} /></button>
           )}
         </div>
+        <QueuePanel visible={sideTab === 'queue'} automix={automix} setAutomix={setAutomix} onLoad={onLoad} mixNow={mixNow} say={say} />
         <AiDjPanel visible={sideTab === 'ai'} sidelistCount={sidelist.length} addTracks={ts => setSidelist(s => [...s, ...ts])}
           automix={automix} setAutomix={setAutomix} />
         <div className="dj-side-body" style={{ display: sideTab === 'list' ? 'flex' : 'none' }}>
@@ -348,7 +388,7 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
           {sidelist.length === 0 && (
             <div className="dj-side-empty">
               <ListMusic size={26} />
-              <p>Drag songs here or press <b>+</b> on a row to build a set. Turn on Automix and AIHub DJ beat-matches and crossfades through it.</p>
+              <p>Drag songs here or press <b>+</b> on a row to build a set. Turn on Automix and AIHub DJ beat-matches and crossfades through it — then on through the YouTube queue if it is playing.</p>
             </div>
           )}
           {sidelist.map((t, i) => (

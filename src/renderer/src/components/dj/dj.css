@@ -160,7 +160,7 @@
 .aihub-dj .dj-ro-row b.dj-lcd-mid { font-size: 18px; color: #c9ccd1; }
 
 /* ── Deck row ── */
-.aihub-dj .dj-row-decks { display: grid; grid-template-columns: var(--dj-cols); grid-template-rows: 100%; gap: 6px; height: 336px; }
+.aihub-dj .dj-row-decks { position: relative; display: grid; grid-template-columns: var(--dj-cols); grid-template-rows: 100%; gap: 6px; height: 336px; }
 .aihub-dj .dj-row-decks > * { min-height: 0; overflow: hidden; }
 
 /* Pads panel */
@@ -326,7 +326,7 @@
 .aihub-dj .dj-xfader { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 4px; padding: 2px 8px; font-weight: 800; color: var(--dj-label); font-size: 13.5px; background: rgba(0,0,0,0.05); border-radius: 4px; }
 
 /* ── Library ── */
-.aihub-dj .dj-library { flex: 1; min-height: 200px; display: grid; grid-template-columns: 250px 1fr 210px; padding: 6px; gap: 0; background: #1a1b1e; border-color: #000; }
+.aihub-dj .dj-library { flex: 1; min-height: 200px; display: grid; grid-template-columns: 230px 1fr 270px; padding: 6px; gap: 0; background: #1a1b1e; border-color: #000; }
 .aihub-dj .dj-library::before, .aihub-dj .dj-library::after { display: none; }
 .aihub-dj .dj-tree { min-height: 0; display: flex; flex-direction: column; background: #202125; border-right: 1px solid #000; color: #e5e7eb; }
 .aihub-dj .dj-tree-scroll { flex: 1; overflow: auto; padding: 4px 0; }

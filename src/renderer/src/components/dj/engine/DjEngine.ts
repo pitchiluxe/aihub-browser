@@ -1,19 +1,22 @@
 /**
  * AIHub DJ audio engine — two decks, a mixer and a master bus on Web Audio.
  *
- * Playback streams from an <audio> element per deck (so a 2-hour mix plays as
- * easily as a 3-minute single) and is routed through a MediaElementSource into
- * the processing graph. The decoded copy used for analysis is thrown away as
- * soon as the waveform envelope and tempo are known.
+ * Local files stream from a media element per deck (so a 2-hour mix plays as
+ * easily as a 3-minute single) routed through a MediaElementSource into the
+ * processing graph. YouTube decks play in a hidden player window whose audio
+ * is captured into the same graph, so both kinds get the full channel strip.
+ * The decoded copy used for analysis is reduced to a small mono copy for the
+ * scratch voice as soon as the waveform envelope and tempo are known.
  *
- *  deck:  source → stems (mid/side + band kills) → trim → EQ → FX → channel fader → crossfader ┐
- *                                                               └→ PFL → cue bus            │
- *  master:                                                           master gain → limiter ←┘ → speakers / recorder
+ *  deck:  source ┬→ stems (mid/side + band kills) → trim → EQ → FX → channel fader → crossfader ┐
+ *                └→ scratch voice ┘                              └→ PFL → cue bus            │
+ *  master:                                                            master gain → limiter ←┘ → speakers / recorder
  */
 import { analyze, ENV_RATE, type Analysis } from './analysis'
 import { createEffect, type Effect, type FxType } from './effects'
 import { rememberTrack } from './trackCache'
-import { YouTubePlayer } from './youtubePlayer'
+import { YouTubeDeck } from './youtubeDeck'
+import { ScratchVoice } from './scratch'
 
 export interface DjTrack {
   token: string
@@ -30,6 +33,8 @@ export interface DjTrack {
   youtubeId?: string
   /** Length known before loading (YouTube search results). */
   durationHint?: number
+  /** A local video file (mp4, mkv…): its picture can be shown on the monitor. */
+  video?: boolean
 }
 
 export type DeckId = 'A' | 'B'
@@ -42,6 +47,12 @@ export const LOOP_SIZES = [1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8, 16, 32]
 /** Decoding needs ~10× the file size in memory; past this we draw the waveform live instead. */
 const MAX_ANALYZE_BYTES = 40 * 1024 * 1024
 const SMOOTH = 0.02
+/** Seconds of steady playing before a song without a known tempo is measured live. */
+const LIVE_TEMPO_AFTER = 24
+/** Auto-gain aims a song's loudness here (RMS, linear) and never moves it more than this. */
+const AUTO_GAIN_TARGET = 0.2
+const AUTO_GAIN_MIN = 0.5
+const AUTO_GAIN_MAX = 4
 
 type Listener = () => void
 
@@ -66,15 +77,38 @@ export function eqKnobToDb(v: number): number {
   return r <= 0.001 ? -48 : Math.max(-48, 40 * Math.log10(r))
 }
 
-/** Channel fader 0..1 → linear gain with an audio taper. */
+/** Channel fader 0..1 → linear gain with an audio taper; the top of travel is unity. */
 export function faderGain(v: number): number {
   return v <= 0 ? 0 : Math.pow(v, 2)
 }
 
-/** Constant-power crossfade. x: 0 = full A, 1 = full B. */
+/** Master knob 0..1 → gain up to +6 dB; the limiter catches anything that would clip. */
+export function masterGain(v: number): number {
+  return v <= 0 ? 0 : 2 * Math.pow(v, 2)
+}
+
+/**
+ * Club-style crossfade. x: 0 = full A, 1 = full B. Both decks stay at full
+ * level through the middle (no dip in loudness while blending) and only the
+ * far side fades out, on a constant-power curve.
+ */
 export function crossfadeGains(x: number): [number, number] {
   const t = Math.min(1, Math.max(0, x)) * Math.PI / 2
-  return [Math.cos(t), Math.sin(t)]
+  return [Math.min(1, Math.cos(t) * Math.SQRT2), Math.min(1, Math.sin(t) * Math.SQRT2)]
+}
+
+export function rmsOf(mono: Float32Array): number {
+  if (!mono.length) return 0
+  // Every 4th sample is plenty for a loudness estimate.
+  let s = 0
+  let n = 0
+  for (let i = 0; i < mono.length; i += 4) { s += mono[i] * mono[i]; n++ }
+  return Math.sqrt(s / n)
+}
+
+export function autoGainFor(rms: number): number {
+  if (!(rms > 1e-4)) return 1
+  return Math.min(AUTO_GAIN_MAX, Math.max(AUTO_GAIN_MIN, AUTO_GAIN_TARGET / rms))
 }
 
 function peakDb(an: AnalyserNode, buf: Float32Array): number {
@@ -84,15 +118,38 @@ function peakDb(an: AnalyserNode, buf: Float32Array): number {
   return p > 0 ? 20 * Math.log10(p) : -96
 }
 
+/** Mono, at half rate when that is still ≥ 22 kHz — scratching needs character, not hi-fi. */
+function scratchCopy(chans: Float32Array[], rate: number): { data: Float32Array; rate: number } {
+  const step = rate >= 44100 ? 2 : 1
+  const n = Math.floor(chans[0].length / step)
+  const out = new Float32Array(n)
+  const k = 1 / (chans.length * step)
+  for (const ch of chans) {
+    for (let i = 0; i < n; i++) {
+      let s = 0
+      for (let j = 0; j < step; j++) s += ch[i * step + j]
+      out[i] += s * k
+    }
+  }
+  return { data: out, rate: rate / step }
+}
+
 export class Deck extends Emitter {
-  readonly audio: HTMLAudioElement
+  /** Plays local files; a <video> so video files have a picture for the monitor. */
+  private readonly media: HTMLVideoElement
   track: DjTrack | null = null
   analysis: Analysis | null = null
   analyzing = false
-  /** Waveform drawn while playing, for files too big to pre-analyse. */
+  /** Waveform drawn while playing, for songs that are not decoded up front. */
   liveEnv: Float32Array | null = null
+  /** Its kick/bass band, for the two-colour waveform. */
+  liveLow: Float32Array | null = null
   duration = 0
   error: string | null = null
+  /** Tempo and grid measured while playing (YouTube, very long files). */
+  liveBpm: number | null = null
+  private liveFirstBeat = 0
+  private measuringTempo = false
 
   cuePoint = 0
   hotCues: (number | null)[] = [null, null, null]
@@ -113,17 +170,35 @@ export class Deck extends Emitter {
   fxSpeed = 0.4
   eq: Record<EqBand, number> = { high: 0.5, mid: 0.5, low: 0.5 }
   gainKnob = 0.5
+  /** Loudness correction for the loaded song (1 = none). */
+  autoGain = 1
   /** Quick filter: 0 = low-pass closed, 0.5 = off, 1 = high-pass closed. */
   filterKnob = 0.5
-  volume = 0.8
+  volume = 1
   pfl = false
 
+  /** The DJ wants this deck playing. Pauses nobody asked for are undone. */
+  private want = false
+  /** A hand is on the record. */
+  held = false
+  private heldTime = 0
+  private holdResume = false
+
   private gen = 0
-  private yt: YouTubePlayer | null = null
+  private videoWanted = 0
+  private ytVideoHeld = false
+  private yt: YouTubeDeck | null = null
+  private ytSrc: MediaStreamAudioSourceNode | null = null
+  private ytStream: MediaStream | null = null
+  private scratch: ScratchVoice
   private meterBuf = new Float32Array(1024)
   private liveBuf = new Float32Array(1024)
+  private lastEnvIndex = -1
+  private lastAnchor = 0
+  private steadySince = 0
 
   // graph
+  private rawIn: GainNode
   private fullGain: GainNode
   private sideGain: GainNode
   private midLowGain: GainNode
@@ -144,23 +219,31 @@ export class Deck extends Emitter {
   readonly xfade: GainNode
   private pflGain: GainNode
   private preAnalyser: AnalyserNode
+  private lowAnalyser: AnalyserNode
   private meter: AnalyserNode
 
   constructor(readonly id: DeckId, private engine: DjEngine) {
     super()
     const ctx = engine.ctx
-    this.audio = new Audio()
-    this.audio.crossOrigin = 'anonymous'
-    this.audio.preload = 'auto'
-    this.audio.preservesPitch = false
+    this.media = document.createElement('video')
+    this.media.crossOrigin = 'anonymous'
+    this.media.preload = 'auto'
+    this.media.playsInline = true
+    this.media.preservesPitch = false
+    this.media.width = 160
+    this.media.height = 90
+    // Kept in the document: a media element taken out of it is paused.
+    engine.mediaHost.appendChild(this.media)
 
-    const src = ctx.createMediaElementSource(this.audio)
+    this.rawIn = ctx.createGain()
+    ctx.createMediaElementSource(this.media).connect(this.rawIn)
     // Force stereo so mono files split into identical L/R instead of L + silence.
     const up = ctx.createGain()
     up.channelCount = 2
     up.channelCountMode = 'explicit'
     up.channelInterpretation = 'speakers'
-    src.connect(up)
+    this.rawIn.connect(up)
+    this.scratch = new ScratchVoice(ctx, this.rawIn, up)
 
     // ── Stems: mid/side separation plus band filters ──
     const split = ctx.createChannelSplitter(2)
@@ -228,6 +311,9 @@ export class Deck extends Emitter {
 
     this.preAnalyser = ctx.createAnalyser(); this.preAnalyser.fftSize = 1024
     this.postFx.connect(this.preAnalyser)
+    const lowTap = ctx.createBiquadFilter(); lowTap.type = 'lowpass'; lowTap.frequency.value = 150
+    this.lowAnalyser = ctx.createAnalyser(); this.lowAnalyser.fftSize = 1024
+    this.postFx.connect(lowTap).connect(this.lowAnalyser)
 
     this.fader = ctx.createGain()
     this.xfade = ctx.createGain()
@@ -237,16 +323,25 @@ export class Deck extends Emitter {
     this.pflGain = ctx.createGain(); this.pflGain.gain.value = 0
     this.postFx.connect(this.pflGain).connect(engine.cueBus)
 
-    this.audio.addEventListener('loadedmetadata', () => {
-      this.duration = Number.isFinite(this.audio.duration) ? this.audio.duration : 0
-      if (!this.analysis && this.duration) this.liveEnv = new Float32Array(Math.ceil(this.duration * ENV_RATE) + 1)
+    this.media.addEventListener('loadedmetadata', () => {
+      this.duration = Number.isFinite(this.media.duration) ? this.media.duration : 0
+      this.ensureLiveEnv()
       if (this.track && this.duration) rememberTrack(this.track.path, { d: this.duration })
       this.emit()
     })
-    this.audio.addEventListener('ended', () => { this.emit() })
-    this.audio.addEventListener('pause', () => this.emit())
-    this.audio.addEventListener('play', () => this.emit())
-    this.audio.addEventListener('error', () => {
+    this.media.addEventListener('ended', () => { this.want = false; this.emit() })
+    this.media.addEventListener('play', () => this.emit())
+    this.media.addEventListener('pause', () => {
+      this.emit()
+      // Something else paused us (the OS media session, a second player
+      // grabbing focus…). The DJ did not, so carry on.
+      if (this.want && !this.held && !this.isYouTube && !this.media.ended) {
+        window.setTimeout(() => {
+          if (this.want && !this.held && this.media.paused && !this.media.ended) void this.media.play().catch(() => {})
+        }, 120)
+      }
+    })
+    this.media.addEventListener('error', () => {
       if (!this.track || this.isYouTube) return
       this.error = 'This file could not be decoded'
       this.emit()
@@ -257,49 +352,113 @@ export class Deck extends Emitter {
 
   // ── state ──
   get isYouTube(): boolean { return !!this.track?.youtubeId }
+  /** False only for a YouTube deck whose audio could not be captured: then just volume works. */
+  get fullControl(): boolean { return !this.isYouTube || !!this.yt?.captured }
+  get loading(): boolean { return this.isYouTube && !!this.yt?.loading }
+  get adPlaying(): boolean { return this.isYouTube && !!this.yt?.ad }
   get playing(): boolean {
+    if (this.held) return false
     if (this.isYouTube) return !!this.yt?.playing
-    return !this.audio.paused && !this.audio.ended
+    return !this.media.paused && !this.media.ended
   }
-  get time(): number { return this.isYouTube ? this.yt?.currentTime ?? 0 : this.audio.currentTime || 0 }
-  get bpm(): number | null { return this.analysis?.bpm ?? this.track?.tagBpm ?? null }
+  /** Playing, or about to be — what the transport button shows. */
+  get active(): boolean { return this.held ? this.holdResume : this.playing || this.want }
+  get time(): number {
+    if (this.held) return this.heldTime
+    return this.isYouTube ? this.yt?.currentTime ?? 0 : this.media.currentTime || 0
+  }
+  get bpm(): number | null { return this.analysis?.bpm ?? this.liveBpm ?? this.track?.tagBpm ?? null }
   get rate(): number { return 1 + this.pitch }
   get effectiveBpm(): number | null { const b = this.bpm; return b ? b * this.rate : null }
   get beatLen(): number { const b = this.bpm; return b ? 60 / b : 0.5 }
-  get firstBeat(): number { return this.analysis?.firstBeat ?? 0 }
+  get firstBeat(): number { return this.analysis?.bpm ? this.analysis.firstBeat : this.liveFirstBeat }
+  /** A beat grid measured from the audio itself (not just a tag). */
+  get gridKnown(): boolean { return !!(this.analysis?.bpm || this.liveBpm) }
 
   /** Peak level after the channel fader, in dBFS. */
   meterDb(): number { return peakDb(this.meter, this.meterBuf) }
 
+  /** Something the video monitor can draw, when this deck has a picture. */
+  videoFrame(): HTMLVideoElement | null {
+    if (this.isYouTube) return this.yt?.hasVideo && this.yt.videoEl.videoWidth ? this.yt.videoEl : null
+    return this.track?.video && this.media.videoWidth ? this.media : null
+  }
+  /** The monitor is showing this deck: capture YouTube pictures while it does. */
+  retainVideo(): void { this.videoWanted++; this.syncVideo() }
+  releaseVideo(): void { this.videoWanted = Math.max(0, this.videoWanted - 1); this.syncVideo() }
+  private syncVideo(): void {
+    const want = this.videoWanted > 0 && this.isYouTube && !!this.yt?.videoId && !this.yt.loading
+    if (want && !this.ytVideoHeld) { this.ytVideoHeld = true; void this.yt!.retainVideo() }
+    else if (!want && this.ytVideoHeld) { this.ytVideoHeld = false; this.yt?.releaseVideo() }
+  }
+
+  private ytPlayer(): YouTubeDeck {
+    if (!this.yt) this.yt = new YouTubeDeck(this.id, this.engine.mediaHost, () => { this.connectYouTubeAudio(); this.emit() })
+    return this.yt
+  }
+
+  /** Route the captured player audio into the deck, once per capture. */
+  private connectYouTubeAudio(): void {
+    const s = this.yt?.audioStream ?? null
+    if (s === this.ytStream) return
+    this.ytSrc?.disconnect()
+    this.ytSrc = null
+    this.ytStream = s
+    if (s) {
+      this.ytSrc = this.engine.ctx.createMediaStreamSource(s)
+      this.ytSrc.connect(this.rawIn)
+    }
+  }
+
   // ── loading ──
   async load(track: DjTrack): Promise<void> {
     const gen = ++this.gen
-    this.audio.pause()
+    this.want = false
+    this.held = false
+    this.media.pause()
     this.track = track
     this.analysis = null
     this.liveEnv = null
+    this.liveLow = null
+    this.liveBpm = null
+    this.liveFirstBeat = 0
+    this.lastEnvIndex = -1
+    this.steadySince = 0
     this.duration = 0
     this.error = null
     this.cuePoint = 0
     this.hotCues = [null, null, null]
     this.loopIn = this.loopOut = null
     this.loopActive = false
+    this.autoGain = 1
+    this.applyTrim()
+    this.scratch.clearBuffer()
     if (track.youtubeId) {
-      this.audio.removeAttribute('src')
-      this.audio.load()
-      if (!this.yt) this.yt = new YouTubePlayer(this.engine.ytHost, () => this.emit())
-      this.yt.load(track.youtubeId)
+      this.media.removeAttribute('src')
+      this.media.load()
       this.duration = track.durationHint ?? 0
+      this.ensureLiveEnv()
+      this.emit()
+      const yt = this.ytPlayer()
+      const ok = await yt.load(track.youtubeId)
+      if (gen !== this.gen) return
+      if (!ok) this.error = yt.error
+      else if (yt.duration) this.duration = yt.duration
+      this.connectYouTubeAudio()
+      this.ensureLiveEnv()
       this.applyRate()
+      this.yt?.setKeyLock(this.keyLock)
+      this.syncVideo()
       this.emit()
       return
     }
     this.yt?.unload()
-    this.audio.src = `aihub-media://${track.token}/`
-    this.audio.load()
+    this.syncVideo()
+    this.media.src = `aihub-media://${track.token}/`
+    this.media.load()
     this.emit()
 
-    if (track.size > MAX_ANALYZE_BYTES) return
+    if (track.size > MAX_ANALYZE_BYTES || track.video) return
     this.analyzing = true
     this.emit()
     try {
@@ -314,8 +473,13 @@ export class Deck extends Emitter {
       for (let c = 0; c < Math.min(2, decoded.numberOfChannels); c++) chans.push(decoded.getChannelData(c))
       const a = analyze(chans, decoded.sampleRate)
       if (gen !== this.gen) return
+      const sc = scratchCopy(chans, decoded.sampleRate)
+      this.autoGain = autoGainFor(rmsOf(sc.data))
+      this.applyTrim()
+      this.scratch.setBuffer(sc.data, sc.rate)
       this.analysis = a
       this.liveEnv = null
+      this.liveLow = null
       if (!this.duration) this.duration = decoded.duration
       rememberTrack(track.path, { d: decoded.duration, bpm: a.bpm ?? undefined })
       this.applyRate()
@@ -326,33 +490,60 @@ export class Deck extends Emitter {
     }
   }
 
+  private ensureLiveEnv(): void {
+    if (this.analysis || !this.duration) return
+    const n = Math.ceil(this.duration * ENV_RATE) + 1
+    if (this.liveEnv && this.liveEnv.length === n) return
+    const grow = (old: Float32Array | null) => {
+      const next = new Float32Array(n)
+      if (old) next.set(old.subarray(0, Math.min(n, old.length)))
+      return next
+    }
+    this.liveEnv = grow(this.liveEnv)
+    this.liveLow = grow(this.liveLow)
+  }
+
   eject(): void {
     if (this.playing) return
     this.gen++
-    this.audio.removeAttribute('src')
-    this.audio.load()
+    this.want = false
+    this.media.removeAttribute('src')
+    this.media.load()
     this.yt?.unload()
+    this.scratch.clearBuffer()
     this.track = null
+    this.syncVideo()
     this.analysis = null
     this.liveEnv = null
+    this.liveLow = null
+    this.liveBpm = null
     this.duration = 0
+    this.error = null
     this.emit()
   }
 
   // ── transport ──
   async play(): Promise<void> {
     if (!this.track) return
+    this.want = true
+    this.emit()
     await this.engine.resume()
+    if (!this.want) return
     if (this.isYouTube) { this.syncYouTubeVolume(); this.yt?.play(); this.emit(); return }
-    try { await this.audio.play() } catch { /* interrupted by a new load */ }
+    try { await this.media.play() } catch { /* interrupted by a new load */ }
     this.emit()
   }
   pause(): void {
+    this.want = false
     if (this.isYouTube) this.yt?.pause()
-    else this.audio.pause()
+    else this.media.pause()
     this.emit()
   }
-  toggle(): void { this.playing ? this.pause() : void this.play() }
+  /** Play/pause from the DJ's point of view: a deck about to start counts as playing. */
+  toggle(): void {
+    if (this.held) return
+    this.active ? this.pause() : void this.play()
+  }
 
   /** Stop: pause and return to the cue point. */
   stop(): void {
@@ -363,21 +554,64 @@ export class Deck extends Emitter {
   /** CUE: while playing, jump back to the cue and stop; while stopped, set it here. */
   cue(): void {
     if (!this.track) return
-    if (this.playing) { this.pause(); this.seek(this.cuePoint) }
+    if (this.active) { this.pause(); this.seek(this.cuePoint) }
     else { this.cuePoint = this.snap(this.time); this.seek(this.cuePoint) }
     this.emit()
   }
 
   seek(t: number): void {
     if (!this.track) return
-    const max = this.duration || (this.isYouTube ? 0 : this.audio.duration) || 0
+    const max = this.duration || (this.isYouTube ? 0 : this.media.duration) || 0
     const at = Math.max(0, max ? Math.min(t, max - 0.01) : t)
     if (this.isYouTube) this.yt?.seek(at)
-    else this.audio.currentTime = at
+    else this.media.currentTime = at
+    this.lastAnchor = 0
+    this.steadySince = 0
     this.emit()
   }
 
   seekFraction(f: number): void { this.seek(f * (this.duration || 0)) }
+
+  // ── the record under the hand ──
+  /** Hand down on the record: it stops under the hand and can be scratched from here. */
+  grab(): void {
+    if (!this.track || this.held) return
+    this.holdResume = this.want
+    this.heldTime = this.time
+    this.held = true
+    this.want = false
+    if (this.isYouTube) this.yt?.pause()
+    else this.media.pause()
+    this.scratch.grab(this.heldTime)
+    this.emit()
+  }
+  /** Move the record under the hand to track time `t`. */
+  scratchTo(t: number): void {
+    if (!this.held) return
+    const max = this.duration || Infinity
+    this.heldTime = Math.max(0, Math.min(max - 0.05, t))
+    this.scratch.move(this.heldTime)
+  }
+  /** Hand off: the record spins back up (if it was playing) from where it was let go. */
+  release(): void {
+    if (!this.held) return
+    const at = this.heldTime
+    const resume = this.holdResume
+    this.held = false
+    this.holdResume = false
+    if (!resume) {
+      this.scratch.release(0, 0)
+      this.seek(at)
+      this.emit()
+      return
+    }
+    // The scratch voice carries the sound while the player catches up, then
+    // hands over. A YouTube seek takes longer to land, so it starts further on.
+    const handover = this.isYouTube ? 0.35 : 0.08
+    this.scratch.release(this.rate, handover)
+    this.seek(at + handover * this.rate)
+    void this.play()
+  }
 
   hotCue(i: number): void {
     if (!this.track) return
@@ -389,7 +623,7 @@ export class Deck extends Emitter {
 
   /** Snap to the nearest beat when the grid is known (within a 1/8 beat). */
   private snap(t: number): number {
-    if (!this.analysis?.bpm) return t
+    if (!this.gridKnown) return t
     const bl = this.beatLen
     const n = Math.round((t - this.firstBeat) / bl)
     const s = this.firstBeat + n * bl
@@ -438,7 +672,12 @@ export class Deck extends Emitter {
     this.pitchRange = PITCH_RANGES[(i + 1) % PITCH_RANGES.length]
     this.setPitch(this.pitch)
   }
-  setKeyLock(on: boolean): void { this.keyLock = on; this.applyRate(); this.emit() }
+  setKeyLock(on: boolean): void {
+    this.keyLock = on
+    this.applyRate()
+    if (this.isYouTube) this.yt?.setKeyLock(on)
+    this.emit()
+  }
   /** Temporary speed push/pull from the jog wheel. */
   setBend(b: number): void { this.bend = Math.max(-0.5, Math.min(0.5, b)); this.applyRate() }
 
@@ -455,7 +694,7 @@ export class Deck extends Emitter {
       this.pitchRange = PITCH_RANGES[PITCH_RANGES.indexOf(this.pitchRange) + 1]
     }
     this.setPitch(p)
-    if (this.analysis?.bpm && master.analysis?.bpm && master.playing) {
+    if (this.gridKnown && master.gridKnown && master.playing) {
       const phase = (d: Deck) => { const x = (d.time - d.firstBeat) / d.beatLen; return x - Math.floor(x) }
       let delta = phase(master) - phase(this)
       if (delta > 0.5) delta -= 1
@@ -467,11 +706,12 @@ export class Deck extends Emitter {
 
   private applyRate(): void {
     const r = Math.max(0.25, Math.min(4, this.rate + this.bend))
-    this.audio.playbackRate = r
-    this.audio.preservesPitch = this.keyLock
+    this.media.playbackRate = r
+    this.media.preservesPitch = this.keyLock
     if (this.isYouTube) this.yt?.setRate(r)
     const eb = this.effectiveBpm
     this.effect.setBeat(eb ? 60 / eb : 0.5)
+    this.lastAnchor = 0
   }
 
   // ── stems ──
@@ -537,8 +777,15 @@ export class Deck extends Emitter {
   }
   setGainKnob(v: number): void {
     this.gainKnob = v
-    this.trim.gain.setTargetAtTime(Math.pow(10, ((v - 0.5) * 24) / 20), this.engine.ctx.currentTime, SMOOTH)
+    this.applyTrim()
     this.emit()
+  }
+  private trimGain(): number {
+    return Math.pow(10, ((this.gainKnob - 0.5) * 24) / 20) * (this.engine.autoGain ? this.autoGain : 1)
+  }
+  /** Re-apply trim × auto-gain (the engine calls this when auto-gain is switched). */
+  applyTrim(): void {
+    this.trim.gain.setTargetAtTime(this.trimGain(), this.engine.ctx.currentTime, 0.08)
   }
   setFilterKnob(v: number): void {
     this.filterKnob = v
@@ -569,48 +816,104 @@ export class Deck extends Emitter {
     this.applyRate()
   }
 
-  /** Per-frame work: loop wrap and the live waveform. */
+  /** Per-frame work: loop wrap, the scratch recorder's clock and the live waveform. */
   tick(): void {
-    if (!this.track) return
+    if (!this.track || this.held) return
     const t = this.time
     if (this.loopActive && this.loopIn != null && this.loopOut != null && t >= this.loopOut) {
       const back = this.loopIn + ((t - this.loopOut) % (this.loopOut - this.loopIn))
       if (this.isYouTube) this.yt?.seek(back)
-      else this.audio.currentTime = back
+      else this.media.currentTime = back
+      this.lastAnchor = 0
+    }
+    const playing = this.playing
+    const now = performance.now()
+    // Tell the recorder where the deck is: on every change and a few times a second.
+    if (now - this.lastAnchor > 250) {
+      this.lastAnchor = now
+      this.scratch.anchor(t, this.rate + this.bend, playing && !this.adPlaying && !this.loading)
     }
     if (this.isYouTube && this.yt) {
-      if (this.yt.duration && this.yt.duration !== this.duration) { this.duration = this.yt.duration; this.emit() }
+      if (this.yt.duration && Math.abs(this.yt.duration - this.duration) > 0.5) { this.duration = this.yt.duration; this.ensureLiveEnv(); this.emit() }
       if (this.yt.error && this.yt.error !== this.error) { this.error = this.yt.error; this.emit() }
       this.syncYouTubeVolume()
-      return
     }
-    if (this.liveEnv && this.playing) {
+    if (this.liveEnv && playing && !this.adPlaying) {
       const i = Math.floor(t * ENV_RATE)
       if (i >= 0 && i < this.liveEnv.length) {
-        this.preAnalyser.getFloatTimeDomainData(this.liveBuf)
-        let p = 0
-        for (let k = 0; k < this.liveBuf.length; k++) { const a = Math.abs(this.liveBuf[k]); if (a > p) p = a }
-        if (p > this.liveEnv[i]) this.liveEnv[i] = Math.min(1, p)
+        const peakOf = (an: AnalyserNode) => {
+          an.getFloatTimeDomainData(this.liveBuf)
+          let p = 0
+          for (let k = 0; k < this.liveBuf.length; k++) { const a = Math.abs(this.liveBuf[k]); if (a > p) p = a }
+          return Math.min(1, p)
+        }
+        const p = peakOf(this.preAnalyser)
+        // The low band is drawn as a share of the full height, like the decoded waveform.
+        const lo = p > 0 ? Math.min(1, peakOf(this.lowAnalyser) / p) : 0
+        // Frames arrive slower than the envelope rate: fill the gap since the last one.
+        const from = this.lastEnvIndex >= 0 && i - this.lastEnvIndex > 0 && i - this.lastEnvIndex < 6 ? this.lastEnvIndex + 1 : i
+        for (let k = from; k <= i; k++) {
+          if (p > this.liveEnv[k]) this.liveEnv[k] = p
+          if (this.liveLow && lo > this.liveLow[k]) this.liveLow[k] = lo
+        }
+        this.lastEnvIndex = i
       }
+    } else this.lastEnvIndex = -1
+    // Songs never decoded up front get their tempo measured from what they played.
+    if (!this.analysis && !this.liveBpm && playing && this.fullControl && !this.measuringTempo && !this.adPlaying) {
+      if (!this.steadySince) this.steadySince = now
+      else if (now - this.steadySince > LIVE_TEMPO_AFTER * 1000) void this.measureTempo()
+    } else if (!playing) this.steadySince = 0
+  }
+
+  private async measureTempo(): Promise<void> {
+    this.measuringTempo = true
+    const gen = this.gen
+    try {
+      const d = await this.scratch.dump()
+      if (!d || gen !== this.gen || d.data.length < d.sampleRate * 12) { this.steadySince = 0; return }
+      const a = analyze([d.data], d.sampleRate)
+      if (gen !== this.gen) return
+      // The recording ran in real time at the deck's rate; convert to track time.
+      if (a.bpm) {
+        let bpm = a.bpm / d.rate
+        // A bpm read at a non-unity rate keeps its precision; tidy only near whole numbers.
+        if (Math.abs(bpm - Math.round(bpm)) < 0.15) bpm = Math.round(bpm)
+        this.liveBpm = bpm
+        const beat = 60 / bpm
+        const first = d.t0 + a.firstBeat * d.rate
+        this.liveFirstBeat = ((first % beat) + beat) % beat
+        this.applyRate()
+      }
+      if (this.autoGain === 1) {
+        this.autoGain = autoGainFor(rmsOf(d.data))
+        this.applyTrim()
+      }
+      this.emit()
+    } finally {
+      this.measuringTempo = false
+      if (!this.liveBpm) this.steadySince = 0
     }
   }
 
   /**
-   * YouTube audio never enters the graph, so the mixer is applied to it as
-   * plain volume: channel fader × crossfader × trim × master.
+   * A YouTube deck that could not be captured is heard straight from its
+   * player, so the mixer is applied as plain volume there.
    */
   private syncYouTubeVolume(): void {
-    if (!this.yt) return
+    if (!this.yt || this.yt.captured) return
     const [a, b] = crossfadeGains(this.engine.crossfader)
-    const trim = Math.pow(10, ((this.gainKnob - 0.5) * 24) / 20)
-    this.yt.setVolume(faderGain(this.volume) * (this.id === 'A' ? a : b) * faderGain(this.engine.masterVolume) * trim)
+    this.yt.setVolume(Math.min(1, faderGain(this.volume) * (this.id === 'A' ? a : b) * masterGain(this.engine.masterVolume) * this.trimGain()))
   }
 
   dispose(): void {
     this.gen++
-    this.audio.pause()
-    this.audio.removeAttribute('src')
+    this.want = false
+    this.media.pause()
+    this.media.removeAttribute('src')
+    this.media.remove()
     this.yt?.dispose()
+    this.scratch.dispose()
     this.effect.dispose()
   }
 }
@@ -626,7 +929,9 @@ export class DjEngine extends Emitter {
   private meterR: AnalyserNode
   private meterBuf = new Float32Array(1024)
   crossfader = 0.5
-  masterVolume = 0.85
+  masterVolume = 0.75
+  /** Level songs so quiet uploads and hot masters sit together. */
+  autoGain = true
 
   // headphones
   private phonesMix: GainNode
@@ -645,16 +950,19 @@ export class DjEngine extends Emitter {
   recStartedAt = 0
   recBytes = 0
 
+  // automatic crossfade
+  private fade: { from: number; to: number; start: number; ms: number } | null = null
+
   private raf = 0
-  /** Off-screen home for the YouTube deck players. */
-  readonly ytHost: HTMLDivElement
+  /** Off-screen home for the decks' media elements and YouTube picture feeds. */
+  readonly mediaHost: HTMLDivElement
 
   constructor() {
     super()
     this.ctx = new AudioContext({ latencyHint: 'interactive' })
     this.masterIn = this.ctx.createGain()
     this.master = this.ctx.createGain()
-    this.master.gain.value = faderGain(this.masterVolume)
+    this.master.gain.value = masterGain(this.masterVolume)
     this.limiter = this.ctx.createDynamicsCompressor()
     this.limiter.threshold.value = -1
     this.limiter.knee.value = 0
@@ -683,10 +991,10 @@ export class DjEngine extends Emitter {
     this.phonesMix.connect(this.phonesDest)
     this.applyPhones()
 
-    this.ytHost = document.createElement('div')
-    this.ytHost.setAttribute('aria-hidden', 'true')
-    this.ytHost.style.cssText = 'position:fixed;left:-10000px;top:0;width:200px;height:240px;overflow:hidden;pointer-events:none'
-    document.body.appendChild(this.ytHost)
+    this.mediaHost = document.createElement('div')
+    this.mediaHost.setAttribute('aria-hidden', 'true')
+    this.mediaHost.style.cssText = 'position:fixed;left:-10000px;top:0;width:200px;height:240px;overflow:hidden;pointer-events:none'
+    document.body.appendChild(this.mediaHost)
 
     this.decks = { A: new Deck('A', this), B: new Deck('B', this) }
     this.setCrossfader(0.5)
@@ -694,6 +1002,7 @@ export class DjEngine extends Emitter {
     const loop = () => {
       this.decks.A.tick()
       this.decks.B.tick()
+      this.tickFade()
       this.raf = requestAnimationFrame(loop)
     }
     this.raf = requestAnimationFrame(loop)
@@ -703,7 +1012,8 @@ export class DjEngine extends Emitter {
     if (this.ctx.state === 'suspended') await this.ctx.resume()
   }
 
-  setCrossfader(x: number): void {
+  setCrossfader(x: number, fromFade = false): void {
+    if (!fromFade) this.fade = null
     this.crossfader = Math.min(1, Math.max(0, x))
     const [a, b] = crossfadeGains(this.crossfader)
     this.decks.A.xfade.gain.setTargetAtTime(a, this.ctx.currentTime, SMOOTH)
@@ -711,9 +1021,32 @@ export class DjEngine extends Emitter {
     this.emit()
   }
 
+  /** Glide the crossfader to `to` over `seconds` (a hand-free transition). */
+  fadeTo(to: number, seconds: number): void {
+    this.fade = { from: this.crossfader, to: Math.min(1, Math.max(0, to)), start: performance.now(), ms: Math.max(50, seconds * 1000) }
+    this.emit()
+  }
+  get fading(): boolean { return !!this.fade }
+  private tickFade(): void {
+    const f = this.fade
+    if (!f) return
+    const p = Math.min(1, (performance.now() - f.start) / f.ms)
+    // Ease in and out so the blend does not lurch at either end.
+    const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2
+    this.setCrossfader(f.from + (f.to - f.from) * e, true)
+    if (p >= 1) { this.fade = null; this.emit() }
+  }
+
   setMasterVolume(v: number): void {
     this.masterVolume = v
-    this.master.gain.setTargetAtTime(faderGain(v), this.ctx.currentTime, SMOOTH)
+    this.master.gain.setTargetAtTime(masterGain(v), this.ctx.currentTime, SMOOTH)
+    this.emit()
+  }
+
+  setAutoGain(on: boolean): void {
+    this.autoGain = on
+    this.decks.A.applyTrim()
+    this.decks.B.applyTrim()
     this.emit()
   }
 
@@ -785,7 +1118,7 @@ export class DjEngine extends Emitter {
     if (this.recorder && this.recorder.state !== 'inactive') this.recorder.stop()
     this.decks.A.dispose()
     this.decks.B.dispose()
-    this.ytHost.remove()
+    this.mediaHost.remove()
     void this.setPhonesDevice(null)
     void this.ctx.close()
   }

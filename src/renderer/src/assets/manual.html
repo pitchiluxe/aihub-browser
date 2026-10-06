@@ -864,16 +864,25 @@
 
           <h3 style="margin-top:28px">What the console does</h3>
           <div class="grid g2" style="margin-top:12px">
-            <div class="feat"><h4><span class="dot" style="background:var(--rose)"></span>Turntables</h4><p>The loaded song's artwork (or its YouTube thumbnail) spins on the record. Hold the record to stop and scratch; drag its outer rim while playing to nudge the tempo. Pitch fader with 8 / 12 / 16 / 50 % ranges and key lock.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--rose)"></span>Turntables</h4><p>The loaded song's artwork (or its YouTube thumbnail) spins on the record. Hold the record and move it to scratch — the sound follows your hand's speed and direction, forwards and backwards, and the record spins back up when you let go. Drag its outer rim while playing to nudge the tempo. Pitch fader with 8 / 12 / 16 / 50 % ranges and key lock.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Waveforms &amp; BPM</h4><p>Each song is analysed when it loads: tempo and beat grid, a live waveform under the title that runs past the playhead, a thin whole-song bar to click and jump, and a scrolling view of both decks for beat-matching by eye.</p></div>
-            <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Mixer</h4><p>Gain, 3-band EQ (fully left kills the band), channel faders with level meters, master volume and a constant-power crossfader.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--emerald)"></span>Mixer</h4><p>Gain, 3-band EQ (fully left kills the band), channel faders with level meters, master volume with headroom and a limiter, and a club-style crossfader that keeps both decks at full level through the middle. Auto-gain levels quiet and loud songs; the ⇄ button fades across to the other deck on its own.</p></div>
+            <div class="feat"><h4><span class="dot" style="background:var(--sky)"></span>Video</h4><p>Switch the mixer from <strong>MIXER</strong> to <strong>VIDEO</strong> to watch YouTube songs and music videos (mp4, mkv, mov). The crossfader blends the pictures just like the sound; audio-only songs show their artwork. The corner button opens a big screen.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--violet)"></span>Stems</h4><p>Mute Vocal, Instru, Bass, Kick or HiHat, or jump to (Acapella) / (Instrumental). Separation works on frequency bands and centre-panned vocals, so it is a fast approximation rather than studio isolation.</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--amber)"></span>Effects, loops &amp; cues</h4><p>Flanger, Echo (beat-synced), Filter, Reverb and Phaser with strength and speed knobs; a quick filter knob; beat-sized auto loops with /2 and X2; three hot cues (right-click to clear).</p></div>
             <div class="feat"><h4><span class="dot" style="background:var(--rose)"></span>Record &amp; headphones</h4><p><strong>REC</strong> records your mix and saves it as a <code>.webm</code> file. The 🎧 button sends pre-listen to a second sound card or headset.</p></div>
           </div>
 
           <h3 style="margin-top:28px">YouTube</h3>
-          <p>Pick <em>YouTube</em> under <em>Online</em> in the browser, search for an artist, song or mix, and drag a result onto a deck. YouTube songs play in YouTube's own embedded player, so play, cue, seek, loops, volume, the crossfader and Automix all work. EQ, effects, stems and waveforms only apply to your local files, and tempo changes snap to YouTube's speed steps.</p>
+          <p>Pick <em>YouTube</em> under <em>Online</em> in the browser, search for an artist, song or mix, and drag a result onto a deck. YouTube songs run through the whole mixer like your own files — EQ, effects, stems, meters, scratching, any tempo and key lock. Their waveform draws as the song plays, and the tempo is measured after about 25 seconds so SYNC works too.</p>
+          <h3 style="margin-top:20px">YouTube queue &amp; playlists</h3>
+          <ul>
+            <li>On any YouTube result, the list button adds it to the <strong>QUEUE</strong> tab, the heart adds it to <strong>Favorites</strong>, and ⇄ <strong>mixes it in now</strong>. The list button next to the search box queues every result.</li>
+            <li>Make more playlists with <strong>+</strong>; drag songs to reorder them or onto a deck. Shuffle and repeat are next to <strong>Play list</strong>.</li>
+            <li><strong>Play list</strong> turns on Automix: each song is loaded on the free deck ahead of time and crossfaded in, so the set moves from artist to artist without a gap.</li>
+          </ul>
+          <h3 style="margin-top:20px">Keyboard</h3>
+          <p><kbd>Q</kbd> / <kbd>P</kbd> play deck A / B · <kbd>W</kbd> / <kbd>O</kbd> cue · <kbd>1</kbd>–<kbd>3</kbd> and <kbd>8</kbd>–<kbd>0</kbd> hot cues · <kbd>S</kbd> sync · <kbd>←</kbd> <kbd>→</kbd> crossfader (<kbd>Shift</kbd> fades all the way) · <kbd>M</kbd> fade across · <kbd>A</kbd> Automix. The ⚙ menu lists them all with the mixing settings.</p>
 
           <h3 style="margin-top:28px">AI DJ</h3>
           <p>Open the <strong>AI DJ</strong> tab on the right of the browser and describe a vibe — "sunset afro-house for a rooftop party" — or tap a suggestion.</p>
@@ -881,7 +890,9 @@
             <li><strong>Build set</strong> asks your AI model (local Ollama by default) to pick and order songs, finds each one on YouTube, and adds them to the Sidelist.</li>
             <li><strong>AI DJ</strong> builds the set and turns on <strong>Automix</strong>, which loads the next song, matches its tempo when it can, and crossfades it in.</li>
             <li><strong>Keep it going</strong> adds more songs, continuing from the last one, whenever the Sidelist runs low.</li>
+            <li><strong>Let the AI take over</strong> makes the AI the DJ: with no vibe needed, it builds the set from what it has learnt you like and keeps it going.</li>
           </ul>
+          <p>It learns from what you do on the console: songs you play to the end, songs you skip early, 👍 / 👎 on each deck, favourites, queued songs and your YouTube searches — recent habits count most, and it notes what you play at each time of day. <strong>Your taste</strong> in the AI DJ tab shows what it knows, the artists it will avoid, and your recent plays. Learning can be turned off or forgotten there; it stays on this computer, and nothing is learnt in a private window.</p>
           <div class="note">The AI only names songs. Every track it plays is a real YouTube search result — if a pick can't be found it is skipped and listed in the AI DJ log.</div>
 
           <h3 style="margin-top:28px">Make it yours</h3>

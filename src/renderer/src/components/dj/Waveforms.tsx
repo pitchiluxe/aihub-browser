@@ -13,7 +13,7 @@ const DECK_COLORS = { A: { hi: '#4cc3ff', lo: '#1d5fff' }, B: { hi: '#ff8a3d', l
 
 function envOf(deck: Deck): { amp: Float32Array; low: Float32Array | null } | null {
   if (deck.analysis) return { amp: deck.analysis.env.amp, low: deck.analysis.env.low }
-  if (deck.liveEnv) return { amp: deck.liveEnv, low: null }
+  if (deck.liveEnv) return { amp: deck.liveEnv, low: deck.liveLow }
   return null
 }
 
@@ -50,8 +50,8 @@ export function OverviewWave({ deck, height = 34 }: { deck: Deck; height?: numbe
     ctx.clearRect(0, 0, w, h)
     const env = envOf(deck)
     const dur = deck.duration
-    if (deck.isYouTube) {
-      // No audio reaches the page for a YouTube stream, so draw a progress bar.
+    if (deck.isYouTube && (!deck.fullControl || deck.loading || !dur)) {
+      // Loading, or a stream whose audio could not be captured: a progress bar.
       ctx.fillStyle = 'rgba(255,255,255,0.08)'
       ctx.fillRect(0, h / 2 - 3, w, 6)
       if (dur) {
@@ -65,7 +65,7 @@ export function OverviewWave({ deck, height = 34 }: { deck: Deck; height?: numbe
       if (h >= 16) {
         ctx.fillStyle = 'rgba(255,255,255,0.55)'
         ctx.font = 'bold 11px Inter, Arial'
-        ctx.fillText(dur ? 'YOUTUBE STREAM' : 'Loading from YouTube…', 4, 9)
+        ctx.fillText(deck.loading || !dur ? 'Loading from YouTube…' : 'YOUTUBE · DIRECT PLAYBACK', 4, 9)
       }
       return
     }
@@ -78,6 +78,7 @@ export function OverviewWave({ deck, height = 34 }: { deck: Deck; height?: numbe
       return
     }
     const key = deck.analysis ?? deck.liveEnv
+    // A song measured as it plays: the waveform grows behind the playhead.
     const live = !deck.analysis
     if (!cache.current || cache.current.key !== key || cache.current.w !== w || live) {
       const img = cache.current?.img ?? document.createElement('canvas')
@@ -98,6 +99,12 @@ export function OverviewWave({ deck, height = 34 }: { deck: Deck; height?: numbe
           if (env.low && env.low[f] > l) l = env.low[f]
         }
         const ah = a * (h / 2 - 1)
+        if (live && !a) {
+          // Not heard yet: a faint groove instead of an empty gap.
+          g.fillStyle = 'rgba(255,255,255,0.12)'
+          g.fillRect(x, mid - 0.5, 1, 1)
+          continue
+        }
         g.fillStyle = col.hi
         g.fillRect(x, mid - ah, 1, ah * 2)
         if (env.low) {
@@ -200,7 +207,7 @@ export function ZoomWave({ decks, compact = false, seconds = ZOOM_SECONDS }: {
       }
 
       // Beat grid
-      if (deck.analysis?.bpm) {
+      if (deck.gridKnown) {
         const bl = deck.beatLen
         const first = deck.firstBeat
         let n = Math.ceil((t0 - first) / bl)
@@ -232,10 +239,15 @@ export function ZoomWave({ decks, compact = false, seconds = ZOOM_SECONDS }: {
       ctx.font = 'bold 11px Inter, Arial'
       if (!compact) ctx.fillText(deck.id, 4, top + 11)
       else if (deck.isYouTube) {
-        // A YouTube stream's audio never reaches the page, so there is no
-        // waveform to draw — say so rather than leave the strip looking broken.
-        ctx.fillStyle = 'rgba(255,255,255,0.45)'
-        ctx.fillText(deck.duration ? 'YouTube stream · EQ, FX, stems & waveform are for local files' : 'Loading from YouTube…', 6, mid + 4)
+        // Say what is going on rather than leave the strip looking broken.
+        const note = deck.loading || !deck.duration ? 'Loading from YouTube…'
+          : deck.adPlaying ? 'Advert playing — the song starts right after it'
+          : !deck.fullControl ? 'YouTube direct playback · this video could not be routed through the mixer'
+          : null
+        if (note) {
+          ctx.fillStyle = 'rgba(255,255,255,0.5)'
+          ctx.fillText(note, 6, mid + 4)
+        }
       }
     })
 

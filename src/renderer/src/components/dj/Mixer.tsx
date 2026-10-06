@@ -3,15 +3,17 @@
  * master and headphone section, PFL and a constant-power crossfader.
  */
 import React, { useSyncExternalStore } from 'react'
-import { Headphones } from 'lucide-react'
+import { Headphones, ArrowLeftRight } from 'lucide-react'
 import type { DjEngine, Deck, EqBand } from './engine/DjEngine'
 import { HFader, Knob, VFader, VuMeter, useDeck } from './controls'
+import VideoMonitor from './VideoMonitor'
 
 function Channel({ deck }: { deck: Deck }) {
   useDeck(deck)
+  const limited = !deck.fullControl
   const bands: { b: EqBand; label: string }[] = [{ b: 'high', label: 'HIGH' }, { b: 'mid', label: 'MID' }, { b: 'low', label: 'LOW' }]
   return (
-    <div className="dj-ch">
+    <div className={`dj-ch ${limited ? 'dj-limited' : ''}`} title={limited ? 'This YouTube video plays directly — only volume and the crossfader reach it' : undefined}>
       <Knob value={deck.gainKnob} onChange={v => deck.setGainKnob(v)} label="GAIN" size={24} color="#e5e7eb" title="Trim ±12 dB" />
       {bands.map(({ b, label }) => (
         <Knob key={b} value={deck.eq[b]} onChange={v => deck.setEq(b, v)} label={label} size={26}
@@ -34,12 +36,30 @@ function Strip({ deck }: { deck: Deck }) {
   )
 }
 
-export default function Mixer({ engine }: { engine: DjEngine }) {
+export default function Mixer({ engine, view, setView, onBigVideo, fadeSeconds }: {
+  engine: DjEngine
+  view: 'mixer' | 'video'
+  setView: (v: 'mixer' | 'video') => void
+  onBigVideo: () => void
+  fadeSeconds: number
+}) {
   const { A, B } = engine.decks
   useSyncExternalStore(engine.subscribe, engine.getVersion)
+  // Fade across to whichever side the fader is further from.
+  const fadeAcross = () => engine.fading ? engine.setCrossfader(engine.crossfader) : engine.fadeTo(engine.crossfader < 0.5 ? 1 : 0, fadeSeconds)
   return (
     <div className="dj-mixer dj-panel">
-      <div className="dj-mixer-tabs"><span>CH A</span><b>MIXER</b><span>CH B</span></div>
+      <div className="dj-mixer-tabs">
+        <span>CH A</span>
+        <div className="dj-mixer-switch" role="tablist">
+          <button type="button" role="tab" aria-selected={view === 'mixer'} className={view === 'mixer' ? 'on' : ''} onClick={() => setView('mixer')}>MIXER</button>
+          <button type="button" role="tab" aria-selected={view === 'video'} className={view === 'video' ? 'on' : ''} onClick={() => setView('video')}>VIDEO</button>
+        </div>
+        <span>CH B</span>
+      </div>
+      {view === 'video' ? (
+        <div className="dj-mixer-video"><VideoMonitor engine={engine} onToggleBig={onBigVideo} /></div>
+      ) : (
       <div className="dj-mixer-body">
         <Channel deck={A} />
         <div className="dj-mixer-center">
@@ -60,6 +80,7 @@ export default function Mixer({ engine }: { engine: DjEngine }) {
         </div>
         <Channel deck={B} />
       </div>
+      )}
       <div className="dj-mixer-faders">
         <Strip deck={A} />
         <div className="dj-mixer-logo">
@@ -71,8 +92,12 @@ export default function Mixer({ engine }: { engine: DjEngine }) {
       </div>
       <div className="dj-xfader">
         <span>◂ A</span>
-        <HFader value={engine.crossfader} onChange={v => engine.setCrossfader(v)} width={150} title="Crossfader (double-click to centre)" />
+        <HFader value={engine.crossfader} onChange={v => engine.setCrossfader(v)} width={130} title="Crossfader (double-click to centre)" />
         <span>B ▸</span>
+        <button type="button" className={`dj-mini dj-fade-btn ${engine.fading ? 'dj-on dj-on-blue' : ''}`} onClick={fadeAcross}
+          title={engine.fading ? 'Stop the fade here' : `Fade across to the other deck over ${fadeSeconds} s`}>
+          <ArrowLeftRight size={10} />
+        </button>
       </div>
     </div>
   )
