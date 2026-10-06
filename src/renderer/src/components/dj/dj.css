@@ -39,7 +39,10 @@
 /* ── Panels with screws ── */
 .aihub-dj .dj-panel {
   position: relative;
-  background: var(--dj-metal);
+  /* Lacquer: a bright top reflection with a soft horizon, over the metal. */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.10) 38%, rgba(255,255,255,0) 40%, rgba(255,255,255,0) 88%, rgba(255,255,255,0.10) 100%),
+    var(--dj-metal);
   border: 1px solid var(--dj-edge);
   border-radius: 6px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.45), var(--dj-glow);
@@ -59,7 +62,10 @@
 
 /* ── LCD surfaces ── */
 .aihub-dj .dj-lcd {
-  background: linear-gradient(180deg, #17181c, var(--dj-lcd));
+  /* Glass over the display: a diagonal reflection across the top. */
+  background:
+    linear-gradient(168deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.04) 42%, rgba(255,255,255,0) 43%),
+    linear-gradient(180deg, #17181c, var(--dj-lcd));
   border: 1px solid #000;
   border-radius: 3px;
   box-shadow: inset 0 2px 6px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.6);
@@ -133,7 +139,7 @@
 .aihub-dj .dj-zoomwave { position: absolute; top: 6px; bottom: 6px; left: 18px; right: 18px; display: block; width: calc(100% - 36px); height: calc(100% - 12px); background: #0b0c0e; border: 1px solid #000; border-radius: 3px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.9); }
 
 /* ── Track info row ── */
-.aihub-dj .dj-row-info { display: grid; grid-template-columns: var(--dj-cols); gap: 6px; height: 74px; }
+.aihub-dj .dj-row-info { display: grid; grid-template-columns: var(--dj-cols); gap: 6px; height: 88px; }
 .aihub-dj .dj-row-info > .dj-info:first-child { grid-column: 1 / span 2; }
 .aihub-dj .dj-row-info > .dj-info:last-child { grid-column: 4 / span 2; }
 .aihub-dj .dj-info { display: flex; gap: 6px; padding: 10px 10px 8px 16px; }
@@ -183,6 +189,7 @@
 }
 .aihub-dj .dj-btn:hover { color: #fff; }
 .aihub-dj .dj-btn:active { transform: translateY(0.5px); }
+.aihub-dj .dj-stem-grid .dj-btn.dj-small { font-size: 9.5px; padding: 0 1px; letter-spacing: -0.2px; }
 .aihub-dj .dj-btn.dj-small { font-size: 11px; padding: 0 2px; }
 .aihub-dj .dj-btn.dj-big { width: 46px; height: 36px; font-size: 13.5px; background: var(--dj-light); color: var(--dj-light-ink); border-color: var(--dj-light-edge); }
 .aihub-dj .dj-on.dj-on-green { color: #fff !important; background: linear-gradient(#2ea043, #1a6e2c) !important; box-shadow: 0 0 9px rgba(74,222,128,0.55), inset 0 1px rgba(255,255,255,0.25) !important; }
@@ -231,7 +238,20 @@
 .aihub-dj .dj-tt { display: flex; flex-direction: column; justify-content: space-between; padding: 12px 10px 10px; }
 .aihub-dj .dj-tt-main { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .aihub-dj .dj-tt.dj-mirror .dj-tt-main { flex-direction: row; }
-.aihub-dj .dj-platter { flex: none; border-radius: 50%; box-shadow: 0 6px 16px rgba(0,0,0,0.45); }
+.aihub-dj .dj-platter { position: relative; flex: none; border-radius: 50%; box-shadow: 0 10px 22px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.6); }
+/* Wax: fine grooves catch two opposing light wedges (anisotropic shine). */
+.aihub-dj .dj-vinyl-gloss {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  background:
+    conic-gradient(from 0deg,
+      rgba(255,255,255,0) 0deg, rgba(255,255,255,0.08) 16deg, rgba(255,255,255,0.42) 34deg, rgba(255,255,255,0.62) 40deg, rgba(255,255,255,0.40) 46deg, rgba(255,255,255,0.08) 64deg, rgba(255,255,255,0) 84deg,
+      rgba(255,255,255,0) 180deg, rgba(255,255,255,0.06) 196deg, rgba(255,255,255,0.34) 214deg, rgba(255,255,255,0.48) 220deg, rgba(255,255,255,0.30) 226deg, rgba(255,255,255,0.06) 244deg, rgba(255,255,255,0) 262deg),
+    repeating-radial-gradient(circle, rgba(255,255,255,0.05) 0 1px, rgba(0,0,0,0) 1px 3px),
+    radial-gradient(circle at 30% 24%, rgba(255,255,255,0.28), rgba(255,255,255,0) 40%);
+  -webkit-mask: radial-gradient(circle, transparent 0 38.5%, #000 40% 99%, transparent 100%);
+          mask: radial-gradient(circle, transparent 0 38.5%, #000 40% 99%, transparent 100%);
+  mix-blend-mode: screen;
+}
 .aihub-dj .dj-tt-side { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .aihub-dj .dj-range { width: 34px; height: 18px; padding: 0; font-size: 12.5px; font-weight: 800; color: #86efac; border: 0; }
 .aihub-dj .dj-mini {
@@ -294,8 +314,10 @@
 .aihub-dj .dj-meters { display: flex; gap: 6px; align-items: flex-end; height: 96px; overflow: hidden; }
 .aihub-dj .dj-master-meters { display: flex; gap: 2px; padding: 0 4px; border-left: 1px solid rgba(0,0,0,0.2); border-right: 1px solid rgba(0,0,0,0.2); }
 .aihub-dj .dj-row { display: flex; gap: 10px; }
+.aihub-dj .dj-mixer .dj-knob-label { font-size: 9.5px; }
 .aihub-dj .dj-mixer-faders { flex: 1; min-height: 0; display: flex; align-items: flex-end; justify-content: space-between; padding: 2px 14px 0; }
-.aihub-dj .dj-strip { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.aihub-dj .dj-strip { display: flex; flex-direction: row; align-items: flex-end; gap: 3px; }
+.aihub-dj .dj-mixer-faders > .dj-strip:last-child { flex-direction: row-reverse; }
 .aihub-dj .dj-pfl { width: 24px; }
 .aihub-dj .dj-mixer-logo { display: flex; flex-direction: column; align-items: center; justify-content: center; align-self: center; line-height: 1; font-style: italic; font-weight: 900; }
 .aihub-dj .dj-logo-ai { font-size: 20px; background: linear-gradient(90deg, #e11d2e, #f97316); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: -0.5px; }
@@ -415,6 +437,18 @@
 .aihub-dj .dj-ai-line { font-size: 12px; line-height: 1.5; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aihub-dj .dj-ai-pick { color: #e9d5ff; }
 .aihub-dj .dj-ai-err { color: #fca5a5; white-space: normal; }
+
+/* Glossy buttons: a light reflection across the upper half of every key. */
+.aihub-dj .dj-btn, .aihub-dj .dj-tbtn, .aihub-dj .dj-pad, .aihub-dj .dj-mini, .aihub-dj .dj-rec-btn, .aihub-dj .dj-automix,
+.aihub-dj .dj-ai-gen, .aihub-dj .dj-ai-go, .aihub-dj .dj-deck-letter { position: relative; overflow: hidden; }
+.aihub-dj .dj-btn::after, .aihub-dj .dj-tbtn::after, .aihub-dj .dj-pad::after, .aihub-dj .dj-mini::after, .aihub-dj .dj-stem::after,
+.aihub-dj .dj-rec-btn::after, .aihub-dj .dj-automix::after, .aihub-dj .dj-ai-gen::after, .aihub-dj .dj-ai-go::after, .aihub-dj .dj-deck-letter::after {
+  content: ''; position: absolute; left: 1px; right: 1px; top: 1px; height: 48%;
+  border-radius: 2px 2px 50% 50% / 2px 2px 5px 5px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.38), rgba(255,255,255,0.06));
+  pointer-events: none;
+}
+.aihub-dj .dj-stem { overflow: hidden; }
 
 /* Drop target highlight */
 .aihub-dj .dj-drop-hot { outline: 3px dashed #22c55e; outline-offset: -4px; box-shadow: 0 0 18px rgba(34,197,94,0.55) !important; }

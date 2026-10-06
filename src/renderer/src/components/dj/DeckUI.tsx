@@ -125,12 +125,12 @@ export function DeckPads({ deck, onDropTrack }: { deck: Deck; onDropTrack: DeckD
           {STEMS.slice(0, 3).map(x => (
             <StemBtn key={x.k} label={x.label} color={x.color} on={s[x.k]} onClick={() => deck.setStem(x.k, !s[x.k])} />
           ))}
-          <LedButton on={acapella} color="green" className="dj-small" onClick={() => deck.soloStem('acapella')} title="Vocals only">(Acapella)</LedButton>
+          <LedButton on={acapella} color="green" className="dj-small" onClick={() => deck.soloStem('acapella')} title="Acapella — vocals only">Acapella</LedButton>
           {STEMS.slice(3).map(x => (
             <StemBtn key={x.k} label={x.label} color={x.color} on={s[x.k]} onClick={() => deck.setStem(x.k, !s[x.k])} />
           ))}
           <LedButton className="dj-small" onClick={() => { for (const x of STEMS) deck.setStem(x.k, true) }} title="Bring every stem back">Reset</LedButton>
-          <LedButton on={instrumental} color="orange" className="dj-small" onClick={() => deck.soloStem('instrumental')} title="Remove vocals">(Instrumental)</LedButton>
+          <LedButton on={instrumental} color="orange" className="dj-small" onClick={() => deck.soloStem('instrumental')} title="Instrumental — remove vocals">Instrum.</LedButton>
         </div>
       </div>
 

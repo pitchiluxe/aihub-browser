@@ -97,6 +97,11 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
             <stop offset="55%" stopColor="rgba(255,255,255,0)" />
             <stop offset="100%" stopColor="rgba(255,255,255,0.10)" />
           </linearGradient>
+          <radialGradient id={`labelgloss-${deck.id}`} cx="35%" cy="25%" r="75%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.55)" />
+            <stop offset="35%" stopColor="rgba(255,255,255,0.12)" />
+            <stop offset="60%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
           <radialGradient id={`plate-${deck.id}`} cx="45%" cy="40%" r="65%">
             <stop offset="0%" stopColor="#e8eaed" />
             <stop offset="100%" stopColor="#8d939b" />
@@ -118,6 +123,8 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
         </g>
         {/* Fixed sheen — stays put while the record spins under it */}
         <circle cx={c} cy={c} r={c * 0.92} fill={`url(#sheen-${deck.id})`} pointerEvents="none" />
+        {/* Glossy label: a soft highlight that does not turn with the record */}
+        <circle cx={c} cy={c} r={c * 0.36} fill={`url(#labelgloss-${deck.id})`} pointerEvents="none" />
         <circle cx={c} cy={c} r={c * 0.035} fill="#d9dce0" stroke="#555" strokeWidth={0.5} pointerEvents="none" />
         {/* Tonearm */}
         <g ref={armRef} pointerEvents="none">
@@ -127,6 +134,8 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
           <rect x={size * 0.765} y={size * 0.78} width={size * 0.06} height={size * 0.1} rx={2} fill="#3a3c40" transform={`rotate(25 ${size * 0.8} ${size * 0.8})`} />
         </g>
       </svg>
+      {/* Light reflections on the vinyl — fixed, so the record spins beneath them */}
+      <div className="dj-vinyl-gloss" style={{ inset: size * 0.04 }} />
     </div>
   )
 }
