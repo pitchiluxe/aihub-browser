@@ -354,9 +354,9 @@
 .aihub-dj .dj-count { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: 13.5px; color: #d1d5db; }
 .aihub-dj .dj-spin { animation: dj-spin 1s linear infinite; }
 
-.aihub-dj .dj-coverflow { position: relative; height: 150px; flex: none; overflow: hidden; perspective: 700px; background: linear-gradient(#141518, #0c0d0f); border-bottom: 1px solid #000; }
+.aihub-dj .dj-coverflow { position: relative; height: 118px; flex: none; overflow: hidden; perspective: 700px; background: linear-gradient(#141518, #0c0d0f); border-bottom: 1px solid #000; }
 .aihub-dj .dj-cf-item {
-  position: absolute; left: 50%; top: 10px; width: 122px; height: 122px;
+  position: absolute; left: 50%; top: 8px; width: 96px; height: 96px;
   transition: transform 0.35s cubic-bezier(.2,.8,.2,1), opacity 0.35s;
   cursor: pointer; transform-style: preserve-3d;
   -webkit-box-reflect: below 2px linear-gradient(transparent 70%, rgba(255,255,255,0.18));
@@ -453,6 +453,9 @@
 /* Live waveform in each deck's track strip */
 .aihub-dj .dj-stripwave-wrap { position: relative; flex: 1; min-height: 22px; margin: 2px 0; border-radius: 2px; overflow: hidden; background: #08090b; }
 .aihub-dj .dj-stripwave { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.aihub-dj .dj-covers-btn.on { color: #fff; background: rgba(255,255,255,0.1); }
+.aihub-dj .dj-tbody { overscroll-behavior: contain; }
 
 /* Drop target highlight */
 .aihub-dj .dj-drop-hot { outline: 3px dashed #22c55e; outline-offset: -4px; box-shadow: 0 0 18px rgba(34,197,94,0.55) !important; }

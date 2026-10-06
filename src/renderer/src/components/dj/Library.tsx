@@ -6,7 +6,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronRight, ChevronDown, Folder as FolderIcon, FolderOpen, HardDrive, Music, Monitor, Download,
-  FileText, Video, Home, Plus, Search, X, ListMusic, Shuffle, Trash2, Loader2, FolderPlus, Youtube, Sparkles,
+  FileText, Video, Home, Plus, Search, X, ListMusic, Shuffle, Trash2, Loader2, FolderPlus, Youtube, Sparkles, Images,
 } from 'lucide-react'
 import AiDjPanel from './AiDjPanel'
 import type { DeckId, DjTrack } from './engine/DjEngine'
@@ -19,6 +19,7 @@ import {
 } from './libraryData'
 
 const MAX_ROWS = 1500
+const COVERS_KEY = 'aihub-dj-covers'
 const PROBE_LIMIT = 400
 
 type SortKey = 'title' | 'artist' | 'album' | 'length' | 'bpm' | 'key'
@@ -51,6 +52,20 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
   const [ytTracks, setYtTracks] = useState<DjTrack[]>([])
   const [ytQuery, setYtQuery] = useState('')
   const [sideTab, setSideTab] = useState<'list' | 'ai'>('list')
+  const [showCovers, setShowCovers] = useState(() => {
+    try { return localStorage.getItem(COVERS_KEY) !== '0' } catch { return true }
+  })
+  const toggleCovers = () => setShowCovers(v => {
+    try { localStorage.setItem(COVERS_KEY, v ? '0' : '1') } catch { /* optional */ }
+    return !v
+  })
+  /** Move the selection by `n` rows and keep it in view (keys and the cover-flow wheel). */
+  const step = (n: number) => {
+    if (!rows.length) return
+    const i = Math.min(rows.length - 1, Math.max(0, selIndex + n))
+    setSelected(rows[i].t.token)
+    document.getElementById(`dj-row-${rows[i].t.token}`)?.scrollIntoView({ block: 'nearest' })
+  }
   // Bumped as tags / lengths arrive so the rows recompute.
   const [tick, setTick] = useState(0)
   const bump = useRafBatch(() => setTick(n => n + 1))
@@ -199,9 +214,7 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
     if (!rows.length) return
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
-      const i = Math.min(rows.length - 1, Math.max(0, selIndex + (e.key === 'ArrowDown' ? 1 : -1)))
-      setSelected(rows[i].t.token)
-      document.getElementById(`dj-row-${rows[i].t.token}`)?.scrollIntoView({ block: 'nearest' })
+      step(e.key === 'ArrowDown' ? 1 : -1)
     } else if (e.key === 'Enter') {
       onLoad(rows[selIndex].t)
     }
@@ -247,6 +260,10 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
               ? 'Search YouTube — artist, song or mix, then Enter'
               : current ? `Filter ${current.name} — Enter searches all sub-folders` : 'Search'} spellCheck={false} />
           {query && <button type="button" className="dj-icon-btn" onClick={() => { setQuery(''); if (searchResults && current) void open(current) }}><X size={12} /></button>}
+          <button type="button" className={`dj-icon-btn dj-covers-btn ${showCovers ? 'on' : ''}`} onClick={toggleCovers}
+            title={showCovers ? 'Hide covers — more room for the list' : 'Show covers'}>
+            <Images size={13} />
+          </button>
           <span className="dj-count">
             {loading ? <Loader2 size={12} className="dj-spin" /> : null}
             {source === 'youtube'
@@ -255,7 +272,7 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
           </span>
         </div>
 
-        <CoverFlow rows={rows.map(r => r.t)} index={selIndex} onSelect={t => setSelected(t.token)} onLoad={onLoad} />
+        {showCovers && <CoverFlow rows={rows.map(r => r.t)} index={selIndex} onSelect={t => setSelected(t.token)} onLoad={onLoad} onStep={step} />}
 
         <div className="dj-table">
           <div className="dj-thead">
@@ -404,12 +421,20 @@ function TreeNode({ folder, icon, current, onOpen, depth = 0, onRemove }: {
   )
 }
 
-function CoverFlow({ rows, index, onSelect, onLoad }: {
+function CoverFlow({ rows, index, onSelect, onLoad, onStep }: {
   rows: DjTrack[]
   index: number
   onSelect: (t: DjTrack) => void
   onLoad: (t: DjTrack) => void
+  onStep: (n: number) => void
 }) {
+  // Mouse wheel flips through the covers, one song per notch.
+  const acc = useRef(0)
+  const onWheel = (e: React.WheelEvent) => {
+    acc.current += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+    const n = Math.trunc(acc.current / 100)
+    if (n) { acc.current -= n * 100; onStep(n) }
+  }
   if (!rows.length) return <div className="dj-coverflow" />
   const span = 3
   const items: { t: DjTrack; off: number }[] = []
@@ -418,13 +443,13 @@ function CoverFlow({ rows, index, onSelect, onLoad }: {
     if (t) items.push({ t, off: o })
   }
   return (
-    <div className="dj-coverflow">
+    <div className="dj-coverflow" onWheel={onWheel} title="Scroll to flip through songs">
       {items.map(({ t, off }) => {
         const abs = Math.abs(off)
         const style: React.CSSProperties = {
           transform: off === 0
             ? 'translateX(-50%) translateZ(40px)'
-            : `translateX(calc(-50% + ${off * 92 + Math.sign(off) * 60}px)) rotateY(${off < 0 ? 52 : -52}deg) scale(${1 - abs * 0.06})`,
+            : `translateX(calc(-50% + ${off * 72 + Math.sign(off) * 46}px)) rotateY(${off < 0 ? 52 : -52}deg) scale(${1 - abs * 0.06})`,
           zIndex: 10 - abs,
           opacity: abs === span ? 0.5 : 1,
         }
