@@ -37,6 +37,9 @@ export default function AiDjPanel({ sidelistCount, addTracks, automix, setAutomi
   const last = useRef<SongPick | undefined>()
   const vibeRef = useRef('')
   const takeoverRef = useRef(false)
+  const activeRef = useRef(false)
+  // Read synchronously: two plans must never run at once (state updates land a render late).
+  const busyRef = useRef(false)
   useSyncExternalStore(subscribeTaste, tasteVersion)
   const profile = currentProfile()
   const learning = learningEnabled()
@@ -44,10 +47,13 @@ export default function AiDjPanel({ sidelistCount, addTracks, automix, setAutomi
   const note = (text: string, kind: 'info' | 'pick' | 'err' = 'info') =>
     setLog(l => [...l.slice(-40), { text, kind }])
 
-  const generate = async (v: string, continuing: boolean) => {
+  /** Plan songs and add them to the set; resolves with how many were found. */
+  const generate = async (v: string, continuing: boolean): Promise<number> => {
     const own = takeoverRef.current
-    if (busy || (!v.trim() && !own)) return
+    if (busyRef.current || (!v.trim() && !own)) return 0
+    busyRef.current = true
     setBusy(true)
+    let added = 0
     vibeRef.current = v.trim()
     const taste = describeTaste(currentProfile())
     if (!continuing) {
@@ -67,23 +73,43 @@ export default function AiDjPanel({ sidelistCount, addTracks, automix, setAutomi
       })
       for (const p of plan.picks) played.current.push(`${p.artist} - ${p.title}`)
       last.current = plan.picks[plan.picks.length - 1]
+      added = found
       if (!found) note('None of the picks could be found on YouTube.', 'err')
       else if (found < plan.picks.length) note(`${plan.picks.length - found} picks were not on YouTube and were skipped.`)
+      // While the AI is in charge, new songs always get played — even if the set had run dry.
+      if (found && activeRef.current) setAutomix(true)
     } catch (e: any) {
       note(e?.message || 'The AI DJ could not plan a set.', 'err')
     } finally {
+      busyRef.current = false
       setBusy(false)
     }
+    return added
   }
 
   const start = async (own: boolean) => {
     takeoverRef.current = own
     setTakeover(own)
     setActive(true)
-    if (sidelistCount === 0 || own) await generate(vibe, false)
-    setAutomix(true)
+    activeRef.current = true
+    let have = own ? 0 : sidelistCount
+    if (have === 0) have = await generate(vibe, false)
+    // A cold local model can miss the first time: try once more before giving up.
+    if (have === 0 && activeRef.current) {
+      note('No songs yet — asking the AI once more…')
+      have = await generate(vibe, false)
+    }
+    if (!activeRef.current) return // stopped while the AI was still choosing
+    if (have > 0 || sidelistCount > 0) setAutomix(true)
+    else {
+      note('The AI DJ could not start: no songs were found. Check that Ollama is running, then try again.', 'err')
+      activeRef.current = false
+      setActive(false)
+      setTakeover(false)
+      takeoverRef.current = false
+    }
   }
-  const stop = () => { setActive(false); setTakeover(false); takeoverRef.current = false; setAutomix(false) }
+  const stop = () => { activeRef.current = false; setActive(false); setTakeover(false); takeoverRef.current = false; setAutomix(false) }
 
   // Top the set up while the AI DJ is running.
   useEffect(() => {
@@ -93,7 +119,19 @@ export default function AiDjPanel({ sidelistCount, addTracks, automix, setAutomi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, automix, keepGoing, busy, sidelistCount])
 
-  useEffect(() => { if (!automix) { setActive(false); setTakeover(false); takeoverRef.current = false } }, [automix])
+  // Automix went off. If the set simply ran dry, the AI fetches more and carries
+  // on; if the DJ switched it off with songs still waiting, the AI steps back.
+  useEffect(() => {
+    if (automix || !activeRef.current || busyRef.current) return
+    if (sidelistCount === 0 && keepGoing && (vibeRef.current || takeoverRef.current)) {
+      void generate(vibeRef.current, true)
+      return
+    }
+    activeRef.current = false
+    setActive(false)
+    setTakeover(false)
+    takeoverRef.current = false
+  }, [automix]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const logRef = useRef<HTMLDivElement>(null)
   useEffect(() => { logRef.current?.scrollTo({ top: 1e9 }) }, [log])
@@ -115,15 +153,22 @@ export default function AiDjPanel({ sidelistCount, addTracks, automix, setAutomi
           <div className="dj-ai-chips">
             {VIBES.map(v => <button type="button" key={v} onClick={() => setVibe(v)}>{v}</button>)}
           </div>
-          {active && automix ? (
+          {active ? (
             <button type="button" className="dj-ai-takeover dj-on dj-on-orange" onClick={stop}>
               <Square size={10} fill="currentColor" /> {takeover ? 'Take back the decks' : 'Stop the AI DJ'}
             </button>
           ) : (
             <button type="button" className="dj-ai-takeover" disabled={busy} onClick={() => void start(true)}
               title="The AI plays the set, choosing from what it has learnt you like">
-              {busy ? <Loader2 size={13} className="dj-spin" /> : <Bot size={13} />} Let the AI take over
+              <Bot size={13} /> Let the AI take over
             </button>
+          )}
+          {/* Always in view: what the AI is doing right now (the full log is below). */}
+          {(busy || log.length > 0) && (
+            <div className={`dj-ai-status ${!busy && log[log.length - 1]?.kind === 'err' ? 'dj-ai-status-err' : ''}`} role="status">
+              {busy ? <Loader2 size={11} className="dj-spin" /> : null}
+              <span>{busy && !log.length ? 'Asking your AI model…' : log[log.length - 1]?.text}</span>
+            </div>
           )}
           <div className="dj-ai-actions">
             <button type="button" className="dj-ai-gen" disabled={busy || !vibe.trim()} onClick={() => void generate(vibe, false)}>

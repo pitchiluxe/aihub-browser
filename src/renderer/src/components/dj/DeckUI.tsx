@@ -222,6 +222,12 @@ function StemBtn({ label, color, on, onClick }: { label: string; color: string; 
   )
 }
 
+/** Pitch as the fader reads it: "+2.4%", "-0.8%", "0.0%". */
+export function pitchText(p: number): string {
+  const pct = Math.round(p * 1000) / 10
+  return `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`
+}
+
 export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Deck; onDropTrack: DeckDrop }) {
   useDeck(deck)
   const [synced, setSynced] = useState(false)
@@ -250,8 +256,11 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
           <button type="button" className="dj-mini" onClick={() => deck.eject()} disabled={!deck.track || deck.playing} title="Eject">
             <ArrowUpFromLine size={11} />
           </button>
-          <button type="button" className="dj-lcd dj-range" onClick={() => deck.cyclePitchRange()} title="Pitch range">
-            {range}%
+          {/* Live pitch as the fader moves; the range sits underneath (click to change it) */}
+          <button type="button" className={`dj-lcd dj-range ${Math.abs(deck.pitch) > 0.0005 ? 'dj-range-moved' : ''}`} onClick={() => deck.cyclePitchRange()}
+            title={`Pitch ${pitchText(deck.pitch)} — click to change the range (now ±${range}%)`}>
+            <b>{pitchText(deck.pitch)}</b>
+            <small>±{range}</small>
           </button>
           <VFader value={pitchValue} onChange={v => { setSynced(false); deck.setPitch((v - 0.5) * 2 * deck.pitchRange) }}
             height={150} defaultValue={0.5} invert className="dj-pitch" title={`Pitch ±${range}% (double-click to reset)`} ticks={9} />

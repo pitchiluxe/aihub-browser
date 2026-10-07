@@ -7,43 +7,71 @@
  * hand's speed and direction, forwards and backwards. Letting go spins the
  * record back up. Dragging the outer rim while playing nudges the tempo
  * (pitch bend) to beat-match by hand.
+ *
+ * The record is its own layer turned with a CSS transform, so the GPU spins
+ * it without repainting the ~180 shapes on it every frame, and its angle runs
+ * on a steady clock that is only eased towards the track position — the
+ * position itself arrives in small uneven steps, which made the spin stutter.
  */
 import React, { useRef } from 'react'
 import type { Deck } from './engine/DjEngine'
 import { useDeck, useRaf } from './controls'
 
 const DEG_PER_SEC = 200 // 33⅓ rpm
+/** Further off than this the record jumps instead of easing (seek, cue, hot cue). */
+const SNAP_DEG = 40
 
 export default function Platter({ deck, size = 230 }: { deck: Deck; size?: number }) {
   useDeck(deck)
-  const discRef = useRef<SVGGElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const discRef = useRef<HTMLDivElement>(null)
   const armRef = useRef<SVGGElement>(null)
   const drag = useRef<{ mode: 'scratch' | 'bend'; last: number; lastT: number; pos: number } | null>(null)
-  const svgRef = useRef<SVGSVGElement>(null)
   const armAngle = useRef(-20)
+  const shown = useRef(0)
+  const lastFrame = useRef(0)
 
   const loaded = !!deck.track
   const cover = deck.track?.cover
   const c = size / 2
 
   useRaf(() => {
-    const a = loaded ? (deck.time * DEG_PER_SEC) % 360 : 0
-    discRef.current?.setAttribute('transform', `rotate(${a} ${c} ${c})`)
+    const now = performance.now()
+    const dt = lastFrame.current ? Math.min(0.1, (now - lastFrame.current) / 1000) : 0
+    lastFrame.current = now
+    const target = loaded ? deck.time * DEG_PER_SEC : 0
+    let a = target
+    if (loaded && deck.playing && !deck.held) {
+      // Spin at the deck's speed and steer gently towards the true position.
+      const expected = shown.current + dt * DEG_PER_SEC * deck.rate
+      const err = target - expected
+      // Ignore the clock's small wobble entirely; steer out bigger drift slowly.
+      a = Math.abs(err) > SNAP_DEG ? target : Math.abs(err) < 3 ? expected : expected + (err - Math.sign(err) * 3) * 0.04
+    }
+    shown.current = a
+    const el = discRef.current
+    if (el) el.style.transform = `rotate(${(a % 360).toFixed(2)}deg)`
     const progress = deck.duration ? Math.min(1, deck.time / deck.duration) : 0
     // Rest off the record at -20°, lower onto the lead-in at 0°, and track
     // inwards to 16° by the end of the song. Eased so loading swings the arm.
-    const target = loaded ? progress * 16 : -20
-    armAngle.current += (target - armAngle.current) * 0.12
-    armRef.current?.setAttribute('transform', `rotate(${armAngle.current} ${size * 0.86} ${size * 0.13})`)
+    const armTarget = loaded ? progress * 16 : -20
+    if (Math.abs(armTarget - armAngle.current) > 0.01) {
+      armAngle.current += (armTarget - armAngle.current) * 0.12
+      armRef.current?.setAttribute('transform', `rotate(${armAngle.current.toFixed(2)} ${size * 0.86} ${size * 0.13})`)
+    }
   })
 
+  const centre = () => {
+    const r = rootRef.current!.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, half: r.width / 2 }
+  }
   const angleAt = (e: React.PointerEvent) => {
-    const r = svgRef.current!.getBoundingClientRect()
-    return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI
+    const k = centre()
+    return Math.atan2(e.clientY - k.y, e.clientX - k.x) * 180 / Math.PI
   }
   const radiusAt = (e: React.PointerEvent) => {
-    const r = svgRef.current!.getBoundingClientRect()
-    return Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)) / (r.width / 2)
+    const k = centre()
+    return Math.hypot(e.clientX - k.x, e.clientY - k.y) / k.half
   }
 
   const onDown = (e: React.PointerEvent) => {
@@ -85,39 +113,34 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
     const ang = (i / 72) * Math.PI * 2
     dots.push(<circle key={i} cx={c + Math.cos(ang) * c * 0.955} cy={c + Math.sin(ang) * c * 0.955} r={1.3} fill="#9aa0a8" />)
   }
+  const layer: React.CSSProperties = { position: 'absolute', inset: 0, pointerEvents: 'none' }
 
   return (
-    <div className="dj-platter" style={{ width: size, height: size }}>
-      <svg ref={svgRef} width={size} height={size} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onUp}
-        style={{ cursor: loaded ? (deck.held ? 'grabbing' : 'grab') : 'default', touchAction: 'none' }}>
+    <div ref={rootRef} className="dj-platter" style={{ width: size, height: size, cursor: loaded ? (deck.held ? 'grabbing' : 'grab') : 'default', touchAction: 'none' }}
+      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onUp}>
+      {/* Platter rim */}
+      <svg width={size} height={size} style={layer}>
         <defs>
-          <radialGradient id={`vinyl-${deck.id}`} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#2a2a2e" />
-            <stop offset="60%" stopColor="#111114" />
-            <stop offset="100%" stopColor="#050506" />
-          </radialGradient>
-          <linearGradient id={`sheen-${deck.id}`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
-            <stop offset="45%" stopColor="rgba(255,255,255,0)" />
-            <stop offset="55%" stopColor="rgba(255,255,255,0)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0.10)" />
-          </linearGradient>
-          <clipPath id={`disc-clip-${deck.id}`}><circle cx={c} cy={c} r={c * 0.9} /></clipPath>
-          <radialGradient id={`labelgloss-${deck.id}`} cx="35%" cy="25%" r="75%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.55)" />
-            <stop offset="35%" stopColor="rgba(255,255,255,0.12)" />
-            <stop offset="60%" stopColor="rgba(255,255,255,0)" />
-          </radialGradient>
           <radialGradient id={`plate-${deck.id}`} cx="45%" cy="40%" r="65%">
             <stop offset="0%" stopColor="#e8eaed" />
             <stop offset="100%" stopColor="#8d939b" />
           </radialGradient>
         </defs>
-        {/* Platter rim + strobe dots */}
         <circle cx={c} cy={c} r={c - 1} fill={`url(#plate-${deck.id})`} stroke="#6b7078" />
-        <g ref={discRef}>
+      </svg>
+
+      {/* The record: strobe dots, vinyl, grooves and artwork — spun by the GPU */}
+      <div ref={discRef} className="dj-disc" style={{ ...layer, transformOrigin: '50% 50%', willChange: 'transform' }}>
+        <svg width={size} height={size} style={{ display: 'block' }}>
+          <defs>
+            <radialGradient id={`vinyl-${deck.id}`} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#2a2a2e" />
+              <stop offset="60%" stopColor="#111114" />
+              <stop offset="100%" stopColor="#050506" />
+            </radialGradient>
+            <clipPath id={`disc-clip-${deck.id}`}><circle cx={c} cy={c} r={c * 0.9} /></clipPath>
+          </defs>
           {dots}
-          {/* Record */}
           <circle cx={c} cy={c} r={c * 0.92} fill={`url(#vinyl-${deck.id})`} />
           {grooves}
           {cover ? (
@@ -140,14 +163,28 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
               <text x={c} y={c + c * 0.24} textAnchor="middle" fontSize={c * 0.1} fontWeight={800} fill="#ffd2d2" fontFamily="Inter, Arial, sans-serif" letterSpacing={2}>DJ</text>
             </>
           )}
-        </g>
-        {/* Fixed sheen — stays put while the record spins under it */}
-        <circle cx={c} cy={c} r={c * 0.92} fill={`url(#sheen-${deck.id})`} pointerEvents="none" />
-        {/* Glossy label: a soft highlight that does not turn with the record */}
-        {!cover && <circle cx={c} cy={c} r={c * 0.36} fill={`url(#labelgloss-${deck.id})`} pointerEvents="none" />}
-        <circle cx={c} cy={c} r={c * 0.035} fill="#d9dce0" stroke="#555" strokeWidth={0.5} pointerEvents="none" />
-        {/* Tonearm */}
-        <g ref={armRef} pointerEvents="none">
+        </svg>
+      </div>
+
+      {/* Fixed sheen, spindle and tonearm — they stay put while the record turns under them */}
+      <svg width={size} height={size} style={layer}>
+        <defs>
+          <linearGradient id={`sheen-${deck.id}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+            <stop offset="45%" stopColor="rgba(255,255,255,0)" />
+            <stop offset="55%" stopColor="rgba(255,255,255,0)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0.10)" />
+          </linearGradient>
+          <radialGradient id={`labelgloss-${deck.id}`} cx="35%" cy="25%" r="75%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.55)" />
+            <stop offset="35%" stopColor="rgba(255,255,255,0.12)" />
+            <stop offset="60%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
+        </defs>
+        <circle cx={c} cy={c} r={c * 0.92} fill={`url(#sheen-${deck.id})`} />
+        {!cover && <circle cx={c} cy={c} r={c * 0.36} fill={`url(#labelgloss-${deck.id})`} />}
+        <circle cx={c} cy={c} r={c * 0.035} fill="#d9dce0" stroke="#555" strokeWidth={0.5} />
+        <g ref={armRef} transform={`rotate(${armAngle.current} ${size * 0.86} ${size * 0.13})`}>
           <circle cx={size * 0.86} cy={size * 0.13} r={size * 0.075} fill="#2b2d31" stroke="#9aa0a8" strokeWidth={2} />
           <circle cx={size * 0.86} cy={size * 0.13} r={size * 0.03} fill="#c9ccd1" />
           <path d={`M${size * 0.86} ${size * 0.13} L${size * 0.9} ${size * 0.55} L${size * 0.8} ${size * 0.8}`} stroke="#d4d7db" strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" />

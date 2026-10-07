@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useRef } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
-import type { Deck, DjEngine } from './engine/DjEngine'
+import { crossfadeGains, faderGain, type Deck, type DjEngine } from './engine/DjEngine'
 import { useRaf } from './controls'
 
 const images = new Map<string, HTMLImageElement>()
@@ -31,6 +31,7 @@ function cover(g: CanvasRenderingContext2D, src: CanvasImageSource, sw: number, 
 
 export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjEngine; big?: boolean; onToggleBig?: () => void }) {
   const cvRef = useRef<HTMLCanvasElement>(null)
+  const lastLive = useRef<'A' | 'B'>('A')
   const { A, B } = engine.decks
 
   // While the monitor is on screen, YouTube decks send pictures as well as sound.
@@ -55,12 +56,28 @@ export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjE
     g.fillStyle = '#000'
     g.fillRect(0, 0, w, h)
 
-    // How much of each deck is heard decides how much of it is seen.
-    const x = engine.crossfader
+    // What is playing is what is shown. Only when both decks play does the
+    // crossfader blend the pictures, by how loud each one is in the mix.
     const live = (d: Deck) => !!d.track && (d.active || d.held)
-    let wa = live(A) ? 1 - x : 0
-    let wb = live(B) ? x : 0
-    if (!wa && !wb) { wa = A.track ? 1 : 0; wb = !A.track && B.track ? 1 : 0 }
+    const la = live(A)
+    const lb = live(B)
+    if (la !== lb) lastLive.current = la ? 'A' : 'B'
+    let wa = 0
+    let wb = 0
+    if (la && lb) {
+      const [ga, gb] = crossfadeGains(engine.crossfader)
+      wa = ga * faderGain(A.volume)
+      wb = gb * faderGain(B.volume)
+      if (wa + wb < 1e-3) { wa = 1 - engine.crossfader; wb = engine.crossfader }
+    } else if (la) wa = 1
+    else if (lb) wb = 1
+    else {
+      // Nothing playing: hold the picture of the deck that played last.
+      const keep = lastLive.current === 'B' ? B : A
+      const other = keep === A ? B : A
+      if (keep.track) { if (keep === A) wa = 1; else wb = 1 }
+      else if (other.track) { if (other === A) wa = 1; else wb = 1 }
+    }
     const total = wa + wb
     if (!total) { idle(g, w, h); return }
 
@@ -86,10 +103,11 @@ export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjE
       }
       g.globalAlpha = 1
     }
-    // The fuller deck goes underneath so the blend reads correctly at the ends.
+    // The fuller deck goes underneath so the blend reads correctly at the ends;
+    // a deck not in the picture is not drawn at all.
     const [first, second] = wa >= wb ? [[A, wa], [B, wb]] as const : [[B, wb], [A, wa]] as const
     layer(first[0], 1)
-    layer(second[0], second[1] / total)
+    if (second[1] > 0) layer(second[0], second[1] / total)
 
     // Beat pulse on the dominant deck.
     const dom = first[0]

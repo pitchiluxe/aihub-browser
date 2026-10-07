@@ -33,9 +33,9 @@ interface YtBridge {
   unload(deck: string): Promise<boolean>
 }
 
-const bridge = (): YtBridge => (window as any).electronAPI.dj.yt
+export const ytBridge = (): YtBridge => (window as any).electronAPI.dj.yt
 
-async function captureTab(id: string, video: boolean): Promise<MediaStream> {
+export async function captureTab(id: string, video: boolean): Promise<MediaStream> {
   const src = { chromeMediaSource: 'tab', chromeMediaSourceId: id }
   return navigator.mediaDevices.getUserMedia({
     audio: video ? false : ({ mandatory: src } as any),
@@ -101,7 +101,7 @@ export class YouTubeDeck {
     this.reportedAt = performance.now()
     this.seq++
     this.onChange()
-    const r: { ok: boolean; error?: string; state?: YtState } = await bridge().load(this.deck, id)
+    const r: { ok: boolean; error?: string; state?: YtState } = await ytBridge().load(this.deck, id)
       .catch(() => ({ ok: false, error: 'The YouTube player could not start' }))
     if (gen !== this.gen) return false
     this.loading = false
@@ -114,8 +114,8 @@ export class YouTubeDeck {
     await this.ensureAudio()
     if (gen !== this.gen) return false
     // Full volume inside the player; the mixer sets the level from here on.
-    void bridge().cmd(this.deck, 'volume', 1)
-    void bridge().cmd(this.deck, 'rate', this.rate)
+    void ytBridge().cmd(this.deck, 'volume', 1)
+    void ytBridge().cmd(this.deck, 'rate', this.rate)
     this.startPolling()
     this.onChange()
     return true
@@ -129,7 +129,7 @@ export class YouTubeDeck {
     this.duration = 0
     this.error = null
     this.stopPolling()
-    void bridge().unload(this.deck)
+    void ytBridge().unload(this.deck)
   }
 
   play(): void {
@@ -139,7 +139,7 @@ export class YouTubeDeck {
     this.paused = false
     this.reportedAt = performance.now()
     this.seq++
-    void bridge().cmd(this.deck, 'play')
+    void ytBridge().cmd(this.deck, 'play')
   }
 
   pause(): void {
@@ -148,7 +148,7 @@ export class YouTubeDeck {
     this.want = false
     this.paused = true
     this.seq++
-    void bridge().cmd(this.deck, 'pause')
+    void ytBridge().cmd(this.deck, 'pause')
   }
 
   seek(t: number): void {
@@ -156,7 +156,7 @@ export class YouTubeDeck {
     this.reportedAt = performance.now()
     this.ended = false
     this.seq++
-    void bridge().cmd(this.deck, 'seek', t)
+    void ytBridge().cmd(this.deck, 'seek', t)
   }
 
   setRate(r: number): void {
@@ -165,10 +165,10 @@ export class YouTubeDeck {
     this.reportedT = this.currentTime
     this.reportedAt = performance.now()
     this.rate = r
-    void bridge().cmd(this.deck, 'rate', r)
+    void ytBridge().cmd(this.deck, 'rate', r)
   }
 
-  setKeyLock(on: boolean): void { void bridge().cmd(this.deck, 'keyLock', on) }
+  setKeyLock(on: boolean): void { void ytBridge().cmd(this.deck, 'keyLock', on) }
 
   /** Only used when capture failed and the player is heard directly. */
   private lastVol = -1
@@ -177,14 +177,14 @@ export class YouTubeDeck {
     const n = Math.round(Math.max(0, Math.min(1, v)) * 100) / 100
     if (n === this.lastVol) return
     this.lastVol = n
-    void bridge().cmd(this.deck, 'volume', n)
+    void ytBridge().cmd(this.deck, 'volume', n)
   }
 
   /** The monitor wants pictures: capture the player's video while anyone is watching. */
   async retainVideo(): Promise<void> {
     this.videoUsers++
     if (this.videoStream || this.videoUsers !== 1) return
-    const id = await bridge().streamId(this.deck)
+    const id = await ytBridge().streamId(this.deck)
     if (!id || !this.watched()) return
     try {
       const s = await captureTab(id, true)
@@ -216,18 +216,18 @@ export class YouTubeDeck {
 
   private async ensureAudio(): Promise<void> {
     if (this.audioStream?.getAudioTracks().some(t => t.readyState === 'live')) return
-    const id = await bridge().streamId(this.deck)
+    const id = await ytBridge().streamId(this.deck)
     try {
       if (!id) throw new Error('no capture id')
       this.audioStream = await captureTab(id, false)
       this.captured = true
-      void bridge().cmd(this.deck, 'audible', false)
+      void ytBridge().cmd(this.deck, 'audible', false)
     } catch {
       // Without a capture the song still plays — straight out of the player,
       // with volume as the only mixer control, like a plain embed.
       this.audioStream = null
       this.captured = false
-      void bridge().cmd(this.deck, 'audible', true)
+      void ytBridge().cmd(this.deck, 'audible', true)
     }
   }
 
@@ -240,14 +240,38 @@ export class YouTubeDeck {
     this.timer = 0
   }
 
+  /**
+   * Fold a reported position into the running clock. While playing smoothly,
+   * small differences are eased in rather than jumped to — re-basing on every
+   * report made the platter and the waveforms judder with IPC timing.
+   */
+  private correctClock(t: number, readAt: number, running: boolean): void {
+    const measured = t + (running ? ((performance.now() - readAt) / 1000) * this.rate : 0)
+    const now = performance.now()
+    if (running && !this.paused) {
+      const predicted = this.currentTime
+      const err = measured - predicted
+      if (Math.abs(err) < 0.25) {
+        this.reportedT = predicted + err * 0.25
+        this.reportedAt = now
+        return
+      }
+    }
+    this.reportedT = measured
+    this.reportedAt = now
+  }
+
   private async poll(): Promise<void> {
     if (this.polling || !this.videoId) return
     this.polling = true
     const seq = this.seq
     const gen = this.gen
+    const sentAt = performance.now()
     try {
-      const s = await bridge().state(this.deck)
+      const s = await ytBridge().state(this.deck)
       if (!s || gen !== this.gen) return
+      // The position was read about halfway through the round trip.
+      const readAt = (sentAt + performance.now()) / 2
       let changed = false
       if (s.d && Math.abs(s.d - this.duration) > 0.5) { this.duration = s.d; changed = true }
       if (s.ad !== this.ad) { this.ad = s.ad; changed = true }
@@ -258,11 +282,11 @@ export class YouTubeDeck {
         const buffering = s.state === YT_BUFFERING
         if (ended !== this.ended) { this.ended = ended; if (ended) this.want = false; changed = true }
         if (buffering !== this.buffering) { this.buffering = buffering; changed = true }
-        if (!s.ad) { this.reportedT = s.t; this.reportedAt = performance.now() }
+        if (!s.ad) this.correctClock(s.t, readAt, !s.paused && !ended && !buffering)
         const paused = s.paused && !ended
         if (paused && this.want && !s.ad) {
           // A pause nobody asked for: give it a moment (seek / quality switch), then resume.
-          if (++this.strayPauses >= 2) { this.strayPauses = 0; void bridge().cmd(this.deck, 'play') }
+          if (++this.strayPauses >= 2) { this.strayPauses = 0; void ytBridge().cmd(this.deck, 'play') }
         } else {
           this.strayPauses = 0
           if (paused !== this.paused) { this.paused = paused; changed = true }

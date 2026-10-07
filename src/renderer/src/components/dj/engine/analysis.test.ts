@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyze, buildEnvelope, ENV_RATE } from './analysis'
+import { analyze, bestLag, buildEnvelope, ENV_RATE } from './analysis'
 
 /** Decaying 60 Hz kicks at `bpm`, starting `offset` seconds in, over quiet noise. */
 function kicks(bpm: number, seconds: number, sr: number, offset = 0): Float32Array {
@@ -46,5 +46,34 @@ describe('dj analysis', () => {
 
   it('declines to guess on very short audio', () => {
     expect(analyze([kicks(120, 3, sr)], sr).bpm).toBeNull()
+  })
+})
+
+describe('bestLag', () => {
+  // An irregular envelope so only one shift lines it up.
+  const env = (n: number) => {
+    const a = new Float32Array(n)
+    let seed = 11
+    for (let i = 0; i < n; i++) { seed = (seed * 16807) % 2147483647; a[i] = 0.1 + (seed / 2147483647) * 0.9 }
+    return a
+  }
+
+  it('finds how far the scan runs ahead or behind what was played', () => {
+    const scan = env(3000)
+    const play = new Float32Array(3000)
+    for (let i = 25; i < 1500; i++) play[i] = scan[i - 25] // the played audio lands 25 frames later
+    expect(bestLag(play, scan, 0, 1500, 100)).toBe(25)
+    const early = new Float32Array(3000)
+    for (let i = 0; i < 1500; i++) early[i] = scan[i + 12]
+    expect(bestLag(early, scan, 0, 1500, 100)).toBe(-12)
+  })
+
+  it('refuses to guess from too little or unrelated audio', () => {
+    const scan = env(3000)
+    const play = new Float32Array(3000)
+    for (let i = 0; i < 100; i++) play[i] = scan[i]
+    expect(bestLag(play, scan, 0, 100, 50)).toBeNull()
+    const noise = env(3000).reverse()
+    expect(bestLag(noise, scan, 0, 1500, 50)).toBeNull()
   })
 })

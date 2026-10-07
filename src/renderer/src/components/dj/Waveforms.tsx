@@ -247,6 +247,11 @@ export function ZoomWave({ decks, compact = false, seconds = ZOOM_SECONDS }: {
         if (note) {
           ctx.fillStyle = 'rgba(255,255,255,0.5)'
           ctx.fillText(note, 6, mid + 4)
+        } else if (deck.scanProgress != null) {
+          const msg = `Reading the waveform ahead… ${Math.round(deck.scanProgress * 100)}%`
+          ctx.font = '600 10px Inter, Arial'
+          ctx.fillStyle = 'rgba(255,255,255,0.45)'
+          ctx.fillText(msg, w - ctx.measureText(msg).width - 6, top + 11)
         }
       }
     })

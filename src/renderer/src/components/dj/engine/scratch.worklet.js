@@ -200,3 +200,43 @@ class ScratchProcessor extends AudioWorkletProcessor {
 }
 
 registerProcessor('aihub-dj-scratch', ScratchProcessor)
+
+/**
+ * Waveform reader for a YouTube scan: the peak of every 128-sample block,
+ * full band and low band, stamped with the context time it was heard and
+ * posted in small batches. `lowHz` is the kick/bass cut-off — raised by the
+ * scan's speed-up, since playing 4× fast moves every frequency up 4×.
+ */
+class MeterProcessor extends AudioWorkletProcessor {
+  constructor(options) {
+    super()
+    const lowHz = (options && options.processorOptions && options.processorOptions.lowHz) || 150
+    this.a = 1 - Math.exp((-2 * Math.PI * lowHz) / sampleRate)
+    this.lp = 0
+    this.batch = []
+  }
+  process(inputs) {
+    const input = inputs[0]
+    if (!input || !input[0]) return true
+    const c0 = input[0]
+    const c1 = input[1]
+    let pa = 0
+    let pl = 0
+    for (let i = 0; i < c0.length; i++) {
+      const s = c1 ? (c0[i] + c1[i]) * 0.5 : c0[i]
+      this.lp += this.a * (s - this.lp)
+      const as = s < 0 ? -s : s
+      const al = this.lp < 0 ? -this.lp : this.lp
+      if (as > pa) pa = as
+      if (al > pl) pl = al
+    }
+    this.batch.push(currentTime, pa, pl)
+    if (this.batch.length >= 3 * 16) {
+      this.port.postMessage(new Float64Array(this.batch))
+      this.batch = []
+    }
+    return true
+  }
+}
+
+registerProcessor('aihub-dj-meter', MeterProcessor)

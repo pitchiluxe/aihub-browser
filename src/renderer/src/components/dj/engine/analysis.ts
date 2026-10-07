@@ -130,6 +130,34 @@ export function detectFirstBeat(onset: Float32Array, bpm: number, rate = ENV_RAT
   return bestOff / rate
 }
 
+/**
+ * The shift that best lines `scan` up with `play` over frames [from, to):
+ * play[i] ≈ scan[i - lag]. Used to align a YouTube song's scanned waveform
+ * with what the deck actually played. Null when the two do not agree well
+ * enough to trust (too little overlap or a weak match).
+ */
+export function bestLag(play: Float32Array, scan: Float32Array, from: number, to: number, maxLag: number): number | null {
+  let best = -Infinity
+  let bestLagV = 0
+  for (let lag = -maxLag; lag <= maxLag; lag++) {
+    let n = 0, sp = 0, ss = 0, spp = 0, sss = 0, sps = 0
+    for (let i = Math.max(from, lag, 0); i < Math.min(to, play.length, scan.length + lag); i++) {
+      const p = play[i]
+      const s = scan[i - lag]
+      if (!p || !s) continue
+      n++; sp += p; ss += s; spp += p * p; sss += s * s; sps += p * s
+    }
+    if (n < 200) continue
+    const cov = sps - (sp * ss) / n
+    const vp = spp - (sp * sp) / n
+    const vs = sss - (ss * ss) / n
+    if (vp <= 0 || vs <= 0) continue
+    const r = cov / Math.sqrt(vp * vs)
+    if (r > best) { best = r; bestLagV = lag }
+  }
+  return best >= 0.3 ? bestLagV : null
+}
+
 export function analyze(channels: Float32Array[], sampleRate: number): Analysis {
   const env = buildEnvelope(toMono(channels), sampleRate)
   const onset = onsetCurve(env)

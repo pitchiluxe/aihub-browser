@@ -17,6 +17,8 @@ import { createEffect, type Effect, type FxType } from './effects'
 import { rememberTrack } from './trackCache'
 import { YouTubeDeck } from './youtubeDeck'
 import { ScratchVoice } from './scratch'
+import { YouTubeScan } from './youtubeScan'
+import { LiveWave } from './liveWave'
 
 export interface DjTrack {
   token: string
@@ -140,10 +142,20 @@ export class Deck extends Emitter {
   track: DjTrack | null = null
   analysis: Analysis | null = null
   analyzing = false
-  /** Waveform drawn while playing, for songs that are not decoded up front. */
-  liveEnv: Float32Array | null = null
+  /** Waveform of a song not decoded up front: played so far plus, for YouTube, scanned ahead. */
+  private wave: LiveWave | null = null
+  get liveEnv(): Float32Array | null { return this.wave?.env ?? null }
   /** Its kick/bass band, for the two-colour waveform. */
-  liveLow: Float32Array | null = null
+  get liveLow(): Float32Array | null { return this.wave?.low ?? null }
+  /** Tempo read from a YouTube scan — shown and used for sync until the grid is measured. */
+  scanBpm: number | null = null
+  private scan: YouTubeScan | null = null
+  /** The load the running scan belongs to. */
+  private scanFor = -1
+  /** 0..1 while a YouTube song's waveform is being read ahead, else null. */
+  get scanProgress(): number | null {
+    return this.scan?.running && this.duration ? Math.min(1, this.scan.reach / this.duration) : null
+  }
   duration = 0
   error: string | null = null
   /** Tempo and grid measured while playing (YouTube, very long files). */
@@ -195,6 +207,8 @@ export class Deck extends Emitter {
   private liveBuf = new Float32Array(1024)
   private lastEnvIndex = -1
   private lastAnchor = 0
+  private lastAlign = 0
+  private lastScanTempo = 0
   private steadySince = 0
 
   // graph
@@ -367,7 +381,7 @@ export class Deck extends Emitter {
     if (this.held) return this.heldTime
     return this.isYouTube ? this.yt?.currentTime ?? 0 : this.media.currentTime || 0
   }
-  get bpm(): number | null { return this.analysis?.bpm ?? this.liveBpm ?? this.track?.tagBpm ?? null }
+  get bpm(): number | null { return this.analysis?.bpm ?? this.liveBpm ?? this.scanBpm ?? this.track?.tagBpm ?? null }
   get rate(): number { return 1 + this.pitch }
   get effectiveBpm(): number | null { const b = this.bpm; return b ? b * this.rate : null }
   get beatLen(): number { const b = this.bpm; return b ? 60 / b : 0.5 }
@@ -418,8 +432,9 @@ export class Deck extends Emitter {
     this.media.pause()
     this.track = track
     this.analysis = null
-    this.liveEnv = null
-    this.liveLow = null
+    this.wave = null
+    this.scan?.stop()
+    this.scanBpm = null
     this.liveBpm = null
     this.liveFirstBeat = 0
     this.lastEnvIndex = -1
@@ -449,6 +464,7 @@ export class Deck extends Emitter {
       this.applyRate()
       this.yt?.setKeyLock(this.keyLock)
       this.syncVideo()
+      if (ok && this.yt?.captured && this.duration) this.startScan(track.youtubeId, gen)
       this.emit()
       return
     }
@@ -478,8 +494,7 @@ export class Deck extends Emitter {
       this.applyTrim()
       this.scratch.setBuffer(sc.data, sc.rate)
       this.analysis = a
-      this.liveEnv = null
-      this.liveLow = null
+      this.wave = null
       if (!this.duration) this.duration = decoded.duration
       rememberTrack(track.path, { d: decoded.duration, bpm: a.bpm ?? undefined })
       this.applyRate()
@@ -493,14 +508,24 @@ export class Deck extends Emitter {
   private ensureLiveEnv(): void {
     if (this.analysis || !this.duration) return
     const n = Math.ceil(this.duration * ENV_RATE) + 1
-    if (this.liveEnv && this.liveEnv.length === n) return
-    const grow = (old: Float32Array | null) => {
-      const next = new Float32Array(n)
-      if (old) next.set(old.subarray(0, Math.min(n, old.length)))
-      return next
+    if (this.wave && this.wave.frames === n) return
+    this.wave = new LiveWave(n, this.wave ?? undefined)
+  }
+
+  /** Read the whole YouTube song ahead in a silent 4× copy, for the waveform and tempo. */
+  private startScan(videoId: string, gen: number): void {
+    this.scanFor = gen
+    if (!this.scan) {
+      this.scan = new YouTubeScan(this.id === 'A' ? 'A-scan' : 'B-scan', this.engine.ctx,
+        (t, peak, low) => { if (this.scanFor === this.gen) this.wave?.addScanned(t, peak, low) },
+        complete => {
+          if (this.scanFor !== this.gen || !complete || this.analysis) { this.emit(); return }
+          this.scanBpm = this.wave?.scannedBpm() ?? null
+          this.applyRate()
+          this.emit()
+        })
     }
-    this.liveEnv = grow(this.liveEnv)
-    this.liveLow = grow(this.liveLow)
+    void this.scan.start(videoId, this.duration).then(() => this.emit())
   }
 
   eject(): void {
@@ -514,8 +539,9 @@ export class Deck extends Emitter {
     this.track = null
     this.syncVideo()
     this.analysis = null
-    this.liveEnv = null
-    this.liveLow = null
+    this.wave = null
+    this.scan?.stop()
+    this.scanBpm = null
     this.liveBpm = null
     this.duration = 0
     this.error = null
@@ -838,9 +864,16 @@ export class Deck extends Emitter {
       if (this.yt.error && this.yt.error !== this.error) { this.error = this.yt.error; this.emit() }
       this.syncYouTubeVolume()
     }
-    if (this.liveEnv && playing && !this.adPlaying) {
+    const wave = this.wave
+    // Tempo from the scan as soon as enough of the song has been read, refined as it reads on.
+    if (wave && this.scan?.running && !this.analysis && !this.liveBpm && this.scan.reach > 40 && now - this.lastScanTempo > 4000) {
+      this.lastScanTempo = now
+      const b = wave.scannedBpm(Math.floor(this.scan.reach * ENV_RATE))
+      if (b && b !== this.scanBpm) { this.scanBpm = b; this.applyRate(); this.emit() }
+    }
+    if (wave && playing && !this.adPlaying) {
       const i = Math.floor(t * ENV_RATE)
-      if (i >= 0 && i < this.liveEnv.length) {
+      if (i >= 0 && i < wave.frames) {
         const peakOf = (an: AnalyserNode) => {
           an.getFloatTimeDomainData(this.liveBuf)
           let p = 0
@@ -852,11 +885,10 @@ export class Deck extends Emitter {
         const lo = p > 0 ? Math.min(1, peakOf(this.lowAnalyser) / p) : 0
         // Frames arrive slower than the envelope rate: fill the gap since the last one.
         const from = this.lastEnvIndex >= 0 && i - this.lastEnvIndex > 0 && i - this.lastEnvIndex < 6 ? this.lastEnvIndex + 1 : i
-        for (let k = from; k <= i; k++) {
-          if (p > this.liveEnv[k]) this.liveEnv[k] = p
-          if (this.liveLow && lo > this.liveLow[k]) this.liveLow[k] = lo
-        }
+        for (let k = from; k <= i; k++) wave.addPlayed(k, p, lo)
         this.lastEnvIndex = i
+        // Line the scanned waveform up with what is actually heard, a few seconds in.
+        if (wave.hasScan && now - this.lastAlign > 5000) { this.lastAlign = now; wave.align(i) }
       }
     } else this.lastEnvIndex = -1
     // Songs never decoded up front get their tempo measured from what they played.
@@ -913,6 +945,7 @@ export class Deck extends Emitter {
     this.media.removeAttribute('src')
     this.media.remove()
     this.yt?.dispose()
+    this.scan?.dispose()
     this.scratch.dispose()
     this.effect.dispose()
   }

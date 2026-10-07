@@ -19,7 +19,11 @@
  */
 import { BrowserWindow, ipcMain, type WebContents, type WebFrameMain } from 'electron'
 
-export type YtDeckId = 'A' | 'B'
+/**
+ * A deck's player, or its scan player: a second, silent copy of the same
+ * video run at 4× so the DJ page can draw the whole waveform ahead of time.
+ */
+export type YtDeckId = 'A' | 'B' | 'A-scan' | 'B-scan'
 
 export interface YtDeckState {
   ready: boolean
@@ -53,8 +57,11 @@ const players = new Map<string, Player>()
 const keyOf = (owner: WebContents, deck: YtDeckId) => `${owner.id}:${deck}`
 
 function validDeck(d: unknown): d is YtDeckId {
-  return d === 'A' || d === 'B'
+  return d === 'A' || d === 'B' || d === 'A-scan' || d === 'B-scan'
 }
+
+/** A scan player only feeds the waveform reader: smallest picture, so YouTube streams the lightest video. */
+const isScan = (d: YtDeckId) => d.endsWith('-scan')
 
 function frameOf(p: Player): WebFrameMain | null {
   if (p.win.isDestroyed()) return null
@@ -74,8 +81,8 @@ async function ensurePlayer(owner: WebContents, deck: YtDeckId): Promise<Player>
 
   const win = new BrowserWindow({
     show: false,
-    width: 640,
-    height: 360,
+    width: isScan(deck) ? 256 : 640,
+    height: isScan(deck) ? 144 : 360,
     skipTaskbar: true,
     focusable: false,
     title: `AIHub DJ deck ${deck}`,
