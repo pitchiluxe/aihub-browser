@@ -16,7 +16,7 @@
 
 *AI assistant · 3D knowledge graph · Local + cloud AI · VPN · Zero subscriptions*
 
-[🌐 Website](https://landing-sooty-omega-22.vercel.app) · [⬇️ Download](https://github.com/pitchiluxe/aihub-browser/releases/download/v1.0.0/AIHub-Browser-Setup-1.0.0.exe) · [📧 Contact](mailto:erickomari243@gmail.com)
+[🌐 Website](https://aihubbrowser.vercel.app) · [⬇️ Download](https://github.com/pitchiluxe/aihub-browser/releases/download/v1.0.0/AIHub-Browser-Setup-1.0.0.exe) · [📧 Contact](mailto:erickomari243@gmail.com)
 
 </div>
 
@@ -36,7 +36,7 @@ It is what you get if Chrome, Arc, Obsidian, and ChatGPT merged into one applica
 
 <img src="https://raw.githubusercontent.com/pitchiluxe/aihub-browser/master/og-image.svg" alt="AIHub Browser UI Preview" width="90%" />
 
-> 🌐 **[See full landing page →](https://landing-sooty-omega-22.vercel.app)**
+> 🌐 **[See full landing page →](https://aihubbrowser.vercel.app)**
 
 </div>
 
@@ -154,6 +154,6 @@ MIT License — see [LICENSE](LICENSE)
 
 <div align="center">
 
-Made with ✏️ · [Website](https://landing-sooty-omega-22.vercel.app) · [Releases](https://github.com/pitchiluxe/aihub-browser/releases)
+Made with ✏️ · [Website](https://aihubbrowser.vercel.app) · [Releases](https://github.com/pitchiluxe/aihub-browser/releases)
 
 </div>

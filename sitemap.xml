@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
-    <loc>https://landing-sooty-omega-22.vercel.app/</loc>
+    <loc>https://aihubbrowser.vercel.app/</loc>
     <lastmod>2026-10-07</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-    <image:image><image:loc>https://landing-sooty-omega-22.vercel.app/img/home-1280.webp</image:loc></image:image>
-    <image:image><image:loc>https://landing-sooty-omega-22.vercel.app/img/dj-classic-1280.webp</image:loc></image:image>
-    <image:image><image:loc>https://landing-sooty-omega-22.vercel.app/img/dj-4deck-1280.webp</image:loc></image:image>
+    <image:image><image:loc>https://aihubbrowser.vercel.app/img/home-1280.webp</image:loc></image:image>
+    <image:image><image:loc>https://aihubbrowser.vercel.app/img/dj-classic-1280.webp</image:loc></image:image>
+    <image:image><image:loc>https://aihubbrowser.vercel.app/img/dj-4deck-1280.webp</image:loc></image:image>
   </url>
   <url>
-    <loc>https://landing-sooty-omega-22.vercel.app/download</loc>
+    <loc>https://aihubbrowser.vercel.app/download</loc>
     <lastmod>2026-10-07</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
