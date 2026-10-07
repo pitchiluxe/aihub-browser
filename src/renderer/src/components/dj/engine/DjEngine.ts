@@ -19,6 +19,7 @@ import { YouTubeDeck } from './youtubeDeck'
 import { ScratchVoice } from './scratch'
 import { YouTubeScan } from './youtubeScan'
 import { LiveWave } from './liveWave'
+import { LocalScan } from './localScan'
 
 export interface DjTrack {
   token: string
@@ -161,9 +162,13 @@ export class Deck extends Emitter {
   private scan: YouTubeScan | null = null
   /** The load the running scan belongs to. */
   private scanFor = -1
-  /** 0..1 while a YouTube song's waveform is being read ahead, else null. */
+  /** Reads a long local file ahead (files too big to decode, music videos). */
+  private localScan: LocalScan | null = null
+  /** 0..1 while a song's waveform is being read ahead, else null. */
   get scanProgress(): number | null {
-    return this.scan?.running && this.duration ? Math.min(1, this.scan.reach / this.duration) : null
+    if (this.scan?.running && this.duration) return Math.min(1, this.scan.reach / this.duration)
+    if (this.localScan?.running) return this.localScan.progress
+    return null
   }
   duration = 0
   error: string | null = null
@@ -350,6 +355,9 @@ export class Deck extends Emitter {
       this.duration = Number.isFinite(this.media.duration) ? this.media.duration : 0
       this.ensureLiveEnv()
       if (this.track && this.duration) rememberTrack(this.track.path, { d: this.duration })
+      // Too big to decode up front: read the whole waveform ahead, like a YouTube song.
+      const t = this.track
+      if (t && !t.youtubeId && this.duration && (t.size > MAX_ANALYZE_BYTES || t.video)) this.startLocalScan(t, this.gen)
       this.emit()
     })
     this.media.addEventListener('ended', () => { this.want = false; this.emit() })
@@ -443,6 +451,7 @@ export class Deck extends Emitter {
     this.analysis = null
     this.wave = null
     this.scan?.stop()
+    this.localScan?.stop()
     this.scanBpm = null
     this.scanTempoAsked = false
     this.liveBpm = null
@@ -522,6 +531,28 @@ export class Deck extends Emitter {
     this.wave = new LiveWave(n, this.wave ?? undefined)
   }
 
+  /** Read a long local file ahead in silent 4× copies, for the waveform and tempo. */
+  private startLocalScan(track: DjTrack, gen: number): void {
+    if (this.localScan?.running && this.scanFor === gen) return
+    this.scanFor = gen
+    if (!this.localScan) {
+      this.localScan = new LocalScan(this.engine.ctx, this.engine.mediaHost,
+        (t, peak, low) => { if (this.scanFor === this.gen) this.wave?.addScanned(t, peak, low) },
+        complete => {
+          if (this.scanFor !== this.gen || !complete || this.analysis) { this.emit(); return }
+          const g = this.gen
+          idle(() => {
+            if (g !== this.gen || this.liveBpm) return
+            this.scanBpm = this.wave?.scannedBpm() ?? this.scanBpm
+            this.applyRate()
+            this.emit()
+          })
+        })
+    }
+    void this.engine.resume()
+    void this.localScan.start(`aihub-media://${track.token}/`, this.duration, this.time).then(() => this.emit())
+  }
+
   /** Read the whole YouTube song ahead in a silent 4× copy, for the waveform and tempo. */
   private startScan(videoId: string, gen: number): void {
     this.scanFor = gen
@@ -555,6 +586,7 @@ export class Deck extends Emitter {
     this.analysis = null
     this.wave = null
     this.scan?.stop()
+    this.localScan?.stop()
     this.scanBpm = null
     this.liveBpm = null
     this.duration = 0
@@ -882,13 +914,16 @@ export class Deck extends Emitter {
     // A first tempo from the scan once enough of the song has been read (the
     // finished scan refines it). Once only, and when the page is idle — it is
     // real work on the thread that draws the console.
-    if (wave && this.scan?.running && !this.analysis && !this.liveBpm && !this.scanBpm && !this.scanTempoAsked && this.scan.reach > 45) {
+    const ytReady = !!this.scan?.running && this.scan.reach > 45
+    // A long local file is read in several stretches at once; tempo once a minute and a half is in.
+    const localReady = !!this.localScan?.running && this.localScan.covered > 90
+    if (wave && (ytReady || localReady) && !this.analysis && !this.liveBpm && !this.scanBpm && !this.scanTempoAsked) {
       this.scanTempoAsked = true
       const gen = this.gen
-      const reach = this.scan.reach
+      const upTo = ytReady ? Math.floor(this.scan!.reach * ENV_RATE) : wave.frames
       idle(() => {
         if (gen !== this.gen || this.scanBpm || this.liveBpm) return
-        const b = wave.scannedBpm(Math.floor(reach * ENV_RATE))
+        const b = wave.scannedBpm(upTo)
         if (b) { this.scanBpm = b; this.applyRate(); this.emit() }
       })
     }
@@ -967,6 +1002,7 @@ export class Deck extends Emitter {
     this.media.remove()
     this.yt?.dispose()
     this.scan?.dispose()
+    this.localScan?.dispose()
     this.scratch.dispose()
     this.effect.dispose()
   }

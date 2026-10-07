@@ -21,17 +21,39 @@ import { djApi, trackByToken, toTrack, loadMeta } from './libraryData'
 import { HFader, useRafThrottled, VuMeter } from './controls'
 import './dj.css'
 import './dj-pro.css'
+import './dj-themes.css'
 
-export const DJ_THEMES: { id: string; name: string; swatch: string }[] = [
+export interface DjTheme { id: string; name: string; swatch: string; dark?: boolean; lightBg?: boolean }
+export const DJ_THEMES: DjTheme[] = [
   { id: 'silver', name: 'Silver', swatch: 'linear-gradient(#eceef0, #c2c6cb)' },
-  { id: 'midnight', name: 'Midnight', swatch: 'linear-gradient(#3a3d44, #202227)' },
-  { id: 'neon', name: 'Neon Club', swatch: 'linear-gradient(135deg, #c026d3, #22d3ee)' },
+  { id: 'midnight', name: 'Midnight', swatch: 'linear-gradient(#3a3d44, #202227)', dark: true },
+  { id: 'neon', name: 'Neon Club', swatch: 'linear-gradient(135deg, #c026d3, #22d3ee)', dark: true },
   { id: 'gold', name: 'Gold', swatch: 'linear-gradient(#f7e7b4, #b8964a)' },
   { id: 'ocean', name: 'Ocean', swatch: 'linear-gradient(#cfe3f5, #7aa3c9)' },
-  { id: 'ruby', name: 'Ruby', swatch: 'linear-gradient(#8f1d2c, #4f0c17)' },
-  { id: 'forest', name: 'Forest', swatch: 'linear-gradient(#4b5d48, #2b382a)' },
-  { id: 'arctic', name: 'Arctic', swatch: 'linear-gradient(#ffffff, #e3e8ef)' },
+  { id: 'ruby', name: 'Ruby', swatch: 'linear-gradient(#8f1d2c, #4f0c17)', dark: true },
+  { id: 'forest', name: 'Forest', swatch: 'linear-gradient(#4b5d48, #2b382a)', dark: true },
+  { id: 'arctic', name: 'Arctic', swatch: 'linear-gradient(#ffffff, #e3e8ef)', lightBg: true },
+  { id: 'carbon', name: 'Carbon', swatch: 'repeating-linear-gradient(45deg, #1b1c1f 0 3px, #2c2e33 3px 6px)', dark: true },
+  { id: 'sunset', name: 'Sunset', swatch: 'linear-gradient(135deg, #f97316, #7e22ce)', dark: true },
+  { id: 'rosegold', name: 'Rose Gold', swatch: 'linear-gradient(#f8e4db, #d4a18c)' },
+  { id: 'matrix', name: 'Matrix', swatch: 'linear-gradient(#052e16, #000)', dark: true },
+  { id: 'vapor', name: 'Vaporwave', swatch: 'linear-gradient(135deg, #ffd6f2, #c7f0ff)' },
+  { id: 'walnut', name: 'Walnut', swatch: 'repeating-linear-gradient(92deg, #6e4428 0 5px, #5c381f 5px 8px)', dark: true },
+  { id: 'pearl', name: 'Pearl', swatch: 'linear-gradient(135deg, #ffffff, #e8e3f0)', lightBg: true },
+  { id: 'royal', name: 'Royal', swatch: 'linear-gradient(#23306a, #c9a227)', dark: true },
+  { id: 'lava', name: 'Lava', swatch: 'linear-gradient(#2a110a, #ea580c)', dark: true },
+  { id: 'mint', name: 'Mint', swatch: 'linear-gradient(#ecfcf5, #a6dfc9)' },
 ]
+
+/** Looks restyle the hardware itself; any look goes with any colour theme. */
+export const DJ_LOOKS: { id: string; name: string; preview: string }[] = [
+  { id: 'classic', name: 'Classic', preview: 'linear-gradient(180deg, #f3f4f6, #b9bec5)' },
+  { id: 'flat', name: 'Flat', preview: 'linear-gradient(#d1d5db, #d1d5db)' },
+  { id: 'club', name: 'Club', preview: 'linear-gradient(#111, #111) padding-box, linear-gradient(90deg, #22d3ee, #c026d3) border-box' },
+  { id: 'retro', name: 'Retro', preview: 'linear-gradient(90deg, #6e4428 0 18%, #e7d6b7 18% 82%, #6e4428 82%)' },
+  { id: 'glass', name: 'Glass', preview: 'linear-gradient(135deg, rgba(255,255,255,0.75), rgba(148,163,184,0.35))' },
+]
+const LOOK_KEY = 'aihub-dj-look'
 const THEME_KEY = 'aihub-dj-theme'
 const VIEW_KEY = 'aihub-dj-mixer-view'
 const FADE_KEY = 'aihub-dj-fade-seconds'
@@ -70,6 +92,9 @@ function Console({ engine }: { engine: DjEngine }) {
     setSidelistState(s => { const n = fn(s); sideRef.current = n; return n })
   }, [])
   const [theme, setThemeState] = useState(savedTheme)
+  const [look, setLookState] = useState(() => { const l = readPref(LOOK_KEY); return DJ_LOOKS.some(x => x.id === l) ? (l as string) : 'classic' })
+  const setLook = (l: string) => { setLookState(l); writePref(LOOK_KEY, l) }
+  const themeInfo = DJ_THEMES.find(t => t.id === theme)
   const [uiZoom, setUiZoomState] = useState(savedZoom)
   const [mixerView, setMixerViewState] = useState<'mixer' | 'video'>(() => (readPref(VIEW_KEY) === 'video' ? 'video' : 'mixer'))
   const [bigVideo, setBigVideo] = useState(false)
@@ -142,8 +167,9 @@ function Console({ engine }: { engine: DjEngine }) {
   useDjShortcuts(engine, mixer, fit.ref)
 
   return (
-    <div className="aihub-dj" data-dj-theme={theme} ref={fit.ref} style={fit.style}>
-      <TopBar engine={engine} mixer={mixer} say={say} theme={theme} setTheme={setTheme} uiZoom={uiZoom} setUiZoom={setUiZoom} />
+    <div className="aihub-dj" data-dj-theme={theme} data-dj-look={look} data-dj-dark={themeInfo?.dark ? '1' : '0'}
+      data-dj-light-bg={themeInfo?.lightBg ? '1' : '0'} ref={fit.ref} style={fit.style}>
+      <TopBar engine={engine} mixer={mixer} say={say} theme={theme} setTheme={setTheme} look={look} setLook={setLook} uiZoom={uiZoom} setUiZoom={setUiZoom} />
 
       <div className="dj-row-clocks">
         <DeckClock deck={A} onDropTrack={dropOn('A')} />
@@ -267,8 +293,9 @@ function useFitToTab(userZoom: number) {
   return { ref, style }
 }
 
-function TopBar({ engine, mixer, say, theme, setTheme, uiZoom, setUiZoom }: {
-  engine: DjEngine; mixer: AutoMixer; say: (m: string) => void; theme: string; setTheme: (t: string) => void; uiZoom: number; setUiZoom: (z: number) => void
+function TopBar({ engine, mixer, say, theme, setTheme, look, setLook, uiZoom, setUiZoom }: {
+  engine: DjEngine; mixer: AutoMixer; say: (m: string) => void; theme: string; setTheme: (t: string) => void
+  look: string; setLook: (l: string) => void; uiZoom: number; setUiZoom: (z: number) => void
 }) {
   useSyncExternalStore(engine.subscribe, engine.getVersion)
   useSyncExternalStore(mixer.subscribe, mixer.getVersion)
@@ -280,6 +307,15 @@ function TopBar({ engine, mixer, say, theme, setTheme, uiZoom, setUiZoom }: {
   const [menu, setMenu] = useState<'out' | 'theme' | 'settings' | null>(null)
   const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([])
   const toggleMenu = (m: 'out' | 'theme' | 'settings') => setMenu(cur => (cur === m ? null : m))
+  // A click anywhere outside the open menu closes it.
+  useEffect(() => {
+    if (!menu) return
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target as Element | null)?.closest?.('.dj-out')) setMenu(null)
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    return () => document.removeEventListener('pointerdown', onDown, true)
+  }, [menu])
 
   useRafThrottled(() => {
     const now = new Date()
@@ -387,12 +423,22 @@ function TopBar({ engine, mixer, say, theme, setTheme, uiZoom, setUiZoom }: {
         </button>
         {menu === 'theme' && (
           <div className="dj-out-menu dj-theme-menu">
-            <div className="dj-out-title">Console theme</div>
-            {DJ_THEMES.map(t => (
-              <button type="button" key={t.id} className={theme === t.id ? 'on' : ''} onClick={() => { setTheme(t.id); setMenu(null) }}>
-                <span className="dj-swatch" style={{ background: t.swatch }} />{t.name}
-              </button>
-            ))}
+            <div className="dj-out-title">Look</div>
+            <div className="dj-look-row">
+              {DJ_LOOKS.map(l => (
+                <button type="button" key={l.id} className={look === l.id ? 'on' : ''} onClick={() => setLook(l.id)} title={`${l.name} look`}>
+                  <span className="dj-look-ico" style={{ background: l.preview, border: l.id === 'club' ? '2px solid transparent' : '1px solid rgba(255,255,255,0.2)' }} />{l.name}
+                </button>
+              ))}
+            </div>
+            <div className="dj-out-title">Colour</div>
+            <div className="dj-swatch-grid">
+              {DJ_THEMES.map(t => (
+                <button type="button" key={t.id} className={theme === t.id ? 'on' : ''} onClick={() => setTheme(t.id)}>
+                  <span className="dj-swatch" style={{ background: t.swatch }} />{t.name}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
