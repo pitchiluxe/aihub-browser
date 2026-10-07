@@ -13,6 +13,7 @@ import { registerGoogleIpc } from './google'
 import { registerCommunityIpc, releaseCommunityWindow, shutdownCommunityBackend } from './community'
 import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
 import { registerMediaScheme, registerMediaProtocol, registerDjIpc } from './dj/library'
+import { viewRect } from './viewBounds'
 import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt } from './modelRouting'
@@ -1432,13 +1433,15 @@ function syncActiveBrowserView(ctx: AppWin | undefined) {
   }
 
   const alreadyAttached = new Set(attachedViews(ctx))
+  // The renderer measures in CSS pixels; views are placed in window pixels.
+  let zoom = 1
+  try { zoom = ctx.win.webContents.getZoomFactor() || 1 } catch {}
+  let contentSize: [number, number] = [0, 0]
+  try { contentSize = ctx.win.getContentSize() as [number, number] } catch {}
   const place = (view: WebContentsView, bounds: { x: number; y: number; width: number; height: number }) => {
     const reattaching = !alreadyAttached.has(view)
     if (reattaching) { try { ctx.win.contentView.addChildView(view) } catch {} }
-    const next = {
-      x: Math.round(bounds.x), y: Math.round(bounds.y),
-      width: Math.max(0, Math.round(bounds.width)), height: Math.max(0, Math.round(bounds.height)),
-    }
+    const next = viewRect(bounds, zoom, contentSize)
     let previous: Electron.Rectangle | null = null
     try { previous = view.getBounds() } catch {}
     const resized = !previous || previous.width !== next.width || previous.height !== next.height
