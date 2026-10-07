@@ -181,6 +181,16 @@ export function startList(listId: string, index = 0): void {
 }
 export function stopList(): void { set({ ...state, playing: null }) }
 
+/** What the playing list will give next, without moving on (for "up next" displays). */
+export function peekNext(): QueueItem | undefined {
+  const p = state.playing
+  if (!p) return undefined
+  const list = state.lists.find(l => l.id === p.listId)
+  if (!list || !list.items.length) return undefined
+  if (p.index < list.items.length) return list.items[p.index]
+  return state.repeat ? list.items[0] : undefined
+}
+
 /** The next song of the list being played, advancing past it. */
 export function takeNext(): DjTrack | undefined {
   const p = state.playing

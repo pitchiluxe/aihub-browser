@@ -1,0 +1,109 @@
+/*
+ * AIHub DJ — layouts. Each arranges the console for a way of working; any
+ * layout combines with any look and colour theme. The console always fits
+ * the tab: rows given more room here take it from the library below.
+ */
+
+/* ── Pro: tall waveforms for beat-matching by eye, compact decks ── */
+.aihub-dj[data-dj-layout='pro'] .dj-row-clocks { height: 132px; }
+.aihub-dj[data-dj-layout='pro'] .dj-row-decks { height: 318px; }
+.aihub-dj[data-dj-layout='pro'] .dj-library { min-height: 170px; }
+.aihub-dj[data-dj-layout='pro'] .dj-pads { padding-top: 8px; }
+
+/* ── Essentials: decks, mixer and library only — big platters ── */
+.aihub-dj[data-dj-layout='essentials'] .dj-row-info { grid-template-columns: 1fr 300px 1fr; }
+.aihub-dj[data-dj-layout='essentials'] .dj-row-info > .dj-info:first-child { grid-column: 1; }
+.aihub-dj[data-dj-layout='essentials'] .dj-row-info > .dj-info:last-child { grid-column: 3; }
+.aihub-dj[data-dj-layout='essentials'] .dj-row-decks { grid-template-columns: 1fr 300px 1fr; height: 350px; }
+
+/* ── Controller: performance pads under each platter, mixer in the middle ── */
+.aihub-dj[data-dj-layout='controller'] .dj-row-info { grid-template-columns: 1fr 300px 1fr; }
+.aihub-dj[data-dj-layout='controller'] .dj-row-info > .dj-info:first-child { grid-column: 1; }
+.aihub-dj[data-dj-layout='controller'] .dj-row-info > .dj-info:last-child { grid-column: 3; }
+.aihub-dj[data-dj-layout='controller'] .dj-row-decks {
+  grid-template-columns: 1fr 300px 1fr;
+  grid-template-rows: minmax(0, 1fr) 182px;
+  height: 476px;
+}
+.aihub-dj[data-dj-layout='controller'] .dj-row-decks > .dj-tt:not(.dj-mirror) { grid-column: 1; grid-row: 1; }
+.aihub-dj[data-dj-layout='controller'] .dj-row-decks > .dj-pads:not(.dj-mirror) { grid-column: 1; grid-row: 2; }
+.aihub-dj[data-dj-layout='controller'] .dj-row-decks > .dj-mixer { grid-column: 2; grid-row: 1 / span 2; }
+.aihub-dj[data-dj-layout='controller'] .dj-row-decks > .dj-tt.dj-mirror { grid-column: 3; grid-row: 1; }
+.aihub-dj[data-dj-layout='controller'] .dj-row-decks > .dj-pads.dj-mirror { grid-column: 3; grid-row: 2; }
+/* The pad deck lies flat under the platter: stems | cues, effects and loops side by side. */
+.aihub-dj[data-dj-layout='controller'] .dj-pads { flex-direction: row; gap: 8px; padding: 8px 10px; }
+.aihub-dj[data-dj-layout='controller'] .dj-pads .dj-stems { flex: 0 0 42%; margin: 0; }
+.aihub-dj[data-dj-layout='controller'] .dj-pads .dj-pads-body { flex: 1; min-width: 0; }
+.aihub-dj[data-dj-layout='controller'] .dj-pads .dj-loop { margin-top: 2px; }
+.aihub-dj[data-dj-layout='controller'] .dj-pads.dj-mirror { flex-direction: row-reverse; }
+.aihub-dj[data-dj-layout='controller'] .dj-library { min-height: 140px; }
+.aihub-dj[data-dj-layout='controller'] .dj-pads .dj-section-title { margin-bottom: 2px; }
+
+/* ── Video DJ: the video monitor large in the middle ── */
+.aihub-dj[data-dj-layout='video'] .dj-row-info { grid-template-columns: 1fr minmax(420px, 1.5fr) 1fr; }
+.aihub-dj[data-dj-layout='video'] .dj-row-info > .dj-info:first-child { grid-column: 1; }
+.aihub-dj[data-dj-layout='video'] .dj-row-info > .dj-info:last-child { grid-column: 3; }
+.aihub-dj[data-dj-layout='video'] .dj-row-decks { grid-template-columns: 1fr minmax(420px, 1.5fr) 1fr; height: 450px; }
+.aihub-dj[data-dj-layout='video'] .dj-library { min-height: 150px; }
+.aihub-dj[data-dj-layout='video'] .dj-mixer-video { height: auto; flex: 1 1 auto; min-height: 0; }
+/* The faders and logo sit under the screen at their natural size: the screen takes the height. */
+.aihub-dj[data-dj-layout='video'] .dj-mixer-faders { flex: none; height: 84px; }
+.aihub-dj[data-dj-layout='video'] .dj-mixer-logo small { display: none; }
+/* The screen is the point here: the MIXER / VIDEO switch stays on VIDEO. */
+.aihub-dj[data-dj-layout='video'] .dj-mixer-switch { display: none; }
+
+/* ── Party: a big now-playing screen above the library ── */
+.aihub-dj .dj-party { flex: none; display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); gap: 6px; height: 440px; }
+.aihub-dj .dj-party-screen { padding: 8px; min-height: 0; }
+.aihub-dj .dj-party-screen .dj-video { border-radius: 6px; }
+.aihub-dj .dj-party-side { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; min-height: 0; overflow: hidden; color: var(--dj-label); }
+.aihub-dj .dj-party-now { font-size: 11px; font-weight: 800; letter-spacing: 2px; color: var(--dj-label-soft); }
+.aihub-dj .dj-party-title { font-size: 28px; font-weight: 800; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.aihub-dj .dj-party-artist { font-size: 17px; font-weight: 600; color: var(--dj-label-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aihub-dj .dj-party-progress { height: 6px; border-radius: 3px; background: rgba(0,0,0,0.25); overflow: hidden; }
+.aihub-dj .dj-party-progress > div { height: 100%; background: linear-gradient(90deg, #f97316, #ef4444); transform-origin: left; transform: scaleX(0); }
+.aihub-dj .dj-party-meta { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: var(--dj-label-soft); font-variant-numeric: tabular-nums; }
+.aihub-dj .dj-party-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.aihub-dj .dj-party-controls button { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border: 1px solid var(--dj-light-edge); border-radius: 20px; background: var(--dj-light); color: var(--dj-light-ink); font-weight: 800; font-size: 13px; }
+.aihub-dj .dj-party-controls button.on { background: linear-gradient(#22c55e, #15803d); color: #fff; border-color: #14532d; }
+.aihub-dj .dj-party-controls .dj-party-play { width: 58px; height: 58px; padding: 0; justify-content: center; border-radius: 50%; background: linear-gradient(#22c55e, #15803d); color: #fff; border-color: #14532d; }
+.aihub-dj .dj-party-controls button:disabled { opacity: 0.45; }
+.aihub-dj .dj-party-next { margin-top: auto; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.15); }
+.aihub-dj .dj-party-label { font-size: 11px; font-weight: 800; letter-spacing: 2px; color: var(--dj-label-soft); margin-bottom: 6px; }
+.aihub-dj .dj-party-next-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.aihub-dj .dj-party-next-row img, .aihub-dj .dj-party-next-ph { width: 64px; height: 40px; object-fit: cover; border-radius: 4px; background: rgba(0,0,0,0.3); flex: none; }
+.aihub-dj .dj-party-next-row div { display: flex; flex-direction: column; min-width: 0; }
+.aihub-dj .dj-party-next-row b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aihub-dj .dj-party-next-row small { font-size: 12px; color: var(--dj-label-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aihub-dj .dj-party .dj-dim { font-size: 13px; line-height: 1.4; }
+
+/* ── Picker icons: a tiny sketch of each layout ── */
+.aihub-dj .dj-layout-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+.aihub-dj .dj-out-menu .dj-layout-row button { display: flex !important; flex-direction: column; align-items: center; gap: 3px; padding: 5px 2px; border: 1px solid #2f3136; border-radius: 6px; font-size: 11px; text-align: center; }
+.aihub-dj .dj-out-menu .dj-layout-row button.on { border-color: #f97316; }
+.aihub-dj .dj-layout-ico { position: relative; width: 44px; height: 26px; border-radius: 3px; background: #0d0e10; border: 1px solid #3a3d44; }
+.aihub-dj .dj-layout-ico i { position: absolute; background: #6b7280; border-radius: 1px; }
+/* classic: wave strip, two decks, mixer */
+.aihub-dj .dj-layout-ico-classic i:nth-child(1) { left: 3px; right: 3px; top: 3px; height: 4px; }
+.aihub-dj .dj-layout-ico-classic i:nth-child(2) { left: 3px; width: 14px; top: 10px; bottom: 3px; }
+.aihub-dj .dj-layout-ico-classic i:nth-child(3) { right: 3px; width: 14px; top: 10px; bottom: 3px; }
+/* pro: tall waves */
+.aihub-dj .dj-layout-ico-pro i:nth-child(1) { left: 3px; right: 3px; top: 3px; height: 11px; background: #38bdf8; }
+.aihub-dj .dj-layout-ico-pro i:nth-child(2) { left: 3px; width: 16px; top: 17px; bottom: 3px; }
+.aihub-dj .dj-layout-ico-pro i:nth-child(3) { right: 3px; width: 16px; top: 17px; bottom: 3px; }
+/* essentials: two big round platters */
+.aihub-dj .dj-layout-ico-essentials i:nth-child(1) { left: 4px; width: 14px; height: 14px; top: 6px; border-radius: 50%; }
+.aihub-dj .dj-layout-ico-essentials i:nth-child(2) { right: 4px; width: 14px; height: 14px; top: 6px; border-radius: 50%; }
+.aihub-dj .dj-layout-ico-essentials i:nth-child(3) { left: 20px; width: 4px; top: 6px; height: 14px; }
+/* controller: platters over pads */
+.aihub-dj .dj-layout-ico-controller i:nth-child(1) { left: 4px; width: 12px; height: 12px; top: 3px; border-radius: 50%; }
+.aihub-dj .dj-layout-ico-controller i:nth-child(2) { right: 4px; width: 12px; height: 12px; top: 3px; border-radius: 50%; }
+.aihub-dj .dj-layout-ico-controller i:nth-child(3) { left: 3px; right: 3px; bottom: 3px; height: 5px; background: repeating-linear-gradient(90deg, #f97316 0 4px, transparent 4px 6px); }
+/* video: big screen in the middle */
+.aihub-dj .dj-layout-ico-video i:nth-child(1) { left: 12px; right: 12px; top: 4px; bottom: 4px; background: #a855f7; }
+.aihub-dj .dj-layout-ico-video i:nth-child(2) { left: 3px; width: 7px; top: 8px; bottom: 8px; }
+.aihub-dj .dj-layout-ico-video i:nth-child(3) { right: 3px; width: 7px; top: 8px; bottom: 8px; }
+/* party: big now-playing */
+.aihub-dj .dj-layout-ico-party i:nth-child(1) { left: 3px; width: 24px; top: 3px; bottom: 3px; background: #ef4444; }
+.aihub-dj .dj-layout-ico-party i:nth-child(2) { left: 30px; right: 3px; top: 5px; height: 4px; }
+.aihub-dj .dj-layout-ico-party i:nth-child(3) { left: 30px; right: 6px; top: 13px; height: 3px; }

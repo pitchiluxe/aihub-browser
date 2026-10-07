@@ -242,7 +242,7 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
     if (!el) return
     const ro = new ResizeObserver(([e]) => {
       const { width, height } = e.contentRect
-      setPlatter(Math.round(Math.max(130, Math.min(240, height - 4, width - 52))))
+      setPlatter(Math.round(Math.max(130, Math.min(320, height - 4, width - 52))))
     })
     ro.observe(el)
     return () => ro.disconnect()

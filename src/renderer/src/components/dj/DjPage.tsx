@@ -14,6 +14,7 @@ import Mixer from './Mixer'
 import Library from './Library'
 import VideoMonitor from './VideoMonitor'
 import { ListeningTracker } from './listeningTracker'
+import PartyView from './PartyView'
 import { takeNext } from './ytQueue'
 import { learningEnabled, setLearning, subscribeTaste, tasteVersion } from './taste'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
@@ -22,6 +23,7 @@ import { HFader, useRafThrottled, VuMeter } from './controls'
 import './dj.css'
 import './dj-pro.css'
 import './dj-themes.css'
+import './dj-layouts.css'
 
 export interface DjTheme { id: string; name: string; swatch: string; dark?: boolean; lightBg?: boolean }
 export const DJ_THEMES: DjTheme[] = [
@@ -54,6 +56,17 @@ export const DJ_LOOKS: { id: string; name: string; preview: string }[] = [
   { id: 'glass', name: 'Glass', preview: 'linear-gradient(135deg, rgba(255,255,255,0.75), rgba(148,163,184,0.35))' },
 ]
 const LOOK_KEY = 'aihub-dj-look'
+
+/** Layouts arrange the console for a way of working; any layout goes with any look and colour. */
+export const DJ_LAYOUTS: { id: string; name: string; hint: string }[] = [
+  { id: 'classic', name: 'Classic', hint: 'Everything on screen: decks, pads, mixer and library' },
+  { id: 'pro', name: 'Pro', hint: 'Tall scrolling waveforms for beat-matching by eye, compact decks' },
+  { id: 'essentials', name: 'Essentials', hint: 'Just the decks, mixer and library — big platters, nothing in the way' },
+  { id: 'controller', name: 'Controller', hint: 'Performance pads under each platter, like a hardware controller' },
+  { id: 'video', name: 'Video DJ', hint: 'The video monitor in the middle, large' },
+  { id: 'party', name: 'Party', hint: 'A big now-playing screen with one-tap mixing — made for Automix and the AI DJ' },
+]
+const LAYOUT_KEY = 'aihub-dj-layout'
 const THEME_KEY = 'aihub-dj-theme'
 const VIEW_KEY = 'aihub-dj-mixer-view'
 const FADE_KEY = 'aihub-dj-fade-seconds'
@@ -93,6 +106,10 @@ function Console({ engine }: { engine: DjEngine }) {
   }, [])
   const [theme, setThemeState] = useState(savedTheme)
   const [look, setLookState] = useState(() => { const l = readPref(LOOK_KEY); return DJ_LOOKS.some(x => x.id === l) ? (l as string) : 'classic' })
+  const [layout, setLayoutState] = useState(() => { const l = readPref(LAYOUT_KEY); return DJ_LAYOUTS.some(x => x.id === l) ? (l as string) : 'classic' })
+  const setLayout = (l: string) => { setLayoutState(l); writePref(LAYOUT_KEY, l) }
+  // Essentials and Video DJ leave out the stems / effects / loop panels.
+  const showPads = layout !== 'essentials' && layout !== 'video'
   const setLook = (l: string) => { setLookState(l); writePref(LOOK_KEY, l) }
   const themeInfo = DJ_THEMES.find(t => t.id === theme)
   const [uiZoom, setUiZoomState] = useState(savedZoom)
@@ -167,10 +184,15 @@ function Console({ engine }: { engine: DjEngine }) {
   useDjShortcuts(engine, mixer, fit.ref)
 
   return (
-    <div className="aihub-dj" data-dj-theme={theme} data-dj-look={look} data-dj-dark={themeInfo?.dark ? '1' : '0'}
+    <div className="aihub-dj" data-dj-theme={theme} data-dj-look={look} data-dj-layout={layout} data-dj-dark={themeInfo?.dark ? '1' : '0'}
       data-dj-light-bg={themeInfo?.lightBg ? '1' : '0'} ref={fit.ref} style={fit.style}>
-      <TopBar engine={engine} mixer={mixer} say={say} theme={theme} setTheme={setTheme} look={look} setLook={setLook} uiZoom={uiZoom} setUiZoom={setUiZoom} />
+      <TopBar engine={engine} mixer={mixer} say={say} theme={theme} setTheme={setTheme} look={look} setLook={setLook}
+        layout={layout} setLayout={setLayout} uiZoom={uiZoom} setUiZoom={setUiZoom} />
 
+      {layout === 'party' ? (
+        <PartyView engine={engine} mixer={mixer} sidelist={sidelist} say={say} />
+      ) : (
+      <>
       <div className="dj-row-clocks">
         <DeckClock deck={A} onDropTrack={dropOn('A')} />
         <div className="dj-panel dj-zoom"><ZoomWave decks={[A, B]} /></div>
@@ -184,11 +206,11 @@ function Console({ engine }: { engine: DjEngine }) {
       </div>
 
       <div className="dj-row-decks">
-        <DeckPads deck={A} onDropTrack={dropOn('A')} />
+        {showPads && <DeckPads deck={A} onDropTrack={dropOn('A')} />}
         <Turntable deck={A} other={B} onDropTrack={dropOn('A')} />
-        <Mixer engine={engine} view={mixerView} setView={setMixerView} onBigVideo={() => setBigVideo(true)} fadeSeconds={mixer.fadeSeconds} />
+        <Mixer engine={engine} view={layout === 'video' ? 'video' : mixerView} setView={setMixerView} onBigVideo={() => setBigVideo(true)} fadeSeconds={mixer.fadeSeconds} />
         <Turntable deck={B} other={A} onDropTrack={dropOn('B')} />
-        <DeckPads deck={B} onDropTrack={dropOn('B')} />
+        {showPads && <DeckPads deck={B} onDropTrack={dropOn('B')} />}
         {bigVideo && (
           <div className="dj-bigscreen">
             <VideoMonitor engine={engine} big onToggleBig={() => setBigVideo(false)} />
@@ -196,6 +218,8 @@ function Console({ engine }: { engine: DjEngine }) {
           </div>
         )}
       </div>
+      </>
+      )}
 
       <Library onLoad={load} sidelist={sidelist} setSidelist={setSidelist} automix={automix} setAutomix={setAutomix} mixNow={mixNow} say={say} />
 
@@ -293,9 +317,9 @@ function useFitToTab(userZoom: number) {
   return { ref, style }
 }
 
-function TopBar({ engine, mixer, say, theme, setTheme, look, setLook, uiZoom, setUiZoom }: {
+function TopBar({ engine, mixer, say, theme, setTheme, look, setLook, layout, setLayout, uiZoom, setUiZoom }: {
   engine: DjEngine; mixer: AutoMixer; say: (m: string) => void; theme: string; setTheme: (t: string) => void
-  look: string; setLook: (l: string) => void; uiZoom: number; setUiZoom: (z: number) => void
+  look: string; setLook: (l: string) => void; layout: string; setLayout: (l: string) => void; uiZoom: number; setUiZoom: (z: number) => void
 }) {
   useSyncExternalStore(engine.subscribe, engine.getVersion)
   useSyncExternalStore(mixer.subscribe, mixer.getVersion)
@@ -423,6 +447,14 @@ function TopBar({ engine, mixer, say, theme, setTheme, look, setLook, uiZoom, se
         </button>
         {menu === 'theme' && (
           <div className="dj-out-menu dj-theme-menu">
+            <div className="dj-out-title">Layout</div>
+            <div className="dj-layout-row">
+              {DJ_LAYOUTS.map(l => (
+                <button type="button" key={l.id} className={layout === l.id ? 'on' : ''} onClick={() => setLayout(l.id)} title={l.hint}>
+                  <span className={`dj-layout-ico dj-layout-ico-${l.id}`}><i /><i /><i /></span>{l.name}
+                </button>
+              ))}
+            </div>
             <div className="dj-out-title">Look</div>
             <div className="dj-look-row">
               {DJ_LOOKS.map(l => (
