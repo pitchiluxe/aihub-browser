@@ -23,7 +23,7 @@ import { BrowserWindow, ipcMain, type WebContents, type WebFrameMain } from 'ele
  * A deck's player, or its scan player: a second, silent copy of the same
  * video run at 4× so the DJ page can draw the whole waveform ahead of time.
  */
-export type YtDeckId = 'A' | 'B' | 'A-scan' | 'B-scan'
+export type YtDeckId = 'A' | 'B' | 'C' | 'D' | 'A-scan' | 'B-scan' | 'C-scan' | 'D-scan'
 
 export interface YtDeckState {
   ready: boolean
@@ -59,7 +59,7 @@ const players = new Map<string, Player>()
 const keyOf = (owner: WebContents, deck: YtDeckId) => `${owner.id}:${deck}`
 
 function validDeck(d: unknown): d is YtDeckId {
-  return d === 'A' || d === 'B' || d === 'A-scan' || d === 'B-scan'
+  return typeof d === 'string' && /^[ABCD](-scan)?$/.test(d)
 }
 
 /** A scan player only feeds the waveform reader: smallest picture, so YouTube streams the lightest video. */

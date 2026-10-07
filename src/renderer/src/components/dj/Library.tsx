@@ -40,9 +40,11 @@ interface Props {
   setAutomix: (on: boolean) => void
   mixNow: (t: DjTrack) => void
   say: (m: string) => void
+  /** Decks a row can be loaded straight onto (four in the 4-Deck layout). */
+  deckIds?: DeckId[]
 }
 
-export default function Library({ onLoad, sidelist, setSidelist, automix, setAutomix, mixNow, say }: Props) {
+export default function Library({ onLoad, sidelist, setSidelist, automix, setAutomix, mixNow, say, deckIds = ['A', 'B'] }: Props) {
   const [roots, setRoots] = useState<{ places: Folder[]; drives: Folder[] }>({ places: [], drives: [] })
   const [mine, setMine] = useState<Folder[]>(savedFolders)
   const [current, setCurrent] = useState<Folder | null>(null)
@@ -336,8 +338,9 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
                 <span className="dj-td dj-c-bpm">{bpm ? bpm.toFixed(1) : ''}</span>
                 <span className="dj-td dj-c-key">{t.key ?? ''}</span>
                 <span className="dj-td dj-c-act">
-                  <button type="button" onClick={e => { e.stopPropagation(); onLoad(t, 'A') }} title="Load on deck A">A</button>
-                  <button type="button" onClick={e => { e.stopPropagation(); onLoad(t, 'B') }} title="Load on deck B">B</button>
+                  {deckIds.map(id => (
+                    <button type="button" key={id} onClick={e => { e.stopPropagation(); onLoad(t, id) }} title={`Load on deck ${id}`}>{id}</button>
+                  ))}
                   {t.youtubeId ? (
                     <>
                       <button type="button" onClick={e => { e.stopPropagation(); mixNow(t) }} title="Mix it in now"><ArrowLeftRight size={11} /></button>

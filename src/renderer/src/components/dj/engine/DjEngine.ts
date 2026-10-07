@@ -40,7 +40,13 @@ export interface DjTrack {
   video?: boolean
 }
 
-export type DeckId = 'A' | 'B'
+export type DeckId = 'A' | 'B' | 'C' | 'D'
+export const DECK_IDS: DeckId[] = ['A', 'B', 'C', 'D']
+/**
+ * Which side of the crossfader a deck sits on. A four-deck console follows
+ * the usual convention: C plays on the left with A, D on the right with B.
+ */
+export function deckSide(id: DeckId): 0 | 1 { return id === 'A' || id === 'C' ? 0 : 1 }
 export type StemKey = 'vocal' | 'instru' | 'bass' | 'kick' | 'hihat'
 export type EqBand = 'high' | 'mid' | 'low'
 
@@ -451,6 +457,7 @@ export class Deck extends Emitter {
     this.analysis = null
     this.wave = null
     this.scan?.stop()
+    this.engine.scanDone(this)
     this.localScan?.stop()
     this.scanBpm = null
     this.scanTempoAsked = false
@@ -557,9 +564,10 @@ export class Deck extends Emitter {
   private startScan(videoId: string, gen: number): void {
     this.scanFor = gen
     if (!this.scan) {
-      this.scan = new YouTubeScan(this.id === 'A' ? 'A-scan' : 'B-scan', this.engine.ctx,
+      this.scan = new YouTubeScan(`${this.id}-scan` as `${DeckId}-scan`, this.engine.ctx,
         (t, peak, low) => { if (this.scanFor === this.gen) this.wave?.addScanned(t, peak, low) },
         complete => {
+          this.engine.scanDone(this)
           if (this.scanFor !== this.gen || !complete || this.analysis) { this.emit(); return }
           const gen = this.gen
           idle(() => {
@@ -570,7 +578,12 @@ export class Deck extends Emitter {
           })
         })
     }
-    void this.scan.start(videoId, this.duration).then(() => this.emit())
+    // One YouTube scan at a time across all decks: each is a 4× player, and
+    // four of them beside four decks starved the decks themselves.
+    this.engine.queueScan(this, () => {
+      if (gen !== this.gen) { this.engine.scanDone(this); return }
+      void this.scan!.start(videoId, this.duration).then(() => this.emit())
+    })
   }
 
   eject(): void {
@@ -586,6 +599,7 @@ export class Deck extends Emitter {
     this.analysis = null
     this.wave = null
     this.scan?.stop()
+    this.engine.scanDone(this)
     this.localScan?.stop()
     this.scanBpm = null
     this.liveBpm = null
@@ -991,7 +1005,7 @@ export class Deck extends Emitter {
   private syncYouTubeVolume(): void {
     if (!this.yt || this.yt.captured) return
     const [a, b] = crossfadeGains(this.engine.crossfader)
-    this.yt.setVolume(Math.min(1, faderGain(this.volume) * (this.id === 'A' ? a : b) * masterGain(this.engine.masterVolume) * this.trimGain()))
+    this.yt.setVolume(Math.min(1, faderGain(this.volume) * (deckSide(this.id) === 0 ? a : b) * masterGain(this.engine.masterVolume) * this.trimGain()))
   }
 
   dispose(): void {
@@ -1086,7 +1100,7 @@ export class DjEngine extends Emitter {
     this.mediaHost.style.cssText = 'position:fixed;left:-10000px;top:0;width:200px;height:240px;overflow:hidden;pointer-events:none'
     document.body.appendChild(this.mediaHost)
 
-    this.decks = { A: new Deck('A', this), B: new Deck('B', this) }
+    this.decks = { A: new Deck('A', this), B: new Deck('B', this), C: new Deck('C', this), D: new Deck('D', this) }
     this.setCrossfader(0.5)
 
     // A steady clock rather than animation frames: asking for a frame every
@@ -1094,8 +1108,7 @@ export class DjEngine extends Emitter {
     // which is what starved the YouTube players. It also keeps loops and
     // fades running while the console is scrolled out of view.
     this.raf = window.setInterval(() => {
-      this.decks.A.tick()
-      this.decks.B.tick()
+      for (const id of DECK_IDS) this.decks[id].tick()
       this.tickFade()
     }, TICK_MS)
   }
@@ -1108,8 +1121,7 @@ export class DjEngine extends Emitter {
     if (!fromFade) this.fade = null
     this.crossfader = Math.min(1, Math.max(0, x))
     const [a, b] = crossfadeGains(this.crossfader)
-    this.decks.A.xfade.gain.setTargetAtTime(a, this.ctx.currentTime, SMOOTH)
-    this.decks.B.xfade.gain.setTargetAtTime(b, this.ctx.currentTime, SMOOTH)
+    for (const id of DECK_IDS) this.decks[id].xfade.gain.setTargetAtTime(deckSide(id) === 0 ? a : b, this.ctx.currentTime, SMOOTH)
     this.emit()
   }
 
@@ -1135,10 +1147,30 @@ export class DjEngine extends Emitter {
     this.emit()
   }
 
+  // ── YouTube scans: one at a time, playing decks first ──
+  private scanQueue: { deck: Deck; start: () => void }[] = []
+  private scanning: Deck | null = null
+  queueScan(deck: Deck, start: () => void): void {
+    this.scanQueue = this.scanQueue.filter(q => q.deck !== deck)
+    this.scanQueue.push({ deck, start })
+    this.nextScan()
+  }
+  /** A deck's scan finished, failed or was abandoned (new song, eject). */
+  scanDone(deck: Deck): void {
+    this.scanQueue = this.scanQueue.filter(q => q.deck !== deck)
+    if (this.scanning === deck) { this.scanning = null; this.nextScan() }
+  }
+  private nextScan(): void {
+    if (this.scanning || !this.scanQueue.length) return
+    const i = Math.max(0, this.scanQueue.findIndex(q => q.deck.active))
+    const [q] = this.scanQueue.splice(i, 1)
+    this.scanning = q.deck
+    q.start()
+  }
+
   setAutoGain(on: boolean): void {
     this.autoGain = on
-    this.decks.A.applyTrim()
-    this.decks.B.applyTrim()
+    for (const id of DECK_IDS) this.decks[id].applyTrim()
     this.emit()
   }
 
@@ -1208,8 +1240,7 @@ export class DjEngine extends Emitter {
   dispose(): void {
     window.clearInterval(this.raf)
     if (this.recorder && this.recorder.state !== 'inactive') this.recorder.stop()
-    this.decks.A.dispose()
-    this.decks.B.dispose()
+    for (const id of DECK_IDS) this.decks[id].dispose()
     this.mediaHost.remove()
     void this.setPhonesDevice(null)
     void this.ctx.close()

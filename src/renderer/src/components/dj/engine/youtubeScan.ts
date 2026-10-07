@@ -32,7 +32,7 @@ export class YouTubeScan {
   running = false
 
   constructor(
-    private key: 'A-scan' | 'B-scan',
+    private key: 'A-scan' | 'B-scan' | 'C-scan' | 'D-scan',
     private ctx: AudioContext,
     private onPeak: (t: number, peak: number, low: number) => void,
     private onEnd: (complete: boolean) => void,

@@ -6,19 +6,24 @@
  */
 import React, { useRef, useSyncExternalStore } from 'react'
 import { Pause, Play, Shuffle, SkipForward, ArrowLeftRight } from 'lucide-react'
-import type { Deck, DjEngine, DjTrack } from './engine/DjEngine'
+import { crossfadeGains, deckSide, DECK_IDS, faderGain, type Deck, type DeckId, type DjEngine, type DjTrack } from './engine/DjEngine'
 import type { AutoMixer } from './engine/autoMixer'
 import VideoMonitor from './VideoMonitor'
 import { fmtTime, useDeck, useRafThrottled } from './controls'
 import { peekNext, queueStore } from './ytQueue'
 
-/** The deck the room is hearing: the playing one, or the louder of two by the crossfader. */
+/** The deck the room is hearing: the playing one, or the loudest in the mix when several play. */
 function liveDeck(engine: DjEngine): Deck {
-  const { A, B } = engine.decks
-  if (A.active && !B.active) return A
-  if (B.active && !A.active) return B
-  if (A.active && B.active) return engine.crossfader > 0.5 ? B : A
-  return B.track && !A.track ? B : A
+  const all = DECK_IDS.map(id => engine.decks[id])
+  const xg = crossfadeGains(engine.crossfader)
+  const playing = all.filter(d => d.active).sort((x, y) => xg[deckSide(y.id)] * faderGain(y.volume) - xg[deckSide(x.id)] * faderGain(x.volume))
+  return playing[0] ?? all.find(d => d.track) ?? engine.decks.A
+}
+
+/** The deck that would take over next: A↔B pair up, as do C↔D. */
+function partnerOf(engine: DjEngine, d: Deck): Deck {
+  const pair: Record<DeckId, DeckId> = { A: 'B', B: 'A', C: 'D', D: 'C' }
+  return engine.decks[pair[d.id]]
 }
 
 export default function PartyView({ engine, mixer, sidelist, say }: {
@@ -32,8 +37,10 @@ export default function PartyView({ engine, mixer, sidelist, say }: {
   useSyncExternalStore(queueStore.subscribe, queueStore.get)
   useDeck(engine.decks.A)
   useDeck(engine.decks.B)
+  useDeck(engine.decks.C)
+  useDeck(engine.decks.D)
   const deck = liveDeck(engine)
-  const other = deck === engine.decks.A ? engine.decks.B : engine.decks.A
+  const other = partnerOf(engine, deck)
   const t = deck.track
   const barRef = useRef<HTMLDivElement>(null)
   const timeRef = useRef<HTMLSpanElement>(null)
@@ -60,7 +67,7 @@ export default function PartyView({ engine, mixer, sidelist, say }: {
     // A song already waiting on the other deck: blend straight across.
     if (other.track && !other.active) {
       void other.play()
-      engine.fadeTo(other.id === 'A' ? 0 : 1, mixer.fadeSeconds)
+      engine.fadeTo(deckSide(other.id), mixer.fadeSeconds)
       return
     }
     if (!mixer.on) { mixer.setOn(true); say('Automix on — mixing through your set'); return }

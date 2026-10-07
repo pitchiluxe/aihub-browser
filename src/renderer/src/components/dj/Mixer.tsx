@@ -8,12 +8,13 @@ import type { DjEngine, Deck, EqBand } from './engine/DjEngine'
 import { HFader, Knob, VFader, VuMeter, useDeck } from './controls'
 import VideoMonitor from './VideoMonitor'
 
-function Channel({ deck }: { deck: Deck }) {
+function Channel({ deck, letter }: { deck: Deck; letter?: boolean }) {
   useDeck(deck)
   const limited = !deck.fullControl
   const bands: { b: EqBand; label: string }[] = [{ b: 'high', label: 'HIGH' }, { b: 'mid', label: 'MID' }, { b: 'low', label: 'LOW' }]
   return (
     <div className={`dj-ch ${limited ? 'dj-limited' : ''}`} title={limited ? 'This YouTube video plays directly — only volume and the crossfader reach it' : undefined}>
+      {letter && <span className={`dj-ch-letter dj-ch-${deck.id}`}>{deck.id}</span>}
       <Knob value={deck.gainKnob} onChange={v => deck.setGainKnob(v)} label="GAIN" size={24} color="#e5e7eb" title="Trim ±12 dB" />
       {bands.map(({ b, label }) => (
         <Knob key={b} value={deck.eq[b]} onChange={v => deck.setEq(b, v)} label={label} size={26}
@@ -36,40 +37,44 @@ function Strip({ deck }: { deck: Deck }) {
   )
 }
 
-export default function Mixer({ engine, view, setView, onBigVideo, fadeSeconds }: {
+export default function Mixer({ engine, view, setView, onBigVideo, fadeSeconds, four = false }: {
   engine: DjEngine
   view: 'mixer' | 'video'
   setView: (v: 'mixer' | 'video') => void
   onBigVideo: () => void
   fadeSeconds: number
+  /** Four channels, in the usual order C A | B D (C and A on the crossfader's left side). */
+  four?: boolean
 }) {
-  const { A, B } = engine.decks
+  const { A, B, C, D } = engine.decks
+  const left = four ? [C, A] : [A]
+  const right = four ? [B, D] : [B]
   useSyncExternalStore(engine.subscribe, engine.getVersion)
   // Fade across to whichever side the fader is further from.
   const fadeAcross = () => engine.fading ? engine.setCrossfader(engine.crossfader) : engine.fadeTo(engine.crossfader < 0.5 ? 1 : 0, fadeSeconds)
   return (
-    <div className="dj-mixer dj-panel">
+    <div className={`dj-mixer dj-panel ${four ? 'dj-mixer-four' : ''}`}>
       <div className="dj-mixer-tabs">
-        <span>CH A</span>
+        <span>{four ? 'CH C · A' : 'CH A'}</span>
         <div className="dj-mixer-switch" role="tablist">
           <button type="button" role="tab" aria-selected={view === 'mixer'} className={view === 'mixer' ? 'on' : ''} onClick={() => setView('mixer')}>MIXER</button>
           <button type="button" role="tab" aria-selected={view === 'video'} className={view === 'video' ? 'on' : ''} onClick={() => setView('video')}>VIDEO</button>
         </div>
-        <span>CH B</span>
+        <span>{four ? 'CH B · D' : 'CH B'}</span>
       </div>
       {view === 'video' ? (
         <div className="dj-mixer-video"><VideoMonitor engine={engine} onToggleBig={onBigVideo} /></div>
       ) : (
       <div className="dj-mixer-body">
-        <Channel deck={A} />
+        {left.map(d => <Channel key={d.id} deck={d} letter={four} />)}
         <div className="dj-mixer-center">
           <div className="dj-meters">
-            <VuMeter read={() => A.meterDb()} height={96} />
+            {left.map(d => <VuMeter key={d.id} read={() => d.meterDb()} height={96} />)}
             <div className="dj-master-meters">
               <VuMeter read={() => engine.masterDb()[0]} height={96} />
               <VuMeter read={() => engine.masterDb()[1]} height={96} />
             </div>
-            <VuMeter read={() => B.meterDb()} height={96} />
+            {right.map(d => <VuMeter key={d.id} read={() => d.meterDb()} height={96} />)}
           </div>
           <Knob value={engine.masterVolume} onChange={v => engine.setMasterVolume(v)} label="MASTER" size={30} center={0} defaultValue={0.85} color="#22c55e" />
           <div className="dj-section-title dj-tight">HEADPHONES</div>
@@ -78,22 +83,22 @@ export default function Mixer({ engine, view, setView, onBigVideo, fadeSeconds }
             <Knob value={engine.cueMix} onChange={v => engine.setCueMix(v)} label="CUE MIX" size={26} center={0} defaultValue={0} title="Cue ↔ master in headphones" />
           </div>
         </div>
-        <Channel deck={B} />
+        {right.map(d => <Channel key={d.id} deck={d} letter={four} />)}
       </div>
       )}
       <div className="dj-mixer-faders">
-        <Strip deck={A} />
+        {left.map(d => <Strip key={d.id} deck={d} />)}
         <div className="dj-mixer-logo">
           <span className="dj-logo-ai">AIHub</span>
           <span className="dj-logo-dj">DJ</span>
-          <small>2-DECK MIX ENGINE</small>
+          <small>{four ? '4-DECK MIX ENGINE' : '2-DECK MIX ENGINE'}</small>
         </div>
-        <Strip deck={B} />
+        {right.map(d => <Strip key={d.id} deck={d} />)}
       </div>
       <div className="dj-xfader">
-        <span>◂ A</span>
+        <span>{four ? '◂ A C' : '◂ A'}</span>
         <HFader value={engine.crossfader} onChange={v => engine.setCrossfader(v)} width={130} title="Crossfader (double-click to centre)" />
-        <span>B ▸</span>
+        <span>{four ? 'B D ▸' : 'B ▸'}</span>
         <button type="button" className={`dj-mini dj-fade-btn ${engine.fading ? 'dj-on dj-on-blue' : ''}`} onClick={fadeAcross}
           title={engine.fading ? 'Stop the fade here' : `Fade across to the other deck over ${fadeSeconds} s`}>
           <ArrowLeftRight size={10} />

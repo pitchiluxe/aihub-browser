@@ -65,6 +65,7 @@ export const DJ_LAYOUTS: { id: string; name: string; hint: string }[] = [
   { id: 'controller', name: 'Controller', hint: 'Performance pads under each platter, like a hardware controller' },
   { id: 'video', name: 'Video DJ', hint: 'The video monitor in the middle, large' },
   { id: 'party', name: 'Party', hint: 'A big now-playing screen with one-tap mixing — made for Automix and the AI DJ' },
+  { id: '4deck', name: '4-Deck', hint: 'Four decks around a four-channel mixer — C plays with A on the left, D with B on the right' },
 ]
 const LAYOUT_KEY = 'aihub-dj-layout'
 const THEME_KEY = 'aihub-dj-theme'
@@ -97,7 +98,7 @@ export default function DjPage() {
 }
 
 function Console({ engine }: { engine: DjEngine }) {
-  const { A, B } = engine.decks
+  const { A, B, C, D } = engine.decks
   const [toast, setToast] = useState<string | null>(null)
   const [sidelist, setSidelistState] = useState<DjTrack[]>([])
   const sideRef = useRef<DjTrack[]>([])
@@ -159,12 +160,14 @@ function Console({ engine }: { engine: DjEngine }) {
   }, [engine])
 
   const load = useCallback((track: DjTrack, id?: DeckId) => {
-    const deck = id ? engine.decks[id] : !A.active ? A : !B.active ? B : null
+    // No deck named: the first free one (C and D too in the 4-Deck layout).
+    const pool = layout === '4deck' ? [A, B, C, D] : [A, B]
+    const deck = id ? engine.decks[id] : pool.find(d => !d.active && !d.held) ?? null
     if (!deck) { say('Both decks are playing — stop one first'); return }
     if (deck.active || deck.held) { say(`Deck ${deck.id} is playing — stop it before loading`); return }
     tracker.noteLoad(deck.id, false)
     void deck.load(track)
-  }, [engine, A, B, say, tracker])
+  }, [engine, A, B, C, D, say, tracker, layout])
 
   const mixNow = useCallback((track: DjTrack) => { void mixer.mixNow(track) }, [mixer])
 
@@ -191,6 +194,27 @@ function Console({ engine }: { engine: DjEngine }) {
 
       {layout === 'party' ? (
         <PartyView engine={engine} mixer={mixer} sidelist={sidelist} say={say} />
+      ) : layout === '4deck' ? (
+      <>
+      <div className="dj-row-clocks dj-4-waves">
+        <div className="dj-panel dj-zoom"><ZoomWave decks={[A, B, C, D]} /></div>
+      </div>
+      <div className="dj-4deck">
+        {([[A, B], [B, A], [C, A], [D, B]] as const).map(([d, other]) => (
+          <div key={d.id} className={`dj-4-cell dj-4-${d.id.toLowerCase()}`}>
+            <DeckInfo deck={d} onDropTrack={dropOn(d.id)} clock />
+            <Turntable deck={d} other={other} onDropTrack={dropOn(d.id)} />
+          </div>
+        ))}
+        <Mixer engine={engine} four view={mixerView} setView={setMixerView} onBigVideo={() => setBigVideo(true)} fadeSeconds={mixer.fadeSeconds} />
+        {bigVideo && (
+          <div className="dj-bigscreen">
+            <VideoMonitor engine={engine} big onToggleBig={() => setBigVideo(false)} />
+            <BigScreenFader engine={engine} />
+          </div>
+        )}
+      </div>
+      </>
       ) : (
       <>
       <div className="dj-row-clocks">
@@ -221,7 +245,8 @@ function Console({ engine }: { engine: DjEngine }) {
       </>
       )}
 
-      <Library onLoad={load} sidelist={sidelist} setSidelist={setSidelist} automix={automix} setAutomix={setAutomix} mixNow={mixNow} say={say} />
+      <Library onLoad={load} sidelist={sidelist} setSidelist={setSidelist} automix={automix} setAutomix={setAutomix} mixNow={mixNow} say={say}
+        deckIds={layout === '4deck' ? ['A', 'B', 'C', 'D'] : ['A', 'B']} />
 
       {toast && <div className="dj-toast">{toast}</div>}
     </div>
@@ -291,23 +316,30 @@ function savedZoom(): number {
 }
 
 /**
- * Fit the whole console into the tab instead of scrolling: lay it out at
- * (tab size ÷ scale) and zoom by `scale`, so it always fills the tab exactly.
+ * Fit the whole console into the tab instead of scrolling: zoom by `scale`
+ * and pin the console to all four edges of the tab, so it lays out at
+ * (tab size ÷ scale) and always fills the tab exactly.
+ *
+ * Pinned, not sized: a computed width / height was rounded at 125 % and
+ * 150 % display scaling and the console stopped a fraction of a pixel —
+ * up to ~5 px after a resize — short of the right and bottom edges, where
+ * the see-through window background showed as a thin border.
  */
 function useFitToTab(userZoom: number) {
   const ref = useRef<HTMLDivElement>(null)
-  const [style, setStyle] = useState<React.CSSProperties>({})
+  const [style, setStyle] = useState<React.CSSProperties>({ position: 'absolute', inset: 0 })
   useEffect(() => {
     const host = ref.current?.parentElement
     if (!host) return
     const apply = () => {
-      const w = host.clientWidth
-      const h = host.clientHeight
+      const r = host.getBoundingClientRect()
+      const w = r.width
+      const h = r.height
       if (!w || !h) return
       // Fit first, then the user's own size preference on top. Below 1 the
       // console simply gets more room, so it never overflows the tab.
       const scale = Math.max(0.4, Math.min(1, w / DESIGN_W, h / DESIGN_H) * userZoom)
-      setStyle({ zoom: scale, width: w / scale, height: h / scale })
+      setStyle({ zoom: scale, position: 'absolute', inset: 0 })
     }
     apply()
     const ro = new ResizeObserver(apply)

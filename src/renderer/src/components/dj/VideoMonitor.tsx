@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useRef } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
-import { crossfadeGains, faderGain, type Deck, type DjEngine } from './engine/DjEngine'
+import { crossfadeGains, deckSide, DECK_IDS, faderGain, type Deck, type DeckId, type DjEngine } from './engine/DjEngine'
 import { useCanvasBox, useRafThrottled } from './controls'
 
 const images = new Map<string, HTMLImageElement>()
@@ -31,15 +31,15 @@ function cover(g: CanvasRenderingContext2D, src: CanvasImageSource, sw: number, 
 
 export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjEngine; big?: boolean; onToggleBig?: () => void }) {
   const cvRef = useRef<HTMLCanvasElement>(null)
-  const lastLive = useRef<'A' | 'B'>('A')
-  const { A, B } = engine.decks
+  const lastLive = useRef<DeckId>('A')
+  const all = DECK_IDS.map(id => engine.decks[id])
 
   // While the monitor is on screen, YouTube decks send pictures as well as sound.
   useEffect(() => {
-    A.retainVideo()
-    B.retainVideo()
-    return () => { A.releaseVideo(); B.releaseVideo() }
-  }, [A, B])
+    for (const d of all) d.retainVideo()
+    return () => { for (const d of all) d.releaseVideo() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine])
 
   const box = useCanvasBox(cvRef)
   // 30 fps is what the videos themselves run at; more only costs the players GPU time.
@@ -54,30 +54,25 @@ export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjE
     g.fillStyle = '#000'
     g.fillRect(0, 0, w, h)
 
-    // What is playing is what is shown. Only when both decks play does the
-    // crossfader blend the pictures, by how loud each one is in the mix.
-    const live = (d: Deck) => !!d.track && (d.active || d.held)
-    const la = live(A)
-    const lb = live(B)
-    if (la !== lb) lastLive.current = la ? 'A' : 'B'
-    let wa = 0
-    let wb = 0
-    if (la && lb) {
-      const [ga, gb] = crossfadeGains(engine.crossfader)
-      wa = ga * faderGain(A.volume)
-      wb = gb * faderGain(B.volume)
-      if (wa + wb < 1e-3) { wa = 1 - engine.crossfader; wb = engine.crossfader }
-    } else if (la) wa = 1
-    else if (lb) wb = 1
+    // What is playing is what is shown. When several decks play, the two
+    // loudest in the mix are blended by how loud each one is.
+    const live = all.filter(d => !!d.track && (d.active || d.held))
+    let picks: { d: Deck; w: number }[]
+    if (live.length > 1) {
+      const xg = crossfadeGains(engine.crossfader)
+      picks = live.map(d => ({ d, w: xg[deckSide(d.id)] * faderGain(d.volume) }))
+        .sort((x, y) => y.w - x.w).slice(0, 2)
+      if (picks[0].w + picks[1].w < 1e-3) picks = [{ d: picks[0].d, w: 1 }]
+    } else if (live.length === 1) picks = [{ d: live[0], w: 1 }]
     else {
       // Nothing playing: hold the picture of the deck that played last.
-      const keep = lastLive.current === 'B' ? B : A
-      const other = keep === A ? B : A
-      if (keep.track) { if (keep === A) wa = 1; else wb = 1 }
-      else if (other.track) { if (other === A) wa = 1; else wb = 1 }
+      const keep = engine.decks[lastLive.current]
+      const any = keep.track ? keep : all.find(d => d.track)
+      picks = any ? [{ d: any, w: 1 }] : []
     }
-    const total = wa + wb
-    if (!total) { idle(g, w, h); return }
+    if (!picks.length) { idle(g, w, h); return }
+    lastLive.current = picks[0].d.id
+    const total = picks.reduce((a, p) => a + p.w, 0)
 
     const now = performance.now() / 1000
     const layer = (d: Deck, alpha: number) => {
@@ -89,11 +84,11 @@ export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjE
         const img = d.track?.cover ? imageFor(d.track.cover) : null
         if (img) {
           // A slow drift over the artwork, so a still picture still feels alive.
-          const drift = Math.sin(now / 9 + (d.id === 'A' ? 0 : 2)) * w * 0.03
+          const drift = Math.sin(now / 9 + DECK_IDS.indexOf(d.id) * 2) * w * 0.03
           cover(g, img, img.naturalWidth, img.naturalHeight, w, h, 1.12 + Math.sin(now / 13) * 0.04, drift)
         } else {
           const grad = g.createLinearGradient(0, 0, w, h)
-          grad.addColorStop(0, d.id === 'A' ? '#0b3d91' : '#7a1f0b')
+          grad.addColorStop(0, deckSide(d.id) === 0 ? '#0b3d91' : '#7a1f0b')
           grad.addColorStop(1, '#050505')
           g.fillStyle = grad
           g.fillRect(0, 0, w, h)
@@ -103,12 +98,11 @@ export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjE
     }
     // The fuller deck goes underneath so the blend reads correctly at the ends;
     // a deck not in the picture is not drawn at all.
-    const [first, second] = wa >= wb ? [[A, wa], [B, wb]] as const : [[B, wb], [A, wa]] as const
-    layer(first[0], 1)
-    if (second[1] > 0) layer(second[0], second[1] / total)
+    layer(picks[0].d, 1)
+    if (picks[1] && picks[1].w > 0) layer(picks[1].d, picks[1].w / total)
 
     // Beat pulse on the dominant deck.
-    const dom = first[0]
+    const dom = picks[0].d
     if (dom.playing && dom.gridKnown) {
       const phase = ((dom.time - dom.firstBeat) / dom.beatLen) % 1
       const p = Math.pow(1 - (phase < 0 ? phase + 1 : phase), 6)

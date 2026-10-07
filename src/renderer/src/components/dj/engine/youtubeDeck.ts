@@ -70,7 +70,7 @@ export class YouTubeDeck {
   private videoUsers = 0
   readonly videoEl: HTMLVideoElement
 
-  constructor(private deck: 'A' | 'B', host: HTMLElement, private onChange: () => void) {
+  constructor(private deck: 'A' | 'B' | 'C' | 'D', host: HTMLElement, private onChange: () => void) {
     this.videoEl = document.createElement('video')
     this.videoEl.muted = true
     this.videoEl.playsInline = true

@@ -4,7 +4,7 @@
  * the crossfader or pulled down on its fader does not count) and how it ended.
  * These records are what the AI DJ learns the DJ's taste from.
  */
-import { crossfadeGains, type DeckId, type DjEngine, type DjTrack } from './engine/DjEngine'
+import { crossfadeGains, deckSide, DECK_IDS, type DeckId, type DjEngine, type DjTrack } from './engine/DjEngine'
 import { classifyListen, recordTaste } from './taste'
 
 interface Session {
@@ -21,8 +21,8 @@ const TICK_S = 1
 const MIN_HEARD = 4
 
 export class ListeningTracker {
-  private sessions: Record<DeckId, Session | null> = { A: null, B: null }
-  private autoLoaded: Record<DeckId, boolean> = { A: false, B: false }
+  private sessions: Record<DeckId, Session | null> = { A: null, B: null, C: null, D: null }
+  private autoLoaded: Record<DeckId, boolean> = { A: false, B: false, C: false, D: false }
   private timer: number
 
   constructor(private engine: DjEngine) {
@@ -35,11 +35,11 @@ export class ListeningTracker {
   private audible(id: DeckId): boolean {
     const d = this.engine.decks[id]
     const [a, b] = crossfadeGains(this.engine.crossfader)
-    return (id === 'A' ? a : b) > 0.25 && d.volume > 0.15 && this.engine.masterVolume > 0.05
+    return (deckSide(id) === 0 ? a : b) > 0.25 && d.volume > 0.15 && this.engine.masterVolume > 0.05
   }
 
   private tick(): void {
-    for (const id of ['A', 'B'] as DeckId[]) {
+    for (const id of DECK_IDS) {
       const deck = this.engine.decks[id]
       let s = this.sessions[id]
       if (s && s.track !== deck.track) { this.finish(s, false); s = this.sessions[id] = null }
@@ -74,7 +74,7 @@ export class ListeningTracker {
   /** The page is closing: whatever is playing now still counts. */
   dispose(): void {
     window.clearInterval(this.timer)
-    for (const id of ['A', 'B'] as DeckId[]) {
+    for (const id of DECK_IDS) {
       const s = this.sessions[id]
       // Not a skip — the DJ closed the console, not the song.
       if (s && !s.done && s.heard >= MIN_HEARD) {

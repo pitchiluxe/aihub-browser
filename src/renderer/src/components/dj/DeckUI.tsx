@@ -87,7 +87,17 @@ function Opinion({ deck }: { deck: Deck }) {
   )
 }
 
-export function DeckInfo({ deck, onDropTrack }: { deck: Deck; onDropTrack: DeckDrop }) {
+/** Elapsed time, small — for layouts with no room for the big deck clocks. */
+function MiniClock({ deck }: { deck: Deck }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  useRafThrottled(() => {
+    const s = fmtTime(deck.time)
+    if (ref.current && ref.current.textContent !== s) ref.current.textContent = s
+  }, 100)
+  return <span className={`dj-mini-clock ${deck.active ? 'dj-live' : ''}`}><b>{deck.id}</b><span ref={ref} /></span>
+}
+
+export function DeckInfo({ deck, onDropTrack, clock = false }: { deck: Deck; onDropTrack: DeckDrop; clock?: boolean }) {
   useDeck(deck)
   const t = deck.track
   const bpm = deck.effectiveBpm
@@ -117,6 +127,7 @@ export function DeckInfo({ deck, onDropTrack }: { deck: Deck; onDropTrack: DeckD
               : <span className="dj-dim">- Drag a song on this deck to load it</span>}
           </span>
           <Opinion deck={deck} />
+          {clock && <MiniClock deck={deck} />}
         </div>
         {deck.error && <div className="dj-err">{deck.error}</div>}
         {/* Live, scrolling waveform around the playhead, then the whole song for seeking */}

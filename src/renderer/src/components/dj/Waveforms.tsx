@@ -12,11 +12,16 @@
  * measured on resize only, and the resolution is capped.
  */
 import React, { useRef } from 'react'
-import type { Deck } from './engine/DjEngine'
+import type { Deck, DeckId } from './engine/DjEngine'
 import { ENV_RATE } from './engine/analysis'
 import { useCanvasBox, useRafThrottled } from './controls'
 
-const DECK_COLORS = { A: { hi: '#4cc3ff', lo: '#1d5fff' }, B: { hi: '#ff8a3d', lo: '#ff2d55' } }
+const DECK_COLORS: Record<DeckId, { hi: string; lo: string }> = {
+  A: { hi: '#4cc3ff', lo: '#1d5fff' },
+  B: { hi: '#ff8a3d', lo: '#ff2d55' },
+  C: { hi: '#5eea8a', lo: '#0f9f4f' },
+  D: { hi: '#d18cff', lo: '#8b2cf5' },
+}
 const FRAME_MS = 33
 /** The track strips and the whole-song bar move less: they need fewer frames. */
 const STRIP_MS = 50
