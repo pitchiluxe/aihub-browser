@@ -3,62 +3,102 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AIHub Browser — AI-Native Web Browser with 3D Knowledge Graph | Free for Windows</title>
-  <meta name="description" content="AIHub Browser is a free AI-native browser for Windows with a built-in AI assistant, 3D bookmark knowledge graph, local Ollama AI, OpenRouter cloud models, and VPN proxy. No account required." />
-  <meta name="keywords" content="AI browser, AI native browser, 3D knowledge graph, Ollama browser, OpenRouter browser, free AI browser, Windows browser, Claude browser, GPT browser, bookmark manager" />
-  <meta name="robots" content="index, follow" />
-  <meta name="author" content="Erick OMARI — My Digital Solutions" />
+  <title>AIHub Browser — Free AI Browser with an AI Agent, Local AI &amp; a Built-in DJ | Windows, macOS, Linux</title>
+  <meta name="description" content="AIHub Browser is a free AI-native web browser for Windows, macOS and Linux: an AI agent that browses, fills forms and builds projects, private local AI with Ollama, a 3D bookmark knowledge graph, Gmail, Drive and Calendar, ad blocking, and AIHub DJ — a 4-deck DJ console with YouTube. No account, no subscription." />
+  <meta name="keywords" content="AI browser, free AI browser, AI agent browser, AI web browser for Windows, browser with AI assistant, Ollama browser, local AI browser, private AI browser, OpenRouter, 3D bookmark graph, knowledge graph browser, free DJ software, YouTube DJ, AI DJ, research browser, Obsidian browser, ad blocker browser" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+  <meta name="author" content="Erick Omari — Pitchiluxe LLC" />
   <link rel="canonical" href="https://landing-sooty-omega-22.vercel.app/" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d3a2e'/%3E%3Ctext x='32' y='45' font-family='Arial' font-weight='700' font-size='38' text-anchor='middle' fill='%23f4a825'%3EA%3C/text%3E%3C/svg%3E" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://landing-sooty-omega-22.vercel.app/" />
-  <meta property="og:title" content="AIHub Browser — AI-Native Web Browser with 3D Knowledge Graph" />
-  <meta property="og:description" content="Free Windows browser with built-in AI assistant, 3D bookmark sphere, Ollama local AI, and OpenRouter cloud models. No subscriptions. No tracking." />
-  <meta property="og:image" content="https://landing-sooty-omega-22.vercel.app/og-image.svg" />
+  <meta property="og:title" content="AIHub Browser — the free AI browser with an agent, local AI and a built-in DJ" />
+  <meta property="og:description" content="An AI agent that browses for you, private local AI, a 3D knowledge graph, Gmail &amp; Drive, ad blocking and a 4-deck YouTube DJ — free for Windows, macOS and Linux." />
+  <meta property="og:image" content="https://landing-sooty-omega-22.vercel.app/img/og-image.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="AIHub Browser with its built-in AIHub DJ console" />
   <meta property="og:site_name" content="AIHub Browser" />
   <meta property="og:locale" content="en_US" />
 
-  <!-- Twitter Card -->
+  <!-- Twitter / X -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="AIHub Browser — AI-Native Web Browser" />
-  <meta name="twitter:description" content="Free Windows browser with built-in AI assistant, 3D knowledge graph, and local AI. No account. No subscriptions." />
-  <meta name="twitter:image" content="https://landing-sooty-omega-22.vercel.app/og-image.svg" />
+  <meta name="twitter:creator" content="@eomari" />
+  <meta name="twitter:title" content="AIHub Browser — free AI browser with an agent, local AI and a built-in DJ" />
+  <meta name="twitter:description" content="An AI agent that browses for you, private local AI, a 3D knowledge graph and a 4-deck YouTube DJ. Free for Windows, macOS and Linux." />
+  <meta name="twitter:image" content="https://landing-sooty-omega-22.vercel.app/img/og-image.jpg" />
+  <meta name="twitter:image:alt" content="AIHub Browser with its built-in AIHub DJ console" />
 
   <!-- Mobile / PWA -->
   <meta name="theme-color" content="#1d3a2e" />
   <meta name="apple-mobile-web-app-title" content="AIHub Browser" />
 
-  <!-- JSON-LD Structured Data -->
+  <!-- Structured data: the app, its maker, and the FAQ below -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "AIHub Browser",
-    "operatingSystem": "Windows 10, Windows 11, macOS, Linux",
-    "applicationCategory": "BrowserApplication",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    },
-    "description": "AI-native web browser with built-in AI assistant, 3D bookmark knowledge graph, local Ollama AI, and OpenRouter cloud model support.",
-    "downloadUrl": "https://github.com/pitchiluxe/aihub-browser/releases/latest",
-    "softwareVersion": "1.3.0",
-    "author": {
-      "@type": "Person",
-      "name": "Erick OMARI",
-      "email": "pitchiluxe@gmail.com"
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": "My Digital Solutions"
-    },
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "5",
-      "ratingCount": "1"
-    }
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://landing-sooty-omega-22.vercel.app/#app",
+        "name": "AIHub Browser",
+        "url": "https://landing-sooty-omega-22.vercel.app/",
+        "operatingSystem": "Windows 10, Windows 11, macOS 11+, Linux",
+        "applicationCategory": "BrowserApplication",
+        "softwareVersion": "1.73.0",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "description": "Free AI-native web browser with an AI agent that browses, fills forms and builds projects, private local AI through Ollama, cloud models through OpenRouter, a 3D bookmark knowledge graph, Gmail, Drive and Calendar, ad and tracker blocking, and AIHub DJ — a four-deck DJ console with YouTube, scratching and an AI DJ.",
+        "downloadUrl": "https://github.com/pitchiluxe/aihub-browser/releases/latest",
+        "screenshot": [
+          "https://landing-sooty-omega-22.vercel.app/img/home-1280.webp",
+          "https://landing-sooty-omega-22.vercel.app/img/dj-classic-1280.webp",
+          "https://landing-sooty-omega-22.vercel.app/img/dj-4deck-1280.webp"
+        ],
+        "featureList": [
+          "AI agent that searches the web, drives tabs, fills forms and writes files with your approval",
+          "Private local AI with Ollama, or cloud models through OpenRouter",
+          "Research Mode with cited reports and named agents",
+          "3D Bookmark Sphere knowledge graph",
+          "AIHub DJ: 4-deck DJ console with YouTube, scratching, video, Automix and an AI DJ",
+          "Gmail, Google Drive and Calendar",
+          "Ad and tracker blocking, Incognito windows, credential guard, free VPN",
+          "Rewind: search what you have read, by meaning",
+          "Community rooms with text, voice and screen sharing",
+          "Obsidian vault and encrypted sync"
+        ],
+        "author": { "@id": "https://landing-sooty-omega-22.vercel.app/#erick" },
+        "publisher": { "@id": "https://landing-sooty-omega-22.vercel.app/#org" }
+      },
+      {
+        "@type": "Person",
+        "@id": "https://landing-sooty-omega-22.vercel.app/#erick",
+        "name": "Erick Omari",
+        "jobTitle": "Founder",
+        "image": "https://landing-sooty-omega-22.vercel.app/img/erick-280.webp",
+        "worksFor": { "@id": "https://landing-sooty-omega-22.vercel.app/#org" },
+        "sameAs": ["https://www.linkedin.com/in/erickomari", "https://twitter.com/eomari", "https://github.com/pitchiluxe"]
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://landing-sooty-omega-22.vercel.app/#org",
+        "name": "Pitchiluxe LLC",
+        "url": "https://landing-sooty-omega-22.vercel.app/",
+        "sameAs": ["https://github.com/pitchiluxe"]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Is AIHub Browser really free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. AIHub Browser is free to download and use on Windows, macOS and Linux, with no account and no subscription. Cloud AI models through OpenRouter use your own key; local AI through Ollama costs nothing." } },
+          { "@type": "Question", "name": "Can I use AI without sending my data to the cloud?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Install Ollama and AIHub runs the AI on your own computer, so nothing you type leaves your machine. You can switch to cloud models through OpenRouter whenever you want." } },
+          { "@type": "Question", "name": "What can the AI agent do?", "acceptedAnswer": { "@type": "Answer", "text": "It searches the live web and cites sources, opens and reads tabs, fills forms and clicks buttons, reads and writes files in folders you choose, and builds working projects. Any shell command needs your explicit approval, and text inside web pages cannot give it orders." } },
+          { "@type": "Question", "name": "Is AIHub Browser compatible with Chrome websites?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. It is built on Chromium, so every site that works in Chrome works in AIHub, including Google sign-in." } },
+          { "@type": "Question", "name": "What is AIHub DJ?", "acceptedAnswer": { "@type": "Answer", "text": "AIHub DJ is a DJ console built into the browser: up to four decks, your own music and YouTube, EQ, effects, stems, real scratching, a video monitor, Automix, a YouTube queue and an AI DJ that learns your taste. It has six layouts, five looks and eighteen colour themes." } },
+          { "@type": "Question", "name": "Which systems does AIHub Browser run on?", "acceptedAnswer": { "@type": "Answer", "text": "Windows 10 and 11 (64-bit), macOS 11 or later on Intel and Apple Silicon, and Linux as an AppImage. Installed copies update themselves on Windows and Linux." } }
+        ]
+      }
+    ]
   }
   </script>
 
@@ -768,6 +808,109 @@
       .course-card.wide, .course-card.full { grid-column: span 1; flex-direction: column; align-items: flex-start; }
       .stats-row { grid-template-columns: 1fr 1fr; }
     }
+
+    /* ══ 2026-10 additions: agent, DJ showcase, every feature, FAQ, contact ══ */
+
+    /* Custom cursor only for a real mouse — touch and keyboard users keep the normal pointer. */
+    @media (hover: none), (pointer: coarse) { body { cursor: auto; } #cur, #cur-ring { display: none; } }
+    section[id] { scroll-margin-top: 100px; }
+    a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
+
+    /* Agent spotlight */
+    .agent-section { background: var(--paper2); padding: 96px 0; }
+    .agent-head { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: end; margin-bottom: 44px; }
+    .agent-head p { font-size: 15px; color: var(--muted); line-height: 1.72; }
+    .agent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .agent-card { background: #fff; border: 1px solid var(--paper3); border-radius: var(--r); padding: 24px; transition: transform .2s, box-shadow .2s; }
+    .agent-card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(28,43,31,.08); }
+    .agent-card .card-ico { margin-bottom: 14px; }
+    .agent-card h3 { font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; margin-bottom: 8px; color: var(--ink); }
+    .agent-card p { font-size: 13px; color: var(--muted); line-height: 1.65; }
+    .agent-say { margin-top: 12px; font-family: 'Caveat', cursive; font-size: 18px; color: var(--green); }
+    .agent-safe { margin-top: 22px; display: flex; gap: 14px; align-items: flex-start; padding: 18px 22px; border-radius: var(--r); background: rgba(82,183,136,.1); border: 1px solid rgba(82,183,136,.3); font-size: 13.5px; color: var(--ink2); line-height: 1.6; }
+    .agent-safe b { color: var(--ink); }
+
+    /* DJ showcase (chalkboard) */
+    .dj-section { background: var(--chalk-bg); color: var(--chalk); padding: 96px 0; position: relative; overflow: hidden; }
+    .dj-section .eyebrow { color: var(--yellow2); }
+    .dj-section h2 { color: var(--chalk); }
+    .dj-intro { display: grid; grid-template-columns: 1fr 1.25fr; gap: 48px; align-items: center; }
+    .dj-intro p { color: var(--chalk2); font-size: 15px; line-height: 1.72; margin: 16px 0 22px; }
+    .dj-list { list-style: none; display: grid; gap: 10px; }
+    .dj-list li { display: flex; gap: 10px; font-size: 14px; color: var(--chalk); line-height: 1.5; }
+    .dj-list li::before { content: '♪'; color: var(--yellow); font-weight: 700; flex: none; }
+    .dj-shot { border-radius: 12px; overflow: hidden; border: 1px solid rgba(245,241,227,.14); box-shadow: 0 24px 60px rgba(0,0,0,.45); background: #0d0e10; }
+    .dj-shot img { display: block; width: 100%; height: auto; }
+    .dj-gallery { margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .dj-gallery figure { margin: 0; }
+    .dj-gallery figcaption { margin-top: 8px; font-size: 12px; color: var(--chalk2); text-align: center; }
+    .dj-cta { margin-top: 34px; display: flex; gap: 12px; flex-wrap: wrap; }
+
+    /* Smart homepage + sphere picture */
+    .home-shot { margin-top: 18px; border-radius: 10px; overflow: hidden; border: 1px solid var(--paper3); }
+    .home-shot img { display: block; width: 100%; height: auto; }
+
+    /* Every feature */
+    .all-section { background: var(--paper); padding: 96px 0; }
+    .all-intro { max-width: 640px; margin-bottom: 40px; }
+    .all-intro p { font-size: 15px; color: var(--muted); line-height: 1.72; margin-top: 14px; }
+    .all-groups { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+    .all-group { background: #fff; border: 1px solid var(--paper3); border-radius: var(--r); padding: 22px 24px; }
+    .all-group h3 { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .all-group ul { list-style: none; display: grid; gap: 9px; }
+    .all-group li { font-size: 13px; color: var(--muted); line-height: 1.55; }
+    .all-group li b { color: var(--ink); font-weight: 600; }
+
+    /* FAQ */
+    .faq-section { background: var(--paper2); padding: 96px 0; }
+    .faq-list { margin-top: 36px; display: grid; gap: 10px; max-width: 820px; }
+    .faq-list details { background: #fff; border: 1px solid var(--paper3); border-radius: 10px; padding: 0 22px; }
+    .faq-list summary { cursor: pointer; list-style: none; padding: 18px 0; font-weight: 600; font-size: 15px; color: var(--ink); display: flex; justify-content: space-between; gap: 16px; }
+    .faq-list summary::-webkit-details-marker { display: none; }
+    .faq-list summary::after { content: '+'; color: var(--green2); font-size: 20px; line-height: 1; }
+    .faq-list details[open] summary::after { content: '–'; }
+    .faq-list details p { padding: 0 0 18px; font-size: 14px; color: var(--muted); line-height: 1.7; }
+
+    /* Contact */
+    .contact-section-wrap { background: var(--paper); padding: 96px 0; }
+    .contact-section { display: flex; gap: 48px; align-items: flex-start; max-width: 1000px; margin: 40px auto 0; flex-wrap: wrap; }
+    .contact-info { flex: 1; min-width: 280px; text-align: center; }
+    .contact-avatar { width: 140px; height: 140px; border-radius: 50%; margin: 0 auto 20px; display: block; border: 3px solid var(--green2); box-shadow: 0 4px 24px rgba(45,106,79,.25); object-fit: cover; }
+    .contact-info h3 { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; margin-bottom: 6px; color: var(--ink); }
+    .contact-role { font-size: 14px; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
+    .contact-socials { display: flex; gap: 14px; justify-content: center; margin-top: 16px; }
+    .contact-social { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #fff; border: 1px solid var(--paper3); color: var(--muted); transition: all .2s ease; text-decoration: none; }
+    .contact-social:hover { transform: translateY(-3px); border-color: var(--green2); color: var(--green); }
+    .contact-social svg { width: 20px; height: 20px; }
+    .contact-form-wrap { flex: 1.5; min-width: 300px; }
+    .contact-form { display: flex; flex-direction: column; gap: 14px; padding: 32px; border-radius: 16px; background: #fff; border: 1px solid var(--paper3); box-shadow: 0 8px 32px rgba(28,43,31,.07); }
+    .contact-form label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .contact-form input, .contact-form textarea { padding: 12px 16px; border-radius: 8px; background: var(--paper); border: 1px solid var(--paper3); color: var(--ink); font-size: 14px; font-family: inherit; transition: border-color .2s; }
+    .contact-form input:focus, .contact-form textarea:focus { outline: none; border-color: var(--green2); }
+    .contact-form textarea { resize: vertical; min-height: 120px; }
+    .contact-form button { padding: 14px 24px; border-radius: 10px; background: var(--green); color: #fff; border: none; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all .2s ease; }
+    .contact-form button:hover { background: var(--green2); transform: translateY(-1px); }
+    .contact-form button:disabled { opacity: .6; cursor: not-allowed; }
+    .contact-success, .contact-error { padding: 16px; border-radius: 8px; text-align: center; font-size: 14px; display: none; }
+    .contact-success { background: rgba(82,183,136,.12); border: 1px solid rgba(82,183,136,.35); color: var(--green); }
+    .contact-error { background: rgba(198,40,40,.08); border: 1px solid rgba(198,40,40,.3); color: var(--red); }
+    .hp { position: absolute; left: -9999px; }
+
+    @media (max-width: 960px) {
+      .agent-head, .dj-intro { grid-template-columns: 1fr; }
+      .agent-grid { grid-template-columns: 1fr 1fr; }
+      .dj-gallery { grid-template-columns: 1fr 1fr; }
+      .all-groups { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .agent-grid, .dj-gallery { grid-template-columns: 1fr; }
+      .agent-section, .dj-section, .all-section, .faq-section, .contact-section-wrap { padding: 64px 0; }
+      .contact-form { padding: 22px 18px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+      .r { opacity: 1; transform: none; }
+    }
   </style>
 </head>
 <body>
@@ -775,42 +918,42 @@
 <div id="cur"></div>
 <div id="cur-ring"></div>
 
-<!-- Live visitor bar -->
+<!-- Live visitor bar (real numbers only: page visits and GitHub release downloads) -->
 <div class="visitor-bar" id="visitor-bar">
   <div class="wrap">
     <div class="visitor-bar-inner">
       <div class="vb-item">
-        <div class="online-dot"></div>
-        <span><span class="vb-num" id="online-count">—</span> online now</span>
-      </div>
-      <div class="vb-sep"></div>
-      <div class="vb-item">
-        👥 <span><span class="vb-num" id="total-visits">—</span> total visitors</span>
-      </div>
-      <div class="vb-sep"></div>
-      <div class="vb-item">
         ⬇️ <span><span class="vb-num" id="dl-count">—</span> downloads</span>
+      </div>
+      <div class="vb-sep"></div>
+      <div class="vb-item">
+        <div class="online-dot"></div>
+        <span>Latest: <span class="vb-num" id="bar-version">v1.73.0</span></span>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Nav -->
-<nav id="nav">
+<nav id="nav" aria-label="Main">
   <a href="#" class="nav-logo">
     <div class="nav-mark">A</div>AIHub Browser
   </a>
   <div class="nav-links">
-    <a href="#features">Lessons</a>
-    <a href="#steps">Get Started</a>
-    <a href="mailto:pitchiluxe@gmail.com">Contact</a>
+    <a href="#agent">AI Agent</a>
+    <a href="#features">Features</a>
+    <a href="#dj">AIHub DJ</a>
+    <a href="#everything">Everything</a>
+    <a href="#faq">FAQ</a>
+    <a href="#contact">Contact</a>
   </div>
   <a href="/download" class="nav-cta">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     Download Free
   </a>
 </nav>
 
+<main>
 <!-- Hero — chalkboard -->
 <section class="hero">
   <div class="chalk-smudge" style="width:600px;height:500px;top:-100px;left:-150px"></div>
@@ -818,42 +961,42 @@
   <div class="wrap">
     <div class="hero-inner">
       <div>
-        <div class="hero-eyebrow">✦ <span id="hero-version">v1.33.0</span> — Free for Windows, macOS &amp; Linux</div>
+        <div class="hero-eyebrow">✦ <span id="hero-version">v1.73.0</span> — Free for Windows, macOS &amp; Linux</div>
         <h1 class="hero-title">
           The browser<br/>
           that <span class="underline-chalk">thinks</span><br/>
           with you.
         </h1>
         <p class="hero-desc">
-          AIHub Browser puts a full AI assistant, 3D knowledge graph,
-          and private local AI right inside your browser.
-          No extensions. No subscriptions.
+          An AI agent that browses, researches and builds for you. Private local AI.
+          A 3D knowledge graph of everything you save. Gmail, Drive and Calendar.
+          And a four-deck DJ console with YouTube — all in one free browser.
         </p>
         <div class="hero-btns">
           <a href="/download" class="btn-chalk" id="btn-hero">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span class="btn-label">Download for Windows</span>
           </a>
           <a href="/api/get?os=mac" class="btn-ghost-chalk" id="btn-hero-alt">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span class="btn-label">Download for macOS</span>
           </a>
           <a href="/api/get?os=linux" class="btn-ghost-chalk" id="btn-hero-linux">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span class="btn-label">Download for Linux</span>
           </a>
-          <a href="#features" class="btn-ghost-chalk">See features →</a>
+          <a href="#everything" class="btn-ghost-chalk">See every feature →</a>
         </div>
         <div class="hero-meta">
           <span>Free forever</span><span class="sep"></span>
           <span>No account</span><span class="sep"></span>
           <span>No telemetry</span><span class="sep"></span>
-          <span>Windows · macOS · Linux</span>
+          <span>Works with every Chrome site</span>
         </div>
       </div>
 
       <!-- Chalkboard mockup -->
-      <div style="position:relative">
+      <div style="position:relative" aria-hidden="true">
         <div class="chalkboard">
           <div class="tray">
             <div class="tray-chalk" style="width:40px;background:#e8e0cc"></div>
@@ -878,18 +1021,18 @@
                   <div class="cb-si on">🌐</div>
                   <div class="cb-si">🔖</div>
                   <div class="cb-si">🤖</div>
-                  <div class="cb-si">🕐</div>
+                  <div class="cb-si">🎧</div>
                   <div class="cb-si">🛡️</div>
                 </div>
                 <div class="cb-main">
                   <div class="cb-clock">9:41</div>
-                  <div class="cb-date">Wednesday, June 11</div>
+                  <div class="cb-date">Good morning</div>
                   <div class="cb-search">🔍 &nbsp;Search or ask AI…</div>
                   <div class="cb-bms">
-                    <div class="cb-bm"><div class="cb-bm-i">🔍</div><span class="cb-bm-l">Search</span></div>
+                    <div class="cb-bm"><div class="cb-bm-i">✉️</div><span class="cb-bm-l">Mail</span></div>
                     <div class="cb-bm"><div class="cb-bm-i">▶</div><span class="cb-bm-l">YouTube</span></div>
-                    <div class="cb-bm"><div class="cb-bm-i">🤖</div><span class="cb-bm-l">AIHub</span></div>
-                    <div class="cb-bm"><div class="cb-bm-i">📈</div><span class="cb-bm-l">Trader</span></div>
+                    <div class="cb-bm"><div class="cb-bm-i">🎧</div><span class="cb-bm-l">DJ</span></div>
+                    <div class="cb-bm"><div class="cb-bm-i">💬</div><span class="cb-bm-l">Rooms</span></div>
                   </div>
                   <div class="cb-sph">
                     <div class="cb-sl" style="width:50px;left:12px;top:16px;transform:rotate(-22deg)"></div>
@@ -904,101 +1047,289 @@
                 <div class="cb-ai">
                   <div class="cb-ai-hdr">
                     <div class="cb-ai-av">⚡</div>
-                    <div><div class="cb-ai-n">AIHub AI</div><div class="cb-ai-s">● Online</div></div>
+                    <div><div class="cb-ai-n">AIHub Agent</div><div class="cb-ai-s">● Local · Ollama</div></div>
                   </div>
-                  <div class="cb-msg">Ready. Ask me anything.</div>
-                  <div class="cb-msg u">Latest AI news?</div>
-                  <div class="cb-msg">🔥 From HN now:<br/>• GPT-5 drops (921 pts)<br/>• Llama 4 open (740 pts)</div>
-                  <div class="cb-inp">Type here…</div>
+                  <div class="cb-msg u">Compare these 3 laptops and fill the order form.</div>
+                  <div class="cb-msg">Read 3 tabs ✓<br/>Comparison table ✓<br/>Form filled — review &amp; submit?</div>
+                  <div class="cb-inp">Ask the agent…</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
         <div class="sticky s1">🤖 Ollama running<br/>100% private</div>
-        <div class="sticky s2">3D Sphere<br/>24 bookmarks</div>
-        <div class="sticky s3">VPN 🇫🇷<br/>Connected</div>
+        <div class="sticky s2">🎧 AIHub DJ<br/>4 decks · YouTube</div>
+        <div class="sticky s3">🛡️ Ads blocked<br/>on every page</div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- Features — course cards -->
+<!-- AI agent spotlight -->
+<section class="agent-section ruled" id="agent">
+  <div class="wrap">
+    <div class="agent-head r">
+      <div>
+        <div class="eyebrow">The AI Agent</div>
+        <h2>Not a chatbot in a sidebar.<br/><span class="hl">An agent that acts.</span></h2>
+      </div>
+      <p>Press <b>Ctrl + Shift + A</b> and ask in plain English. The agent picks its own tools — searching the web, reading and driving your tabs, filling forms, writing files — and shows which brain is answering: your private <b>local model through Ollama</b> or a <b>cloud model through OpenRouter</b>.</p>
+    </div>
+    <div class="agent-grid">
+      <div class="agent-card r d1">
+        <div class="card-ico" style="background:#dcfce7;border:1px solid #bbf7d0">🔎</div>
+        <h3>Researches the live web</h3>
+        <p>Searches the real internet, opens the best sources, reads them and answers with citations. It never has to say "I can't browse".</p>
+        <div class="agent-say">"What changed in the EU AI Act this month?"</div>
+      </div>
+      <div class="agent-card r d2">
+        <div class="card-ico" style="background:#dbeafe;border:1px solid #bfdbfe">🧭</div>
+        <h3>Drives the browser</h3>
+        <p>Opens, switches and closes tabs, reads any page, maps every form field, types into inputs and clicks buttons for you.</p>
+        <div class="agent-say">"Fill this application with my details."</div>
+      </div>
+      <div class="agent-card r d3">
+        <div class="card-ico" style="background:#f3e8ff;border:1px solid #ddd6fe">🛠️</div>
+        <h3>Writes &amp; builds</h3>
+        <p>Generates code, documents and whole working projects in a folder you choose, then installs, runs and fixes them until they pass.</p>
+        <div class="agent-say">"Build me a landing page for my bakery."</div>
+      </div>
+      <div class="agent-card r d4">
+        <div class="card-ico" style="background:#fff7ed;border:1px solid #fed7aa">📂</div>
+        <h3>Works with your files</h3>
+        <p>Reads local documents (including Word files), rewrites them and saves the result — only in the folders you point it at.</p>
+        <div class="agent-say">"Tighten this cover letter."</div>
+      </div>
+      <div class="agent-card r d5">
+        <div class="card-ico" style="background:#ecfdf5;border:1px solid #a7f3d0">🧠</div>
+        <h3>Remembers what you read</h3>
+        <p>Searches your private Rewind archive by meaning, keeps the conversation between launches and keeps a separate memory per site.</p>
+        <div class="agent-say">"That article about pricing I read yesterday?"</div>
+      </div>
+      <div class="agent-card r d6">
+        <div class="card-ico" style="background:#fffbeb;border:1px solid #fde68a">📊</div>
+        <h3>Research &amp; Agent Modes</h3>
+        <p>Cross-reference several tabs, spot contradictions and export a cited report — or save named agents (research, shopping, code) that keep their own context.</p>
+        <div class="agent-say">"Compare these six tabs in one table."</div>
+      </div>
+    </div>
+    <div class="agent-safe r">
+      <span style="font-size:22px">🛡️</span>
+      <div><b>Safe by design.</b> Nothing runs on your computer without an explicit click, file access stays inside your home folder, and text hidden in web pages or files is treated as data — it can't hijack the agent. With Ollama, nothing you type ever leaves your machine.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Highlights — course cards -->
 <section class="course-section ruled" id="features">
   <div class="wrap">
     <div class="course-header r">
-      <div class="eyebrow">Curriculum · Module 1</div>
-      <h2>Everything you need,<br/><span class="hl">taught by your browser.</span></h2>
+      <div class="eyebrow">Highlights</div>
+      <h2>Everything you need,<br/><span class="hl">in one browser.</span></h2>
     </div>
     <div class="course-grid">
 
       <div class="course-card wide r d1">
         <div class="lesson-num">01</div>
-        <div class="card-ico" style="background:#dcfce7;border:1px solid #bbf7d0">🤖</div>
-        <h3>Built-in AI Assistant</h3>
-        <p>Summarize pages, research topics, pull live AI headlines — without leaving the tab. Works offline with Ollama or uses cloud models through OpenRouter.</p>
-        <div class="chat-preview">
-          <div class="cp-hdr"><div class="cp-dot"></div>AIHub Assistant — Live</div>
-          <div class="cp-msgs">
-            <div class="cp-msg u">Summarize this page for me.</div>
-            <div class="cp-msg">Summary (3 key points):<br/><br/>1. <strong>AIHub is an AI-native browser</strong> — AI is first-class, not an add-on.<br/>2. <strong>Local + cloud AI</strong> — Ollama keeps data private; OpenRouter adds cloud power.<br/>3. <strong>3D Bookmark Graph</strong> — knowledge organizes itself visually.</div>
-          </div>
+        <div class="card-ico" style="background:#dcfce7;border:1px solid #bbf7d0">🏠</div>
+        <h3>Smart homepage &amp; Bookmark Sphere</h3>
+        <p>Every new tab is part launcher, part memory: universal search, AI picks, a focus timer and your bookmarks as a living 3D constellation with AI-written summaries and automatic topic clusters.</p>
+        <div class="home-shot">
+          <img src="/img/home-720.webp" srcset="/img/home-720.webp 720w, /img/home-1280.webp 1280w" sizes="(max-width: 960px) 100vw, 640px" width="720" height="428" loading="lazy" decoding="async" alt="AIHub Browser smart homepage with search, shortcuts and bookmarks" />
         </div>
       </div>
 
       <div class="course-card r d2">
         <div class="lesson-num">02</div>
-        <div class="card-ico" style="background:#f3e8ff;border:1px solid #ddd6fe">🔮</div>
-        <h3>3D Bookmark<br/>Knowledge Graph</h3>
-        <p>Bookmarks become connected nodes in a living 3D sphere. Clusters form by topic. Navigate knowledge like a galaxy.</p>
-        <div class="sphere-mini">
-          <div class="sm-l" style="width:72px;left:30px;top:26px;transform:rotate(-22deg)"></div>
-          <div class="sm-l" style="width:52px;left:56px;top:26px;transform:rotate(30deg)"></div>
-          <div class="sm-l" style="width:46px;left:28px;top:50px;transform:rotate(-5deg)"></div>
-          <div class="sm-n" style="width:14px;height:14px;left:50%;top:0;transform:translateX(-50%)"></div>
-          <div class="sm-n" style="width:10px;height:10px;left:20px;top:42px"></div>
-          <div class="sm-n" style="width:10px;height:10px;left:84px;top:42px"></div>
-          <div class="sm-n" style="width:8px;height:8px;left:54px;top:54px;background:var(--yellow);box-shadow:0 0 7px rgba(244,168,37,.4)"></div>
-        </div>
+        <div class="card-ico" style="background:#f3e8ff;border:1px solid #ddd6fe">🎧</div>
+        <h3>AIHub DJ</h3>
+        <p>A real DJ console in a tab: up to four decks, YouTube and your own music, scratching, EQ, effects, stems, video and an AI DJ that learns your taste.</p>
+        <p style="margin-top:10px"><a href="#dj" style="color:var(--green);font-weight:600">See AIHub DJ →</a></p>
       </div>
 
       <div class="course-card r d3">
         <div class="lesson-num">03</div>
-        <div class="card-ico" style="background:#fff7ed;border:1px solid #fed7aa">🛡️</div>
-        <h3>Built-in VPN Proxy</h3>
-        <p>One-click SOCKS5/HTTP proxy with country presets: France, DR Congo, USA, UK. Zero extra software.</p>
+        <div class="card-ico" style="background:#dbeafe;border:1px solid #bfdbfe">✉️</div>
+        <h3>Gmail, Drive &amp; Calendar</h3>
+        <p>A native Gmail client plus Drive and Calendar, connected through Google's secure sign-in in your own system browser. Tokens are encrypted on your device.</p>
       </div>
 
       <div class="course-card r d4">
         <div class="lesson-num">04</div>
-        <div class="card-ico" style="background:#fffbeb;border:1px solid #fde68a">📰</div>
-        <h3>Live AI News Feed</h3>
-        <p>Ask the AI for today's AI headlines — fetched live from Hacker News, ranked by score, no subscriptions required.</p>
+        <div class="card-ico" style="background:#fff7ed;border:1px solid #fed7aa">🛡️</div>
+        <h3>Privacy that's built in</h3>
+        <p>Ad and tracker blocking, Incognito windows, burner tabs, a credential guard for unfamiliar password pages and a free one-click VPN.</p>
       </div>
 
       <div class="course-card r d5">
         <div class="lesson-num">05</div>
-        <div class="card-ico" style="background:#ecfdf5;border:1px solid #a7f3d0">📄</div>
-        <h3>Article Summarizer</h3>
-        <p>Summarize any page instantly. Export as Markdown or save into your Articles knowledge cluster.</p>
+        <div class="card-ico" style="background:#fffbeb;border:1px solid #fde68a">📚</div>
+        <h3>Read, research, remember</h3>
+        <p>AI Reading Mode with read-aloud, Rewind search by meaning, Recall, Page Vault snapshots, PDFs, and a three-pane Research Workspace.</p>
       </div>
 
-      <div class="course-card full r d6">
+      <div class="course-card r d6">
+        <div class="lesson-num">06</div>
+        <div class="card-ico" style="background:#ecfdf5;border:1px solid #a7f3d0">💬</div>
+        <h3>Community rooms</h3>
+        <p>Text and voice channels with screen sharing, inside the browser — under a name you pick, with no email and no password.</p>
+      </div>
+
+      <div class="course-card r d1">
+        <div class="lesson-num">07</div>
+        <div class="card-ico" style="background:#fce7f3;border:1px solid #fbcfe8">✏️</div>
+        <h3>Screen Pen &amp; recording</h3>
+        <p>Draw and annotate on any page, leave sticky notes, take full-page or area screenshots and record your screen with a live camera bubble.</p>
+      </div>
+
+      <div class="course-card r d2">
+        <div class="lesson-num">08</div>
+        <div class="card-ico" style="background:#ede9fe;border:1px solid #ddd6fe">🔗</div>
+        <h3>Obsidian &amp; encrypted sync</h3>
+        <p>Your reading becomes Markdown notes in your Obsidian vault, with a knowledge graph — and bookmarks sync end-to-end encrypted.</p>
+      </div>
+
+      <div class="course-card full r d4">
         <div>
           <div class="card-ico" style="background:#ecfdf5;border:1px solid #a7f3d0;margin-bottom:10px">⚡</div>
           <h3>Local AI + Cloud AI —<br/>always your choice.</h3>
-          <p style="max-width:300px">Ollama runs on your machine for 100% private AI. OpenRouter connects to every major model — with no lock-in.</p>
+          <p style="max-width:320px">Ollama runs on your machine for 100% private AI — AIHub can even start it for you. OpenRouter connects to every major model, with no lock-in.</p>
         </div>
         <div>
-          <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:9px;text-transform:uppercase;letter-spacing:.07em;font-family:'Space Grotesk',sans-serif">Supported models</div>
+          <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:9px;text-transform:uppercase;letter-spacing:.07em;font-family:'Space Grotesk',sans-serif">Works with</div>
           <div class="chip-row">
-            <span class="chip">Claude</span><span class="chip">GPT-4o</span><span class="chip">Gemini</span>
-            <span class="chip">Llama 3.3</span><span class="chip">DeepSeek R1</span><span class="chip">Mistral</span>
-            <span class="chip">Qwen 2.5</span><span class="chip">Grok</span><span class="chip">+ dozens more</span>
+            <span class="chip">Claude</span><span class="chip">GPT</span><span class="chip">Gemini</span>
+            <span class="chip">Llama</span><span class="chip">DeepSeek</span><span class="chip">Mistral</span>
+            <span class="chip">Qwen</span><span class="chip">Gemma</span><span class="chip">Grok</span><span class="chip">+ any Ollama model</span>
           </div>
         </div>
       </div>
 
+    </div>
+  </div>
+</section>
+
+<!-- AIHub DJ showcase -->
+<section class="dj-section" id="dj">
+  <div class="wrap">
+    <div class="dj-intro">
+      <div class="r">
+        <div class="eyebrow">AIHub DJ · built in</div>
+        <h2>A free DJ console,<br/><span class="hl">right in your browser.</span></h2>
+        <p>Open <b>aihub://dj</b> and mix. Search YouTube, queue your favourites and let Automix crossfade from artist to artist without a gap — or let the AI DJ take over and play what it has learnt you love.</p>
+        <ul class="dj-list">
+          <li>Up to 4 decks with EQ, filters, effects and vocal / instrumental stems</li>
+          <li>YouTube and your own files — full waveforms, BPM and sync on both</li>
+          <li>Real scratching that follows your hand, forwards and backwards</li>
+          <li>Video monitor and big screen, blended by the crossfader</li>
+          <li>YouTube queue, playlists, favourites and gapless Automix</li>
+          <li>AI DJ that learns your taste from what you play, skip and like</li>
+          <li>Record your mixes · keyboard control · headphone cueing</li>
+          <li>6 layouts × 5 looks × 18 colour themes</li>
+        </ul>
+      </div>
+      <div class="dj-shot r d2">
+        <img src="/img/dj-classic-720.webp" srcset="/img/dj-classic-720.webp 720w, /img/dj-classic-1280.webp 1280w" sizes="(max-width: 960px) 100vw, 640px" width="720" height="428" loading="lazy" decoding="async" alt="AIHub DJ two-deck console with waveforms, mixer and music library" />
+      </div>
+    </div>
+    <div class="dj-gallery">
+      <figure class="r d1"><div class="dj-shot"><img src="/img/dj-club-neon-720.webp" width="720" height="428" loading="lazy" decoding="async" alt="AIHub DJ Pro layout in the Club look with the Neon colour theme" /></div><figcaption>Pro layout · Club look · Neon</figcaption></figure>
+      <figure class="r d2"><div class="dj-shot"><img src="/img/dj-4deck-720.webp" width="720" height="428" loading="lazy" decoding="async" alt="AIHub DJ four-deck layout with a four-channel mixer" /></div><figcaption>4-Deck layout · Flat look · Royal</figcaption></figure>
+      <figure class="r d3"><div class="dj-shot"><img src="/img/dj-retro-walnut-720.webp" width="720" height="428" loading="lazy" decoding="async" alt="AIHub DJ in the Retro look with walnut wood panels" /></div><figcaption>Retro look · Walnut</figcaption></figure>
+      <figure class="r d4"><div class="dj-shot"><img src="/img/dj-glass-sunset-720.webp" width="720" height="428" loading="lazy" decoding="async" alt="AIHub DJ in the Glass look with the Sunset colour theme" /></div><figcaption>Glass look · Sunset</figcaption></figure>
+    </div>
+    <div class="dj-cta">
+      <a href="/download" class="btn-chalk"><span class="btn-label">Download AIHub Browser — free</span></a>
+    </div>
+  </div>
+</section>
+
+<!-- Every feature -->
+<section class="all-section ruled" id="everything">
+  <div class="wrap">
+    <div class="all-intro r">
+      <div class="eyebrow">Everything inside</div>
+      <h2>Every feature,<br/><span class="hl">nothing to install.</span></h2>
+      <p>No extension store and no add-ons to hunt for — all of this ships in the one free download.</p>
+    </div>
+    <div class="all-groups">
+      <div class="all-group r d1">
+        <h3>🤖 AI &amp; agent</h3>
+        <ul>
+          <li><b>AI Agent</b> — searches the web, drives tabs, fills forms, writes files and builds projects, with your approval.</li>
+          <li><b>Research Mode</b> — analyse several tabs, cross-reference claims, spot contradictions, export a cited report.</li>
+          <li><b>Agent Mode</b> — named agents with their own instructions and saved conversations.</li>
+          <li><b>Cross-Tab Comparison</b> — up to six tabs laid out in one comparison table.</li>
+          <li><b>Parallel Page Intelligence</b> — the AI reads what you browse and surfaces what matters.</li>
+          <li><b>AI Tab Curator</b> — forty open tabs become an organised workspace in one click.</li>
+          <li><b>Voice to the agent</b> and <b>per-site AI memory</b>.</li>
+          <li><b>Rich AI answers</b> — tables, code and colour, not plain text.</li>
+          <li><b>Local or cloud</b> — Ollama on your machine or any model through OpenRouter.</li>
+        </ul>
+      </div>
+      <div class="all-group r d2">
+        <h3>📚 Reading &amp; research</h3>
+        <ul>
+          <li><b>AI Reading Mode</b> — clean reading view, AI summaries and read-aloud.</li>
+          <li><b>Rewind</b> — search everything you've read, by meaning, on your device.</li>
+          <li><b>Semantic History</b> — find a page by what it was about, not its title.</li>
+          <li><b>Recall</b> — the ideas you read come back to you, so they stick.</li>
+          <li><b>Research Workspace</b> — notes, sources and report generation in three panes.</li>
+          <li><b>Page Vault</b> — keep a copy of a page even after it changes or disappears.</li>
+          <li><b>PDFs</b> — papers, invoices and manuals open right in the browser.</li>
+          <li><b>Morning Brief</b> — one page for everything that happened while you were away.</li>
+          <li><b>Watch &amp; Ping</b> — a page tells you when it changes.</li>
+        </ul>
+      </div>
+      <div class="all-group r d3">
+        <h3>🧭 Browsing</h3>
+        <ul>
+          <li><b>Chromium engine</b> — every Chrome site works, including Google sign-in.</li>
+          <li><b>Split view &amp; vertical tabs</b>, tab groups, tab search and tab sleeping.</li>
+          <li><b>Command palette</b> — Ctrl + K to find any tab, bookmark, page or action.</li>
+          <li><b>Smart homepage</b> with universal search and AI picks.</li>
+          <li><b>3D Bookmark Sphere</b> with smart summaries and automatic categories.</li>
+          <li><b>Sessions, workspaces &amp; containers</b> — sign in twice to the same site.</li>
+          <li><b>Cross-device handoff</b> — move your session to another computer in two clicks.</li>
+          <li><b>Downloads menu</b> with smart sorting.</li>
+        </ul>
+      </div>
+      <div class="all-group r d4">
+        <h3>🛡️ Privacy &amp; security</h3>
+        <ul>
+          <li><b>Ad &amp; tracker blocking</b> — requests that never leave your machine.</li>
+          <li><b>Incognito windows</b> — one private session, wiped when you close it.</li>
+          <li><b>Burner tabs</b> — a tab that forgets.</li>
+          <li><b>Credential guard</b> — a second look before a password goes somewhere new.</li>
+          <li><b>Free VPN</b> — no account, pick a country, done.</li>
+          <li><b>Wi-Fi</b> — scan and join networks from the sidebar.</li>
+          <li><b>Encrypted keys &amp; tokens</b>, full Chromium sandboxing, no telemetry.</li>
+        </ul>
+      </div>
+      <div class="all-group r d5">
+        <h3>✉️ Productivity</h3>
+        <ul>
+          <li><b>Gmail, Google Drive &amp; Calendar</b> built in.</li>
+          <li><b>Obsidian vault</b> — your reading as notes you own, with a knowledge graph.</li>
+          <li><b>Ledger</b> — what you actually spent, from receipts you were already sent.</li>
+          <li><b>Tables to CSV</b> — any web table into a spreadsheet in one click.</li>
+          <li><b>Focus Mode</b> &amp; focus sprints that block the sites that derail you.</li>
+          <li><b>Moving to another computer</b> — everything in one backup file.</li>
+          <li><b>Extensions</b> — 14 built in, or describe one and the AI writes it.</li>
+        </ul>
+      </div>
+      <div class="all-group r d6">
+        <h3>🎨 Create, play &amp; connect</h3>
+        <ul>
+          <li><b>AIHub DJ</b> — 4-deck console with YouTube, scratching, video and an AI DJ.</li>
+          <li><b>Screen Pen</b> — draw, annotate and leave sticky notes on any page.</li>
+          <li><b>Screenshots &amp; screen recording</b> with a live camera bubble.</li>
+          <li><b>Community</b> — text and voice rooms with screen sharing, and public reading lists.</li>
+          <li><b>Trading Coach</b> and a <b>live price tracker</b> for gold, crypto and indices.</li>
+          <li><b>Bible &amp; Bible Study</b> — the whole Bible offline, with courses and memory verses.</li>
+          <li><b>25 browser themes</b> plus light and dark modes.</li>
+        </ul>
+      </div>
     </div>
   </div>
 </section>
@@ -1006,45 +1337,45 @@
 <!-- Stats — bulletin board -->
 <section class="bulletin">
   <div class="wrap">
-    <div class="bulletin-title">— Class Summary —</div>
+    <div class="bulletin-title">— At a glance —</div>
     <div class="stats-row" id="stats-row">
-      <div class="stat-pin r d1"><div class="stat-n"><span class="cnt" data-t="80">0</span><span class="u">MB</span></div><div class="stat-l">Installer size</div></div>
-      <div class="stat-pin r d2"><div class="stat-n"><span class="cnt" data-t="10">0</span><span class="u">+</span></div><div class="stat-l">AI models</div></div>
-      <div class="stat-pin r d3"><div class="stat-n"><span class="cnt" data-t="6">0</span></div><div class="stat-l">Core features</div></div>
+      <div class="stat-pin r d1"><div class="stat-n"><span class="cnt" data-t="60">0</span><span class="u">+</span></div><div class="stat-l">Built-in features</div></div>
+      <div class="stat-pin r d2"><div class="stat-n"><span class="cnt" data-t="3">0</span></div><div class="stat-l">Platforms</div></div>
+      <div class="stat-pin r d3"><div class="stat-n"><span class="cnt" data-t="4">0</span></div><div class="stat-l">DJ decks</div></div>
       <div class="stat-pin r d4"><div class="stat-n"><span class="cnt" data-t="100">0</span><span class="u">%</span></div><div class="stat-l">Free forever</div></div>
     </div>
   </div>
 </section>
 
-<!-- Steps — lesson plan -->
+<!-- Steps -->
 <section class="lesson-section" id="steps">
   <div class="wrap">
     <div class="r">
-      <div class="eyebrow">Lesson Plan · Module 2</div>
+      <div class="eyebrow">Get started</div>
       <h2>Up and running<br/>in <span class="hl">three steps.</span></h2>
     </div>
     <div class="lesson-list">
       <div class="lesson-row r d1">
         <div class="lesson-num-cell"><div class="lesson-num-val">01</div></div>
         <div class="lesson-content">
-          <h3>Download &amp; Install</h3>
-          <p>Run the installer and follow the setup wizard. Optionally install Ollama for private local AI.</p>
+          <h3>Download &amp; install</h3>
+          <p>Run the installer for your system. Installed copies keep themselves up to date on Windows and Linux.</p>
         </div>
-        <div class="lesson-badge"><span class="lb green">✓ 5 min</span></div>
+        <div class="lesson-badge"><span class="lb green">✓ 2 min</span></div>
       </div>
       <div class="lesson-row r d2">
         <div class="lesson-num-cell"><div class="lesson-num-val">02</div></div>
         <div class="lesson-content">
-          <h3>Add Your AI Key</h3>
-          <p>Open Settings → AI Configuration. Paste your OpenRouter key (free tier available) or point to local Ollama.</p>
+          <h3>Pick your AI</h3>
+          <p>Install Ollama for free, private AI on your own computer — AIHub starts it for you — or paste an OpenRouter key in Settings for cloud models.</p>
         </div>
         <div class="lesson-badge"><span class="lb yellow">⏱ 2 min</span></div>
       </div>
       <div class="lesson-row r d3">
         <div class="lesson-num-cell"><div class="lesson-num-val">03</div></div>
         <div class="lesson-content">
-          <h3>Browse Smarter</h3>
-          <p>Summarize pages, build your 3D knowledge graph, ask for live AI news, toggle light/dark theme.</p>
+          <h3>Browse smarter</h3>
+          <p>Ask the agent for anything, build your Bookmark Sphere, connect Gmail, open a Community room — or open <b>aihub://dj</b> and start a mix.</p>
         </div>
         <div class="lesson-badge"><span class="lb blue">🚀 Now</span></div>
       </div>
@@ -1057,19 +1388,82 @@
   <div class="wrap">
     <div class="index-card r">
       <div class="card-content">
-        <div class="card-heading">Personal Note — Erick OMARI</div>
+        <div class="card-heading">Personal Note — Erick Omari</div>
         <blockquote>
-          "I built AIHub Browser because I was tired of switching between my browser, AI chat, research tools, and notes app.
+          "I built AIHub Browser because I was tired of switching between my browser, AI chat, research tools, notes, mail — and even my DJ software.
           <strong>Everything should live in one place.</strong>
           The browser is where you spend most of your time online — it should be the smartest tool you own, not the dumbest."
         </blockquote>
         <div class="author">
-          <div class="author-av"><img src="/erick.jpg" alt="Erick OMARI" width="52" height="52" /></div>
+          <div class="author-av"><img src="/img/erick-104.webp" alt="Erick Omari" width="52" height="52" loading="lazy" decoding="async" /></div>
           <div>
-            <div class="author-name">Erick OMARI</div>
-            <div class="author-role">Creator · My Digital Solutions · pitchiluxe@gmail.com</div>
+            <div class="author-name">Erick Omari</div>
+            <div class="author-role">Founder · Creator of AIHub Browser · Pitchiluxe LLC</div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ (mirrors the FAQPage structured data in the head) -->
+<section class="faq-section" id="faq">
+  <div class="wrap">
+    <div class="r">
+      <div class="eyebrow">Questions</div>
+      <h2>Frequently asked<br/><span class="hl">questions.</span></h2>
+    </div>
+    <div class="faq-list">
+      <details class="r d1"><summary>Is AIHub Browser really free?</summary><p>Yes. AIHub Browser is free to download and use on Windows, macOS and Linux, with no account and no subscription. Cloud AI models through OpenRouter use your own key; local AI through Ollama costs nothing.</p></details>
+      <details class="r d2"><summary>Can I use AI without sending my data to the cloud?</summary><p>Yes. Install Ollama and AIHub runs the AI on your own computer, so nothing you type leaves your machine. You can switch to cloud models through OpenRouter whenever you want.</p></details>
+      <details class="r d3"><summary>What can the AI agent do?</summary><p>It searches the live web and cites sources, opens and reads tabs, fills forms and clicks buttons, reads and writes files in folders you choose, and builds working projects. Any shell command needs your explicit approval, and text inside web pages cannot give it orders.</p></details>
+      <details class="r d4"><summary>Is AIHub Browser compatible with Chrome websites?</summary><p>Yes. It is built on Chromium, so every site that works in Chrome works in AIHub, including Google sign-in.</p></details>
+      <details class="r d5"><summary>What is AIHub DJ?</summary><p>AIHub DJ is a DJ console built into the browser: up to four decks, your own music and YouTube, EQ, effects, stems, real scratching, a video monitor, Automix, a YouTube queue and an AI DJ that learns your taste. It has six layouts, five looks and eighteen colour themes.</p></details>
+      <details class="r d6"><summary>Which systems does AIHub Browser run on?</summary><p>Windows 10 and 11 (64-bit), macOS 11 or later on Intel and Apple Silicon, and Linux as an AppImage. Installed copies update themselves on Windows and Linux.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- Contact -->
+<section class="contact-section-wrap ruled" id="contact">
+  <div class="wrap">
+    <div class="r" style="text-align:center">
+      <div class="eyebrow" style="justify-content:center">Contact</div>
+      <h2>Get in <span class="hl">touch.</span></h2>
+      <p class="desc" style="margin:12px auto 0">Questions about AIHub Browser? Want to collaborate? Send a message.</p>
+    </div>
+    <div class="contact-section">
+      <div class="contact-info r d1">
+        <img src="/img/erick-280.webp" alt="Erick Omari — creator of AIHub Browser" class="contact-avatar" width="140" height="140" loading="lazy" decoding="async" />
+        <h3>Erick Omari</h3>
+        <div class="contact-role">Founder · Creator of AIHub Browser<br/>Cybersecurity GRC Specialist · Pitchiluxe LLC</div>
+        <div class="contact-socials">
+          <a href="https://www.linkedin.com/in/erickomari" target="_blank" rel="noopener" class="contact-social" title="LinkedIn" aria-label="Erick Omari on LinkedIn">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg>
+          </a>
+          <a href="https://twitter.com/eomari" target="_blank" rel="noopener" class="contact-social" title="Twitter / X" aria-label="Erick Omari on X">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          </a>
+          <a href="https://github.com/pitchiluxe" target="_blank" rel="noopener" class="contact-social" title="GitHub" aria-label="Pitchiluxe on GitHub">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.6.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="contact-form-wrap r d2">
+        <form class="contact-form" id="contactForm" novalidate>
+          <label for="cf-name">Your name</label>
+          <input id="cf-name" type="text" name="name" placeholder="Your Name" autocomplete="name" required />
+          <label for="cf-email">Your email</label>
+          <input id="cf-email" type="email" name="email" placeholder="Your Email" autocomplete="email" required />
+          <label for="cf-subject">Subject</label>
+          <input id="cf-subject" type="text" name="subject" placeholder="Subject" required />
+          <label for="cf-message">Message</label>
+          <textarea id="cf-message" name="message" placeholder="Your Message" required></textarea>
+          <input class="hp" type="text" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true" />
+          <button type="submit" id="contactSubmit">Send Message</button>
+          <div class="contact-success" id="contactSuccess" role="status">✓ Message sent! I'll get back to you soon.</div>
+          <div class="contact-error" id="contactError" role="alert">✗ Something went wrong. Please try again or reach out on social media.</div>
+        </form>
       </div>
     </div>
   </div>
@@ -1079,20 +1473,20 @@
 <section class="download-section" id="download">
   <div class="wrap">
     <div class="dl-inner r">
-      <div class="dl-eyebrow">✦ Assignment Due: Now ✦</div>
+      <div class="dl-eyebrow">✦ Free · <span id="dl-version">v1.73.0</span> ✦</div>
       <h2>Download.<br/>Browse smarter.</h2>
       <p>Free download. No account. No subscription.<br/>No tracking. Just a better browser.</p>
       <div class="dl-btn-row">
         <a href="/download" class="btn-dl" id="btn-dl-main">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span class="btn-label">Download for Windows — Free</span>
         </a>
         <a href="/api/get?os=mac" class="btn-dl-ghost" id="btn-dl-alt">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span class="btn-label">Download for macOS</span>
         </a>
         <a href="/api/get?os=linux" class="btn-dl-ghost" id="btn-dl-linux">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span class="btn-label">Download for Linux</span>
         </a>
       </div>
@@ -1100,21 +1494,22 @@
         <span id="dl-meta-os"><span class="ck">✓</span>Windows 10/11 x64</span>
         <span><span class="ck">✓</span>No account</span>
         <span><span class="ck">✓</span>No telemetry</span>
-        <span><span class="ck">✓</span>76 MB</span>
+        <span id="dl-meta-size"><span class="ck">✓</span>118 MB</span>
       </div>
     </div>
   </div>
 </section>
+</main>
 
 <!-- Download toast notification -->
 <div id="dl-toast" role="alert">
-  <button class="dl-toast-close" onclick="document.getElementById('dl-toast').classList.remove('show')">✕</button>
+  <button class="dl-toast-close" onclick="document.getElementById('dl-toast').classList.remove('show')" aria-label="Close">✕</button>
   <span class="dl-toast-icon">⬇️</span>
   <div class="dl-toast-title">Download is starting…</div>
-  <div class="dl-toast-body">AIHub Browser installer — run the .exe to install</div>
+  <div class="dl-toast-body">AIHub Browser installer for Windows</div>
   <div class="dl-toast-steps">
-    <div class="dl-toast-step"><span class="n">1</span><span>Look for the download bar at the <strong style="color:#e2fdf0">bottom of Chrome</strong> or click the <strong style="color:#e2fdf0">⬇ icon</strong> in Chrome's top-right toolbar.</span></div>
-    <div class="dl-toast-step"><span class="n">2</span><span>Extract the ZIP. Open the folder and double-click <strong style="color:#e2fdf0">AIHub Browser.exe</strong> to launch.</span></div>
+    <div class="dl-toast-step"><span class="n">1</span><span>Look for the download in your browser's downloads bar or the <strong style="color:#e2fdf0">⬇ icon</strong> in the toolbar.</span></div>
+    <div class="dl-toast-step"><span class="n">2</span><span>Run <strong style="color:#e2fdf0">AIHub-Browser-Setup.exe</strong>. If Windows SmartScreen appears, choose <strong style="color:#e2fdf0">More info → Run anyway</strong>.</span></div>
     <div class="dl-toast-step"><span class="n">3</span><span>If nothing starts within 15 seconds, use the button below.</span></div>
   </div>
   <a href="https://github.com/pitchiluxe/aihub-browser/releases/latest" target="_blank" rel="noopener" class="dl-toast-fallback">
@@ -1127,98 +1522,68 @@
   <div class="wrap">
     <div class="footer-inner">
       <a href="#" class="footer-brand"><div class="footer-mark">A</div>AIHub Browser</a>
-      <span class="footer-copy">© 2025 Erick OMARI — My Digital Solutions</span>
+      <span class="footer-copy">© <span id="year">2026</span> Erick Omari — Pitchiluxe LLC</span>
       <div class="footer-links">
-        <a href="../LICENSE.txt">License</a>
-        <a href="mailto:pitchiluxe@gmail.com">Contact</a>
+        <a href="/download">Download</a>
+        <a href="https://github.com/pitchiluxe/aihub-browser/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contact">Contact</a>
       </div>
     </div>
-    <p class="footer-note">Crafted with ✏️ by Erick OMARI</p>
+    <p class="footer-note">Crafted with ✏️ by Erick Omari</p>
   </div>
 </footer>
 
 <script>
-  /* ── Source protection ── */
-  document.addEventListener('contextmenu', e => e.preventDefault())
-  document.addEventListener('keydown', e => {
-    const ctrl = e.ctrlKey || e.metaKey
-    if (ctrl && (e.key === 'u' || e.key === 'U')) { e.preventDefault(); return }
-    if (ctrl && e.shiftKey && ['i','I','j','J','c','C'].includes(e.key)) { e.preventDefault(); return }
-    if (e.key === 'F12') e.preventDefault()
-  })
-
-  /* ── Custom cursor ── */
+  /* ── Custom cursor (real mouse only; touch keeps the system pointer) ── */
   const cur = document.getElementById('cur')
   const ring = document.getElementById('cur-ring')
-  let mx=0,my=0,rx=0,ry=0
-  document.addEventListener('mousemove', e=>{ mx=e.clientX; my=e.clientY })
-  ;(function tick(){
-    rx+=(mx-rx)*.13; ry+=(my-ry)*.13
-    cur.style.cssText=`left:${mx}px;top:${my}px`
-    ring.style.cssText=`left:${rx}px;top:${ry}px`
-    requestAnimationFrame(tick)
-  })()
-
-  /* ── Visitor counter ── */
-  function getOnlineNow() {
-    const h = new Date().getHours()
-    const m = new Date().getMinutes()
-    const seed = h * 60 + m
-    const base = (h >= 8 && h <= 22) ? 12 : 4
-    return Math.max(3, Math.round(base + Math.sin(seed * 0.37) * 6 + Math.cos(seed * 0.19) * 3))
+  if (cur && ring && matchMedia('(hover: hover) and (pointer: fine)').matches) {
+    let mx=0,my=0,rx=0,ry=0
+    document.addEventListener('mousemove', e=>{ mx=e.clientX; my=e.clientY }, {passive:true})
+    ;(function tick(){
+      rx+=(mx-rx)*.13; ry+=(my-ry)*.13
+      cur.style.cssText=`left:${mx}px;top:${my}px`
+      ring.style.cssText=`left:${rx}px;top:${ry}px`
+      requestAnimationFrame(tick)
+    })()
   }
 
-  async function loadVisitorCounts() {
-    const onlineEl = document.getElementById('online-count')
-    const totalEl  = document.getElementById('total-visits')
+  /* ── Footer year ── */
+  const yearEl = document.getElementById('year'); if (yearEl) yearEl.textContent = new Date().getFullYear()
 
-    onlineEl.textContent = getOnlineNow()
-    setInterval(() => { onlineEl.textContent = getOnlineNow() }, 30000)
-
+  /* ── Real numbers: GitHub release downloads and the current version ── */
+  async function loadCounts() {
     try {
-      const res = await fetch('https://api.counterapi.dev/v1/aihub-browser-landing/visitors/up', {
-        method: 'GET', mode: 'cors'
+      const r = await fetch('/api/downloads')
+      const d = await r.json()
+      const dlEl = document.getElementById('dl-count')
+      if (dlEl && d && typeof d.downloads === 'number') dlEl.textContent = d.downloads.toLocaleString()
+      // The release tag comes from GitHub, so the page never shows a stale version.
+      if (d && d.version) ['hero-version','dl-version','bar-version'].forEach(id=>{
+        const el = document.getElementById(id); if (el) el.textContent = d.version
       })
-      const data = await res.json()
-      if (data && data.count) {
-        totalEl.textContent = data.count.toLocaleString()
-      } else {
-        totalEl.textContent = '—'
-      }
-    } catch {
-      totalEl.textContent = '—'
-    }
-
-    // Live download count from GitHub Releases (via our cached edge function).
-    const dlEl = document.getElementById('dl-count')
-    if (dlEl) {
-      try {
-        const r = await fetch('/api/downloads')
-        const d = await r.json()
-        dlEl.textContent = (d && typeof d.downloads === 'number') ? d.downloads.toLocaleString() : '—'
-        // Same call carries the current release tag, so the hero version stops
-        // being a number somebody has to remember to edit.
-        const verEl = document.getElementById('hero-version')
-        if (verEl && d && d.version) verEl.textContent = d.version
-      } catch { dlEl.textContent = '—' }
-    }
+    } catch {}
   }
-  loadVisitorCounts()
+  loadCounts()
 
   /* ── Scroll nav border ── */
+  const nav = document.getElementById('nav')
   window.addEventListener('scroll', ()=>{
-    document.getElementById('nav').style.borderBottomColor = scrollY > 30 ? 'rgba(245,241,227,.18)' : 'rgba(245,241,227,.1)'
+    nav.style.borderBottomColor = scrollY > 30 ? 'rgba(245,241,227,.18)' : 'rgba(245,241,227,.1)'
   }, {passive:true})
 
-  /* ── Magnetic buttons ── */
-  document.querySelectorAll('.btn-chalk,.btn-dl,.nav-cta').forEach(btn=>{
-    btn.addEventListener('mousemove', e=>{
-      const r=btn.getBoundingClientRect()
-      const bx=e.clientX-r.left-r.width/2, by=e.clientY-r.top-r.height/2
-      btn.style.transform=`translate(${bx*.1}px,${by*.12}px)`
+  /* ── Magnetic buttons (mouse only) ── */
+  if (matchMedia('(hover: hover)').matches) {
+    document.querySelectorAll('.btn-chalk,.btn-dl,.nav-cta').forEach(btn=>{
+      btn.addEventListener('mousemove', e=>{
+        const r=btn.getBoundingClientRect()
+        const bx=e.clientX-r.left-r.width/2, by=e.clientY-r.top-r.height/2
+        btn.style.transform=`translate(${bx*.1}px,${by*.12}px)`
+      })
+      btn.addEventListener('mouseleave', ()=>btn.style.transform='')
     })
-    btn.addEventListener('mouseleave', ()=>btn.style.transform='')
-  })
+  }
 
   /* ── Scroll reveal ── */
   const obs=new IntersectionObserver(e=>{
@@ -1261,11 +1626,14 @@
     if(metaOs) metaOs.innerHTML = os === 'mac'
       ? '<span class="ck">✓</span>macOS 11+ · Intel &amp; Apple Silicon'
       : '<span class="ck">✓</span>Linux · AppImage (x64)'
+    const metaSize = document.getElementById('dl-meta-size')
+    if(metaSize) metaSize.innerHTML = '<span class="ck">✓</span>' + (os === 'mac' ? '236 MB' : '137 MB')
 
-    // Ghost/alt buttons offer Windows for non-Windows visitors.
-    ;['btn-dl-alt','btn-hero-alt'].forEach(id=>{
-      const b = document.getElementById(id)
-      if(b){ b.href = '/api/get'; const l = b.querySelector('.btn-label'); if(l) l.textContent = 'Download for Windows' }
+    // The alt button that offered this visitor's own OS now offers Windows instead.
+    ;['btn-dl-alt','btn-hero-alt','btn-dl-linux','btn-hero-linux'].forEach(id=>{
+      const b = document.getElementById(id); if(!b) return
+      const own = b.href.indexOf('os=' + os) !== -1
+      if(own){ b.href = '/api/get'; const l = b.querySelector('.btn-label'); if(l) l.textContent = 'Download for Windows' }
     })
 
     const toastBody = document.querySelector('#dl-toast .dl-toast-body')
@@ -1280,11 +1648,58 @@
     }
   })()
 
+  /* ── Direct installer links show the "download is starting" helper ── */
+  const toast = document.getElementById('dl-toast')
+  document.querySelectorAll('a[href^="/api/get"]').forEach(a=>{
+    a.addEventListener('click', ()=>{
+      toast.classList.add('show')
+      clearTimeout(toast._t); toast._t = setTimeout(()=>toast.classList.remove('show'), 20000)
+    })
+  })
+
+  /* ── Contact form: FormSubmit, with a mail-app fallback if it can't be reached ── */
+  ;(function(){
+    const form = document.getElementById('contactForm'); if (!form) return
+    const btn = document.getElementById('contactSubmit')
+    const ok = document.getElementById('contactSuccess')
+    const bad = document.getElementById('contactError')
+    const TO = 'ZXJpY2tvbWFyaTI0M0BnbWFpbC5jb20='
+    const mailFallback = (f)=>{
+      location.href = 'mailto:' + atob(TO) + '?subject=' + encodeURIComponent(f.subject || 'AIHub Browser')
+        + '&body=' + encodeURIComponent((f.message || '') + '\n\n— ' + (f.name || '') + ' <' + (f.email || '') + '>')
+    }
+    form.addEventListener('submit', async e=>{
+      e.preventDefault()
+      ok.style.display = 'none'; bad.style.display = 'none'
+      if (!form.checkValidity()) { form.reportValidity(); return }
+      const f = Object.fromEntries(new FormData(form))
+      if (f._honey) return
+      btn.disabled = true; btn.textContent = 'Sending…'
+      try {
+        const res = await fetch('https://formsubmit.co/ajax/' + TO, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ name: f.name, email: f.email, subject: f.subject, message: f.message,
+            _subject: 'AIHub Browser: ' + f.subject, _template: 'table', _captcha: 'false' })
+        })
+        if (!res.ok) throw new Error('HTTP ' + res.status)
+        ok.style.display = 'block'; form.reset()
+      } catch {
+        bad.style.display = 'block'
+        mailFallback(f)
+      } finally {
+        btn.disabled = false; btn.textContent = 'Send Message'
+      }
+    })
+  })()
+
   /* ── Smooth scroll ── */
   document.querySelectorAll('a[href^="#"]').forEach(a=>{
     a.addEventListener('click', e=>{
-      const t=document.querySelector(a.getAttribute('href'))
+      const id = a.getAttribute('href')
+      const t = id.length > 1 ? document.querySelector(id) : null
       if(t){ e.preventDefault(); t.scrollIntoView({behavior:'smooth'}) }
+      else if(id === '#'){ e.preventDefault(); scrollTo({top:0,behavior:'smooth'}) }
     })
   })
 </script>

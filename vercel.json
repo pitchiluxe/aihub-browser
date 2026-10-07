@@ -3,6 +3,9 @@
   "buildCommand": "",
   "outputDirectory": ".",
   "routes": [
+    { "src": "/img/(.*)", "headers": { "cache-control": "public, max-age=2592000, stale-while-revalidate=86400" }, "continue": true },
+    { "src": "/(index\\.html)?", "headers": { "cache-control": "public, max-age=0, s-maxage=600, stale-while-revalidate=86400" }, "continue": true },
+    { "src": "/(.*)", "headers": { "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin" }, "continue": true },
     { "src": "/download", "dest": "/download.html" },
     { "src": "/(.*\\.html)", "dest": "/$1" },
     { "src": "/sitemap.xml", "dest": "/sitemap.xml" },
