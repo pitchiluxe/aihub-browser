@@ -52,9 +52,9 @@
         "description": "Free AI-native web browser with an AI agent that browses, fills forms and builds projects, private local AI through Ollama, cloud models through OpenRouter, a 3D bookmark knowledge graph, Gmail, Drive and Calendar, ad and tracker blocking, and AIHub DJ — a four-deck DJ console with YouTube, scratching and an AI DJ.",
         "downloadUrl": "https://github.com/pitchiluxe/aihub-browser/releases/latest",
         "screenshot": [
-          "https://landing-sooty-omega-22.vercel.app/img/home-1280.webp",
-          "https://landing-sooty-omega-22.vercel.app/img/dj-classic-1280.webp",
-          "https://landing-sooty-omega-22.vercel.app/img/dj-4deck-1280.webp"
+          "https://landing-sooty-omega-22.vercel.app/img/home-1600.webp",
+          "https://landing-sooty-omega-22.vercel.app/img/dj-classic-1600.webp",
+          "https://landing-sooty-omega-22.vercel.app/img/dj-4deck-1600.webp"
         ],
         "featureList": [
           "AI agent that searches the web, drives tabs, fills forms and writes files with your approval",
@@ -841,7 +841,7 @@
     .dj-list li::before { content: '♪'; color: var(--yellow); font-weight: 700; flex: none; }
     .dj-shot { border-radius: 12px; overflow: hidden; border: 1px solid rgba(245,241,227,.14); box-shadow: 0 24px 60px rgba(0,0,0,.45); background: #0d0e10; }
     .dj-shot img { display: block; width: 100%; height: auto; }
-    .dj-gallery { margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .dj-gallery { margin-top: 40px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; }
     .dj-gallery figure { margin: 0; }
     .dj-gallery figcaption { margin-top: 8px; font-size: 12px; color: var(--chalk2); text-align: center; }
     .dj-cta { margin-top: 34px; display: flex; gap: 12px; flex-wrap: wrap; }
@@ -896,14 +896,50 @@
     .contact-error { background: rgba(198,40,40,.08); border: 1px solid rgba(198,40,40,.3); color: var(--red); }
     .hp { position: absolute; left: -9999px; }
 
+    /* Screenshots: framed, sharp, click to view full size */
+    .shot-frame { border-radius: 12px; overflow: hidden; border: 1px solid rgba(28,43,31,.14); box-shadow: 0 18px 50px rgba(20,24,40,.22); background: #12131f; }
+    .shot-frame img, .dj-shot img { display: block; width: 100%; height: auto; }
+    .zoom, .dj-shot, .home-shot { cursor: zoom-in; }
+    .zoom img, .dj-shot img, .home-shot img { transition: transform .35s ease; }
+    .zoom:hover img, .dj-shot:hover img, .home-shot:hover img { transform: scale(1.015); }
+    #lightbox { position: fixed; inset: 0; z-index: 10000; background: rgba(8,10,14,.92); display: none; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out; }
+    #lightbox.open { display: flex; }
+    #lightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+    #lightbox button { position: absolute; top: 16px; right: 20px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08); color: #fff; font-size: 20px; cursor: pointer; }
+
+    /* Agent Mode block */
+    .agentmode { margin-top: 64px; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+    .agentmode h3 { font-family: 'Space Grotesk', sans-serif; font-size: 28px; line-height: 1.2; font-weight: 700; color: var(--ink); margin: 8px 0 12px; }
+    .agentmode-text > p { font-size: 15px; color: var(--muted); line-height: 1.7; }
+    .agentmode-list { list-style: none; margin: 20px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .agentmode-list li { display: flex; gap: 10px; background: #fff; border: 1px solid var(--paper3); border-radius: 10px; padding: 12px 14px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    .agentmode-list li span { font-size: 18px; line-height: 1.2; }
+    .agentmode-list li b { display: block; color: var(--ink); font-size: 13.5px; margin-bottom: 2px; }
+    .agentmode-foot { font-size: 13.5px !important; padding: 14px 16px; border-radius: 10px; background: rgba(244,168,37,.1); border: 1px solid rgba(244,168,37,.3); }
+    .agentmode-shot { position: sticky; top: 110px; }
+
+    /* Left sidebar tour */
+    .sidebar-section { background: var(--paper); padding: 96px 0; }
+    .sidebar-layout { display: grid; grid-template-columns: 260px 1fr; gap: 56px; align-items: start; }
+    .sidebar-shot { position: sticky; top: 110px; max-height: calc(100vh - 140px); overflow: hidden; }
+    .sb-grid { margin-top: 28px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .sb-item { background: #fff; border: 1px solid var(--paper3); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    .sb-item b { display: block; color: var(--ink); font-size: 14px; margin-bottom: 4px; }
+    .sb-foot { margin-top: 18px; font-size: 14px; color: var(--muted); }
+
     @media (max-width: 960px) {
       .agent-head, .dj-intro { grid-template-columns: 1fr; }
       .agent-grid { grid-template-columns: 1fr 1fr; }
       .dj-gallery { grid-template-columns: 1fr 1fr; }
       .all-groups { grid-template-columns: 1fr; }
+      .agentmode, .sidebar-layout { grid-template-columns: 1fr; }
+      .agentmode-shot, .sidebar-shot { position: static; max-height: none; }
+      .sidebar-shot { max-width: 260px; }
+      .sb-grid { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 600px) {
-      .agent-grid, .dj-gallery { grid-template-columns: 1fr; }
+      .agent-grid, .dj-gallery, .agentmode-list, .sb-grid { grid-template-columns: 1fr; }
+      .sidebar-section { padding: 64px 0; }
       .agent-section, .dj-section, .all-section, .faq-section, .contact-section-wrap { padding: 64px 0; }
       .contact-form { padding: 22px 18px; }
     }
@@ -923,7 +959,7 @@
   <div class="wrap">
     <div class="visitor-bar-inner">
       <div class="vb-item">
-        ⬇️ <span><span class="vb-num" id="dl-count">—</span> downloads</span>
+        ⬇️ <span>Downloaded <span class="vb-num" id="dl-count">—</span> times</span>
       </div>
       <div class="vb-sep"></div>
       <div class="vb-item">
@@ -942,6 +978,7 @@
   <div class="nav-links">
     <a href="#agent">AI Agent</a>
     <a href="#features">Features</a>
+    <a href="#sidebar">Sidebar</a>
     <a href="#dj">AIHub DJ</a>
     <a href="#everything">Everything</a>
     <a href="#faq">FAQ</a>
@@ -1117,6 +1154,31 @@
       <span style="font-size:22px">🛡️</span>
       <div><b>Safe by design.</b> Nothing runs on your computer without an explicit click, file access stays inside your home folder, and text hidden in web pages or files is treated as data — it can't hijack the agent. With Ollama, nothing you type ever leaves your machine.</div>
     </div>
+
+    <!-- Agent Mode: the ready-made agents in the left sidebar -->
+    <div class="agentmode" id="agent-mode">
+      <div class="agentmode-text r">
+        <div class="eyebrow">Agent Mode · in the sidebar</div>
+        <h3>Ten ready-made agents. <span class="hl">Or build your own.</span></h3>
+        <p>Open <b>Agent Mode</b> from the left sidebar, pick an agent and give it a task. It works step by step and shows each step as it goes, and every conversation is saved so you can pick it up later.</p>
+        <ul class="agentmode-list">
+          <li><span>🌐</span><div><b>Data Extractor</b>Prices, contacts, listings — any repeated content into a clean table.</div></li>
+          <li><span>📝</span><div><b>Form Assistant</b>Fills web forms and multi-step flows with sensible values.</div></li>
+          <li><span>🔔</span><div><b>Site Monitor</b>Watches pages for price changes or new content and tells you.</div></li>
+          <li><span>🔎</span><div><b>Web Researcher</b>Searches, browses and compiles research across many sites.</div></li>
+          <li><span>🏷️</span><div><b>Price Tracker</b>Tracks products across shops, spots sales, finds the best deal.</div></li>
+          <li><span>💼</span><div><b>Job Application Agent</b>Reads your resume, finds matching roles and fills applications.</div></li>
+          <li><span>📄</span><div><b>Document Reviewer</b>Reviews resumes and letters from your files and returns a polished copy.</div></li>
+          <li><span>✍️</span><div><b>Creative Writer</b>Blog posts, emails, stories, scripts and marketing copy.</div></li>
+          <li><span>🧑‍💻</span><div><b>Code Reviewer</b>Finds bugs, suggests improvements and explains tricky code.</div></li>
+          <li><span>📈</span><div><b>Financial Analyst</b>Analyses financial data, builds valuations and compares investments.</div></li>
+        </ul>
+        <p class="agentmode-foot">➕ <b>Custom agents</b> — describe a job once and reuse it forever. Export and import agents as a file, paste images into the chat, and download any conversation or the code it wrote as a ZIP.</p>
+      </div>
+      <div class="agentmode-shot shot-frame zoom r d2">
+        <img src="/img/agents-960.webp" srcset="/img/agents-960.webp 960w, /img/agents-1600.webp 1600w" sizes="(max-width: 960px) 100vw, 560px" width="960" height="970" loading="lazy" decoding="async" alt="AIHub Agent Mode with the left sidebar and the list of ready-made agent templates" />
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1135,7 +1197,7 @@
         <h3>Smart homepage &amp; Bookmark Sphere</h3>
         <p>Every new tab is part launcher, part memory: universal search, AI picks, a focus timer and your bookmarks as a living 3D constellation with AI-written summaries and automatic topic clusters.</p>
         <div class="home-shot">
-          <img src="/img/home-720.webp" srcset="/img/home-720.webp 720w, /img/home-1280.webp 1280w" sizes="(max-width: 960px) 100vw, 640px" width="720" height="428" loading="lazy" decoding="async" alt="AIHub Browser smart homepage with search, shortcuts and bookmarks" />
+          <img src="/img/home-960.webp" srcset="/img/home-960.webp 960w, /img/home-1600.webp 1600w" sizes="(max-width: 960px) 100vw, 640px" width="960" height="600" loading="lazy" decoding="async" alt="AIHub Browser smart homepage with search, shortcuts and bookmarks" />
         </div>
       </div>
 
@@ -1209,6 +1271,45 @@
   </div>
 </section>
 
+<!-- Left sidebar tour -->
+<section class="sidebar-section ruled" id="sidebar">
+  <div class="wrap">
+    <div class="sidebar-layout">
+      <div class="sidebar-shot shot-frame zoom r">
+        <img src="/img/sidebar-320.webp" srcset="/img/sidebar-320.webp 320w, /img/sidebar-540.webp 540w" sizes="260px" width="320" height="1208" loading="lazy" decoding="async" alt="The AIHub Browser left sidebar listing every built-in tool" />
+      </div>
+      <div>
+        <div class="r">
+          <div class="eyebrow">The left sidebar</div>
+          <h2>One click to<br/><span class="hl">every tool.</span></h2>
+          <p class="desc" style="max-width:560px;margin-top:14px">Click the panel button at the top-left and the sidebar opens. Each entry is a full app built into the browser — no extensions, no sign-ups.</p>
+        </div>
+        <div class="sb-grid">
+          <div class="sb-item r d1"><b>🏠 Home</b>Search, shortcuts, AI picks and your Bookmark Sphere.</div>
+          <div class="sb-item r d1"><b>🔗 Obsidian</b>Your vault and a knowledge graph of everything you've saved.</div>
+          <div class="sb-item r d1"><b>🌅 Morning Brief</b>One page for what happened while you were away.</div>
+          <div class="sb-item r d2"><b>🧪 Research</b>Notes, sources, comparison and a cited AI report.</div>
+          <div class="sb-item r d2"><b>🤖 Agent Mode</b>Ten ready-made agents plus your own custom ones.</div>
+          <div class="sb-item r d2"><b>🗒️ Sticky Notes</b>Notes that stay on the pages you leave them on.</div>
+          <div class="sb-item r d3"><b>⏪ Rewind</b>Search everything you've read, by meaning.</div>
+          <div class="sb-item r d3"><b>🔔 Watch &amp; Ping</b>Get told when a page changes.</div>
+          <div class="sb-item r d3"><b>🗄️ Page Vault</b>Saved copies of pages, even after they change or vanish.</div>
+          <div class="sb-item r d4"><b>🧠 Recall</b>The ideas you read come back so they stick.</div>
+          <div class="sb-item r d4"><b>🧾 Ledger</b>What you spent, from the receipts already in your mail.</div>
+          <div class="sb-item r d4"><b>📖 Bible &amp; Bible Study</b>The whole Bible offline, with courses and memory verses.</div>
+          <div class="sb-item r d5"><b>💬 Community</b>Text and voice rooms with screen sharing.</div>
+          <div class="sb-item r d5"><b>📚 Reading Lists</b>Share and follow public reading lists.</div>
+          <div class="sb-item r d5"><b>🕘 History &amp; Downloads</b>Search history by meaning; smart download sorting.</div>
+          <div class="sb-item r d6"><b>🧩 Extensions</b>14 built in, or describe one and the AI writes it.</div>
+          <div class="sb-item r d6"><b>📶 Free WiFi &amp; 🛡️ VPN</b>Join networks and go private in one click.</div>
+          <div class="sb-item r d6"><b>✉️ Mail</b>Gmail, Drive and Calendar inside the browser.</div>
+        </div>
+        <p class="sb-foot r">Plus the <b>User Manual</b> and <b>Settings</b> — and the AI assistant on the right, one click away on every page.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- AIHub DJ showcase -->
 <section class="dj-section" id="dj">
   <div class="wrap">
@@ -1229,14 +1330,14 @@
         </ul>
       </div>
       <div class="dj-shot r d2">
-        <img src="/img/dj-classic-720.webp" srcset="/img/dj-classic-720.webp 720w, /img/dj-classic-1280.webp 1280w" sizes="(max-width: 960px) 100vw, 640px" width="720" height="428" loading="lazy" decoding="async" alt="AIHub DJ two-deck console with waveforms, mixer and music library" />
+        <img src="/img/dj-classic-960.webp" srcset="/img/dj-classic-960.webp 960w, /img/dj-classic-1600.webp 1600w" sizes="(max-width: 960px) 100vw, 640px" width="960" height="600" loading="lazy" decoding="async" alt="AIHub DJ two-deck console with waveforms, mixer and music library" />
       </div>
     </div>
     <div class="dj-gallery">
-      <figure class="r d1"><div class="dj-shot"><img src="/img/dj-club-neon-720.webp" width="720" height="428" loading="lazy" decoding="async" alt="AIHub DJ Pro layout in the Club look with the Neon colour theme" /></div><figcaption>Pro layout · Club look · Neon</figcaption></figure>
-      <figure class="r d2"><div class="dj-shot"><img src="/img/dj-4deck-720.webp" width="720" height="428" loading="lazy" decoding="async" alt="AIHub DJ four-deck layout with a four-channel mixer" /></div><figcaption>4-Deck layout · Flat look · Royal</figcaption></figure>
-      <figure class="r d3"><div class="dj-shot"><img src="/img/dj-retro-walnut-720.webp" width="720" height="428" loading="lazy" decoding="async" alt="AIHub DJ in the Retro look with walnut wood panels" /></div><figcaption>Retro look · Walnut</figcaption></figure>
-      <figure class="r d4"><div class="dj-shot"><img src="/img/dj-glass-sunset-720.webp" width="720" height="428" loading="lazy" decoding="async" alt="AIHub DJ in the Glass look with the Sunset colour theme" /></div><figcaption>Glass look · Sunset</figcaption></figure>
+      <figure class="r d1"><div class="dj-shot"><img src="/img/dj-club-neon-960.webp" srcset="/img/dj-club-neon-960.webp 960w, /img/dj-club-neon-1600.webp 1600w" sizes="(max-width: 600px) 100vw, (max-width: 960px) 50vw, 540px" width="960" height="600" loading="lazy" decoding="async" alt="AIHub DJ Pro layout in the Club look with the Neon colour theme" /></div><figcaption>Pro layout · Club look · Neon</figcaption></figure>
+      <figure class="r d2"><div class="dj-shot"><img src="/img/dj-4deck-960.webp" srcset="/img/dj-4deck-960.webp 960w, /img/dj-4deck-1600.webp 1600w" sizes="(max-width: 600px) 100vw, (max-width: 960px) 50vw, 540px" width="960" height="600" loading="lazy" decoding="async" alt="AIHub DJ four-deck layout with a four-channel mixer" /></div><figcaption>4-Deck layout · Flat look · Royal</figcaption></figure>
+      <figure class="r d3"><div class="dj-shot"><img src="/img/dj-retro-walnut-960.webp" srcset="/img/dj-retro-walnut-960.webp 960w, /img/dj-retro-walnut-1600.webp 1600w" sizes="(max-width: 600px) 100vw, (max-width: 960px) 50vw, 540px" width="960" height="600" loading="lazy" decoding="async" alt="AIHub DJ in the Retro look with walnut wood panels" /></div><figcaption>Retro look · Walnut</figcaption></figure>
+      <figure class="r d4"><div class="dj-shot"><img src="/img/dj-glass-sunset-960.webp" srcset="/img/dj-glass-sunset-960.webp 960w, /img/dj-glass-sunset-1600.webp 1600w" sizes="(max-width: 600px) 100vw, (max-width: 960px) 50vw, 540px" width="960" height="600" loading="lazy" decoding="async" alt="AIHub DJ in the Glass look with the Sunset colour theme" /></div><figcaption>Glass look · Sunset</figcaption></figure>
     </div>
     <div class="dj-cta">
       <a href="/download" class="btn-chalk"><span class="btn-label">Download AIHub Browser — free</span></a>
@@ -1501,6 +1602,9 @@
 </section>
 </main>
 
+<!-- Full-size screenshot viewer -->
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot"><button type="button" aria-label="Close">✕</button><img alt="" /></div>
+
 <!-- Download toast notification -->
 <div id="dl-toast" role="alert">
   <button class="dl-toast-close" onclick="document.getElementById('dl-toast').classList.remove('show')" aria-label="Close">✕</button>
@@ -1691,6 +1795,22 @@
         btn.disabled = false; btn.textContent = 'Send Message'
       }
     })
+  })()
+
+  /* ── Screenshots open full size ── */
+  ;(function(){
+    const box = document.getElementById('lightbox'), big = box.querySelector('img')
+    const close = ()=>{ box.classList.remove('open'); big.removeAttribute('src') }
+    document.querySelectorAll('.zoom img, .dj-shot img, .home-shot img').forEach(img=>{
+      img.addEventListener('click', ()=>{
+        const set = (img.getAttribute('srcset') || '').split(',').map(x=>x.trim().split(' ')[0]).filter(Boolean)
+        big.src = set.length ? set[set.length - 1] : img.src
+        big.alt = img.alt
+        box.classList.add('open')
+      })
+    })
+    box.addEventListener('click', close)
+    document.addEventListener('keydown', e=>{ if (e.key === 'Escape') close() })
   })()
 
   /* ── Smooth scroll ── */
