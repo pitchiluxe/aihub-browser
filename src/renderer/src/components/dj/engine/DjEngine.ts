@@ -49,6 +49,8 @@ export const LOOP_SIZES = [1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8, 16, 32]
 /** Decoding needs ~10× the file size in memory; past this we draw the waveform live instead. */
 const MAX_ANALYZE_BYTES = 40 * 1024 * 1024
 const SMOOTH = 0.02
+/** Engine clock: loop wraps, the live waveform and fades. */
+const TICK_MS = 20
 /** Seconds of steady playing before a song without a known tempo is measured live. */
 const LIVE_TEMPO_AFTER = 24
 /** Auto-gain aims a song's loudness here (RMS, linear) and never moves it more than this. */
@@ -111,6 +113,13 @@ export function rmsOf(mono: Float32Array): number {
 export function autoGainFor(rms: number): number {
   if (!(rms > 1e-4)) return 1
   return Math.min(AUTO_GAIN_MAX, Math.max(AUTO_GAIN_MIN, AUTO_GAIN_TARGET / rms))
+}
+
+/** Run heavier analysis when the page has a moment, so it never lands in the middle of a frame. */
+function idle(fn: () => void): void {
+  const ric = (window as any).requestIdleCallback as ((cb: () => void, o?: { timeout: number }) => number) | undefined
+  if (ric) ric(fn, { timeout: 3000 })
+  else window.setTimeout(fn, 50)
 }
 
 function peakDb(an: AnalyserNode, buf: Float32Array): number {
@@ -208,7 +217,7 @@ export class Deck extends Emitter {
   private lastEnvIndex = -1
   private lastAnchor = 0
   private lastAlign = 0
-  private lastScanTempo = 0
+  private scanTempoAsked = false
   private steadySince = 0
 
   // graph
@@ -435,6 +444,7 @@ export class Deck extends Emitter {
     this.wave = null
     this.scan?.stop()
     this.scanBpm = null
+    this.scanTempoAsked = false
     this.liveBpm = null
     this.liveFirstBeat = 0
     this.lastEnvIndex = -1
@@ -520,9 +530,13 @@ export class Deck extends Emitter {
         (t, peak, low) => { if (this.scanFor === this.gen) this.wave?.addScanned(t, peak, low) },
         complete => {
           if (this.scanFor !== this.gen || !complete || this.analysis) { this.emit(); return }
-          this.scanBpm = this.wave?.scannedBpm() ?? null
-          this.applyRate()
-          this.emit()
+          const gen = this.gen
+          idle(() => {
+            if (gen !== this.gen || this.liveBpm) return
+            this.scanBpm = this.wave?.scannedBpm() ?? this.scanBpm
+            this.applyRate()
+            this.emit()
+          })
         })
     }
     void this.scan.start(videoId, this.duration).then(() => this.emit())
@@ -865,11 +879,18 @@ export class Deck extends Emitter {
       this.syncYouTubeVolume()
     }
     const wave = this.wave
-    // Tempo from the scan as soon as enough of the song has been read, refined as it reads on.
-    if (wave && this.scan?.running && !this.analysis && !this.liveBpm && this.scan.reach > 40 && now - this.lastScanTempo > 4000) {
-      this.lastScanTempo = now
-      const b = wave.scannedBpm(Math.floor(this.scan.reach * ENV_RATE))
-      if (b && b !== this.scanBpm) { this.scanBpm = b; this.applyRate(); this.emit() }
+    // A first tempo from the scan once enough of the song has been read (the
+    // finished scan refines it). Once only, and when the page is idle — it is
+    // real work on the thread that draws the console.
+    if (wave && this.scan?.running && !this.analysis && !this.liveBpm && !this.scanBpm && !this.scanTempoAsked && this.scan.reach > 45) {
+      this.scanTempoAsked = true
+      const gen = this.gen
+      const reach = this.scan.reach
+      idle(() => {
+        if (gen !== this.gen || this.scanBpm || this.liveBpm) return
+        const b = wave.scannedBpm(Math.floor(reach * ENV_RATE))
+        if (b) { this.scanBpm = b; this.applyRate(); this.emit() }
+      })
     }
     if (wave && playing && !this.adPlaying) {
       const i = Math.floor(t * ENV_RATE)
@@ -1032,13 +1053,15 @@ export class DjEngine extends Emitter {
     this.decks = { A: new Deck('A', this), B: new Deck('B', this) }
     this.setCrossfader(0.5)
 
-    const loop = () => {
+    // A steady clock rather than animation frames: asking for a frame every
+    // vsync made the page render 60 times a second just to keep this running,
+    // which is what starved the YouTube players. It also keeps loops and
+    // fades running while the console is scrolled out of view.
+    this.raf = window.setInterval(() => {
       this.decks.A.tick()
       this.decks.B.tick()
       this.tickFade()
-      this.raf = requestAnimationFrame(loop)
-    }
-    this.raf = requestAnimationFrame(loop)
+    }, TICK_MS)
   }
 
   async resume(): Promise<void> {
@@ -1147,7 +1170,7 @@ export class DjEngine extends Emitter {
   }
 
   dispose(): void {
-    cancelAnimationFrame(this.raf)
+    window.clearInterval(this.raf)
     if (this.recorder && this.recorder.state !== 'inactive') this.recorder.stop()
     this.decks.A.dispose()
     this.decks.B.dispose()

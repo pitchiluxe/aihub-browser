@@ -18,7 +18,7 @@ import { takeNext } from './ytQueue'
 import { learningEnabled, setLearning, subscribeTaste, tasteVersion } from './taste'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
 import { djApi, trackByToken, toTrack, loadMeta } from './libraryData'
-import { HFader, useRaf, VuMeter } from './controls'
+import { HFader, useRafThrottled, VuMeter } from './controls'
 import './dj.css'
 import './dj-pro.css'
 
@@ -281,7 +281,7 @@ function TopBar({ engine, mixer, say, theme, setTheme, uiZoom, setUiZoom }: {
   const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([])
   const toggleMenu = (m: 'out' | 'theme' | 'settings') => setMenu(cur => (cur === m ? null : m))
 
-  useRaf(() => {
+  useRafThrottled(() => {
     const now = new Date()
     const c = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
     if (clockRef.current && clockRef.current.textContent !== c) clockRef.current.textContent = c
@@ -293,7 +293,7 @@ function TopBar({ engine, mixer, say, theme, setTheme, uiZoom, setUiZoom }: {
       const s = `${mm}:${ss} / ${kb > 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.round(kb)} KB`}`
       if (recRef.current.textContent !== s) recRef.current.textContent = s
     }
-  })
+  }, 200)
 
   const toggleRec = async () => {
     if (!recording) {

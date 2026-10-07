@@ -3,13 +3,64 @@
  *  - OverviewWave: the whole track, click to jump; shows cue, hot cues, loop.
  *  - ZoomWave: both decks scrolling past a centre line with their beat grids,
  *    the view a DJ beat-matches by eye.
+ *
+ * Drawing is kept cheap on purpose. The console shares the GPU with the
+ * hidden YouTube players' video decoding, and thousands of single-pixel
+ * fills every display frame starved them — the music stuttered and the
+ * platter lagged. So: each waveform is a handful of batched paths, frames are
+ * capped at 30 fps, nothing is redrawn while nothing moves, canvas sizes are
+ * measured on resize only, and the resolution is capped.
  */
 import React, { useRef } from 'react'
 import type { Deck } from './engine/DjEngine'
 import { ENV_RATE } from './engine/analysis'
-import { useRaf } from './controls'
+import { useCanvasBox, useRafThrottled } from './controls'
 
 const DECK_COLORS = { A: { hi: '#4cc3ff', lo: '#1d5fff' }, B: { hi: '#ff8a3d', lo: '#ff2d55' } }
+const FRAME_MS = 33
+/** The track strips and the whole-song bar move less: they need fewer frames. */
+const STRIP_MS = 50
+const OVERVIEW_MS = 100
+/**
+ * Waveforms are drawn on the CPU. On a GPU canvas, a path of thousands of
+ * thin bars is rasterised in the GPU process, the same process that presents
+ * the YouTube players' video, and it starved them (measured 0.21× playback
+ * speed with only the waveforms on screen). On the CPU the GPU just receives
+ * the finished picture.
+ */
+const CPU_CANVAS: CanvasRenderingContext2DSettings = { willReadFrequently: true }
+/** A song measured as it plays only grows a little each moment: rebuild its overview twice a second. */
+const LIVE_REBUILD_MS = 500
+
+/** #rrggbb + alpha → a pixel for a little-endian RGBA Uint32 view of ImageData. */
+function pixel(hex: string, alpha = 255): number {
+  const n = parseInt(hex.slice(1), 16)
+  return ((alpha << 24) | ((n & 0xff) << 16) | (n & 0xff00) | ((n >> 16) & 0xff)) >>> 0
+}
+
+/**
+ * A pixel buffer the scrolling waveforms are written into directly — a
+ * vertical bar is a few array writes, with no path for anyone to rasterise —
+ * then handed to the canvas in one putImageData.
+ */
+class BarRaster {
+  img: ImageData | null = null
+  px = new Uint32Array(0)
+  begin(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    if (!this.img || this.img.width !== w || this.img.height !== h) {
+      this.img = ctx.createImageData(w, h)
+      this.px = new Uint32Array(this.img.data.buffer)
+    } else this.px.fill(0)
+  }
+  /** Column x, rows [y0, y1). */
+  bar(x: number, y0: number, y1: number, c: number): void {
+    const img = this.img!
+    const W = img.width
+    const a = Math.max(0, Math.floor(y0))
+    const b = Math.min(img.height, Math.ceil(y1))
+    for (let y = a; y < b; y++) this.px[y * W + x] = c
+  }
+}
 
 function envOf(deck: Deck): { amp: Float32Array; low: Float32Array | null } | null {
   if (deck.analysis) return { amp: deck.analysis.env.amp, low: deck.analysis.env.low }
@@ -17,39 +68,41 @@ function envOf(deck: Deck): { amp: Float32Array; low: Float32Array | null } | nu
   return null
 }
 
-function fitCanvas(cv: HTMLCanvasElement): { w: number; h: number; ctx: CanvasRenderingContext2D } | null {
-  const ctx = cv.getContext('2d')
+/** Start drawing at the canvas's current CSS size; null while it has none. */
+function begin(cv: HTMLCanvasElement | null, box: { w: number; h: number; k: number }) {
+  // Not on screen (another tab is in front): draw nothing — the music plays on regardless.
+  if (!cv || !box.w || !box.h || !cv.offsetParent) return null
+  const ctx = cv.getContext('2d', CPU_CANVAS)
   if (!ctx) return null
-  const w = cv.clientWidth
-  const h = cv.clientHeight
-  if (!w || !h) return null
-  // Real device pixels, including any CSS zoom on the console, so the
-  // waveform stays sharp when the console is scaled to fit the tab.
-  const rect = cv.getBoundingClientRect()
-  const k = (window.devicePixelRatio || 1) * (rect.width / w)
-  if (cv.width !== Math.round(w * k) || cv.height !== Math.round(h * k)) {
-    cv.width = Math.round(w * k)
-    cv.height = Math.round(h * k)
-  }
-  ctx.setTransform(k, 0, 0, k, 0, 0)
-  return { w, h, ctx }
+  ctx.setTransform(box.k, 0, 0, box.k, 0, 0)
+  return { ctx, w: box.w, h: box.h }
+}
+
+/** Everything that changes what a deck's waveform looks like, apart from time. */
+function deckState(d: Deck): string {
+  return `${d.version}|${d.playing ? 1 : 0}|${d.held ? 1 : 0}|${d.rate.toFixed(4)}|${d.scanProgress == null ? '' : Math.round(d.scanProgress * 100)}`
 }
 
 export function OverviewWave({ deck, height = 34 }: { deck: Deck; height?: number }) {
   const cvRef = useRef<HTMLCanvasElement>(null)
-  // The static waveform is rendered once per analysis into an offscreen canvas.
-  const cache = useRef<{ key: unknown; w: number; img: HTMLCanvasElement } | null>(null)
+  const box = useCanvasBox(cvRef)
+  // The waveform itself is rendered into an offscreen canvas; each frame only adds the markers.
+  const cache = useRef<{ key: unknown; w: number; h: number; img: HTMLCanvasElement; at: number } | null>(null)
+  const drawn = useRef('')
   const col = DECK_COLORS[deck.id]
 
-  useRaf(() => {
-    const cv = cvRef.current
-    if (!cv) return
-    const fit = fitCanvas(cv)
-    if (!fit) return
-    const { w, h, ctx } = fit
-    ctx.clearRect(0, 0, w, h)
+  useRafThrottled(now => {
+    const d = begin(cvRef.current, box.current)
+    if (!d) return
+    const { ctx, w, h } = d
     const env = envOf(deck)
     const dur = deck.duration
+    const live = !deck.analysis
+    // Redraw only when the playhead has moved a pixel or something else changed.
+    const sig = `${Math.round(dur ? (deck.time / dur) * w : 0)}|${deckState(deck)}|${w}x${h}|${live && cache.current && now - cache.current.at >= LIVE_REBUILD_MS ? now : ''}`
+    if (sig === drawn.current) return
+    drawn.current = sig
+    ctx.clearRect(0, 0, w, h)
     if (deck.isYouTube && (!deck.fullControl || deck.loading || !dur)) {
       // Loading, or a stream whose audio could not be captured: a progress bar.
       ctx.fillStyle = 'rgba(255,255,255,0.08)'
@@ -78,18 +131,20 @@ export function OverviewWave({ deck, height = 34 }: { deck: Deck; height?: numbe
       return
     }
     const key = deck.analysis ?? deck.liveEnv
-    // A song measured as it plays: the waveform grows behind the playhead.
-    const live = !deck.analysis
-    if (!cache.current || cache.current.key !== key || cache.current.w !== w || live) {
-      const img = cache.current?.img ?? document.createElement('canvas')
-      const dpr = window.devicePixelRatio || 1
-      img.width = Math.round(w * dpr)
-      img.height = Math.round(h * dpr)
-      const g = img.getContext('2d')!
-      g.setTransform(dpr, 0, 0, dpr, 0, 0)
+    const c = cache.current
+    if (!c || c.key !== key || c.w !== w || c.h !== h || (live && now - c.at >= LIVE_REBUILD_MS)) {
+      const img = c?.img ?? document.createElement('canvas')
+      const k = box.current.k
+      img.width = Math.round(w * k)
+      img.height = Math.round(h * k)
+      const g = img.getContext('2d', CPU_CANVAS)!
+      g.setTransform(k, 0, 0, k, 0, 0)
       g.clearRect(0, 0, w, h)
       const frames = env.amp.length
       const mid = h / 2
+      const hi = new Path2D()
+      const lo = new Path2D()
+      const groove = new Path2D()
       for (let x = 0; x < w; x++) {
         const f0 = Math.floor((x / w) * frames)
         const f1 = Math.max(f0 + 1, Math.floor(((x + 1) / w) * frames))
@@ -98,24 +153,17 @@ export function OverviewWave({ deck, height = 34 }: { deck: Deck; height?: numbe
           if (env.amp[f] > a) a = env.amp[f]
           if (env.low && env.low[f] > l) l = env.low[f]
         }
+        if (live && !a) { groove.rect(x, mid - 0.5, 1, 1); continue } // not heard yet
         const ah = a * (h / 2 - 1)
-        if (live && !a) {
-          // Not heard yet: a faint groove instead of an empty gap.
-          g.fillStyle = 'rgba(255,255,255,0.12)'
-          g.fillRect(x, mid - 0.5, 1, 1)
-          continue
-        }
-        g.fillStyle = col.hi
-        g.fillRect(x, mid - ah, 1, ah * 2)
-        if (env.low) {
-          const lh = l * a * (h / 2 - 1)
-          g.fillStyle = col.lo
-          g.fillRect(x, mid - lh, 1, lh * 2)
-        }
+        hi.rect(x, mid - ah, 1, ah * 2)
+        if (env.low) { const lh = l * a * (h / 2 - 1); lo.rect(x, mid - lh, 1, lh * 2) }
       }
-      cache.current = { key, w, img }
+      g.fillStyle = 'rgba(255,255,255,0.12)'; g.fill(groove)
+      g.fillStyle = col.hi; g.fill(hi)
+      g.fillStyle = col.lo; g.fill(lo)
+      cache.current = { key, w, h, img, at: now }
     }
-    ctx.drawImage(cache.current.img, 0, 0, w, h)
+    ctx.drawImage(cache.current!.img, 0, 0, w, h)
 
     const px = (t: number) => (t / dur) * w
     const head = px(deck.time)
@@ -137,7 +185,7 @@ export function OverviewWave({ deck, height = 34 }: { deck: Deck; height?: numbe
     })
     ctx.fillStyle = '#fff'
     ctx.fillRect(head - 1, 0, 2, h)
-  })
+  }, OVERVIEW_MS)
 
   const onClick = (e: React.MouseEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -161,63 +209,82 @@ export function ZoomWave({ decks, compact = false, seconds = ZOOM_SECONDS }: {
   seconds?: number
 }) {
   const cvRef = useRef<HTMLCanvasElement>(null)
-  useRaf(() => {
-    const cv = cvRef.current
-    if (!cv) return
-    const fit = fitCanvas(cv)
-    if (!fit) return
-    const { w, h, ctx } = fit
-    ctx.clearRect(0, 0, w, h)
+  const box = useCanvasBox(cvRef)
+  const drawn = useRef('')
+  const raster = useRef(new BarRaster()).current
+
+  useRafThrottled(() => {
+    const d = begin(cvRef.current, box.current)
+    if (!d) return
+    const { ctx, w, h } = d
+    // Nothing moves while every deck is stopped: keep the last picture.
+    const sig = decks.map(dk => `${dk.time.toFixed(3)}|${deckState(dk)}`).join('/') + `|${w}x${h}`
+    if (sig === drawn.current) return
+    drawn.current = sig
     const lane = h / decks.length
     const center = w / 2
+
+    // The waveforms, written pixel by pixel at full resolution (played part dimmed).
+    const k = box.current.k
+    const cv = cvRef.current!
+    const W = cv.width
+    const H = cv.height
+    raster.begin(ctx, W, H)
+    decks.forEach((deck, i) => {
+      const env = envOf(deck)
+      if (!env || !deck.track) return
+      const col = DECK_COLORS[deck.id]
+      const hi = pixel(col.hi), lo = pixel(col.lo), hiPast = pixel(col.hi, 140), loPast = pixel(col.lo, 140)
+      const laneD = H / decks.length
+      const midD = i * laneD + laneD / 2
+      const half = (lane / 2 - 2) * k
+      // Track-seconds per device pixel: a faster deck scrolls faster, so two
+      // synced decks show beat lines at the same spacing.
+      const sppD = (seconds * deck.rate) / w / k
+      const t0 = deck.time - (W / 2) * sppD
+      const centreD = W / 2
+      for (let x = 0; x < W; x++) {
+        const ta = t0 + x * sppD
+        const f0 = Math.max(0, Math.floor(ta * ENV_RATE))
+        const f1 = Math.min(env.amp.length, Math.max(f0 + 1, Math.floor((ta + sppD) * ENV_RATE)))
+        let a = 0, l = 0
+        for (let f = f0; f < f1; f++) {
+          if (env.amp[f] > a) a = env.amp[f]
+          if (env.low && env.low[f] > l) l = env.low[f]
+        }
+        if (!a) continue
+        const past = x < centreD
+        const ah = Math.max(0.5, a * half)
+        raster.bar(x, midD - ah, midD + ah, past ? hiPast : hi)
+        if (env.low) {
+          const lh = l * a * half
+          if (lh >= 0.5) raster.bar(x, midD - lh, midD + lh, past ? loPast : lo)
+        }
+      }
+    })
+    ctx.putImageData(raster.img!, 0, 0)
 
     decks.forEach((deck, i) => {
       const top = i * lane
       const mid = top + lane / 2
-      const env = envOf(deck)
-      const col = DECK_COLORS[deck.id]
-      // Track-seconds per pixel: a faster deck scrolls faster, so two synced
-      // decks show beat lines at the same spacing.
       const spp = (seconds * deck.rate) / w
       const t0 = deck.time - center * spp
-
-      if (env && deck.track) {
-        for (let x = 0; x < w; x++) {
-          const ta = t0 + x * spp
-          const f0 = Math.floor(ta * ENV_RATE)
-          const f1 = Math.max(f0 + 1, Math.floor((ta + spp) * ENV_RATE))
-          let a = 0, l = 0
-          for (let f = f0; f < f1; f++) {
-            if (f < 0 || f >= env.amp.length) continue
-            if (env.amp[f] > a) a = env.amp[f]
-            if (env.low && env.low[f] > l) l = env.low[f]
-          }
-          if (!a) continue
-          const ah = a * (lane / 2 - 2)
-          ctx.globalAlpha = x < center ? 0.55 : 1
-          ctx.fillStyle = col.hi
-          ctx.fillRect(x, mid - ah, 1, ah * 2)
-          if (env.low) {
-            const lh = l * a * (lane / 2 - 2)
-            ctx.fillStyle = col.lo
-            ctx.fillRect(x, mid - lh, 1, lh * 2)
-          }
-        }
-        ctx.globalAlpha = 1
-      }
 
       // Beat grid
       if (deck.gridKnown) {
         const bl = deck.beatLen
         const first = deck.firstBeat
+        const bars = new Path2D(), beats = new Path2D()
         let n = Math.ceil((t0 - first) / bl)
         for (let t = first + n * bl; t < t0 + w * spp; t += bl, n++) {
           const x = (t - t0) / spp
           const bar = ((n % 4) + 4) % 4 === 0
-          ctx.fillStyle = bar ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.28)'
-          ctx.fillRect(x, top + 1, bar ? 1.5 : 1, bar ? 6 : 4)
-          ctx.fillRect(x, top + lane - (bar ? 7 : 5), bar ? 1.5 : 1, bar ? 6 : 4)
+          const p = bar ? bars : beats
+          p.rect(x, top + 1, bar ? 1.5 : 1, bar ? 6 : 4)
+          p.rect(x, top + lane - (bar ? 7 : 5), bar ? 1.5 : 1, bar ? 6 : 4)
         }
+        ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fill(bars)
+        ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fill(beats)
       }
 
       // Cue and loop markers
@@ -262,7 +329,7 @@ export function ZoomWave({ decks, compact = false, seconds = ZOOM_SECONDS }: {
     ctx.moveTo(center - 5, 0); ctx.lineTo(center + 5, 0); ctx.lineTo(center, 6)
     ctx.moveTo(center - 5, h); ctx.lineTo(center + 5, h); ctx.lineTo(center, h - 6)
     ctx.fill()
-  })
+  }, compact ? STRIP_MS : FRAME_MS)
 
   return <canvas ref={cvRef} className={compact ? 'dj-stripwave' : 'dj-zoomwave'} />
 }

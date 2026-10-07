@@ -7,7 +7,7 @@
 import React, { useEffect, useRef } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { crossfadeGains, faderGain, type Deck, type DjEngine } from './engine/DjEngine'
-import { useRaf } from './controls'
+import { useCanvasBox, useRafThrottled } from './controls'
 
 const images = new Map<string, HTMLImageElement>()
 function imageFor(src: string): HTMLImageElement | null {
@@ -41,17 +41,15 @@ export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjE
     return () => { A.releaseVideo(); B.releaseVideo() }
   }, [A, B])
 
-  useRaf(() => {
+  const box = useCanvasBox(cvRef)
+  // 30 fps is what the videos themselves run at; more only costs the players GPU time.
+  useRafThrottled(() => {
     const cv = cvRef.current
-    if (!cv) return
+    if (!cv || !cv.offsetParent) return
     const g = cv.getContext('2d')
     if (!g) return
-    const w = cv.clientWidth
-    const h = cv.clientHeight
+    const { w, h, k } = box.current
     if (!w || !h) return
-    const rect = cv.getBoundingClientRect()
-    const k = (window.devicePixelRatio || 1) * (rect.width / w)
-    if (cv.width !== Math.round(w * k) || cv.height !== Math.round(h * k)) { cv.width = Math.round(w * k); cv.height = Math.round(h * k) }
     g.setTransform(k, 0, 0, k, 0, 0)
     g.fillStyle = '#000'
     g.fillRect(0, 0, w, h)
@@ -130,7 +128,7 @@ export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjE
       g.fillStyle = '#facc15'
       g.fillText('AD', w - 24, 14)
     }
-  })
+  }, 33)
 
   return (
     <div className={`dj-video ${big ? 'dj-video-big' : ''}`}>

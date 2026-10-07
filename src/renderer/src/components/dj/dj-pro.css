@@ -20,6 +20,15 @@
 .aihub-dj .dj-limited { opacity: 0.45; filter: grayscale(0.7); }
 .aihub-dj .dj-limited > * { pointer-events: none; }
 
+/* ── Level meters: a lit strip painted once, a cover and a peak marker moved on the GPU ── */
+.aihub-dj .dj-vu { position: relative; overflow: hidden; }
+.aihub-dj .dj-vu-cover { position: absolute; left: 0; right: 0; top: 0; bottom: 0; background: rgba(11, 12, 14, 0.82); transform-origin: top; transform: scaleY(1); pointer-events: none; }
+.aihub-dj .dj-vu-hold { position: absolute; left: 1px; right: 1px; top: 0; opacity: 0; background: rgba(255, 255, 255, 0.85); pointer-events: none; }
+.aihub-dj .dj-vu.dj-vu-h .dj-vu-cover { transform-origin: right; transform: scaleX(1); }
+.aihub-dj .dj-vu.dj-vu-h .dj-vu-hold { top: 0; bottom: 0; left: 0; right: auto; }
+/* Lit segments without the per-segment glow: a glow on every segment is a lot of painting for little effect. */
+.aihub-dj .dj-vu i.lit, .aihub-dj .dj-vu i.lit[data-zone='amber'], .aihub-dj .dj-vu i.lit[data-zone='red'] { box-shadow: none; }
+
 /* ── Pitch readout above the pitch fader: live value, range underneath ── */
 .aihub-dj .dj-range { width: 46px; height: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .aihub-dj .dj-range b { font-size: 11.5px; font-weight: 800; color: #86efac; }

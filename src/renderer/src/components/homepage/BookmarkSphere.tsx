@@ -471,13 +471,32 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   }, [])  // draw is stable; refs hold mutable state
 
   // ── RAF loop ─────────────────────────────────────────────────────────────
+  // A home page in a background tab is only hidden (display: none), not
+  // unmounted. Animating it anyway rendered the page 60 times a second behind
+  // whatever tab was in front — measured at ~19 % of the page thread behind
+  // the DJ console, where it competed with the decks. So while the sphere is
+  // not on screen the loop rests, and looks twice a second for its return.
+  const hiddenTimerRef = useRef(0)
   const startLoop = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
-    const loop = () => { draw(); rafRef.current = requestAnimationFrame(loop) }
+    window.clearTimeout(hiddenTimerRef.current)
+    const loop = () => {
+      const cv = canvasRef.current
+      if (cv && !cv.offsetParent) {
+        rafRef.current = 0
+        hiddenTimerRef.current = window.setTimeout(() => { rafRef.current = requestAnimationFrame(loop) }, 500)
+        return
+      }
+      draw()
+      rafRef.current = requestAnimationFrame(loop)
+    }
     rafRef.current = requestAnimationFrame(loop)
   }, [draw])
 
-  const stopLoop = useCallback(() => cancelAnimationFrame(rafRef.current), [])
+  const stopLoop = useCallback(() => {
+    cancelAnimationFrame(rafRef.current)
+    window.clearTimeout(hiddenTimerRef.current)
+  }, [])
 
   // ── Hit test ─────────────────────────────────────────────────────────────
   const getNodeAt = useCallback((cx: number, cy: number): ExtNode | null => {

@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { ArrowUpFromLine, Play, Pause, Square, Lock, ThumbsUp, ThumbsDown, Youtube, Film } from 'lucide-react'
 import type { Deck, StemKey } from './engine/DjEngine'
 import { FX_LABELS, type FxType } from './engine/effects'
-import { Knob, LedButton, VFader, fmtTime, useDeck, useRaf } from './controls'
+import { Knob, LedButton, VFader, fmtTime, useDeck, useRafThrottled } from './controls'
 import { OverviewWave, ZoomWave } from './Waveforms'
 import Platter from './Platter'
 import { recordTaste } from './taste'
@@ -20,12 +20,12 @@ export function DeckClock({ deck, onDropTrack }: { deck: Deck; onDropTrack: Deck
   useDeck(deck)
   const [remain, setRemain] = useState(false)
   const timeRef = useRef<HTMLSpanElement>(null)
-  useRaf(() => {
+  useRafThrottled(() => {
     if (!timeRef.current) return
     const t = remain ? Math.max(0, deck.duration - deck.time) : deck.time
     const s = (remain && deck.track ? '-' : '') + fmtTime(t)
     if (timeRef.current.textContent !== s) timeRef.current.textContent = s
-  })
+  }, 50)
   const warn = deck.track && deck.playing && deck.duration - deck.time < 30
   const letter = <div className={`dj-deck-letter ${deck.playing ? 'dj-live' : ''}`}>{deck.id}</div>
   return (

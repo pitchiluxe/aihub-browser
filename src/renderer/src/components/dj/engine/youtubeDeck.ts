@@ -39,7 +39,7 @@ export async function captureTab(id: string, video: boolean): Promise<MediaStrea
   const src = { chromeMediaSource: 'tab', chromeMediaSourceId: id }
   return navigator.mediaDevices.getUserMedia({
     audio: video ? false : ({ mandatory: src } as any),
-    video: video ? ({ mandatory: { ...src, maxWidth: 640, maxHeight: 360, maxFrameRate: 30 } } as any) : false,
+    video: video ? ({ mandatory: { ...src, maxWidth: 640, maxHeight: 360, maxFrameRate: 24 } } as any) : false,
   })
 }
 
@@ -184,6 +184,8 @@ export class YouTubeDeck {
   async retainVideo(): Promise<void> {
     this.videoUsers++
     if (this.videoStream || this.videoUsers !== 1) return
+    // The player keeps its picture hidden unless watched — that is what keeps it from stalling.
+    await ytBridge().cmd(this.deck, 'video', true)
     const id = await ytBridge().streamId(this.deck)
     if (!id || !this.watched()) return
     try {
@@ -199,7 +201,9 @@ export class YouTubeDeck {
   private watched(): boolean { return this.videoUsers > 0 }
   releaseVideo(): void {
     this.videoUsers = Math.max(0, this.videoUsers - 1)
-    if (this.videoUsers || !this.videoStream) return
+    if (this.videoUsers) return
+    void ytBridge().cmd(this.deck, 'video', false)
+    if (!this.videoStream) return
     this.videoStream.getTracks().forEach(t => t.stop())
     this.videoStream = null
     this.videoEl.srcObject = null

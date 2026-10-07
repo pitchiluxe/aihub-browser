@@ -51,6 +51,8 @@ interface Player {
   videoId: string | null
   /** Bumped per load so a slow ready-wait for an old video gives up. */
   gen: number
+  /** The video monitor is watching this player (see videoJs). */
+  showVideo: boolean
 }
 
 const players = new Map<string, Player>()
@@ -109,7 +111,7 @@ async function ensurePlayer(owner: WebContents, deck: YtDeckId): Promise<Player>
   wc.setAudioMuted(true)
   await win.loadURL(`data:text/html;base64,${Buffer.from(WRAPPER).toString('base64')}`)
 
-  const player: Player = { win, videoId: null, gen: 0 }
+  const player: Player = { win, videoId: null, gen: 0, showVideo: false }
   players.set(key, player)
   win.on('closed', () => { if (players.get(key) === player) players.delete(key) })
   return player
@@ -173,6 +175,27 @@ const INSTALL_JS = `(() => {
   return true
 })()`
 
+/**
+ * Show or hide the player's picture. A hidden window's <video> still has to
+ * present every frame, and while the DJ console was busy drawing, those
+ * presents queued up behind it in the GPU process: the players stalled with
+ * data in hand (measured 0.66× speed with one deck, 0.33× with two) and the
+ * music stuttered. With the picture hidden the same players run at exactly
+ * 1× (4× for a scan) — so a player only shows its video while the video
+ * monitor is actually watching it.
+ */
+const videoJs = (show: boolean) => `(() => {
+  let s = document.getElementById('aihub-dj-novideo')
+  if (${show}) { if (s) s.remove(); return true }
+  if (!s) {
+    s = document.createElement('style')
+    s.id = 'aihub-dj-novideo'
+    s.textContent = 'video{visibility:hidden!important}'
+    document.head.appendChild(s)
+  }
+  return true
+})()`
+
 async function waitReady(p: Player, gen: number): Promise<YtDeckState | null> {
   const until = Date.now() + READY_TIMEOUT_MS
   while (Date.now() < until && p.gen === gen && !p.win.isDestroyed()) {
@@ -180,6 +203,7 @@ async function waitReady(p: Player, gen: number): Promise<YtDeckState | null> {
     if (s?.error) return s
     if (s?.ready) {
       await inFrame(p, INSTALL_JS)
+      await inFrame(p, videoJs(p.showVideo))
       return s
     }
     await new Promise(r => setTimeout(r, 200))
@@ -264,6 +288,12 @@ export function registerYouTubeDeckIpc(): void {
     if (!validDeck(deck) || typeof cmd !== 'string') return false
     const p = players.get(keyOf(e.sender, deck))
     if (!p || p.win.isDestroyed()) return false
+    if (cmd === 'video') {
+      // Scan players feed only the waveform reader: their picture stays hidden.
+      p.showVideo = value === true && !isScan(deck)
+      await inFrame(p, videoJs(p.showVideo))
+      return true
+    }
     if (cmd === 'audible') {
       // Fallback when the page could not capture the deck: let it play out directly.
       p.win.webContents.setAudioMuted(value !== true)

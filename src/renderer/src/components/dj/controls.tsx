@@ -22,6 +22,83 @@ export function useRaf(cb: () => void): void {
   }, [])
 }
 
+/**
+ * Like useRaf, but at most once every `minMs`. The console's drawing shares
+ * the GPU with the hidden YouTube players' video decoding; drawing every
+ * display frame starved them and made the music stutter.
+ */
+export function useRafThrottled(cb: (now: number) => void, minMs: number): void {
+  const ref = useRef(cb)
+  ref.current = cb
+  useEffect(() => {
+    const sub: Sub = { cb: now => ref.current(now), minMs, last: 0 }
+    subs.add(sub)
+    schedule()
+    return () => { subs.delete(sub) }
+  }, [minMs])
+}
+
+/**
+ * One shared clock for everything on the console that animates. Each part
+ * asking for frames on its own schedule meant some part wanted almost every
+ * display frame, so the page rendered ~60 times a second. Here every part
+ * runs on the same frame, at most 30 times a second (every frame only while
+ * something needs it, like a hand on a record).
+ */
+interface Sub { cb: (now: number) => void; minMs: number; last: number }
+const subs = new Set<Sub>()
+const BASE_MS = 33
+let pending = false
+function schedule(): void {
+  if (pending || !subs.size) return
+  pending = true
+  const everyFrame = [...subs].some(s => s.minMs <= 0)
+  if (everyFrame) requestAnimationFrame(run)
+  else window.setTimeout(() => requestAnimationFrame(run), BASE_MS - 10)
+}
+function run(now: number): void {
+  pending = false
+  for (const s of subs) {
+    if (s.minMs <= 0 || now - s.last >= s.minMs - 6) {
+      s.last = now
+      try { s.cb(now) } catch (e) { console.error(e) }
+    }
+  }
+  schedule()
+}
+
+/** Highest canvas resolution the console draws at — sharp enough, half the raster work of 2×+. */
+export const MAX_CANVAS_SCALE = 1.5
+
+/**
+ * A canvas's CSS size and its backing-store scale, measured when it resizes
+ * instead of on every frame (a per-frame getBoundingClientRect forced layout
+ * for every canvas, every frame).
+ */
+export function useCanvasBox(ref: React.RefObject<HTMLCanvasElement>) {
+  const box = useRef({ w: 0, h: 0, k: 1 })
+  useEffect(() => {
+    const cv = ref.current
+    if (!cv) return
+    const measure = () => {
+      const w = cv.clientWidth
+      const h = cv.clientHeight
+      const rect = cv.getBoundingClientRect()
+      // Device pixels including any CSS zoom on the console, capped.
+      const k = Math.min(MAX_CANVAS_SCALE, (window.devicePixelRatio || 1) * (w ? rect.width / w : 1))
+      box.current = { w, h, k }
+      const bw = Math.round(w * k)
+      const bh = Math.round(h * k)
+      if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh }
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(cv)
+    return () => ro.disconnect()
+  }, [ref])
+  return box
+}
+
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 
 /** Vertical drag (and wheel) editing shared by knobs and faders. */
@@ -156,27 +233,39 @@ export function LedButton({ on, onClick, children, color = 'green', className = 
 
 /** Segmented LED level meter fed by a dBFS reader. */
 export function VuMeter({ read, height = 120, segments = 16, horizontal = false }: { read: () => number; height?: number; segments?: number; horizontal?: boolean }) {
-  const ref = useRef<HTMLDivElement>(null)
+  // The meter is a fully lit strip painted once, with a dark cover over the
+  // unlit part and a peak marker — both moved with GPU transforms. Restyling
+  // ~130 meter segments up to 30 times a second kept the whole console
+  // repainting, which starved the YouTube players' video and made the music
+  // stutter.
+  const coverRef = useRef<HTMLDivElement>(null)
+  const holdRef = useRef<HTMLDivElement>(null)
   const peak = useRef({ db: -96, at: 0 })
-  useRaf(() => {
-    const el = ref.current
-    if (!el) return
+  const shown = useRef({ lit: -1, hold: -1 })
+  useRafThrottled(() => {
+    const cover = coverRef.current
+    const holdEl = holdRef.current
+    if (!cover || !holdEl) return
     const db = read()
     const now = performance.now()
     if (db > peak.current.db || now - peak.current.at > 900) peak.current = { db, at: now }
     const level = (d: number) => clamp01((d + 42) / 42) // -42 dB … 0 dB
     const lit = Math.round(level(db) * segments)
     const hold = Math.round(level(peak.current.db) * segments)
-    const kids = el.children
-    for (let i = 0; i < kids.length; i++) {
-      const seg = segments - 1 - i // top child is the loudest segment
-      const c = kids[i] as HTMLElement
-      c.className = seg < lit || seg === hold - 1 ? 'lit' : ''
-    }
-  })
+    if (lit === shown.current.lit && hold === shown.current.hold) return
+    shown.current = { lit, hold }
+    const off = 1 - lit / segments
+    cover.style.transform = horizontal ? `scaleX(${off})` : `scaleY(${off})`
+    // The peak marker is one segment tall/wide and steps in whole segments.
+    holdEl.style.opacity = hold > lit ? '1' : '0'
+    holdEl.style.transform = horizontal ? `translateX(${Math.max(0, hold - 1) * 100}%)` : `translateY(${(segments - Math.max(1, hold)) * 100}%)`
+  }, 33)
   return (
-    <div className={`dj-vu ${horizontal ? 'dj-vu-h' : ''}`} ref={ref} style={horizontal ? undefined : { height }}>
-      {Array.from({ length: segments }).map((_, i) => <i key={i} data-zone={i < 3 ? 'red' : i < 6 ? 'amber' : 'green'} />)}
+    <div className={`dj-vu ${horizontal ? 'dj-vu-h' : ''}`} style={horizontal ? undefined : { height }}
+      data-segments={segments}>
+      {Array.from({ length: segments }).map((_, i) => <i key={i} className="lit" data-zone={i < 3 ? 'red' : i < 6 ? 'amber' : 'green'} />)}
+      <div className="dj-vu-cover" ref={coverRef} />
+      <div className="dj-vu-hold" ref={holdRef} style={{ [horizontal ? 'width' : 'height']: `${100 / segments}%` }} />
     </div>
   )
 }

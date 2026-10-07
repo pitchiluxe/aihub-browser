@@ -82,7 +82,13 @@ export default function HolidayLayer({ holiday }: { holiday: Holiday }) {
     const ro = new ResizeObserver(resize)
     ro.observe(canvas)
 
+    let hiddenTimer = 0
     const draw = () => {
+      // Hidden behind another tab (display: none): rest, and look again shortly.
+      if (!canvas.offsetParent) {
+        hiddenTimer = window.setTimeout(() => { rafRef.current = requestAnimationFrame(draw) }, 500)
+        return
+      }
       ctx.clearRect(0, 0, W, H)
       for (let i = 0; i < parts.length; i++) {
         const p = parts[i]
@@ -115,6 +121,7 @@ export default function HolidayLayer({ holiday }: { holiday: Holiday }) {
 
     return () => {
       cancelAnimationFrame(rafRef.current)
+      window.clearTimeout(hiddenTimer)
       ro.disconnect()
     }
   }, [holiday])
