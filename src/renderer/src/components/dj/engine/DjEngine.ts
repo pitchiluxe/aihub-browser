@@ -346,10 +346,11 @@ export class Deck extends Emitter {
     this.effect.output.connect(this.wet).connect(this.postFx)
 
     this.preAnalyser = ctx.createAnalyser(); this.preAnalyser.fftSize = 1024
-    this.postFx.connect(this.preAnalyser)
+    // Tapped before the channel EQ and filter: the waveform shows the song, not a bass swap or filter sweep in progress.
+    this.trim.connect(this.preAnalyser)
     const lowTap = ctx.createBiquadFilter(); lowTap.type = 'lowpass'; lowTap.frequency.value = 150
     this.lowAnalyser = ctx.createAnalyser(); this.lowAnalyser.fftSize = 1024
-    this.postFx.connect(lowTap).connect(this.lowAnalyser)
+    this.trim.connect(lowTap).connect(this.lowAnalyser)
 
     this.fader = ctx.createGain()
     this.xfade = ctx.createGain()
@@ -391,8 +392,8 @@ export class Deck extends Emitter {
 
   // ── state ──
   get isYouTube(): boolean { return !!this.track?.youtubeId }
-  /** False only for a YouTube deck whose audio could not be captured: then just volume works. */
-  get fullControl(): boolean { return !this.isYouTube || !!this.yt?.captured }
+  /** False only for a YouTube deck whose audio capture failed: then just volume works. (Before it is tried — loading, not yet playing — the full mixer shows as available.) */
+  get fullControl(): boolean { return !this.isYouTube || !this.yt?.captureFailed }
   get loading(): boolean { return this.isYouTube && !!this.yt?.loading }
   get adPlaying(): boolean { return this.isYouTube && !!this.yt?.ad }
   get playing(): boolean {

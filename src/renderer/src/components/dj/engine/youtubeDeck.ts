@@ -53,6 +53,8 @@ export class YouTubeDeck {
   audioStream: MediaStream | null = null
   /** True when the deck's audio comes through Web Audio rather than straight out of the player. */
   captured = false
+  /** Capture was tried and failed: the song plays straight from the player with only volume to mix. */
+  captureFailed = false
 
   private paused = true
   private ended = false
@@ -225,12 +227,14 @@ export class YouTubeDeck {
       if (!id) throw new Error('no capture id')
       this.audioStream = await captureTab(id, false)
       this.captured = true
+      this.captureFailed = false
       void ytBridge().cmd(this.deck, 'audible', false)
     } catch {
       // Without a capture the song still plays — straight out of the player,
       // with volume as the only mixer control, like a plain embed.
       this.audioStream = null
       this.captured = false
+      this.captureFailed = true
       void ytBridge().cmd(this.deck, 'audible', true)
     }
   }
