@@ -171,7 +171,7 @@
 
 /* ── Picker ─────────────────────────────────────────────────────────────── */
 .aihub-dj .dj-theme-menu { width: 330px; max-height: 72vh; overflow: auto; }
-.aihub-dj .dj-look-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 8px; }
+.aihub-dj .dj-look-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
 .aihub-dj .dj-out-menu .dj-look-row button { display: flex !important; flex-direction: column; align-items: center; gap: 3px; padding: 5px 2px; border: 1px solid #2f3136; border-radius: 6px; font-size: 11px; text-align: center; }
 .aihub-dj .dj-out-menu .dj-look-row button.on { border-color: #f97316; }
 .aihub-dj .dj-look-ico { width: 34px; height: 22px; border-radius: 4px; }

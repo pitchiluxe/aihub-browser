@@ -20,6 +20,8 @@ import { ScratchVoice } from './scratch'
 import { YouTubeScan } from './youtubeScan'
 import { LiveWave } from './liveWave'
 import { LocalScan } from './localScan'
+import { Sampler } from './sampler'
+import { keyMatch, parseKey, type KeyMatch, type MusicalKey } from './key'
 
 export interface DjTrack {
   token: string
@@ -406,6 +408,13 @@ export class Deck extends Emitter {
   }
   get bpm(): number | null { return this.analysis?.bpm ?? this.liveBpm ?? this.scanBpm ?? this.track?.tagBpm ?? null }
   get rate(): number { return 1 + this.pitch }
+  /** Key read from the audio, or failing that from the file's tag. */
+  get musicalKey(): MusicalKey | null { return this.analysis?.key ?? parseKey(this.track?.key) }
+  /** How this song's key sits with the song on the other side of the mixer; null when either is unknown. */
+  get harmonic(): KeyMatch | null {
+    const other = this.engine.decks[this.id === 'A' ? 'B' : this.id === 'B' ? 'A' : this.id === 'C' ? 'D' : 'C']
+    return other.track ? keyMatch(this.musicalKey, other.musicalKey) : null
+  }
   get effectiveBpm(): number | null { const b = this.bpm; return b ? b * this.rate : null }
   get beatLen(): number { const b = this.bpm; return b ? 60 / b : 0.5 }
   get firstBeat(): number { return this.analysis?.bpm ? this.analysis.firstBeat : this.liveFirstBeat }
@@ -1028,6 +1037,12 @@ export class DjEngine extends Emitter {
   readonly cueBus: GainNode
   readonly decks: Record<DeckId, Deck>
   private master: GainNode
+  /** Dips the music (not the sampler) while the AI DJ speaks. */
+  private duckGain: GainNode
+  readonly sampler: Sampler
+  /** Last stage before the speakers: muted in Sandbox (meters, headphones and the recorder tap earlier). */
+  private speakerOut: GainNode
+  sandbox = false
   private limiter: DynamicsCompressorNode
   private meterL: AnalyserNode
   private meterR: AnalyserNode
@@ -1073,12 +1088,17 @@ export class DjEngine extends Emitter {
     this.limiter.ratio.value = 20
     this.limiter.attack.value = 0.002
     this.limiter.release.value = 0.12
-    this.masterIn.connect(this.master).connect(this.limiter).connect(this.ctx.destination)
+    this.duckGain = this.ctx.createGain()
+    this.masterIn.connect(this.duckGain).connect(this.master).connect(this.limiter)
+    this.sampler = new Sampler(this.ctx, this.master)
+    this.sampler.setLevel(0.8)
 
     const split = this.ctx.createChannelSplitter(2)
     this.meterL = this.ctx.createAnalyser(); this.meterL.fftSize = 1024
     this.meterR = this.ctx.createAnalyser(); this.meterR.fftSize = 1024
     this.limiter.connect(split)
+    this.speakerOut = this.ctx.createGain()
+    this.limiter.connect(this.speakerOut).connect(this.ctx.destination)
     split.connect(this.meterL, 0)
     split.connect(this.meterR, 1)
 
@@ -1141,6 +1161,15 @@ export class DjEngine extends Emitter {
     if (p >= 1) { this.fade = null; this.emit() }
   }
 
+  /** Lower the music to `level` (0..1) for `seconds`, then bring it back — for a voice over the mix. */
+  duck(level: number, seconds: number): void {
+    const g = this.duckGain.gain
+    const t = this.ctx.currentTime
+    g.cancelScheduledValues(t)
+    g.setTargetAtTime(Math.min(1, Math.max(0.05, level)), t, 0.12)
+    g.setTargetAtTime(1, t + seconds, 0.35)
+  }
+
   setMasterVolume(v: number): void {
     this.masterVolume = v
     this.master.gain.setTargetAtTime(masterGain(v), this.ctx.currentTime, SMOOTH)
@@ -1173,6 +1202,19 @@ export class DjEngine extends Emitter {
     for (const id of DECK_IDS) this.decks[id].applyTrim()
     this.emit()
   }
+
+  /** Sandbox: rehearse a mix — the speakers go silent while the meters, headphones and recorder keep running. */
+  setSandbox(on: boolean): void {
+    this.sandbox = on
+    this.speakerOut.gain.setTargetAtTime(on ? 0 : 1, this.ctx.currentTime, SMOOTH)
+    // With a headphone output chosen, the rehearsal is heard there at full master level.
+    if (on && this.phonesDevice) this.setCueMix(1)
+    this.emit()
+  }
+
+  /** Master spectrum, 0..255 per bin, into `out` (length = frequencyBinCount of the analyser). */
+  masterSpectrum(out: Uint8Array<ArrayBuffer>): void { this.meterL.getByteFrequencyData(out) }
+  get spectrumBins(): number { return this.meterL.frequencyBinCount }
 
   masterDb(): [number, number] {
     return [peakDb(this.meterL, this.meterBuf), peakDb(this.meterR, this.meterBuf)]

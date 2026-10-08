@@ -97,6 +97,13 @@ function MiniClock({ deck }: { deck: Deck }) {
   return <span className={`dj-mini-clock ${deck.active ? 'dj-live' : ''}`}><b>{deck.id}</b><span ref={ref} /></span>
 }
 
+const HARMONIC_HINT: Record<string, string> = {
+  perfect: 'same key as the other deck — a perfect blend',
+  smooth: 'mixes smoothly with the other deck',
+  energy: 'a lift in energy against the other deck',
+  clash: 'clashes with the other deck — mix quickly or use the EQ',
+}
+
 export function DeckInfo({ deck, onDropTrack, clock = false }: { deck: Deck; onDropTrack: DeckDrop; clock?: boolean }) {
   useDeck(deck)
   const t = deck.track
@@ -111,7 +118,11 @@ export function DeckInfo({ deck, onDropTrack, clock = false }: { deck: Deck; onD
     <div className="dj-lcd dj-readout">
       <div className="dj-ro-row"><span>BPM</span><b className="dj-lcd-mid">{bpm ? bpm.toFixed(2) : '00.00'}</b></div>
       <div className="dj-ro-row"><span>PITCH</span><b>{(pitchPct >= 0 ? '+' : '') + pitchPct.toFixed(1)}</b></div>
-      <div className="dj-ro-row"><span>KEY</span><b>{t?.key || ''}</b>{deck.keyLock && <Lock size={9} />}</div>
+      <div className="dj-ro-row" title={deck.musicalKey ? `${deck.musicalKey.name}${deck.harmonic ? ` — ${HARMONIC_HINT[deck.harmonic]}` : ''}` : undefined}>
+        <span>KEY</span>
+        <b className={deck.harmonic ? `dj-key dj-key-${deck.harmonic}` : 'dj-key'}>{deck.musicalKey?.camelot ?? t?.key ?? ''}</b>
+        {deck.keyLock && <Lock size={9} />}
+      </div>
     </div>
   )
   return (

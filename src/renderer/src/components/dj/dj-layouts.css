@@ -156,3 +156,32 @@
 .aihub-dj .dj-layout-ico-party i:nth-child(1) { left: 3px; width: 24px; top: 3px; bottom: 3px; background: #ef4444; }
 .aihub-dj .dj-layout-ico-party i:nth-child(2) { left: 30px; right: 3px; top: 5px; height: 4px; }
 .aihub-dj .dj-layout-ico-party i:nth-child(3) { left: 30px; right: 6px; top: 13px; height: 3px; }
+
+/* ── Video screen rises into the empty gap above the mixer ──
+   The track-info row leaves its middle cell empty; with the VIDEO view on, the
+   screen climbs up through it (info row 88 + gap 6 + mixer padding/border 5),
+   and the MIXER / VIDEO tabs drop under the screen so nothing else moves. */
+.aihub-dj .dj-mixer.dj-video-up { overflow: visible; z-index: 6; margin-top: -94px; height: calc(100% + 94px); }
+.aihub-dj .dj-mixer.dj-video-up .dj-mixer-video { order: 1; position: relative; z-index: 2; margin: 8px 4px 8px; height: calc(158px + 94px - 16px); padding: 0; }
+.aihub-dj .dj-mixer.dj-video-up .dj-mixer-tabs { order: 2; position: relative; z-index: 3; }
+.aihub-dj .dj-mixer.dj-video-up .dj-mixer-faders { order: 3; }
+.aihub-dj .dj-mixer.dj-video-up .dj-xfader { order: 4; }
+.aihub-dj[data-dj-layout='video'] .dj-mixer.dj-video-up .dj-mixer-video { height: auto; }
+/* Monitor bezel: glass front in a black frame, so it reads as a real display. */
+.aihub-dj .dj-mixer.dj-video-up .dj-video { border: 3px solid #0a0a0c; border-radius: 6px; box-shadow: 0 0 0 1px #3a3d44, inset 0 0 18px rgba(0,0,0,0.6); }
+.aihub-dj .dj-mixer.dj-video-up .dj-video::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(155deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 32%); }
+
+/* ── Harmonic key chip: the Camelot code lights up by how it mixes with the other deck ── */
+.aihub-dj .dj-readout .dj-key { padding: 0 3px; border-radius: 2px; }
+.aihub-dj .dj-readout .dj-key-perfect { background: #16a34a; color: #fff; }
+.aihub-dj .dj-readout .dj-key-smooth { background: #15803d; color: #ecfdf5; }
+.aihub-dj .dj-readout .dj-key-energy { background: #ca8a04; color: #fff; }
+.aihub-dj .dj-readout .dj-key-clash { background: #b91c1c; color: #fff; }
+
+/* ── Title bar: drag down to enlarge the cover thumbnails above (VirtualDJ style) ── */
+.aihub-dj .dj-coverflow { height: calc(var(--cf, 124px) + 22px); }
+.aihub-dj .dj-cf-item { width: var(--cf, 124px); height: var(--cf, 124px); }
+.aihub-dj .dj-thead { position: relative; cursor: row-resize; touch-action: none; }
+.aihub-dj .dj-thead .dj-th { cursor: row-resize; }
+.aihub-dj .dj-grip { position: absolute; left: 50%; bottom: 1px; width: 34px; height: 3px; margin-left: -17px; border-radius: 2px; background: repeating-linear-gradient(90deg, #6b7280 0 3px, transparent 3px 5px); pointer-events: none; }
+.aihub-dj .dj-thead:hover .dj-grip { background: repeating-linear-gradient(90deg, #f97316 0 3px, transparent 3px 5px); }

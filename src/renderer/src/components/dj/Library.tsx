@@ -32,6 +32,10 @@ const PLACE_ICONS: Record<string, React.ReactNode> = {
   Documents: <FileText size={13} />, Videos: <Video size={13} className="dj-ic-video" />, Home: <Home size={13} />,
 }
 
+const CF_KEY = 'aihub-dj-cover-size'
+const CF_MIN = 124
+const CF_MAX = 230
+
 interface Props {
   onLoad: (track: DjTrack, deck?: DeckId) => void
   sidelist: DjTrack[]
@@ -55,6 +59,38 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
   const [searchResults, setSearchResults] = useState<{ q: string; truncated: boolean } | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  // Thumbnail size, dragged from the title bar like VirtualDJ: pull it down and the covers above get bigger.
+  const [cfSize, setCfSizeState] = useState(() => { try { const v = Number(localStorage.getItem(CF_KEY)); return v >= CF_MIN && v <= CF_MAX ? v : CF_MIN } catch { return CF_MIN } })
+  const setCfSize = (h: number) => {
+    const v = Math.round(Math.min(CF_MAX, Math.max(CF_MIN, h)))
+    setCfSizeState(v)
+    try { localStorage.setItem(CF_KEY, String(v)) } catch { /* optional */ }
+  }
+  const dragSize = useRef<{ y: number; h: number; moved: boolean } | null>(null)
+  const onHeadDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    dragSize.current = { y: e.clientY, h: cfSize, moved: false }
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+  const onHeadMove = (e: React.PointerEvent) => {
+    const d = dragSize.current
+    if (!d) return
+    // The console is CSS-zoomed to fit the tab: convert screen pixels back to layout pixels.
+    const zoom = Number((getComputedStyle(e.currentTarget.closest('.aihub-dj') as Element) as any).zoom) || 1
+    const dy = (e.clientY - d.y) / zoom
+    if (!d.moved && Math.abs(dy) < 4) return
+    d.moved = true
+    sortBlock.current = true
+    setCfSize(d.h + dy)
+  }
+  const onHeadUp = (e: React.PointerEvent) => {
+    const d = dragSize.current
+    dragSize.current = null
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* already released */ }
+    // A drag is not a sort click.
+    if (d?.moved) window.setTimeout(() => { sortBlock.current = false }, 0)
+  }
+  const sortBlock = useRef(false)
   const [source, setSource] = useState<'local' | 'youtube'>('local')
   const [ytTracks, setYtTracks] = useState<DjTrack[]>([])
   const [ytQuery, setYtQuery] = useState('')
@@ -299,16 +335,18 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
           </span>
         </div>
 
-        {showCovers && <CoverFlow rows={rows.map(r => r.t)} index={selIndex} onSelect={t => setSelected(t.token)} onLoad={onLoad} onStep={step} />}
+        {showCovers && <CoverFlow size={cfSize} rows={rows.map(r => r.t)} index={selIndex} onSelect={t => setSelected(t.token)} onLoad={onLoad} onStep={step} />}
 
         <div className="dj-table">
-          <div className="dj-thead">
+          <div className="dj-thead" onPointerDown={onHeadDown} onPointerMove={onHeadMove} onPointerUp={onHeadUp} onPointerCancel={onHeadUp}
+            title="Drag this bar down to make the thumbnails above bigger (double-click to reset)" onDoubleClick={() => setCfSize(CF_MIN)}>
             {([['title', 'Title'], ['artist', 'Artist'], ['album', 'Album'], ['length', 'Length'], ['bpm', 'Bpm'], ['key', 'Key']] as [SortKey, string][]).map(([k, label]) => (
-              <button type="button" key={k} className={`dj-th dj-c-${k}`} onClick={() => toggleSort(k)}>
+              <button type="button" key={k} className={`dj-th dj-c-${k}`} onClick={() => { if (!sortBlock.current) toggleSort(k) }}>
                 {label}{sort?.key === k ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
               </button>
             ))}
             <span className="dj-th dj-c-act" />
+            <i className="dj-grip" aria-hidden="true" />
           </div>
           <div className="dj-tbody">
             {error && <div className="dj-empty">{error}</div>}
@@ -464,7 +502,8 @@ function TreeNode({ folder, icon, current, onOpen, depth = 0, onRemove }: {
   )
 }
 
-function CoverFlow({ rows, index, onSelect, onLoad, onStep }: {
+function CoverFlow({ size, rows, index, onSelect, onLoad, onStep }: {
+  size: number
   rows: DjTrack[]
   index: number
   onSelect: (t: DjTrack) => void
@@ -478,21 +517,23 @@ function CoverFlow({ rows, index, onSelect, onLoad, onStep }: {
     const n = Math.trunc(acc.current / 100)
     if (n) { acc.current -= n * 100; onStep(n) }
   }
-  if (!rows.length) return <div className="dj-coverflow" />
-  const span = 3
+  const k = size / 96
+  const box = { '--cf': `${size}px` } as React.CSSProperties
+  if (!rows.length) return <div className="dj-coverflow" style={box} />
+  const span = 4
   const items: { t: DjTrack; off: number }[] = []
   for (let o = -span; o <= span; o++) {
     const t = rows[index + o]
     if (t) items.push({ t, off: o })
   }
   return (
-    <div className="dj-coverflow" onWheel={onWheel} title="Scroll to flip through songs">
+    <div className="dj-coverflow" style={box} onWheel={onWheel} title="Scroll to flip through songs">
       {items.map(({ t, off }) => {
         const abs = Math.abs(off)
         const style: React.CSSProperties = {
           transform: off === 0
-            ? 'translateX(-50%) translateZ(40px)'
-            : `translateX(calc(-50% + ${off * 72 + Math.sign(off) * 46}px)) rotateY(${off < 0 ? 52 : -52}deg) scale(${1 - abs * 0.06})`,
+            ? `translateX(-50%) translateZ(${40 * k}px)`
+            : `translateX(calc(-50% + ${Math.sign(off) * (0.82 + 0.6 * (abs - 1)) * size}px)) rotateY(${off < 0 ? 52 : -52}deg) scale(${1 - abs * 0.03})`,
           zIndex: 10 - abs,
           opacity: abs === span ? 0.5 : 1,
         }

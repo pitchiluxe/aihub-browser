@@ -6,6 +6,8 @@
  * one time base regardless of the file's sample rate.
  */
 
+import { detectKey, type MusicalKey } from './key'
+
 export const ENV_RATE = 100 // envelope frames per second
 
 export interface Envelope {
@@ -21,6 +23,8 @@ export interface Analysis {
   /** Seconds to the first downbeat of the detected grid. */
   firstBeat: number
   env: Envelope
+  /** Musical key read from the audio; null when the music is too ambiguous. */
+  key: MusicalKey | null
 }
 
 /** Downmix an AudioBuffer-like object to mono. */
@@ -170,8 +174,11 @@ export function bestLag(play: Float32Array, scan: Float32Array, from: number, to
 }
 
 export function analyze(channels: Float32Array[], sampleRate: number): Analysis {
-  const env = buildEnvelope(toMono(channels), sampleRate)
+  const mono = toMono(channels)
+  const env = buildEnvelope(mono, sampleRate)
   const onset = onsetCurve(env)
   const bpm = detectBpm(onset)
-  return { bpm, firstBeat: bpm ? detectFirstBeat(onset, bpm) : 0, env }
+  let key: MusicalKey | null = null
+  try { key = detectKey(mono, sampleRate) } catch { /* the key is a nicety — never lose the tempo over it */ }
+  return { bpm, firstBeat: bpm ? detectFirstBeat(onset, bpm) : 0, env, key }
 }

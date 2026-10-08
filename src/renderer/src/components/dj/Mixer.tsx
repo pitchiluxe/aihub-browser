@@ -53,7 +53,7 @@ export default function Mixer({ engine, view, setView, onBigVideo, fadeSeconds, 
   // Fade across to whichever side the fader is further from.
   const fadeAcross = () => engine.fading ? engine.setCrossfader(engine.crossfader) : engine.fadeTo(engine.crossfader < 0.5 ? 1 : 0, fadeSeconds)
   return (
-    <div className={`dj-mixer dj-panel ${four ? 'dj-mixer-four' : ''}`}>
+    <div className={`dj-mixer dj-panel ${four ? 'dj-mixer-four' : ''} ${view === 'video' && !four ? 'dj-video-up' : ''}`}>
       <div className="dj-mixer-tabs">
         <span>{four ? 'CH C · A' : 'CH A'}</span>
         <div className="dj-mixer-switch" role="tablist">

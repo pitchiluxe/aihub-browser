@@ -7,6 +7,7 @@
  * It respects the DJ: while a hand is on a record, or a song has been paused
  * part-way through, Automix waits instead of loading over it.
  */
+import { planTransition, TransitionFx } from './transitionFx'
 import { Emitter, type Deck, type DeckId, type DjEngine, type DjTrack } from './DjEngine'
 
 /** Start the next song this many seconds before the end. */
@@ -21,12 +22,17 @@ export interface AutoMixerHooks {
   /** A deck was loaded by Automix (true) or Mix now (false). */
   loaded(deck: DeckId, auto: boolean): void
   say(msg: string): void
+  /** A song is about to come in — the moment for a voice drop. */
+  mixing?(track: DjTrack): void
 }
 
 export class AutoMixer extends Emitter {
   on = false
   /** Crossfade length, seconds. */
   fadeSeconds = 10
+  /** Bass swaps and filter sweeps during blends, chosen from the two songs' tempos. */
+  proTransitions = true
+  private fx: TransitionFx | null = null
   /** The song each deck finished (or was faded out of) — free to be replaced. */
   private spent = new Map<DeckId, DjTrack>()
   private loadingNext = false
@@ -43,6 +49,7 @@ export class AutoMixer extends Emitter {
     if (on) this.timer = window.setInterval(() => this.tick(), TICK_MS)
     this.emit()
   }
+  setProTransitions(on: boolean): void { this.proTransitions = on; this.emit() }
   setFadeSeconds(s: number): void { this.fadeSeconds = Math.max(2, Math.min(30, s)); this.emit() }
 
   get busy(): boolean { return !!this.transition || this.loadingNext }
@@ -67,16 +74,28 @@ export class AutoMixer extends Emitter {
 
   private async blendInto(target: Deck, seconds: number): Promise<void> {
     const live = this.other(target)
+    if (target.track) this.hooks.mixing?.(target.track)
     if (!live.active) {
       this.engine.setCrossfader(this.side(target.id))
       await target.play()
       return
     }
-    target.sync(live)
-    if (target.time < 1 && target.gridKnown) target.seek(Math.max(0, target.firstBeat))
+    const plan = this.proTransitions
+      ? planTransition(live.bpm, target.bpm, seconds)
+      : { style: 'blend' as const, seconds, sync: true }
+    if (plan.sync) target.sync(live)
+    if (target.time < 1 && target.gridKnown && plan.sync) target.seek(Math.max(0, target.firstBeat))
+    // EQ / filter positions must be set before the new song makes a sound.
+    this.fx?.finish()
+    this.fx = null
+    if (this.proTransitions) {
+      this.fx = new TransitionFx(this.engine, live, target, plan)
+      this.fx.prepare()
+    }
     await target.play()
     this.transition = { from: live.id, to: target.id }
-    this.engine.fadeTo(this.side(target.id), seconds)
+    this.engine.fadeTo(this.side(target.id), plan.seconds)
+    this.fx?.run()
     this.emit()
   }
 
@@ -144,5 +163,5 @@ export class AutoMixer extends Emitter {
     }
   }
 
-  dispose(): void { this.setOn(false) }
+  dispose(): void { this.fx?.finish(); this.setOn(false) }
 }

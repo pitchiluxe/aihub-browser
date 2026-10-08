@@ -5,7 +5,7 @@
  * keeps playing while the user browses in other tabs.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { Circle, Headphones, Minus, Palette, Plus, Settings2, Square } from 'lucide-react'
+import { Circle, Clipboard, Headphones, Minus, Palette, Plus, Settings2, Square } from 'lucide-react'
 import { DjEngine, type DeckId, type DjTrack } from './engine/DjEngine'
 import { AutoMixer } from './engine/autoMixer'
 import { DeckClock, DeckInfo, DeckPads, Turntable } from './DeckUI'
@@ -17,6 +17,11 @@ import { ListeningTracker } from './listeningTracker'
 import PartyView from './PartyView'
 import { takeNext } from './ytQueue'
 import { learningEnabled, setLearning, subscribeTaste, tasteVersion } from './taste'
+import { DjEnvContext, type DjEnv } from './djActions'
+import { announce, setVoiceEnabled, subscribeVoice, voiceEnabled } from './djVoice'
+import { getEnergy, introLine } from './djBrain'
+import { SetLog } from './setLog'
+import { CpuMeter, SamplerBank, SandboxBar, ScopeButton } from './TopWidgets'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
 import { djApi, trackByToken, toTrack, loadMeta } from './libraryData'
 import { HFader, useRafThrottled, VuMeter } from './controls'
@@ -24,6 +29,7 @@ import './dj.css'
 import './dj-pro.css'
 import './dj-themes.css'
 import './dj-layouts.css'
+import './dj-real.css'
 
 export interface DjTheme { id: string; name: string; swatch: string; dark?: boolean; lightBg?: boolean }
 export const DJ_THEMES: DjTheme[] = [
@@ -45,10 +51,27 @@ export const DJ_THEMES: DjTheme[] = [
   { id: 'royal', name: 'Royal', swatch: 'linear-gradient(#23306a, #c9a227)', dark: true },
   { id: 'lava', name: 'Lava', swatch: 'linear-gradient(#2a110a, #ea580c)', dark: true },
   { id: 'mint', name: 'Mint', swatch: 'linear-gradient(#ecfcf5, #a6dfc9)' },
+  { id: 'clubblack', name: 'Club Black', swatch: 'linear-gradient(#34363b, #121315)', dark: true },
+  { id: 'graphite', name: 'Graphite', swatch: 'linear-gradient(#8a8f97, #565b63)', dark: true },
+  { id: 'champagne', name: 'Champagne', swatch: 'linear-gradient(#efe3c8, #bfa774)' },
+  { id: 'bakelite', name: 'Bakelite', swatch: 'linear-gradient(#e8dcc2, #bba97f)' },
+  { id: 'chrome', name: 'Chrome', swatch: 'linear-gradient(#ffffff, #a9afb8 55%, #eef0f3)' },
+  { id: 'gunmetal', name: 'Gunmetal', swatch: 'linear-gradient(#5b6572, #303741)', dark: true },
+  { id: 'redline', name: 'Redline', swatch: 'linear-gradient(#5a1a1f, #1a0507)', dark: true },
+  { id: 'pianowhite', name: 'Piano White', swatch: 'linear-gradient(#ffffff, #dfe3e8)', lightBg: true },
+  { id: 'rosewood', name: 'Rosewood', swatch: 'repeating-linear-gradient(92deg, #5a2a1c 0 3px, #6a3322 3px 7px)', dark: true },
+  { id: 'titanium', name: 'Titanium', swatch: 'linear-gradient(#c4c7cc, #868a92)' },
+  { id: 'midnightblue', name: 'Navy', swatch: 'linear-gradient(#1f3a63, #0f1f38)', dark: true },
+  { id: 'emeraldglass', name: 'Emerald', swatch: 'linear-gradient(#14543f, #082a20)', dark: true },
+  { id: 'copper', name: 'Copper', swatch: 'linear-gradient(#e8b090, #8f4e30)' },
+  { id: 'stealth', name: 'Stealth', swatch: 'linear-gradient(#17181b, #000)', dark: true },
+  { id: 'sand', name: 'Sand', swatch: 'linear-gradient(#e9dfcf, #bfae90)' },
+  { id: 'violetnight', name: 'Violet Night', swatch: 'linear-gradient(#3b2a5e, #1b122f)', dark: true },
 ]
 
 /** Looks restyle the hardware itself; any look goes with any colour theme. */
 export const DJ_LOOKS: { id: string; name: string; preview: string }[] = [
+  { id: 'studio', name: 'Studio', preview: 'linear-gradient(90deg, #6e4428 0 14%, #cfd2d6 14% 86%, #6e4428 86%)' },
   { id: 'classic', name: 'Classic', preview: 'linear-gradient(180deg, #f3f4f6, #b9bec5)' },
   { id: 'flat', name: 'Flat', preview: 'linear-gradient(#d1d5db, #d1d5db)' },
   { id: 'club', name: 'Club', preview: 'linear-gradient(#111, #111) padding-box, linear-gradient(90deg, #22d3ee, #c026d3) border-box' },
@@ -72,6 +95,7 @@ const THEME_KEY = 'aihub-dj-theme'
 const VIEW_KEY = 'aihub-dj-mixer-view'
 const FADE_KEY = 'aihub-dj-fade-seconds'
 const AUTOGAIN_KEY = 'aihub-dj-autogain'
+const PROFX_KEY = 'aihub-dj-pro-transitions'
 const FADE_CHOICES = [4, 6, 8, 10, 16]
 
 function readPref(key: string): string | null {
@@ -106,7 +130,7 @@ function Console({ engine }: { engine: DjEngine }) {
     setSidelistState(s => { const n = fn(s); sideRef.current = n; return n })
   }, [])
   const [theme, setThemeState] = useState(savedTheme)
-  const [look, setLookState] = useState(() => { const l = readPref(LOOK_KEY); return DJ_LOOKS.some(x => x.id === l) ? (l as string) : 'classic' })
+  const [look, setLookState] = useState(() => { const l = readPref(LOOK_KEY); return DJ_LOOKS.some(x => x.id === l) ? (l as string) : 'studio' })
   const [layout, setLayoutState] = useState(() => { const l = readPref(LAYOUT_KEY); return DJ_LAYOUTS.some(x => x.id === l) ? (l as string) : 'classic' })
   const setLayout = (l: string) => { setLayoutState(l); writePref(LAYOUT_KEY, l) }
   // Essentials and Video DJ leave out the stems / effects / loop panels.
@@ -146,12 +170,16 @@ function Console({ engine }: { engine: DjEngine }) {
       },
       loaded: (deck, auto) => tracker.noteLoad(deck, auto),
       say,
+      mixing: t => announce(engine, introLine(t.artist, t.title, getEnergy())),
     })
     const saved = parseFloat(readPref(FADE_KEY) || '')
     if (saved >= 2 && saved <= 30) m.setFadeSeconds(saved)
+    m.setProTransitions(readPref(PROFX_KEY) !== 'off')
     return m
   }, [engine, tracker, setSidelist, say])
   useEffect(() => () => mixer.dispose(), [mixer])
+  const setLog = useMemo(() => new SetLog(engine), [engine])
+  useEffect(() => () => setLog.dispose(), [setLog])
   useSyncExternalStore(mixer.subscribe, mixer.getVersion)
   const automix = mixer.on
   const setAutomix = useCallback((on: boolean) => mixer.setOn(on), [mixer])
@@ -171,6 +199,17 @@ function Console({ engine }: { engine: DjEngine }) {
 
   const mixNow = useCallback((track: DjTrack) => { void mixer.mixNow(track) }, [mixer])
 
+  // What the AI DJ assistant may reach — the same calls the buttons make.
+  const env = useMemo<DjEnv>(() => ({
+    engine, mixer, mixNow, say,
+    playNext: ts => setSidelist(s => [...ts, ...s]),
+    pullNext: () => {
+      const [t, ...rest] = sideRef.current
+      if (t) { setSidelist(() => rest); return t }
+      return takeNext()
+    },
+  }), [engine, mixer, mixNow, say, setSidelist])
+
   const dropOn = (id: DeckId) => async (src: string | File) => {
     if (typeof src === 'string') {
       const t = trackByToken(src)
@@ -187,9 +226,10 @@ function Console({ engine }: { engine: DjEngine }) {
   useDjShortcuts(engine, mixer, fit.ref)
 
   return (
+    <DjEnvContext.Provider value={env}>
     <div className="aihub-dj" data-dj-theme={theme} data-dj-look={look} data-dj-layout={layout} data-dj-dark={themeInfo?.dark ? '1' : '0'}
       data-dj-light-bg={themeInfo?.lightBg ? '1' : '0'} ref={fit.ref} style={fit.style}>
-      <TopBar engine={engine} mixer={mixer} say={say} theme={theme} setTheme={setTheme} look={look} setLook={setLook}
+      <TopBar engine={engine} mixer={mixer} setLog={setLog} say={say} theme={theme} setTheme={setTheme} look={look} setLook={setLook}
         layout={layout} setLayout={setLayout} uiZoom={uiZoom} setUiZoom={setUiZoom} />
 
       {layout === 'party' ? (
@@ -250,6 +290,7 @@ function Console({ engine }: { engine: DjEngine }) {
 
       {toast && <div className="dj-toast">{toast}</div>}
     </div>
+    </DjEnvContext.Provider>
   )
 }
 
@@ -293,6 +334,14 @@ function useDjShortcuts(engine: DjEngine, mixer: AutoMixer, root: React.RefObjec
         case 'arrowdown': engine.setCrossfader(0.5); break
         case 'm': engine.fadeTo(engine.crossfader < 0.5 ? 1 : 0, mixer.fadeSeconds); break
         case 'a': mixer.setOn(!mixer.on); break
+        case 'z': engine.sampler.hit('horn'); break
+        case 'x': engine.sampler.hit('siren'); break
+        case 'c': engine.sampler.hit('laser'); break
+        case 'v': engine.sampler.hit('riser'); break
+        case 'b': engine.sampler.hit('impact'); break
+        case 'n': engine.sampler.hit('clap'); break
+        case 'g': engine.sampler.hit('rewind'); break
+        case 'h': engine.sampler.hit('tom'); break
         default: used = false
       }
       if (used) e.preventDefault()
@@ -304,7 +353,7 @@ function useDjShortcuts(engine: DjEngine, mixer: AutoMixer, root: React.RefObjec
 
 /** The size the console is designed for; smaller tabs scale it down to fit. */
 const DESIGN_W = 1300
-const DESIGN_H = 880
+const DESIGN_H = 892
 const ZOOM_KEY = 'aihub-dj-zoom'
 const ZOOM_MIN = 0.55
 const ZOOM_MAX = 1
@@ -349,20 +398,22 @@ function useFitToTab(userZoom: number) {
   return { ref, style }
 }
 
-function TopBar({ engine, mixer, say, theme, setTheme, look, setLook, layout, setLayout, uiZoom, setUiZoom }: {
-  engine: DjEngine; mixer: AutoMixer; say: (m: string) => void; theme: string; setTheme: (t: string) => void
+function TopBar({ engine, mixer, setLog, say, theme, setTheme, look, setLook, layout, setLayout, uiZoom, setUiZoom }: {
+  engine: DjEngine; mixer: AutoMixer; setLog: SetLog; say: (m: string) => void; theme: string; setTheme: (t: string) => void
   look: string; setLook: (l: string) => void; layout: string; setLayout: (l: string) => void; uiZoom: number; setUiZoom: (z: number) => void
 }) {
   useSyncExternalStore(engine.subscribe, engine.getVersion)
   useSyncExternalStore(mixer.subscribe, mixer.getVersion)
   useSyncExternalStore(subscribeTaste, tasteVersion)
+  useSyncExternalStore(setLog.subscribe, setLog.getVersion)
+  useSyncExternalStore(subscribeVoice, voiceEnabled)
   const clockRef = useRef<HTMLSpanElement>(null)
   const recRef = useRef<HTMLSpanElement>(null)
   const [recording, setRecording] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [menu, setMenu] = useState<'out' | 'theme' | 'settings' | null>(null)
+  const [menu, setMenu] = useState<'out' | 'theme' | 'settings' | 'scope' | null>(null)
   const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([])
-  const toggleMenu = (m: 'out' | 'theme' | 'settings') => setMenu(cur => (cur === m ? null : m))
+  const toggleMenu = (m: 'out' | 'theme' | 'settings' | 'scope') => setMenu(cur => (cur === m ? null : m))
   // A click anywhere outside the open menu closes it.
   useEffect(() => {
     if (!menu) return
@@ -431,6 +482,7 @@ function TopBar({ engine, mixer, say, theme, setTheme, look, setLook, layout, se
     <div className="dj-top">
       <div className="dj-brand"><span>AIHub</span><b>DJ</b></div>
       <div className="dj-lcd dj-top-clock"><span ref={clockRef} /></div>
+      <CpuMeter engine={engine} />
       <div className="dj-top-meter" title="Master level">
         <span>MASTER</span>
         <div className="dj-hmeter">
@@ -442,6 +494,8 @@ function TopBar({ engine, mixer, say, theme, setTheme, look, setLook, layout, se
         title="Automix — mix through the set list and the playing YouTube queue (A)">
         AUTOMIX {mixer.on ? 'ON' : 'OFF'}
       </button>
+      <SandboxBar engine={engine} say={say} />
+      <SamplerBank engine={engine} />
       <div className="dj-top-spacer" />
       <div className="dj-zoomctl" title="Console size">
         <button type="button" onClick={() => setUiZoom(uiZoom - 0.05)} disabled={uiZoom <= ZOOM_MIN} aria-label="Smaller"><Minus size={11} /></button>
@@ -455,6 +509,7 @@ function TopBar({ engine, mixer, say, theme, setTheme, look, setLook, layout, se
         </button>
         <span className="dj-lcd dj-rec-info" ref={recRef}>00:00 / 0 KB</span>
       </div>
+      <ScopeButton engine={engine} open={menu === 'scope'} toggle={() => toggleMenu('scope')} />
       <div className="dj-out">
         <button type="button" className={`dj-icon-btn dj-top-btn ${engine.phonesDevice ? 'dj-on dj-on-orange' : ''}`} onClick={openOutputs}
           title="Headphones (cue) output">
@@ -525,10 +580,31 @@ function TopBar({ engine, mixer, say, theme, setTheme, look, setLook, layout, se
                 ))}
               </div>
             </div>
+            <label className="dj-set-row" title="When both songs have a tempo: swap the basslines mid-blend. Otherwise: sweep a filter out and in.">
+              <input type="checkbox" checked={mixer.proTransitions} onChange={e => { mixer.setProTransitions(e.target.checked); writePref(PROFX_KEY, e.target.checked ? 'on' : 'off') }} />
+              Pro transitions — bass swap and filter sweeps
+            </label>
+            <label className="dj-set-row" title="The AI DJ announces the next song over the mix, dipping the music">
+              <input type="checkbox" checked={voiceEnabled()} onChange={e => setVoiceEnabled(e.target.checked)} />
+              DJ voice — announce the next song
+            </label>
             <label className="dj-set-row">
               <input type="checkbox" checked={learningEnabled()} disabled={IS_INCOGNITO} onChange={e => setLearning(e.target.checked)} />
               {IS_INCOGNITO ? 'Taste learning is off in private windows' : 'Learn my taste for the AI DJ (stays on this computer)'}
             </label>
+            <div className="dj-out-title">Tracklist <span className="dj-dim">({setLog.entries.length})</span></div>
+            <div className="dj-tracklist">
+              {setLog.entries.length === 0
+                ? <span className="dj-dim">Songs are listed here once they have been on air for a few seconds.</span>
+                : setLog.text(true).split('\n').map((l, i) => <div key={i}>{l}</div>)}
+            </div>
+            <div className="dj-set-row">
+              <button type="button" className="dj-seg-btn" disabled={!setLog.entries.length}
+                onClick={() => { void navigator.clipboard.writeText(setLog.text()).then(() => say('Tracklist copied — paste it under your mix')) }}>
+                <Clipboard size={11} /> Copy tracklist
+              </button>
+              <button type="button" className="dj-seg-btn" disabled={!setLog.entries.length} onClick={() => setLog.clear()}>Clear</button>
+            </div>
             <div className="dj-out-title">Keyboard</div>
             <div className="dj-keys">
               {SHORTCUTS.map(([k, what]) => <React.Fragment key={k}><kbd>{k}</kbd><span>{what}</span></React.Fragment>)}
@@ -553,6 +629,7 @@ const SHORTCUTS: [string, string][] = [
   ['↓', 'Centre the crossfader'],
   ['M', 'Fade across to the other deck'],
   ['A', 'Automix on / off'],
+  ['Z X C V B N G H', 'Sampler pads, left to right'],
 ]
 
 const HELP = [
@@ -562,6 +639,8 @@ const HELP = [
   'Mix now (⇄): blends a song in over the fade length while the other deck keeps playing.',
   'Scratch: hold the record and move it — it plays at the speed and direction of your hand. Let go and it spins back up.',
   'Rim: drag the outer edge while playing to nudge the tempo when beat-matching by ear.',
+  'Ask the DJ: type "skip", "more energy", "play Essence by Wizkid" or "hit the horn" in the AI tab — it understands plain speech.',
+  "Key: the colour of a deck's KEY box shows how it mixes with the other deck — green is in key, red clashes.",
   'AI DJ: "Let the AI take over" plays a set built from what you play, finish, skip and like (👍 / 👎 on each deck).',
   'Video: switch the mixer to VIDEO to watch YouTube and music videos, blended by the crossfader.',
   'Faders and knobs: drag, scroll or Shift-drag for fine control; double-click to reset.',
