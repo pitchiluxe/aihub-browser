@@ -21,7 +21,7 @@ import { DjEnvContext, type DjEnv } from './djActions'
 import { announce, setVoiceEnabled, subscribeVoice, voiceEnabled } from './djVoice'
 import { getEnergy, introLine } from './djBrain'
 import { SetLog } from './setLog'
-import { CpuMeter, SamplerBank, SandboxBar, ScopeButton } from './TopWidgets'
+import { CpuMeter, NowPlaying, SamplerBank, SandboxBar, ScopeButton } from './TopWidgets'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
 import { djApi, trackByToken, toTrack, loadMeta } from './libraryData'
 import { HFader, useRafThrottled, VuMeter } from './controls'
@@ -496,7 +496,7 @@ function TopBar({ engine, mixer, setLog, say, theme, setTheme, look, setLook, la
       </button>
       <SandboxBar engine={engine} say={say} />
       <SamplerBank engine={engine} />
-      <div className="dj-top-spacer" />
+      <NowPlaying engine={engine} />
       <div className="dj-zoomctl" title="Console size">
         <button type="button" onClick={() => setUiZoom(uiZoom - 0.05)} disabled={uiZoom <= ZOOM_MIN} aria-label="Smaller"><Minus size={11} /></button>
         <span>{Math.round(uiZoom * 100)}%</span>

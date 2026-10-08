@@ -5,9 +5,10 @@
  */
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AudioLines, Box } from 'lucide-react'
-import type { DjEngine } from './engine/DjEngine'
+import { DECK_IDS, type DjEngine } from './engine/DjEngine'
+import { onAir } from './djActions'
 import { HITS } from './engine/sampler'
-import { Knob } from './controls'
+import { Knob, fmtTime, useRafThrottled } from './controls'
 
 const SEGMENTS = 8
 
@@ -137,6 +138,56 @@ export function ScopeButton({ engine, open, toggle }: { engine: DjEngine; open: 
           <canvas ref={cv} width={300} height={110} />
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Now playing: what is on air, its tempo and key, time left with a progress bar,
+ * and what is cued next on the other deck. Fills the top bar between the
+ * sampler and the controls; click it to flip between time left and elapsed.
+ */
+export function NowPlaying({ engine }: { engine: DjEngine }) {
+  useSyncExternalStore(engine.subscribe, engine.getVersion)
+  const [remain, setRemain] = useState(true)
+  const timeRef = useRef<HTMLSpanElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
+  const deck = onAir(engine)
+  const loadedAny = DECK_IDS.map(id => engine.decks[id]).find(d => d.track)
+  const shown = deck ?? loadedAny ?? null
+  const t = shown?.track ?? null
+  const next = shown ? DECK_IDS.map(id => engine.decks[id]).find(d => d !== shown && d.track && !d.active && !d.error) : null
+  const bpm = shown?.effectiveBpm
+  const key = shown?.musicalKey
+
+  useRafThrottled(() => {
+    if (!shown || !shown.duration) {
+      if (timeRef.current && timeRef.current.textContent !== '--:--') timeRef.current.textContent = '--:--'
+      if (barRef.current) barRef.current.style.transform = 'scaleX(0)'
+      return
+    }
+    const left = Math.max(0, shown.duration - shown.time)
+    const s = remain ? `-${fmtTime(left, false)}` : fmtTime(shown.time, false)
+    if (timeRef.current && timeRef.current.textContent !== s) timeRef.current.textContent = s
+    if (barRef.current) barRef.current.style.transform = `scaleX(${Math.min(1, shown.time / shown.duration)})`
+  }, 200)
+
+  const live = !!deck && deck.playing
+  return (
+    <div className={`dj-lcd dj-nowplaying ${live ? 'dj-np-live' : ''}`} onClick={() => setRemain(r => !r)} title="Click to switch between time left and elapsed">
+      <span className="dj-np-lamp">{live ? 'ON AIR' : shown ? 'READY' : 'IDLE'}<i /></span>
+      <div className="dj-np-cover">{t?.cover ? <img src={t.cover} alt="" /> : null}</div>
+      <div className="dj-np-text">
+        <b>{t ? t.title : 'Load a song to begin'}</b>
+        <small>{t ? [t.artist, shown ? `Deck ${shown.id}` : ''].filter(Boolean).join(' · ') : 'Drag from the library, or ask the AI DJ'}</small>
+      </div>
+      <div className="dj-np-stat"><small>BPM</small><b>{bpm ? bpm.toFixed(1) : '--'}</b></div>
+      <div className="dj-np-stat"><small>KEY</small><b className={shown?.harmonic ? `dj-key dj-key-${shown.harmonic}` : ''}>{key?.camelot ?? '--'}</b></div>
+      <div className="dj-np-time"><span ref={timeRef}>--:--</span><div className="dj-np-bar"><div ref={barRef} /></div></div>
+      <div className="dj-np-next" title={next?.track ? `Next: ${next.track.title}` : undefined}>
+        <small>NEXT</small>
+        <b>{next?.track ? next.track.title : '—'}</b>
+      </div>
     </div>
   )
 }

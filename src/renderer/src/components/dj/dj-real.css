@@ -228,3 +228,23 @@
   --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(139,92,246,0.25), transparent 60%), linear-gradient(180deg, #0f0a1e, #05030b);
   --dj-glow: 0 0 10px rgba(139,92,246,0.16);
 }
+
+/* ── Now playing strip (fills the top bar) ── */
+.aihub-dj .dj-nowplaying { flex: 1; min-width: 0; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 8px; cursor: pointer; overflow: hidden; }
+.aihub-dj .dj-np-lamp { position: relative; flex: none; padding-right: 12px; font-size: 9.5px; font-weight: 800; letter-spacing: 1px; color: #6b7280; }
+.aihub-dj .dj-np-lamp i { position: absolute; right: 0; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: #374151; }
+.aihub-dj .dj-np-live .dj-np-lamp { color: #fca5a5; }
+.aihub-dj .dj-np-live .dj-np-lamp i { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+.aihub-dj .dj-np-cover { flex: none; width: 26px; height: 26px; border-radius: 3px; background: #15171a; overflow: hidden; box-shadow: 0 0 0 1px rgba(255,255,255,0.12); }
+.aihub-dj .dj-np-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.aihub-dj .dj-np-text { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.aihub-dj .dj-np-text b { font-size: 12.5px; font-weight: 700; color: #f1f3f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aihub-dj .dj-np-text small { font-size: 10.5px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aihub-dj .dj-np-stat { flex: none; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.aihub-dj .dj-np-stat small, .aihub-dj .dj-np-next small { font-size: 8.5px; font-weight: 800; letter-spacing: 0.8px; color: #6b7280; }
+.aihub-dj .dj-np-stat b { font-size: 13px; font-weight: 700; color: #e5e7eb; font-variant-numeric: tabular-nums; padding: 0 3px; border-radius: 2px; }
+.aihub-dj .dj-np-time { flex: none; width: 54px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; font-weight: 700; color: #e5e7eb; font-variant-numeric: tabular-nums; text-align: right; }
+.aihub-dj .dj-np-bar { height: 3px; border-radius: 2px; background: rgba(255,255,255,0.14); overflow: hidden; }
+.aihub-dj .dj-np-bar > div { height: 100%; background: linear-gradient(90deg, #f97316, #ef4444); transform-origin: left; transform: scaleX(0); }
+.aihub-dj .dj-np-next { flex: none; width: 112px; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.aihub-dj .dj-np-next b { font-size: 11px; font-weight: 600; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

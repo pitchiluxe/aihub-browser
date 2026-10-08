@@ -1131,6 +1131,8 @@ export class DjEngine extends Emitter {
     this.raf = window.setInterval(() => {
       for (const id of DECK_IDS) this.decks[id].tick()
       this.tickFade()
+      // A second deck may have started playing since a scan was queued.
+      if (this.scanQueue.length) this.nextScan()
     }, TICK_MS)
   }
 
@@ -1177,9 +1179,12 @@ export class DjEngine extends Emitter {
     this.emit()
   }
 
-  // ── YouTube scans: one at a time, playing decks first ──
+  // ── YouTube scans: playing decks first; two at once while two decks are playing ──
+  // Each scan is a silent 4× player, and four beside four decks starved the decks
+  // themselves — but the song coming in must not sit with an empty waveform
+  // while the one going out is scanned, so a second scan runs when two decks play.
   private scanQueue: { deck: Deck; start: () => void }[] = []
-  private scanning: Deck | null = null
+  private scanning = new Set<Deck>()
   queueScan(deck: Deck, start: () => void): void {
     this.scanQueue = this.scanQueue.filter(q => q.deck !== deck)
     this.scanQueue.push({ deck, start })
@@ -1188,14 +1193,17 @@ export class DjEngine extends Emitter {
   /** A deck's scan finished, failed or was abandoned (new song, eject). */
   scanDone(deck: Deck): void {
     this.scanQueue = this.scanQueue.filter(q => q.deck !== deck)
-    if (this.scanning === deck) { this.scanning = null; this.nextScan() }
+    if (this.scanning.delete(deck)) this.nextScan()
   }
   private nextScan(): void {
-    if (this.scanning || !this.scanQueue.length) return
-    const i = Math.max(0, this.scanQueue.findIndex(q => q.deck.active))
-    const [q] = this.scanQueue.splice(i, 1)
-    this.scanning = q.deck
-    q.start()
+    const playing = DECK_IDS.filter(id => this.decks[id].active).length
+    const limit = playing >= 2 ? 2 : 1
+    while (this.scanning.size < limit && this.scanQueue.length) {
+      const i = Math.max(0, this.scanQueue.findIndex(q => q.deck.active))
+      const [q] = this.scanQueue.splice(i, 1)
+      this.scanning.add(q.deck)
+      q.start()
+    }
   }
 
   setAutoGain(on: boolean): void {
