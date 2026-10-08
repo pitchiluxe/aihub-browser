@@ -5,7 +5,7 @@ import {
 } from './index'
 import { DEFAULT_BLOCKLIST, BLOCKLIST_SIZE } from './adblockList'
 
-const FOCUS_PAGE = 'https://landing-sooty-omega-22.vercel.app/blocked'
+const FOCUS_PAGE = 'https://aihubbrowser.vercel.app/blocked'
 const on: AdblockConfig = { ...DEFAULT_ADBLOCK_CONFIG }
 const sub = (url: string, id = 1) => ({ url, resourceType: 'script', webContentsId: id })
 
@@ -106,7 +106,7 @@ describe('decideRequest — focus mode', () => {
 
   it('never redirects the block page itself, which would loop', () => {
     const nav = { url: FOCUS_PAGE + '?site=reddit.com', resourceType: 'mainFrame' }
-    expect(decideRequest(nav, on, ['landing-sooty-omega-22.vercel.app'], '', FOCUS_PAGE)).toEqual({})
+    expect(decideRequest(nav, on, ['aihubbrowser.vercel.app'], '', FOCUS_PAGE)).toEqual({})
   })
 
   it('leaves subresources of a focus-blocked domain to the ad rules', () => {

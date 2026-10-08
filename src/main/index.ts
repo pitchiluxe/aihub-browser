@@ -2532,7 +2532,7 @@ ipcMain.handle('vpn:freeCancel', () => { freeVpnCancelled = true; return { succe
 // Chromium refuses to redirect a top-level navigation to a data: URL, so the
 // "blocked" page is hosted on the landing site. The blocked domain rides along
 // as ?site= for a tailored message.
-const FOCUS_BLOCK_PAGE = 'https://landing-sooty-omega-22.vercel.app/blocked.html'
+const FOCUS_BLOCK_PAGE = 'https://aihubbrowser.vercel.app/blocked.html'
 
 let focusBlocked: string[] | null = null
 
