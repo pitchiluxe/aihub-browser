@@ -17,6 +17,7 @@ import { shouldRunOn } from './extensions/siteRules'
 import { withPanelRuntime } from './extensions/panelRuntime'
 import { applyThemeToDom } from './services/themeService'
 import { pruneTabActivity, selectTabsToSleep } from './services/tabSleepPolicy'
+import { buildDeclutterStyleScript, loadDeclutterRules, normalizeOrigin, selectorsForOrigin, type DeclutterRule } from './extensions/declutterRules'
 
 // Special pages are code-split — none are needed at startup, so keeping them
 // out of the entry chunk makes first paint faster.
@@ -45,6 +46,7 @@ const ObsidianGraphView = lazy(() => import('./components/pages/ObsidianGraphVie
 const DjPage         = lazy(() => import('./components/dj/DjPage'))
 const FlightsRentalsPage = lazy(() => import('./components/travel/FlightsRentalsPage'))
 const TravelPage     = lazy(() => import('./components/travel/TravelPage'))
+const DeclutterPage = lazy(() => import('./components/pages/DeclutterPage'))
 
 import type { PageType } from '../../shared/pageTypes'
 
@@ -908,6 +910,15 @@ export default function App() {
           const url = payload.url
           if (!url || url === 'about:blank') break
           store.updateTab(tabId, { url })
+          if (url.startsWith('http://') || url.startsWith('https://')) {
+            const tab = store.tabs.find(item => item.id === tabId)
+            const wcId = store.tabWcIds[tabId]
+            if (tab?.pageType === 'browser' && !tab.asleep && wcId != null) {
+              const rules = loadDeclutterRules()
+              const selectors = selectorsForOrigin(normalizeOrigin(url) || '', rules)
+              void window.electronAPI.webview.execScript(wcId, buildDeclutterStyleScript(selectors)).catch(() => {})
+            }
+          }
           if (tabId === store.activeTabId) {
             window.electronAPI.tabView.getNavState(tabId).then((s: any) => store.setNavState(s)).catch(() => {})
           }
@@ -1102,6 +1113,7 @@ export default function App() {
                     {tab.pageType === 'research'   && <ResearchPage onNavigate={navigate} />}
                     {tab.pageType === 'agents'     && <AgentsPage />}
                     {tab.pageType === 'extensions' && <ExtensionsPage />}
+                    {tab.pageType === 'declutter' && <DeclutterPage />}
                     {tab.pageType === 'mail'       && <MailPage />}
                     {tab.pageType === 'notes'      && <NotesPage onNavigate={navigate} />}
                     {tab.pageType === 'manual'     && <ManualPage />}
