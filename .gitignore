@@ -4,6 +4,7 @@ dist/
 .env.local
 .env
 *.log
+.superpowers/
 .DS_Store
 Thumbs.db
 .claude/
