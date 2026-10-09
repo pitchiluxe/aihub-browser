@@ -65,7 +65,9 @@
   width:100%;border:1px solid var(--ds-border-sm);background:var(--ds-glass-sm);
   border-radius:9px;padding:8px 10px;margin:5px 0 12px;font:inherit;color:inherit;user-select:text;
 }
-.research-workspace select option {color:#162536}
+.research-workspace select option {color:#162536;background-color:#f7fbff}
+.research-workspace select.research-mode-select {color-scheme:light;background-color:#f7fbff;color:#162536;border-color:rgba(56,189,248,.3)}
+.research-workspace select.research-mode-select option {color:#162536;background-color:#f7fbff}
 .research-workspace textarea {resize:vertical;min-height:64px;line-height:1.7}
 .research-workspace :focus-visible {outline:2px solid rgba(56,189,248,.65);outline-offset:3px}
 .research-workspace label {display:block;font-size:10px;color:rgb(var(--ds-text-3))}
