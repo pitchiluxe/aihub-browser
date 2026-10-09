@@ -1,0 +1,232 @@
+/* AI answer typography. Loaded with the lazy markdown chunk, so none of it
+   costs anything until an AI message is on screen.
+
+   Colour is used to carry structure — which section you're in, which item is
+   which, what a cell is saying — not as decoration on body text. Body copy
+   stays on the theme's text tokens; the palette lands on headings, markers,
+   rules, badges and chips. Each colour has a dark-theme and a light-theme
+   value so both stay legible (light values are the 700 shades, ≥ 4.5:1 on
+   the light surface). */
+
+.aihub-md {
+  --md-violet:  167 139 250;
+  --md-sky:      56 189 248;
+  --md-emerald:  52 211 153;
+  --md-amber:   251 191  36;
+  --md-rose:    251 113 133;
+  --md-strong:  253 224 138;
+  --md-key:     var(--ds-accent-soft);
+  --md-code-head: linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.22));
+  --md-code-bg:   linear-gradient(180deg, rgba(0,0,0,0.38), rgba(0,0,0,0.32));
+  line-height: 1.6;
+}
+body.light-mode .aihub-md {
+  --md-violet:  109  40 217;
+  --md-sky:       3 105 161;
+  --md-emerald:   4 120  87;
+  --md-amber:   180  83   9;
+  --md-rose:    190  18  60;
+  --md-strong:  146  64  14;
+  --md-key:     var(--ds-accent);
+  --md-code-head: linear-gradient(180deg, #eceef6, #e4e7f2);
+  --md-code-bg:   #f6f8fa;
+}
+
+/* A bubble sizes to its content, so a table whose cells won't break mid-word
+   would push the bubble past the panel. A bubble holding a table or code
+   block instead takes exactly the width its container allows, and the table
+   scrolls inside its own box. */
+div:has(> .aihub-md :is(.md-table-wrap, .md-code)) { align-self: stretch; width: 100%; box-sizing: border-box; }
+.aihub-md .md-table-wrap, .aihub-md .md-code { max-width: 100%; }
+
+.aihub-md > :first-child { margin-top: 0 !important; }
+.aihub-md > :last-child  { margin-bottom: 0 !important; }
+
+/* ── Text ─────────────────────────────────────────────────────────── */
+.aihub-md p { margin: 6px 0; }
+.aihub-md strong { font-weight: 700; color: rgb(var(--md-strong)); }
+.aihub-md em { color: rgb(var(--md-sky)); font-style: italic; }
+.aihub-md del { opacity: 0.6; }
+
+/* ── Headings: each h2 takes the next colour, so sections are told apart
+      at a glance in a long answer. ─────────────────────────────────── */
+.aihub-md h1, .aihub-md h2, .aihub-md h3, .aihub-md h4 { line-height: 1.3; letter-spacing: -0.01em; }
+
+.aihub-md h1 {
+  font-size: 17px; font-weight: 800; margin: 14px 0 8px; padding-bottom: 6px;
+  background: linear-gradient(90deg, rgb(var(--ds-accent-soft)), rgb(var(--md-sky)) 60%, rgb(var(--md-emerald)));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgb(var(--ds-accent) / 0.6), rgb(var(--md-sky) / 0.3), transparent) 1;
+}
+
+.aihub-md h2 {
+  --h: var(--md-violet);
+  font-size: 14.5px; font-weight: 800; margin: 14px 0 6px;
+  color: rgb(var(--h));
+  display: flex; align-items: center; gap: 8px;
+}
+.aihub-md h2::before {
+  content: ''; width: 4px; height: 15px; border-radius: 2px; flex-shrink: 0;
+  background: linear-gradient(180deg, rgb(var(--h)), rgb(var(--h) / 0.35));
+  box-shadow: 0 0 10px rgb(var(--h) / 0.45);
+}
+.aihub-md h2:nth-of-type(5n+2) { --h: var(--md-sky); }
+.aihub-md h2:nth-of-type(5n+3) { --h: var(--md-emerald); }
+.aihub-md h2:nth-of-type(5n+4) { --h: var(--md-amber); }
+.aihub-md h2:nth-of-type(5n+5) { --h: var(--md-rose); }
+
+.aihub-md h3 {
+  font-size: 13px; font-weight: 700; margin: 12px 0 4px; color: rgb(var(--ds-text-1));
+  display: flex; align-items: center; gap: 7px;
+}
+.aihub-md h3::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: rgb(var(--md-sky)); box-shadow: 0 0 6px rgb(var(--md-sky) / 0.6);
+}
+.aihub-md h4 {
+  font-size: 11px; font-weight: 800; margin: 10px 0 3px;
+  text-transform: uppercase; letter-spacing: 0.06em; color: rgb(var(--md-amber));
+}
+
+/* ── Lists ────────────────────────────────────────────────────────── */
+.aihub-md ul, .aihub-md ol {
+  margin: 6px 0; padding-left: 20px;
+}
+/* Spacing by margin, not a flex gap: a flex container drops ::marker. */
+.aihub-md li + li { margin-top: 4px; }
+.aihub-md li { line-height: 1.55; padding-left: 2px; }
+.aihub-md li > ul, .aihub-md li > ol { margin: 4px 0 2px; }
+
+/* Tailwind's preflight strips list styles app-wide; answers want them back. */
+.aihub-md ul { list-style: disc; }
+.aihub-md ul ul { list-style: circle; }
+.aihub-md ul > li::marker { color: rgb(var(--md-violet)); font-size: 1.15em; }
+.aihub-md ul > li:nth-child(5n+2)::marker { color: rgb(var(--md-sky)); }
+.aihub-md ul > li:nth-child(5n+3)::marker { color: rgb(var(--md-emerald)); }
+.aihub-md ul > li:nth-child(5n+4)::marker { color: rgb(var(--md-amber)); }
+.aihub-md ul > li:nth-child(5n+5)::marker { color: rgb(var(--md-rose)); }
+
+/* Numbered steps get a coloured badge instead of a bare "1." */
+.aihub-md ol { list-style: none; padding-left: 0; counter-reset: md-ol; }
+.aihub-md ol > li {
+  --c: var(--md-violet);
+  counter-increment: md-ol; position: relative; padding-left: 28px;
+}
+.aihub-md ol > li::before {
+  content: counter(md-ol);
+  position: absolute; left: 0; top: 1px;
+  min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: rgb(var(--c)); background: rgb(var(--c) / 0.15);
+  border: 1px solid rgb(var(--c) / 0.35);
+}
+.aihub-md ol > li:nth-child(5n+2) { --c: var(--md-sky); }
+.aihub-md ol > li:nth-child(5n+3) { --c: var(--md-emerald); }
+.aihub-md ol > li:nth-child(5n+4) { --c: var(--md-amber); }
+.aihub-md ol > li:nth-child(5n+5) { --c: var(--md-rose); }
+.aihub-md ol[start] { counter-reset: none; }
+
+.aihub-md li.task-list-item { list-style: none; }
+.aihub-md li.task-list-item::before { display: none; }
+.aihub-md input[type='checkbox'] { margin-right: 6px; accent-color: rgb(var(--md-emerald)); vertical-align: middle; }
+
+/* ── Tables ───────────────────────────────────────────────────────── */
+.aihub-md .md-table-wrap {
+  overflow-x: auto; margin: 10px 0; border-radius: 10px;
+  border: 1px solid rgb(var(--ds-accent) / 0.22);
+  box-shadow: 0 4px 18px rgb(var(--ds-accent) / 0.08);
+}
+.aihub-md table { border-collapse: collapse; width: 100%; font-size: 11.5px; line-height: 1.5; }
+.aihub-md thead {
+  background: linear-gradient(90deg, rgb(var(--ds-accent) / 0.26), rgb(var(--md-sky) / 0.16));
+}
+.aihub-md th {
+  padding: 8px 11px; text-align: left; font-weight: 800; font-size: 10.5px;
+  letter-spacing: 0.03em; color: rgb(var(--ds-text-1));
+  border-bottom: 1.5px solid rgb(var(--ds-accent) / 0.4);
+  white-space: nowrap;
+}
+.aihub-md td {
+  padding: 7px 11px; color: rgb(var(--ds-text-2)); vertical-align: top;
+  border-bottom: 1px solid var(--ds-glass-md);
+  /* The bubble breaks long words anywhere so a URL can't overflow it; in a
+     cell that splits "JavaScript" into "JavaScri / pt". Cells wrap at spaces
+     and the wrapper scrolls instead. */
+  word-break: normal; overflow-wrap: normal; min-width: 72px;
+}
+.aihub-md tbody tr:nth-child(even) { background: var(--ds-glass-xs); }
+.aihub-md tbody tr { transition: background 0.12s; }
+.aihub-md tbody tr:hover { background: rgb(var(--ds-accent) / 0.09); }
+.aihub-md tbody tr:last-child td { border-bottom: none; }
+.aihub-md tbody td:first-child { font-weight: 700; color: rgb(var(--md-key)); }
+.aihub-md th[align='right'], .aihub-md td[align='right'] { text-align: right; font-variant-numeric: tabular-nums; }
+.aihub-md th[align='center'], .aihub-md td[align='center'] { text-align: center; }
+
+.aihub-md .md-up   { color: rgb(var(--md-emerald)) !important; font-weight: 700; font-variant-numeric: tabular-nums; }
+.aihub-md .md-down { color: rgb(var(--md-rose)) !important; font-weight: 700; font-variant-numeric: tabular-nums; }
+.aihub-md .md-chip {
+  display: inline-block; padding: 1px 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; white-space: nowrap;
+  color: rgb(var(--t)); background: rgb(var(--t) / 0.14); border: 1px solid rgb(var(--t) / 0.32);
+}
+.aihub-md .md-good { --t: var(--md-emerald); }
+.aihub-md .md-bad  { --t: var(--md-rose); }
+.aihub-md .md-warn { --t: var(--md-amber); }
+
+/* ── Quotes & callouts ────────────────────────────────────────────── */
+.aihub-md blockquote {
+  --q: var(--ds-accent-soft);
+  margin: 10px 0; padding: 8px 12px;
+  border-left: 3px solid rgb(var(--q) / 0.75);
+  background: linear-gradient(90deg, rgb(var(--q) / 0.12), rgb(var(--q) / 0.03));
+  border-radius: 0 10px 10px 0; color: rgb(var(--ds-text-2));
+}
+.aihub-md blockquote:not(.md-callout) { font-style: italic; }
+.aihub-md blockquote p { margin: 3px 0; }
+.aihub-md .md-callout { display: flex; gap: 9px; align-items: flex-start; font-style: normal; }
+.aihub-md .md-callout > .md-callout-icon { flex-shrink: 0; margin-top: 3px; color: rgb(var(--q)); }
+.aihub-md .md-callout > .md-callout-body { min-width: 0; flex: 1; }
+.aihub-md .md-callout strong:first-child { color: rgb(var(--q)); }
+.aihub-md .md-callout-body > p:first-child > strong:first-child { display: block; margin-bottom: 2px; }
+.aihub-md .md-note      { --q: var(--md-sky); }
+.aihub-md .md-tip       { --q: var(--md-emerald); }
+.aihub-md .md-important { --q: var(--md-violet); }
+.aihub-md .md-warning   { --q: var(--md-amber); }
+.aihub-md .md-caution   { --q: var(--md-rose); }
+
+/* ── Rules, inline code, links ────────────────────────────────────── */
+.aihub-md hr {
+  border: none; height: 2px; margin: 14px 0; border-radius: 1px; opacity: 0.55;
+  background: linear-gradient(90deg, transparent, rgb(var(--md-violet)), rgb(var(--md-sky)), rgb(var(--md-emerald)), rgb(var(--md-amber)), transparent);
+}
+.aihub-md code.md-inline {
+  background: rgb(var(--md-rose) / 0.12); color: rgb(var(--md-rose));
+  border: 1px solid rgb(var(--md-rose) / 0.2);
+  border-radius: 5px; padding: 1px 6px; font-size: 0.88em;
+  font-family: ui-monospace, 'Cascadia Code', SFMono-Regular, Consolas, monospace;
+  word-break: break-word;
+}
+
+/* ── Syntax colours (One Dark-ish in dark, GitHub-ish in light) ───── */
+.aihub-md .tk-comment  { color: #7f848e; font-style: italic; }
+.aihub-md .tk-string   { color: #98c379; }
+.aihub-md .tk-number   { color: #d19a66; }
+.aihub-md .tk-keyword  { color: #c678dd; }
+.aihub-md .tk-literal  { color: #d19a66; }
+.aihub-md .tk-function { color: #61afef; }
+.aihub-md .tk-type     { color: #e5c07b; }
+.aihub-md .tk-property { color: #e06c75; }
+.aihub-md .tk-tag      { color: #e06c75; }
+.aihub-md .tk-attr     { color: #d19a66; }
+body.light-mode .aihub-md .tk-comment  { color: #6a737d; }
+body.light-mode .aihub-md .tk-string   { color: #116329; }
+body.light-mode .aihub-md .tk-number,
+body.light-mode .aihub-md .tk-literal,
+body.light-mode .aihub-md .tk-attr     { color: #953800; }
+body.light-mode .aihub-md .tk-keyword  { color: #8250df; }
+body.light-mode .aihub-md .tk-function { color: #0550ae; }
+body.light-mode .aihub-md .tk-type     { color: #7d4e00; }
+body.light-mode .aihub-md .tk-property,
+body.light-mode .aihub-md .tk-tag      { color: #cf222e; }

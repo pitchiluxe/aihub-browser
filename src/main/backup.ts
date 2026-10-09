@@ -1,3 +1,4 @@
+import { SECRET_SETTING_KEYS } from './secretStore'
 /**
  * AIHub Browser — moving everything you have made to another computer.
  *
@@ -70,8 +71,9 @@ export interface Backup {
 }
 
 /** Settings that are meaningless or unsafe on another machine. */
-const SETTINGS_BLOCKLIST = new Set([
-  'openrouterKey', 'openrouterBase', 'openrouterModel', 'ollamaUrl',
+const SETTINGS_BLOCKLIST = new Set<string>([
+  ...SECRET_SETTING_KEYS,   // API keys never travel in a backup file
+  'openrouterBase', 'openrouterModel', 'ollamaUrl',
   'obsidianVault',   // a filesystem path from the other computer
   'containers',      // cookie jars are per-machine
   'lastSyncAt',

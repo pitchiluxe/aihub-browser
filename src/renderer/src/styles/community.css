@@ -1,0 +1,261 @@
+/**
+ * Community — the workspace takes the colour of the room you are standing in.
+ *
+ * Every channel already carried an accent hex from the day the feature shipped,
+ * and nothing used it for more than a dot. Here it becomes `--cm-accent`, set
+ * on the shell whenever the channel changes, and everything expressive derives
+ * from it: the header rule, the active channel spine, focus rings, the
+ * new-message divider, the composer's caret, the ring around whoever is
+ * speaking. Walking from #ai into #traders visibly re-tints the frame.
+ *
+ * That is the one loud idea. Everything else is deliberately quiet — hairlines,
+ * two radii, no gradients, no glows — so the tint is what the eye reads.
+ *
+ * The base is graphite rather than true black: a chat window is looked at for
+ * hours, and pure black next to bright text is the palette that produces the
+ * halo people mistake for eye strain.
+ */
+
+/* `.cm-portal` carries the same tokens for anything rendered through a portal.
+   A popover has to escape the workspace's overflow to avoid being clipped,
+   but document.body is outside this selector — so every var() in it resolved
+   to nothing and the card came out transparent, with the conversation legible
+   straight through it. Same variables, no layout. */
+.cm-shell,
+.cm-portal {
+  --cm-void:   #090d12;
+  --cm-shell:  #0f151c;
+  --cm-stage:  #141b24;
+  --cm-raise:  #1b242f;
+  --cm-hover:  #202b38;
+  --cm-line:   #233040;
+  --cm-ink:    #e4ebf2;
+  --cm-dim:    #8496a8;
+  --cm-faint:  #5a6b7d;
+
+  --cm-danger: #f87171;
+  --cm-warn:   #fbbf24;
+
+  /* Overwritten inline per channel. Emerald is the Community entry's own
+     accent in the sidebar, so an un-tinted shell still looks deliberate. */
+  --cm-accent: #34d399;
+
+  --cm-radius:    10px;
+  --cm-radius-sm: 7px;
+
+  color: var(--cm-ink);
+  background: var(--cm-stage);
+  font-feature-settings: 'cv05' 1, 'ss01' 1;
+}
+
+/* Light mode is the same structure with the surfaces inverted. The accent is
+   untouched: it is the room's identity, not a decoration that needs a variant. */
+body.light-mode .cm-shell {
+  --cm-void:   #e8edf2;
+  --cm-shell:  #f1f4f8;
+  --cm-stage:  #ffffff;
+  --cm-raise:  #f4f7fa;
+  --cm-hover:  #e9eef4;
+  --cm-line:   #d8e0e9;
+  --cm-ink:    #16202b;
+  --cm-dim:    #55677a;
+  --cm-faint:  #8496a8;
+}
+
+/* ── Structure ─────────────────────────────────────────────────────────── */
+
+/**
+ * The shell measures itself, not the window.
+ *
+ * The browser's own navigation sidebar sits to the left of this page and can be
+ * open or closed, so the width the workspace actually gets is the viewport minus
+ * whatever that is doing. Media queries could not see that: at a 900px window
+ * with the app sidebar open the community had barely 680px and still drew four
+ * columns, and at phone width it drew a rail and a sliver.
+ *
+ * A container query asks the right question — how much room do *I* have — and
+ * gets the same answer whether the window shrank or the sidebar opened.
+ */
+.cm-frame {
+  height: 100%;
+  container-type: inline-size;
+  container-name: cmshell;
+}
+
+/* Three rows: a banner that is usually zero-height, the workspace, the dock.
+   The banner row is `auto`, so when no banner is rendered it costs nothing and
+   the layout is exactly what it was. */
+.cm-shell {
+  display: grid;
+  grid-template-columns: 68px 248px minmax(0, 1fr) 232px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  overflow: hidden;
+}
+
+.cm-banner  { grid-column: 1 / -1; grid-row: 1; }
+.cm-rail    { grid-column: 1; grid-row: 2 / 4; background: var(--cm-void); }
+.cm-sidebar { grid-column: 2; grid-row: 2; background: var(--cm-shell); }
+.cm-main    { grid-column: 3; grid-row: 2; background: var(--cm-stage); min-width: 0; }
+.cm-aside   { grid-column: 4; grid-row: 2; background: var(--cm-shell); }
+.cm-dock    { grid-column: 2 / 5; grid-row: 3; background: var(--cm-void); }
+
+/* Member list folds away first — it is the pane you can reconstruct from the
+   conversation itself. The sidebar goes next, into a drawer. */
+@container cmshell (max-width: 1200px) {
+  .cm-shell { grid-template-columns: 68px 248px minmax(0, 1fr); }
+  .cm-aside { display: none; }
+  .cm-dock  { grid-column: 2 / 4; }
+  .cm-shell[data-members='open'] { grid-template-columns: 68px 248px minmax(0, 1fr) 232px; }
+  .cm-shell[data-members='open'] .cm-aside { display: block; }
+  .cm-shell[data-members='open'] .cm-dock  { grid-column: 2 / 5; }
+}
+
+@container cmshell (max-width: 900px) {
+  .cm-shell,
+  .cm-shell[data-members='open'] { grid-template-columns: 56px minmax(0, 1fr); }
+  .cm-main { grid-column: 2; }
+  .cm-dock { grid-column: 1 / 3; }
+  .cm-shell[data-members='open'] .cm-aside { display: none; }
+
+  /* The sidebar becomes a drawer over the conversation rather than squeezing
+     it: a 40-character-wide chat is not a smaller chat, it is an unusable one. */
+  .cm-sidebar {
+    position: absolute;
+    inset: 0 auto 0 56px;
+    width: 248px;
+    z-index: 30;
+    transform: translateX(-104%);
+    transition: transform 180ms ease;
+    box-shadow: 0 0 40px rgb(0 0 0 / 0.5);
+  }
+  .cm-shell[data-drawer='open'] .cm-sidebar { transform: translateX(0); }
+
+  /* The control that opens the drawer has to appear on exactly the layout that
+     has a drawer. A viewport breakpoint here would disagree with the container
+     query above the moment the app's own sidebar opened — leaving a hidden
+     channel list and no way to reach it. */
+  .cm-shell .cm-drawer-toggle { display: inline-flex; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-sidebar { transition: none; }
+  .cm-speaking { animation: none; }
+}
+
+/* Hidden until the container is narrow enough to need it; see the drawer rule. */
+.cm-drawer-toggle { display: none; }
+
+/* ── Channel rows ──────────────────────────────────────────────────────── */
+
+.cm-channel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px 6px 12px;
+  border-radius: var(--cm-radius-sm);
+  color: var(--cm-dim);
+  font-size: 14px;
+  text-align: left;
+  transition: background 120ms ease, color 120ms ease;
+}
+.cm-channel:hover { background: var(--cm-hover); color: var(--cm-ink); }
+
+/* The spine, not a filled pill: it marks the row without competing with the
+   accent already doing work in the header. */
+.cm-channel[data-active='true'] {
+  background: var(--cm-raise);
+  color: var(--cm-ink);
+}
+.cm-channel[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 6px; bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--cm-accent);
+}
+.cm-channel[data-unread='true'] { color: var(--cm-ink); font-weight: 500; }
+
+/* Slugs are set in mono because a slug *is* a key — it is the value stored on
+   every message, and the one thing renaming a channel must never change. */
+.cm-slug { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; }
+
+/* ── Messages ──────────────────────────────────────────────────────────── */
+
+.cm-msg { position: relative; padding: 2px 16px 2px 60px; }
+.cm-msg:hover { background: rgb(255 255 255 / 0.02); }
+body.light-mode .cm-msg:hover { background: rgb(0 0 0 / 0.025); }
+
+/* Consecutive messages from one author share a spine in that author's role
+   colour. Grouping becomes something you can see rather than something you
+   infer from a gap. */
+.cm-msg[data-grouped='true']::before {
+  content: '';
+  position: absolute;
+  left: 27px; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--cm-role, var(--cm-line));
+  opacity: 0.35;
+}
+.cm-msg[data-mentioned='true'] {
+  background: color-mix(in srgb, var(--cm-accent) 9%, transparent);
+  box-shadow: inset 3px 0 0 var(--cm-accent);
+}
+
+.cm-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 16px;
+  color: var(--cm-accent);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cm-divider::before,
+.cm-divider::after { content: ''; height: 1px; flex: 1; background: currentColor; opacity: 0.4; }
+.cm-divider::before { flex: 0 0 8px; }
+
+/* ── Controls ──────────────────────────────────────────────────────────── */
+
+.cm-composer {
+  border: 1px solid var(--cm-line);
+  background: var(--cm-raise);
+  border-radius: var(--cm-radius);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.cm-composer:focus-within {
+  border-color: var(--cm-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cm-accent) 18%, transparent);
+}
+.cm-composer textarea { caret-color: var(--cm-accent); }
+
+.cm-shell :is(button, a, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--cm-accent);
+  outline-offset: 2px;
+  border-radius: var(--cm-radius-sm);
+}
+
+.cm-chip {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--cm-accent) 22%, transparent);
+  color: var(--cm-accent);
+  font-weight: 500;
+}
+
+/* ── Voice ─────────────────────────────────────────────────────────────── */
+
+.cm-speaking { animation: cmSpeak 1.1s ease-in-out infinite; }
+@keyframes cmSpeak {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cm-accent) 55%, transparent); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--cm-accent) 0%, transparent); }
+}
+
+.cm-scroll { scrollbar-width: thin; scrollbar-color: var(--cm-line) transparent; }
+.cm-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.cm-scroll::-webkit-scrollbar-thumb { background: var(--cm-line); border-radius: 4px; }
+.cm-scroll::-webkit-scrollbar-track { background: transparent; }

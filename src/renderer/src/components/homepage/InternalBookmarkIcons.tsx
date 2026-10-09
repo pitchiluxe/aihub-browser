@@ -71,6 +71,52 @@ function MailIcon({ size = 30 }: { size?: number }) {
   )
 }
 
+// The Community lounge: a group of people on an emerald badge, in the same
+// #34d399 the sidebar's Community entry already uses, so the tile and the rail
+// item read as the same destination.
+//
+// Depth instead of outlines: the two companions sit behind at reduced opacity,
+// and the front figure is separated from them by a dark rim painted *under* its
+// own fill (paint-order="stroke"). Stroking the silhouette this way keeps the
+// separation at 30px, where a hairline gap between two whites disappears.
+function CommunityIcon({ size = 30 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="aihub-community-field" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#5eecb0" />
+          <stop offset="45%" stopColor="#34d399" />
+          <stop offset="100%" stopColor="#0d8f7d" />
+        </linearGradient>
+        <linearGradient id="aihub-community-figure" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#dcf7ec" />
+        </linearGradient>
+      </defs>
+
+      {/* Badge */}
+      <rect x="2.6" y="2.6" width="26.8" height="26.8" rx="8.4" fill="url(#aihub-community-field)" />
+      {/* Light rolling off the top-left, shadow pooling at the bottom */}
+      <path d="M2.6 11a8.4 8.4 0 0 1 8.4-8.4h10A8.4 8.4 0 0 1 29.4 11v1.6C22 8.2 9.6 8.6 2.6 14.4Z" fill="#fff" opacity="0.16" />
+      <path d="M2.6 24.2c7.4 3.4 19.4 3.4 26.8 0V21a8.4 8.4 0 0 1-8.4 8.4h-10A8.4 8.4 0 0 1 2.6 21Z" fill="#053b33" opacity="0.10" />
+
+      {/* Companions, behind */}
+      <g fill="url(#aihub-community-figure)" opacity="0.66">
+        <circle cx="8.9" cy="13" r="3.2" />
+        <path d="M4 22.6a4.9 4.9 0 0 1 9.8 0Z" />
+        <circle cx="23.1" cy="13" r="3.2" />
+        <path d="M18.2 22.6a4.9 4.9 0 0 1 9.8 0Z" />
+      </g>
+
+      {/* Front figure, rimmed against them */}
+      <g fill="url(#aihub-community-figure)" stroke="#065f52" strokeOpacity="0.42" strokeWidth="1.7" strokeLinejoin="round" paintOrder="stroke">
+        <circle cx="16" cy="14.6" r="4.2" />
+        <path d="M9.7 26.6a6.3 6.3 0 0 1 12.6 0Z" />
+      </g>
+    </svg>
+  )
+}
+
 // Lucide glyphs are fine for the secondary pages — they're rarely bookmarked and
 // read correctly as utility icons.
 function glyph(Icon: React.ComponentType<any>, accent: string) {
@@ -87,6 +133,7 @@ const INTERNAL_ICONS: Record<string, { Icon: React.ComponentType<{ size?: number
   // washing a red tile with a red-brown book.
   bible:    { Icon: BibleIcon, accent: '#C9A227' },
   mail:     { Icon: MailIcon,  accent: '#4285F4' },
+  community:{ Icon: CommunityIcon, accent: '#34d399' },
   notes:    glyph(StickyNote,  '#facc15'),
   research: glyph(FlaskConical,'#34d399'),
   agents:   glyph(Bot,         '#a78bfa'),

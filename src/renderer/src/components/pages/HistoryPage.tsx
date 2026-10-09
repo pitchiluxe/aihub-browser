@@ -27,34 +27,60 @@ function groupByDate(items: HistoryItem[]): Record<string, HistoryItem[]> {
 }
 
 export default function HistoryPage({ onNavigate }: Props) {
-  const [history, setHistory] = useState<HistoryItem[]>([])
+  const [allHistory, setAllHistory] = useState<HistoryItem[]>([])
   const [search, setSearch] = useState('')
+  const [searchResults, setSearchResults] = useState<HistoryItem[]>([])
   const [clearing, setClearing] = useState(false)
+  const [searchVia, setSearchVia] = useState<'none' | 'keyword' | 'semantic'>('none')
+  const [searchLoading, setSearchLoading] = useState(false)
 
   useEffect(() => { load() }, [])
 
   const load = async () => {
     const h = await window.electronAPI.history.getAll()
-    setHistory(h)
+    setAllHistory(h)
   }
 
   const clearAll = async () => {
     setClearing(true)
     await window.electronAPI.history.clear()
-    setHistory([])
+    setAllHistory([])
+    setSearchResults([])
     setClearing(false)
   }
 
   const deleteItem = async (id: string) => {
     await window.electronAPI.history.deleteItem(id)
-    setHistory(h => h.filter(x => x.id !== id))
+    setAllHistory(h => h.filter(x => x.id !== id))
+    setSearchResults(r => r.filter(x => x.id !== id))
   }
 
-  const filtered = search
-    ? history.filter(h => h.url.toLowerCase().includes(search.toLowerCase()) || h.title.toLowerCase().includes(search.toLowerCase()))
-    : history
+  // Debounced semantic search — fires after the user stops typing for 400ms
+  const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
 
-  const groups = groupByDate(filtered)
+  const handleSearch = async (query: string) => {
+    setSearch(query)
+    if (!query.trim()) { setSearchVia('none'); setSearchResults([]); return }
+    if (debounceTimer) clearTimeout(debounceTimer)
+    const timer = setTimeout(async () => {
+      setSearchLoading(true)
+      try {
+        const result = await window.electronAPI.history.smartSearch(query)
+        setSearchVia(result.via || 'keyword')
+        setSearchResults(result.results || [])
+      } catch {
+        const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+        setSearchResults(allHistory.filter(item =>
+          terms.every(t => item.title.toLowerCase().includes(t) || item.url.toLowerCase().includes(t))))
+        setSearchVia('keyword')
+      } finally { setSearchLoading(false) }
+    }, 400)
+    setDebounceTimer(timer)
+  }
+
+  const displayItems = search ? searchResults : allHistory
+
+  const groups = groupByDate(displayItems)
 
   return (
     <div className="flex flex-col h-full bg-aihub-bg text-aihub-text overflow-hidden">
@@ -62,11 +88,11 @@ export default function HistoryPage({ onNavigate }: Props) {
       <div className="px-8 pt-8 pb-4 border-b border-aihub-border/30 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-aihub-text">History</h1>
-          <p className="text-sm text-aihub-muted mt-0.5">{history.length} pages visited</p>
+          <p className="text-sm text-aihub-muted mt-0.5">{allHistory.length} pages visited</p>
         </div>
         <button
           onClick={clearAll}
-          disabled={clearing || history.length === 0}
+          disabled={clearing || allHistory.length === 0}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-medium transition-all disabled:opacity-40"
         >
           <Trash2 size={14} /> Clear all
@@ -80,11 +106,19 @@ export default function HistoryPage({ onNavigate }: Props) {
           <input
             type="text"
             value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search history…"
+            onChange={e => handleSearch(e.target.value)}
+            placeholder="Search history (semantic)…"
             className="w-full pl-9 pr-4 py-2 bg-aihub-card border border-aihub-border/40 rounded-xl text-sm text-aihub-text placeholder:text-aihub-muted/50 outline-none focus:border-aihub-accent/50 transition-colors"
             style={{ userSelect: 'text' }}
           />
+          {searchLoading && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-aihub-muted text-xs">Searching…</div>
+          )}
+          {!searchLoading && search && searchVia !== 'none' && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-aihub-muted text-[10px] uppercase tracking-wider">
+              {searchVia === 'semantic' ? '🧠 AI' : '⌕ keyword'}
+            </div>
+          )}
         </div>
       </div>
 
@@ -93,7 +127,7 @@ export default function HistoryPage({ onNavigate }: Props) {
         {Object.keys(groups).length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 gap-3 text-aihub-muted">
             <Clock size={40} className="opacity-20" />
-            <p className="text-sm">{search ? 'No results found' : 'No browsing history'}</p>
+            <p className="text-sm">{search ? `No results for "${search}"` : 'No browsing history'}</p>
           </div>
         ) : (
           Object.entries(groups).map(([date, items]) => (

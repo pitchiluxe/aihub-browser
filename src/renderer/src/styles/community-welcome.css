@@ -1,0 +1,328 @@
+/* ══ The still pool ═══════════════════════════════════════════════════════
+   The Community welcome screen.
+
+   The metaphor is a calm body of water you are about to step into: the
+   surface is quiet until somebody arrives, and joining is the first ripple.
+   One idea carried by one signature element — the crystal well holding your
+   avatar — with everything around it kept deliberately quiet. What this
+   replaces was three paragraphs and a flat button on a flat background: it
+   read as a form to fill in, not as a door into a room.
+
+   No web fonts. This is an offline-first browser, and a welcome screen that
+   needs the network to look right is one that looks wrong on a plane.
+   Personality comes from scale, tracking and weight instead.
+
+   Kept in its own file rather than appended to community.css because that
+   sheet dresses the workspace — the chrome around a conversation — and this
+   one is a single screen with a different palette and a different job. */
+
+.cw {
+  --cw-abyss:   #04121c;
+  --cw-deep:    #0a2233;
+  --cw-mid:     #10405c;
+  --cw-crystal: #a8e8ff;
+  --cw-aqua:    #33d6c8;
+  --cw-foam:    #eaf9ff;
+  --cw-glass:   rgba(146, 220, 255, 0.06);
+  --cw-edge:    rgba(168, 232, 255, 0.16);
+
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(120% 90% at 50% -10%, var(--cw-mid) 0%, transparent 55%),
+    radial-gradient(90% 70% at 12% 105%, #0d3350 0%, transparent 60%),
+    linear-gradient(180deg, var(--cw-deep) 0%, var(--cw-abyss) 100%);
+  color: var(--cw-foam);
+}
+
+/* Caustics: the wobbling light on the floor of a pool. Two large, very
+   low-opacity fields drifting at different speeds — cheap, and the loop never
+   visibly repeats because the two periods do not divide into each other. */
+.cw::before,
+.cw::after {
+  content: '';
+  position: absolute;
+  inset: -25%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 26% at 30% 35%, rgba(120, 226, 255, 0.13), transparent 60%),
+    radial-gradient(30% 20% at 72% 62%, rgba(51, 214, 200, 0.11), transparent 62%),
+    radial-gradient(24% 18% at 52% 84%, rgba(168, 232, 255, 0.08), transparent 65%);
+  filter: blur(18px);
+  animation: cw-drift 34s ease-in-out infinite alternate;
+}
+.cw::after {
+  animation: cw-drift-b 47s ease-in-out infinite alternate;
+  opacity: 0.7;
+}
+
+@keyframes cw-drift {
+  from { transform: translate3d(-3%, -2%, 0) scale(1); }
+  to   { transform: translate3d(4%, 3%, 0) scale(1.14); }
+}
+@keyframes cw-drift-b {
+  from { transform: translate3d(3%, 2%, 0) scale(1.1) rotate(0deg); }
+  to   { transform: translate3d(-4%, -3%, 0) scale(0.95) rotate(6deg); }
+}
+
+/* The pane. Crystal rather than the usual frosted rectangle: a bright top
+   edge where light would catch, and a cold shadow beneath it in the water. */
+
+/* Centring an overflowing child with align-items clips its top: the overflow
+   goes above the scroll origin and cannot be reached. Auto margins centre the
+   same way while keeping the whole card scrollable, which matters here because
+   the pane is taller than a short window. */
+.cw > .cw-center { margin: auto; padding: 28px 0; }
+
+.cw-pane {
+  position: relative;
+  border-radius: 20px;
+  padding: 30px 30px 26px;
+  background:
+    linear-gradient(180deg, rgba(168, 232, 255, 0.10) 0%, rgba(10, 34, 51, 0.42) 42%),
+    var(--cw-glass);
+  border: 1px solid var(--cw-edge);
+  backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+  box-shadow:
+    0 1px 0 rgba(220, 248, 255, 0.22) inset,
+    0 26px 60px -26px rgba(2, 12, 20, 0.9),
+    0 0 90px -50px rgba(51, 214, 200, 0.5);
+}
+
+.cw-eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(168, 232, 255, 0.62);
+}
+
+.cw-title {
+  font-size: 40px;
+  line-height: 1.02;
+  font-weight: 300;
+  letter-spacing: -0.035em;
+  margin: 6px 0 0;
+  background: linear-gradient(170deg, var(--cw-foam) 12%, var(--cw-crystal) 62%, var(--cw-aqua) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* One word carries the weight, so the light face reads as a decision. */
+.cw-title strong { font-weight: 600; }
+
+.cw-lede {
+  margin-top: 12px;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: rgba(226, 244, 255, 0.72);
+}
+
+/* ── The rules ─────────────────────────────────────────────────────────
+   A facet of crystal catches the light as you pass it: the sheen sweeps on
+   hover, it does not loop. Three looping cards is where a design starts to
+   look busy, and it would compete with the well. */
+.cw-rule {
+  position: relative;
+  overflow: hidden;
+  border-radius: 13px;
+  padding: 13px 15px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(226, 244, 255, 0.66);
+  background: rgba(9, 30, 46, 0.42);
+  border: 1px solid rgba(168, 232, 255, 0.09);
+  transition: transform 260ms cubic-bezier(.2,.8,.3,1),
+              border-color 260ms ease,
+              background 260ms ease;
+}
+.cw-rule + .cw-rule { margin-top: 9px; }
+.cw-rule:hover {
+  transform: translateY(-2px);
+  border-color: rgba(168, 232, 255, 0.26);
+  background: rgba(14, 44, 66, 0.55);
+}
+.cw-rule::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgba(200, 244, 255, 0.16) 50%, transparent 62%);
+  transform: translateX(-120%);
+  transition: transform 720ms cubic-bezier(.2,.7,.3,1);
+}
+.cw-rule:hover::after { transform: translateX(120%); }
+.cw-rule strong { color: var(--cw-crystal); font-weight: 600; }
+
+/* ── The signature: a crystal well ─────────────────────────────────────
+   The avatar sits in a lit basin. While a name is being checked the surface
+   ripples, so the motion reports something real instead of decorating. */
+.cw-well {
+  position: relative;
+  width: 62px;
+  height: 62px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background:
+    radial-gradient(80% 80% at 50% 20%, rgba(168, 232, 255, 0.20), transparent 70%),
+    rgba(6, 24, 38, 0.75);
+  border: 1px solid rgba(168, 232, 255, 0.20);
+  box-shadow:
+    0 1px 0 rgba(220, 248, 255, 0.26) inset,
+    0 10px 24px -12px rgba(2, 12, 20, 0.95);
+  transition: box-shadow 320ms ease, border-color 320ms ease;
+}
+.cw-well img { border-radius: 12px; display: block; }
+.cw-well[data-state='ok'] {
+  border-color: rgba(51, 214, 200, 0.5);
+  box-shadow:
+    0 1px 0 rgba(220, 248, 255, 0.3) inset,
+    0 0 26px -6px rgba(51, 214, 200, 0.55);
+}
+.cw-well[data-state='taken'] { border-color: rgba(248, 113, 113, 0.5); }
+
+/* The ripple: expanding rings, only while a name is actually in flight. */
+.cw-well[data-state='checking']::before,
+.cw-well[data-state='checking']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  border: 1px solid rgba(168, 232, 255, 0.5);
+  animation: cw-ripple 1.9s cubic-bezier(.25,.6,.3,1) infinite;
+}
+.cw-well[data-state='checking']::after { animation-delay: 0.95s; }
+
+@keyframes cw-ripple {
+  0%   { transform: scale(1);    opacity: 0.65; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+
+.cw-field {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 15px;
+  border-radius: 13px;
+  font-size: 15px;
+  color: var(--cw-foam);
+  background: rgba(4, 18, 28, 0.6);
+  border: 1px solid rgba(168, 232, 255, 0.16);
+  outline: none;
+  transition: border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
+}
+.cw-field::placeholder { color: rgba(168, 232, 255, 0.34); }
+.cw-field:focus {
+  border-color: rgba(51, 214, 200, 0.55);
+  background: rgba(6, 24, 38, 0.75);
+  box-shadow: 0 0 0 4px rgba(51, 214, 200, 0.11);
+}
+.cw-field[data-invalid='true'] { border-color: rgba(248, 113, 113, 0.5); }
+
+/* ── The button surfaces ───────────────────────────────────────────────
+   Submerged while it cannot be used, rising into the light when it can, so
+   the state change is itself the animation and "why is this dead" answers
+   itself before the sentence underneath has to.
+
+   Specificity note: :disabled sits after :hover deliberately. Written the
+   other way round a disabled button still lifts when the pointer crosses
+   it, which is the exact wrong signal. */
+.cw-join {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #02171b;
+  cursor: pointer;
+  border: 1px solid rgba(51, 214, 200, 0.65);
+  background: linear-gradient(135deg, var(--cw-crystal) 0%, var(--cw-aqua) 52%, #1ea89d 100%);
+  box-shadow: 0 12px 30px -14px rgba(51, 214, 200, 0.75);
+  transition: transform 240ms cubic-bezier(.2,.8,.3,1),
+              box-shadow 240ms ease,
+              filter 240ms ease;
+}
+.cw-join:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 44px -16px rgba(51, 214, 200, 0.9);
+  filter: brightness(1.06);
+}
+.cw-join:active { transform: translateY(0); }
+.cw-join:focus-visible { outline: 2px solid var(--cw-crystal); outline-offset: 3px; }
+
+/* Light sweeping across the face on hover. */
+.cw-join::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.45) 50%, transparent 60%);
+  transform: translateX(-120%);
+  transition: transform 780ms cubic-bezier(.2,.7,.3,1);
+}
+.cw-join:hover::after { transform: translateX(120%); }
+
+.cw-join:disabled {
+  cursor: not-allowed;
+  color: rgba(168, 232, 255, 0.5);
+  background: rgba(10, 34, 51, 0.6);
+  border-color: rgba(168, 232, 255, 0.14);
+  box-shadow: none;
+  transform: none;
+  filter: none;
+}
+.cw-join:disabled::after { content: none; }
+
+.cw-label {
+  display: block;
+  margin: 22px 0 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(168, 232, 255, 0.55);
+}
+.cw-note { font-size: 12px; color: rgba(168, 232, 255, 0.5); }
+.cw-ok   { color: var(--cw-aqua); }
+.cw-bad  { color: #fca5a5; }
+.cw-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(226, 244, 255, 0.66);
+  cursor: pointer;
+}
+.cw-agree input { margin-top: 2px; accent-color: var(--cw-aqua); }
+.cw-link {
+  color: var(--cw-crystal);
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(168, 232, 255, 0.4);
+}
+.cw-link:hover { color: var(--cw-aqua); border-bottom-color: var(--cw-aqua); }
+
+/* Drift and ripples are atmosphere. Nobody needs them in order to join. */
+@media (prefers-reduced-motion: reduce) {
+  .cw::before, .cw::after,
+  .cw-well[data-state='checking']::before,
+  .cw-well[data-state='checking']::after { animation: none; }
+  .cw-rule, .cw-join { transition: none; }
+  .cw-rule::after, .cw-join::after { display: none; }
+}
+
+@media (max-width: 560px) {
+  .cw-pane  { padding: 22px 18px 20px; border-radius: 16px; }
+  .cw-title { font-size: 31px; }
+}

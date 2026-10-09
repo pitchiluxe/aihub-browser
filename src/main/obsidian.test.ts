@@ -4,7 +4,7 @@ import os from 'os'
 import { join } from 'path'
 import {
   safeFileName, yamlValue, buildFrontmatter, isoDate, buildNote, folderFor,
-  uniquePath, describeVault, writeNote,
+  uniquePath, describeVault, writeNote, parseTagSuggestions,
 } from './obsidian'
 
 describe('safeFileName', () => {
@@ -109,6 +109,30 @@ describe('folderFor', () => {
     expect(folderFor('clip')).toBe('AIHub/Clippings')
     expect(folderFor('bookmark')).toBe('AIHub/Bookmarks')
     expect(folderFor('answer')).toBe('AIHub/AI Answers')
+    expect(folderFor('conversation')).toBe('AIHub/Conversations')
+  })
+})
+
+describe('parseTagSuggestions', () => {
+  it('splits on commas or newlines and cleans each tag', () => {
+    expect(parseTagSuggestions('Finance, #Trading, market-analysis')).toEqual(['finance', 'trading', 'market-analysis'])
+    expect(parseTagSuggestions('finance\ntrading\n')).toEqual(['finance', 'trading'])
+  })
+  it('drops punctuation and spaces a model might add mid-word', () => {
+    expect(parseTagSuggestions('AI/ML, "quotes", tag with spaces')).toEqual(['aiml', 'quotes', 'tagwithspaces'])
+  })
+  it('dedupes case-insensitively', () => {
+    expect(parseTagSuggestions('Finance, finance, FINANCE')).toEqual(['finance'])
+  })
+  it('drops single characters and anything absurdly long', () => {
+    expect(parseTagSuggestions('a, ok, ' + 'x'.repeat(40))).toEqual(['ok'])
+  })
+  it('caps at the requested count even with plenty of good tags', () => {
+    expect(parseTagSuggestions('one,two,three,four,five,six', 3)).toEqual(['one', 'two', 'three'])
+  })
+  it('returns nothing usable from an empty or conversational non-answer', () => {
+    expect(parseTagSuggestions('')).toEqual([])
+    expect(parseTagSuggestions('I am not sure what tags to suggest here.')).toEqual([])
   })
 })
 

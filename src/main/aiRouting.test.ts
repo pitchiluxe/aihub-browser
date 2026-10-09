@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { routeGenerate, summarizeOpenRouterSkips, type RoutingSettings, type RouterDeps, type OllamaHealth } from './aiRouting'
+import { routeGenerate, selectOllamaModel, summarizeOpenRouterSkips, type RoutingSettings, type RouterDeps, type OllamaHealth } from './aiRouting'
 
 const DEFAULTS: RoutingSettings = {
   primaryProvider: 'ollama',
@@ -50,6 +50,11 @@ describe('Ollama available', () => {
     const { d } = deps({ health: { available: true, models: ['llama3.2:3b', 'mistral:7b'] } })
     const r = await routeGenerate(settings({ ollamaModel: '' }), d)
     expect(r).toMatchObject({ provider: 'ollama', model: 'llama3.2:3b' })
+  })
+
+  it('prefers a responsive recommended local model over Ollama list order', async () => {
+    expect(selectOllamaModel(['gemma4:26b', 'llama3.2:3b', 'tinyllama:latest'])).toBe('llama3.2:3b')
+    expect(selectOllamaModel(['gemma4:26b', 'llama3.2:3b'], 'gemma4:26b')).toBe('gemma4:26b')
   })
 
   it('trusts the configured model when the model list could not be read', async () => {
@@ -111,18 +116,15 @@ describe('Ollama unavailable', () => {
 
 // ── Test 3 ─────────────────────────────────────────────────────────────────
 describe('Ollama model missing', () => {
-  it('falls back and names the model that is not installed', async () => {
+  it('uses another installed local model instead of falling back to OpenRouter', async () => {
     const { d, generate, orGenerate } = deps({
       health: { available: true, models: ['llama3.2:3b'] },
     })
     const r = await routeGenerate(settings({ ollamaModel: 'mistral:7b' }), d)
 
-    expect(r).toMatchObject({ fallbackUsed: true, fallbackReason: 'ollama_model_missing' })
-    // No point generating with a model Ollama does not have.
-    expect(generate).not.toHaveBeenCalled()
-    expect(orGenerate).toHaveBeenCalledOnce()
-    expect(r.ok && r.notice).toContain('mistral:7b')
-    expect(r.ok && r.notice).toMatch(/not installed/i)
+    expect(generate).toHaveBeenCalledWith('llama3.2:3b')
+    expect(r).toMatchObject({ provider: 'ollama', model: 'llama3.2:3b', fallbackUsed: false })
+    expect(orGenerate).not.toHaveBeenCalled()
   })
 
   it('reports "no chat model installed" separately from "wrong model"', async () => {
@@ -288,31 +290,33 @@ describe('OpenRouter unavailable while Ollama is healthy', () => {
   })
 })
 
-// ── OpenRouter as the primary ──────────────────────────────────────────────
-describe('OpenRouter primary', () => {
-  it('serves the request without touching Ollama', async () => {
-    const { d, health, generate } = deps()
+// ── User-selectable primary provider ──────────────────────────────────────
+describe('OpenRouter selected as primary', () => {
+  it('answers from OpenRouter without probing Ollama', async () => {
+    const { d, health, generate, orGenerate } = deps()
     const r = await routeGenerate(settings({ primaryProvider: 'openrouter', fallbackProvider: 'ollama' }), d)
-    expect(r).toMatchObject({ provider: 'openrouter', fallbackUsed: false })
+    expect(r).toMatchObject({ provider: 'openrouter', model: 'openrouter/free', fallbackUsed: false })
+    expect(orGenerate).toHaveBeenCalledOnce()
     expect(health).not.toHaveBeenCalled()
     expect(generate).not.toHaveBeenCalled()
   })
 
-  it('falls back to the local model when the cloud refuses', async () => {
-    const { d, generate } = deps({
-      orGenerate: async () => ({ ok: false as const, failure: { kind: 'credits' as const } }),
+  it('uses the configured Ollama fallback when OpenRouter fails', async () => {
+    const { d, health, generate } = deps({
+      orGenerate: async () => ({ ok: false as const, failure: { kind: 'error' as const, message: 'network unavailable' } }),
     })
     const r = await routeGenerate(settings({ primaryProvider: 'openrouter', fallbackProvider: 'ollama' }), d)
-    expect(r).toMatchObject({
-      provider: 'ollama', fallbackUsed: true, fallbackReason: 'openrouter_failed',
-    })
+    expect(r).toMatchObject({ provider: 'ollama', model: 'mistral:7b', fallbackUsed: true })
+    expect(health).toHaveBeenCalledOnce()
     expect(generate).toHaveBeenCalledWith('mistral:7b')
   })
 
-  it('falls back when no API key is configured', async () => {
-    const { d } = deps({ orConfigured: false })
+  it('uses Ollama when the selected OpenRouter primary is not configured', async () => {
+    const { d, orGenerate, generate } = deps({ orConfigured: false })
     const r = await routeGenerate(settings({ primaryProvider: 'openrouter', fallbackProvider: 'ollama' }), d)
-    expect(r).toMatchObject({ provider: 'ollama', fallbackReason: 'openrouter_not_configured' })
+    expect(r).toMatchObject({ provider: 'ollama', fallbackUsed: true, fallbackReason: 'openrouter_not_configured' })
+    expect(orGenerate).not.toHaveBeenCalled()
+    expect(generate).toHaveBeenCalledWith('mistral:7b')
   })
 })
 

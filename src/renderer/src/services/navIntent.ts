@@ -23,7 +23,7 @@ export interface NavTarget {
 // nothing at all.
 const IN_APP_PAGES = [
   'settings', 'history', 'downloads', 'wifi', 'vpn', 'research', 'agents',
-  'extensions', 'mail', 'notes', 'manual', 'rewind', 'watch', 'bible', 'study',
+  'extensions', 'mail', 'notes', 'obsidian-graph', 'manual', 'rewind', 'watch', 'bible', 'study', 'dj', 'travel', 'flights-rentals',
 ] as const
 
 export function pageTypeForUrl(url: string | undefined): PageType {
@@ -35,10 +35,12 @@ export function pageTypeForUrl(url: string | undefined): PageType {
 // Spoken names for the built-in pages. Matched on the whole (normalised) query
 // only, so "open bible" opens the reader while "open biblegateway" does not.
 const BUILT_IN_APPS: { pageType: PageType; title: string; aliases: string[] }[] = [
+  { pageType: 'flights-rentals', title: 'Flights & Rentals', aliases: ['flights', 'flights and rentals', 'flights & rentals', 'car rentals', 'vacation stays'] },
   { pageType: 'study',      title: 'Bible Study', aliases: ['bible study', 'study', 'study bible', 'daily verse', 'verse of the day', 'memorise verses', 'memorize verses', 'scripture memory', 'bible lessons', 'bible course', 'bible courses'] },
   { pageType: 'bible',      title: 'Bible',      aliases: ['bible', 'holy bible', 'bible reader', 'scripture', 'scriptures', 'kjv'] },
   { pageType: 'mail',       title: 'Mail',       aliases: ['mail', 'email', 'e-mail', 'inbox', 'gmail'] },
   { pageType: 'notes',      title: 'Notes',      aliases: ['notes', 'note', 'notepad', 'my notes'] },
+  { pageType: 'obsidian-graph', title: 'Obsidian Graph', aliases: ['obsidian', 'obsidian graph', 'graph view', 'knowledge graph', 'my graph', 'vault graph'] },
   { pageType: 'settings',   title: 'Settings',   aliases: ['settings', 'preferences', 'options'] },
   { pageType: 'history',    title: 'History',    aliases: ['history', 'browsing history'] },
   { pageType: 'downloads',  title: 'Downloads',  aliases: ['downloads', 'download manager'] },
@@ -50,6 +52,8 @@ const BUILT_IN_APPS: { pageType: PageType; title: string; aliases: string[] }[] 
   { pageType: 'manual',     title: 'Manual',     aliases: ['manual', 'user manual', 'help', 'docs'] },
   { pageType: 'wifi',       title: 'Free WiFi',  aliases: ['wifi', 'wi-fi', 'free wifi'] },
   { pageType: 'vpn',        title: 'VPN',        aliases: ['vpn', 'proxy'] },
+  { pageType: 'travel',     title: 'Travel the World', aliases: ['travel', 'travel the world', 'world travel', 'countries', 'trip planner', 'explore countries'] },
+  { pageType: 'dj',         title: 'AIHub DJ',   aliases: ['dj', 'aihub dj', 'dj mixer', 'mixer', 'dj software', 'turntables', 'virtual dj'] },
 ]
 
 // Last-resort destinations so a site the user never bookmarked (or has since

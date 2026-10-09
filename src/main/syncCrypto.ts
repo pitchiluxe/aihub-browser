@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { SECRET_SETTING_KEYS } from './secretStore'
 
 /**
  * AIHub Browser — end-to-end encryption and merging for cloud sync.
@@ -117,8 +118,9 @@ export function mergeBookmarks(local: SyncBookmark[], remote: SyncBookmark[]): S
 }
 
 /** Settings the user has explicitly asked not to leave the machine. */
-const NEVER_SYNC = new Set([
-  'openrouterKey', 'openrouterBase', 'openrouterModel', 'ollamaUrl',
+const NEVER_SYNC = new Set<string>([
+  ...SECRET_SETTING_KEYS,   // API keys stay on the device that entered them
+  'openrouterBase', 'openrouterModel', 'ollamaUrl',
   'obsidianVault',       // a local filesystem path means nothing on another machine
   'containers',          // cookie jars are per-device by definition
 ])

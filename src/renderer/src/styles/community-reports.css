@@ -1,0 +1,388 @@
+/* ══ Reports ══════════════════════════════════════════════════════════════
+   The moderator's review queue.
+
+   This panel was plain text on the page background: a heading, some rows, and
+   three buttons that looked like links. Nothing held a case together, nothing
+   said which case was worse than the next, and the destructive verdict sat
+   flush against the harmless one.
+
+   The redesign has one idea. A moderator with ten minutes needs to know where
+   to spend them BEFORE reading anything, so severity is carried by the shape
+   of the queue rather than by a number you have to read: every case has a
+   coloured spine down its left edge that thickens and warms as reports pile
+   up. Amber is a complaint, red is a pile-on. Scrolling the queue tells you
+   how bad the morning is without a single word being read.
+
+   The palette is the workspace's own --cm-*; only the severity ramp is added,
+   because that is the one thing this panel means that no other panel does. */
+
+.cr {
+  --cr-low:   #fbbf24;   /* one or two reports — someone objected           */
+  --cr-mid:   #fb923c;   /* three, the auto-hide threshold                  */
+  --cr-high:  #f87171;   /* a pile-on                                       */
+  --cr-safe:  #34d399;   /* the keep verdict, and the empty queue           */
+
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 28px;
+}
+
+/* The queue is a reading column, not a spreadsheet. Left-aligned rather than
+   centred so it stays anchored to the rail when the pane is wide. */
+.cr-inner {
+  width: 100%;
+  max-width: 760px;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────
+   The count is the headline, not the word "Reports". A moderator opening
+   this already knows what it is; what they do not know is how much is
+   waiting. */
+.cr-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.cr-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--cr-high) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cr-high) 26%, transparent);
+  color: var(--cr-high);
+}
+
+.cr-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.cr-sub {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--cm-dim);
+}
+
+/* ── The summary strip ──────────────────────────────────────────────────
+   Three facts that change what a moderator does next: how many cases, how
+   many are already hidden from the room, and how long the oldest has been
+   waiting. Drawn only when there is a queue — a row of zeroes above an
+   empty state is noise. */
+.cr-stats {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0 18px;
+  flex-wrap: wrap;
+}
+
+.cr-stat {
+  flex: 0 1 auto;
+  min-width: 128px;
+  padding: 10px 14px;
+  border-radius: var(--cm-radius);
+  background: var(--cm-raise);
+  border: 1px solid color-mix(in srgb, var(--cm-ink) 11%, transparent);
+}
+
+.cr-stat-n {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-stat-l {
+  margin-top: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cm-faint);
+}
+
+/* ── A case ─────────────────────────────────────────────────────────────
+   The spine is the whole design. Its colour and width come from the report
+   count, so the queue is legible as a shape. */
+.cr-case {
+  position: relative;
+  margin-bottom: 12px;
+  padding: 14px 16px 14px 18px;
+  border-radius: var(--cm-radius);
+  background: var(--cm-raise);
+  /* --cm-line is tuned for dividers inside the conversation and vanishes as a
+     card edge at this size; a little ink mixed in is what makes each case read
+     as its own object rather than as a run of text with a stripe. */
+  border: 1px solid color-mix(in srgb, var(--cm-ink) 13%, transparent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+  transition: border-color 0.18s ease, opacity 0.18s ease;
+}
+
+.cr-case:hover { border-color: color-mix(in srgb, var(--cm-ink) 24%, transparent); }
+
+.cr-case::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--cr-low);
+}
+
+.cr-case[data-sev='mid']::before  { width: 4px; background: var(--cr-mid); }
+.cr-case[data-sev='high']::before { width: 5px; background: var(--cr-high); }
+
+/* A case being acted on stops accepting the eye as well as the pointer. */
+.cr-case[data-busy='true'] {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.cr-case-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+}
+
+.cr-who {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.cr-where {
+  font-size: 11px;
+  color: var(--cm-dim);
+}
+
+.cr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.cr-chip[data-tone='count'] {
+  color: var(--cr-high);
+  background: color-mix(in srgb, var(--cr-high) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cr-high) 26%, transparent);
+}
+
+/* "Hidden" is a statement about the room, not about this message, so it is
+   drawn as state rather than as another warning. */
+.cr-chip[data-tone='hidden'] {
+  color: var(--cm-dim);
+  background: var(--cm-raise);
+  border: 1px solid var(--cm-line);
+}
+
+/* ── The reported message ───────────────────────────────────────────────
+   Shown in full and never truncated: a verdict on a message you can only
+   half see is a guess. The quote bar marks it as somebody else's words, so
+   a moderator is never unsure which text is the evidence. */
+.cr-quote {
+  position: relative;
+  padding: 11px 13px 11px 15px;
+  border-radius: var(--cm-radius-sm);
+  background: var(--cm-void);
+  border: 1px solid color-mix(in srgb, var(--cm-line) 70%, transparent);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cr-quote::before {
+  content: '';
+  position: absolute;
+  inset: 10px auto 10px 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--cm-line);
+}
+
+/* ── Reasons ────────────────────────────────────────────────────────────
+   Identical complaints are collapsed and counted. Five people writing
+   "spam" is one fact about the message, not five things to read. */
+.cr-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.cr-reason {
+  max-width: 100%;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--cm-dim);
+  background: var(--cm-shell);
+  border: 1px solid var(--cm-line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-reason b {
+  color: var(--cm-ink);
+  font-weight: 650;
+}
+
+/* ── Verdicts ───────────────────────────────────────────────────────────
+   Keep and Remove sit together; the banning verdict is pushed to the far
+   right behind a divider. Irreversible things should not be adjacent to
+   reversible ones — the gap is the guard rail. */
+.cr-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cm-line);
+}
+
+.cr-spacer { margin-left: auto; }
+
+.cr-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--cm-radius-sm);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.cr-btn:active { transform: translateY(1px); }
+
+.cr-btn[data-kind='keep'] {
+  color: var(--cr-safe);
+  background: color-mix(in srgb, var(--cr-safe) 12%, transparent);
+  border-color: color-mix(in srgb, var(--cr-safe) 30%, transparent);
+}
+.cr-btn[data-kind='keep']:hover {
+  background: color-mix(in srgb, var(--cr-safe) 20%, transparent);
+}
+
+.cr-btn[data-kind='remove'] {
+  color: var(--cm-ink);
+  background: var(--cm-shell);
+  border-color: var(--cm-line);
+}
+.cr-btn[data-kind='remove']:hover { background: var(--cm-hover); }
+
+.cr-btn[data-kind='ban'] {
+  color: var(--cr-high);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--cr-high) 30%, transparent);
+}
+.cr-btn[data-kind='ban']:hover {
+  background: color-mix(in srgb, var(--cr-high) 14%, transparent);
+}
+
+/* ── Empty, loading, error ──────────────────────────────────────────────
+   An empty queue is good news and is drawn as good news, in the safe
+   colour, rather than as a grey dashed box that reads like a missing
+   feature. */
+.cr-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 46px 24px;
+  text-align: center;
+  border-radius: var(--cm-radius);
+  background: var(--cm-raise);
+  border: 1px solid color-mix(in srgb, var(--cm-ink) 11%, transparent);
+}
+
+.cr-empty-ring {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  color: var(--cr-safe);
+  background: color-mix(in srgb, var(--cr-safe) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cr-safe) 26%, transparent);
+}
+
+.cr-empty-t { font-size: 14px; font-weight: 650; }
+.cr-empty-d { font-size: 12px; color: var(--cm-dim); max-width: 340px; line-height: 1.55; }
+
+/* Skeletons rather than a spinner: the queue keeps its shape while it
+   loads, so the panel does not jump when the cases arrive. */
+.cr-skel {
+  height: 108px;
+  margin-bottom: 12px;
+  border-radius: var(--cm-radius);
+  background: var(--cm-shell);
+  border: 1px solid var(--cm-line);
+  position: relative;
+  overflow: hidden;
+}
+
+.cr-skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--cm-hover), transparent);
+  transform: translateX(-100%);
+  animation: cr-sweep 1.3s ease-in-out infinite;
+}
+
+@keyframes cr-sweep { to { transform: translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cr-skel::after { animation: none; }
+}
+
+.cr-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border-radius: var(--cm-radius-sm);
+  font-size: 12.5px;
+  color: var(--cr-high);
+  background: color-mix(in srgb, var(--cr-high) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cr-high) 26%, transparent);
+}
+
+/* The confirmation after a verdict. It replaces the case in place for a
+   moment instead of the row vanishing, so a mis-click is noticed. */
+.cr-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border-radius: var(--cm-radius);
+  font-size: 12.5px;
+  color: var(--cr-safe);
+  background: color-mix(in srgb, var(--cr-safe) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cr-safe) 24%, transparent);
+}

@@ -172,8 +172,19 @@ export function suggestFasterModel(models: ModelInfo[], timedOut: string): strin
     !m.cloud && m.params > 0 && m.params < failed.params && m.name !== timedOut)
   if (!smaller.length) return null
 
-  return [...smaller].sort((a, b) => {
+  // Avoid swapping between near-identical sizes (for example 7.6B → 7.2B)
+  // when a substantially lighter installed model can actually change whether
+  // CPU-bound prompt prefill finishes in time.
+  const substantiallySmaller = smaller.filter(m => m.params <= failed.params * 0.8)
+  const candidates = substantiallySmaller.length ? substantiallySmaller : smaller
+  return [...candidates].sort((a, b) => {
     if (b.params !== a.params) return b.params - a.params
     return familyScore(a.name) - familyScore(b.name)
   })[0].name
+}
+
+/** Scale prompt prefill time while bounding how long a local request can hang. */
+export function firstTokenTimeoutForPrompt(promptChars: number): number {
+  const estimatedTokens = Math.ceil(Math.max(0, promptChars) / 3.5)
+  return Math.min(240_000, Math.max(180_000, estimatedTokens * 22))
 }

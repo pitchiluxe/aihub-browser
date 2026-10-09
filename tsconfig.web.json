@@ -5,12 +5,11 @@
     "composite": true,
     "moduleResolution": "bundler",
     "ignoreDeprecations": "5.0",
-    "baseUrl": ".",
     "paths": {
-      "@renderer/*": ["src/renderer/src/*"],
-      "@components/*": ["src/renderer/src/components/*"],
-      "@store/*": ["src/renderer/src/store/*"],
-      "@services/*": ["src/renderer/src/services/*"]
+      "@renderer/*": ["./src/renderer/src/*"],
+      "@components/*": ["./src/renderer/src/components/*"],
+      "@store/*": ["./src/renderer/src/store/*"],
+      "@services/*": ["./src/renderer/src/services/*"]
     }
   }
 }

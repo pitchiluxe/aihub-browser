@@ -1,0 +1,296 @@
+/* ══ The guide ════════════════════════════════════════════════════════════
+   The panel where the owner switches on the community's AI.
+
+   It sits inside the workspace, so it keeps the workspace's --cm-* palette
+   rather than importing the welcome screen's water. What it adds is one
+   accent — the same aqua the AI badge uses beside every message the guide
+   writes — so the switch and the label people see in the room are visibly
+   the same thing.
+
+   The signature is the listening ring: concentric circles that breathe only
+   while the guide is actually running. Off, it is a flat dot. That is the
+   whole status, readable from across the room, and it is tied to real state
+   rather than decorating the header. */
+
+.cg {
+  --cg-aqua:  #33d6c8;
+  --cg-glow:  rgba(51, 214, 200, 0.16);
+  --cg-edge:  rgba(51, 214, 200, 0.28);
+}
+
+/* Centred in the pane, with auto margins so an overflowing card still
+   scrolls to its own top. */
+.cg-center {
+  margin: auto;
+  padding: 26px 0;
+  width: 100%;
+  max-width: 580px;
+}
+
+/* ── The card ───────────────────────────────────────────────────────────
+   The panel had no container: text and controls sat straight on the page
+   background with nothing holding them together, which reads as an unstyled
+   form rather than as a piece of the app.
+
+   The edge is not only decoration — it carries state. When the guide is
+   running the border takes the aqua accent and a faint outward glow, so the
+   whole panel says "this is live" from the doorway, matching the ring in the
+   header and the badge on every message the guide writes. */
+.cg-card {
+  position: relative;
+  padding: 24px 26px 22px;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(51, 214, 200, 0.045) 0%, transparent 38%),
+    var(--cm-shell);
+  border: 1px solid var(--cm-line);
+  box-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.85);
+  transition: border-color 500ms ease, box-shadow 500ms ease;
+}
+.cg-card[data-running='true'] {
+  border-color: var(--cg-edge);
+  box-shadow:
+    0 18px 40px -28px rgba(0, 0, 0, 0.85),
+    0 0 42px -22px rgba(51, 214, 200, 0.55);
+}
+
+/* A hairline of accent along the top edge, brighter while it is listening —
+   the same trick as light catching the lip of a surface. */
+.cg-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 18px;
+  right: 18px;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--cg-edge), transparent);
+  opacity: 0.5;
+  transition: opacity 500ms ease;
+}
+.cg-card[data-running='true']::before { opacity: 1; }
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.cg-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--cm-line);
+}
+
+/** The listening ring. Breathing = running; still = off. */
+.cg-orb {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--cm-faint);
+  background: var(--cm-stage);
+  border: 1px solid var(--cm-line);
+  transition: color 400ms ease, border-color 400ms ease, background 400ms ease;
+}
+.cg-orb[data-running='true'] {
+  color: var(--cg-aqua);
+  border-color: var(--cg-edge);
+  background: linear-gradient(160deg, var(--cg-glow), transparent 70%), var(--cm-stage);
+}
+.cg-orb[data-running='true']::before,
+.cg-orb[data-running='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  border: 1px solid var(--cg-edge);
+  animation: cg-listen 2.8s cubic-bezier(.3,.5,.3,1) infinite;
+}
+.cg-orb[data-running='true']::after { animation-delay: 1.4s; }
+
+@keyframes cg-listen {
+  0%   { transform: scale(1);    opacity: 0.7; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+
+.cg-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+
+.cg-state {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cm-faint);
+}
+.cg-state[data-running='true'] { color: var(--cg-aqua); }
+
+/* ── What it is, and what it is not ─────────────────────────────────── */
+
+.cg-lede {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--cm-dim);
+  margin-bottom: 18px;
+}
+.cg-lede strong { color: var(--cm-ink); font-weight: 600; }
+
+/* Three promises, each with its own mark. Bordered on the leading edge only:
+   a full box around each would build a stack of three heavy cards where the
+   point is a quiet list. */
+.cg-note {
+  position: relative;
+  display: flex;
+  gap: 11px;
+  padding: 11px 13px 11px 14px;
+  margin-bottom: 8px;
+  border-radius: 0 10px 10px 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--cm-dim);
+  background: var(--cm-stage);
+  border-left: 2px solid var(--cg-edge);
+  transition: background 220ms ease, border-left-color 220ms ease;
+}
+.cg-note:hover {
+  background: var(--cm-raise);
+  border-left-color: var(--cg-aqua);
+}
+.cg-note svg { flex-shrink: 0; margin-top: 1px; color: var(--cg-aqua); opacity: 0.85; }
+.cg-note strong { color: var(--cm-ink); font-weight: 600; }
+
+/* ── The switch ─────────────────────────────────────────────────────── */
+
+.cg-switch {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  margin-top: 22px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  text-align: left;
+  cursor: pointer;
+  background: var(--cm-stage);
+  border: 1px solid var(--cm-line);
+  transition: border-color 220ms ease, background 220ms ease;
+}
+.cg-switch:hover:not(:disabled) { border-color: var(--cg-edge); background: var(--cm-raise); }
+.cg-switch:focus-visible { outline: 2px solid var(--cg-aqua); outline-offset: 2px; }
+.cg-switch:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* A real track and knob. A bare checkbox reads as a form field, and this is
+   the one control on the page that does something to a shared room. */
+.cg-track {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--cm-hover);
+  border: 1px solid var(--cm-line);
+  transition: background 260ms ease, border-color 260ms ease;
+}
+.cg-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--cm-dim);
+  transition: transform 260ms cubic-bezier(.2,.8,.3,1), background 260ms ease;
+}
+.cg-switch[data-on='true'] .cg-track {
+  background: linear-gradient(135deg, var(--cg-aqua), #1ea89d);
+  border-color: var(--cg-edge);
+}
+.cg-switch[data-on='true'] .cg-knob {
+  transform: translateX(18px);
+  background: #04231f;
+}
+
+.cg-switch-label { font-size: 13.5px; color: var(--cm-ink); }
+.cg-switch-hint  { font-size: 11.5px; color: var(--cm-faint); margin-top: 2px; }
+
+/* ── Model ──────────────────────────────────────────────────────────── */
+
+.cg-label {
+  display: block;
+  margin: 22px 0 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cm-faint);
+}
+
+.cg-select {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  color: var(--cm-ink);
+  background: var(--cm-stage);
+  border: 1px solid var(--cm-line);
+  cursor: pointer;
+  transition: border-color 200ms ease;
+}
+.cg-select:hover:not(:disabled) { border-color: var(--cg-edge); }
+.cg-select:focus {
+  outline: none;
+  border-color: var(--cg-aqua);
+  box-shadow: 0 0 0 3px rgba(51, 214, 200, 0.12);
+}
+
+.cg-blocker {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cm-dim);
+  background: rgba(251, 191, 36, 0.07);
+  border: 1px solid rgba(251, 191, 36, 0.22);
+}
+.cg-blocker svg { flex-shrink: 0; margin-top: 1px; color: var(--cm-warn); }
+
+.cg-error {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--cm-danger);
+}
+
+.cg-foot {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--cm-line);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--cm-faint);
+}
+
+.cg-code {
+  background: var(--cm-void);
+  border: 1px solid var(--cm-line);
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--cg-aqua);
+}
+
+/* The ring is a status light, not an animation people need. */
+@media (prefers-reduced-motion: reduce) {
+  .cg-orb[data-running='true']::before,
+  .cg-orb[data-running='true']::after { animation: none; }
+  .cg-knob, .cg-track, .cg-note, .cg-switch, .cg-card { transition: none; }
+}
+
+@media (max-width: 620px) {
+  .cg-card { padding: 18px 16px 16px; border-radius: 13px; }
+}

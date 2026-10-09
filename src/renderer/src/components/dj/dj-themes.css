@@ -1,0 +1,178 @@
+/*
+ * AIHub DJ — more colour themes, and "looks" that change the console's style.
+ *
+ * A colour theme (data-dj-theme) only re-points the colour tokens; a look
+ * (data-dj-look) restyles the hardware itself — panels, buttons, displays.
+ * Any look works with any theme. Everything here is static styling: no blur,
+ * no animated effects, nothing the GPU has to redraw while music plays.
+ */
+
+/* ── Colour themes ─────────────────────────────────────────────────────── */
+.aihub-dj[data-dj-theme='carbon'] {
+  --dj-metal: repeating-linear-gradient(45deg, #1b1c1f 0 3px, #232428 3px 6px);
+  --dj-edge: #000;
+  --dj-label: #e5e7eb; --dj-label-soft: #f87171;
+  --dj-light: linear-gradient(#2e3035, #1b1c20); --dj-light-ink: #f3f4f6; --dj-light-edge: #000;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(239,68,68,0.12), transparent 60%), linear-gradient(180deg, #0e0f11, #050506);
+  --dj-screw: radial-gradient(circle at 35% 35%, #9ca3af, #111 70%);
+}
+.aihub-dj[data-dj-theme='sunset'] {
+  --dj-metal: linear-gradient(180deg, #4a2147 0%, #331632 55%, #241024 100%);
+  --dj-edge: #1a0a18;
+  --dj-label: #fde68a; --dj-label-soft: #fb923c;
+  --dj-light: linear-gradient(#6a2e58, #3f1a3a); --dj-light-ink: #fde68a; --dj-light-edge: #1a0a18;
+  --dj-bg: radial-gradient(ellipse at 50% -10%, rgba(249,115,22,0.35), transparent 55%), radial-gradient(ellipse at 50% 110%, rgba(168,85,247,0.25), transparent 60%), #12060f;
+  --dj-screw: radial-gradient(circle at 35% 35%, #fed7aa, #7c2d12 70%);
+  --dj-glow: 0 0 12px rgba(249,115,22,0.18);
+}
+.aihub-dj[data-dj-theme='rosegold'] {
+  --dj-metal: linear-gradient(180deg, #f8e4db 0%, #e9c3b2 50%, #d4a18c 100%);
+  --dj-edge: #9c6b5b;
+  --dj-label: #4a2a22; --dj-label-soft: #7c4a3c;
+  --dj-light: linear-gradient(#fff6f2, #efd2c6); --dj-light-ink: #3b1f18; --dj-light-edge: #a87765;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(251,191,170,0.18), transparent 60%), linear-gradient(180deg, #2a1c19, #140d0b);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #b07c69 70%);
+}
+.aihub-dj[data-dj-theme='matrix'] {
+  --dj-metal: linear-gradient(180deg, #0b140d 0%, #060b07 100%);
+  --dj-edge: #166534;
+  --dj-label: #4ade80; --dj-label-soft: #22c55e;
+  --dj-light: linear-gradient(#11251a, #08140d); --dj-light-ink: #86efac; --dj-light-edge: #14532d;
+  --dj-bg: radial-gradient(ellipse at 50% 0%, rgba(34,197,94,0.16), transparent 60%), #000;
+  --dj-screw: radial-gradient(circle at 35% 35%, #86efac, #052e16 70%);
+  --dj-glow: 0 0 10px rgba(34,197,94,0.18);
+  --dj-ink: #86efac;
+}
+.aihub-dj[data-dj-theme='vapor'] {
+  --dj-metal: linear-gradient(135deg, #ffd6f2 0%, #e9d5ff 50%, #c7f0ff 100%);
+  --dj-edge: #c084fc;
+  --dj-label: #6b21a8; --dj-label-soft: #db2777;
+  --dj-light: linear-gradient(#ffffff, #f5d0fe); --dj-light-ink: #581c87; --dj-light-edge: #c084fc;
+  --dj-bg: linear-gradient(135deg, #3b0764 0%, #1e1b4b 50%, #0c4a6e 100%);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #c084fc 70%);
+}
+.aihub-dj[data-dj-theme='walnut'] {
+  --dj-metal: repeating-linear-gradient(92deg, #6e4428 0 7px, #5c381f 7px 10px, #7a4d2e 10px 17px, #643d23 17px 21px);
+  --dj-edge: #2b170b;
+  --dj-label: #fbe7c6; --dj-label-soft: #e0b98a;
+  --dj-light: linear-gradient(#f3e3c8, #d8bf98); --dj-light-ink: #2b1708; --dj-light-edge: #3b220f;
+  --dj-bg: linear-gradient(180deg, #1c120b, #0d0805);
+  --dj-screw: radial-gradient(circle at 35% 35%, #f5e6c8, #8a6a3a 70%);
+}
+.aihub-dj[data-dj-theme='pearl'] {
+  --dj-metal: linear-gradient(180deg, #ffffff 0%, #f5f2f9 50%, #e8e3f0 100%);
+  --dj-edge: #c9c1d6;
+  --dj-label: #3b3150; --dj-label-soft: #7c6f94;
+  --dj-light: linear-gradient(#ffffff, #ece6f5); --dj-light-ink: #2a2140; --dj-light-edge: #b8acc9;
+  --dj-bg: linear-gradient(135deg, #ece7f4 0%, #dbe3f2 100%);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #c9c1d6 70%);
+}
+.aihub-dj[data-dj-theme='royal'] {
+  --dj-metal: linear-gradient(180deg, #23306a 0%, #172150 55%, #111a40 100%);
+  --dj-edge: #0a0f26;
+  --dj-label: #fde68a; --dj-label-soft: #93c5fd;
+  --dj-light: linear-gradient(#2f3f86, #1a2557); --dj-light-ink: #fde68a; --dj-light-edge: #c9a227;
+  --dj-bg: radial-gradient(ellipse at 50% -15%, rgba(201,162,39,0.22), transparent 55%), linear-gradient(180deg, #0b1130, #050817);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fef3c7, #a16207 70%);
+}
+.aihub-dj[data-dj-theme='lava'] {
+  --dj-metal: linear-gradient(180deg, #2a110a 0%, #1a0906 100%);
+  --dj-edge: #7c2d12;
+  --dj-label: #fed7aa; --dj-label-soft: #fb923c;
+  --dj-light: linear-gradient(#45200f, #260e06); --dj-light-ink: #fdba74; --dj-light-edge: #7c2d12;
+  --dj-bg: radial-gradient(ellipse at 50% 115%, rgba(234,88,12,0.4), transparent 60%), #0a0302;
+  --dj-screw: radial-gradient(circle at 35% 35%, #fdba74, #431407 70%);
+  --dj-glow: 0 0 12px rgba(234,88,12,0.22);
+}
+.aihub-dj[data-dj-theme='mint'] {
+  --dj-metal: linear-gradient(180deg, #ecfcf5 0%, #c9f0e1 50%, #a6dfc9 100%);
+  --dj-edge: #5fa88c;
+  --dj-label: #0f3d2e; --dj-label-soft: #2f7a60;
+  --dj-light: linear-gradient(#ffffff, #d5f5e8); --dj-light-ink: #0b2f23; --dj-light-edge: #6bb79a;
+  --dj-bg: linear-gradient(180deg, #0f2a22, #071612);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #5fa88c 70%);
+}
+/* Dark-metal themes: the stems panel sits darker so its buttons read. */
+.aihub-dj[data-dj-dark='1'] .dj-stems { background: rgba(0,0,0,0.22); }
+.aihub-dj[data-dj-dark='1'] .dj-logo-dj { text-shadow: 0 0 10px currentColor; }
+
+/* ── Looks ─────────────────────────────────────────────────────────────── */
+
+/* Flat: a clean, modern app — no lacquer, screws or bevels; softer corners. */
+.aihub-dj[data-dj-look='flat'] .dj-panel {
+  background: var(--dj-metal);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+}
+.aihub-dj[data-dj-look='flat'] .dj-panel::before, .aihub-dj[data-dj-look='flat'] .dj-panel::after { display: none; }
+.aihub-dj[data-dj-look='flat'] .dj-lcd { background: var(--dj-lcd); box-shadow: none; border-radius: 8px; border-color: transparent; }
+.aihub-dj[data-dj-look='flat'] .dj-btn, .aihub-dj[data-dj-look='flat'] .dj-tbtn, .aihub-dj[data-dj-look='flat'] .dj-pad,
+.aihub-dj[data-dj-look='flat'] .dj-mini, .aihub-dj[data-dj-look='flat'] .dj-stem, .aihub-dj[data-dj-look='flat'] .dj-rec-btn,
+.aihub-dj[data-dj-look='flat'] .dj-automix { border-radius: 8px; box-shadow: none; }
+.aihub-dj[data-dj-look='flat'] .dj-btn::after, .aihub-dj[data-dj-look='flat'] .dj-tbtn::after, .aihub-dj[data-dj-look='flat'] .dj-pad::after,
+.aihub-dj[data-dj-look='flat'] .dj-mini::after, .aihub-dj[data-dj-look='flat'] .dj-stem::after, .aihub-dj[data-dj-look='flat'] .dj-rec-btn::after,
+.aihub-dj[data-dj-look='flat'] .dj-automix::after, .aihub-dj[data-dj-look='flat'] .dj-deck-letter::after { display: none; }
+.aihub-dj[data-dj-look='flat'] .dj-tbtn { background: var(--dj-light); }
+.aihub-dj[data-dj-look='flat'] .dj-platter { box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+
+/* Club: dark booth hardware — sharp edges outlined in the theme colour, lit displays. */
+.aihub-dj[data-dj-look='club'] { --dj-glow: 0 0 16px -4px var(--dj-label-soft); }
+.aihub-dj[data-dj-look='club'] .dj-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 30%), linear-gradient(180deg, #16171b, #0c0d10);
+  border-radius: 2px;
+  border-color: var(--dj-label-soft);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.6), var(--dj-glow);
+  --dj-label: #e5e7eb;
+  --dj-text: #e5e7eb;
+}
+.aihub-dj[data-dj-look='club'] .dj-panel::before, .aihub-dj[data-dj-look='club'] .dj-panel::after { display: none; }
+.aihub-dj[data-dj-look='club'] .dj-lcd { border-color: var(--dj-label-soft); box-shadow: inset 0 2px 6px rgba(0,0,0,0.8), 0 0 8px -3px var(--dj-label-soft); }
+.aihub-dj[data-dj-look='club'] .dj-btn, .aihub-dj[data-dj-look='club'] .dj-tbtn, .aihub-dj[data-dj-look='club'] .dj-pad { border-radius: 2px; }
+.aihub-dj[data-dj-look='club'] .dj-tbtn { background: linear-gradient(#2a2c31, #18191d); color: #f3f4f6; border-color: #000; box-shadow: inset 0 1px rgba(255,255,255,0.08); }
+.aihub-dj[data-dj-look='club'] .dj-section-title, .aihub-dj[data-dj-look='club'] .dj-knob-label { color: var(--dj-label-soft); letter-spacing: 1.5px; }
+.aihub-dj[data-dj-look='club'] .dj-stems { background: rgba(0,0,0,0.3); }
+
+/* Retro: a 70s home deck — walnut cheeks, warm amber displays, rounded keys. */
+.aihub-dj[data-dj-look='retro'] {
+  padding-left: 22px; padding-right: 22px;
+  background:
+    repeating-linear-gradient(180deg, #6e4428 0 9px, #5c381f 9px 13px, #7a4d2e 13px 22px) left / 16px 100% no-repeat,
+    repeating-linear-gradient(180deg, #6e4428 0 9px, #5c381f 9px 13px, #7a4d2e 13px 22px) right / 16px 100% no-repeat,
+    var(--dj-bg);
+  --dj-ink: #fbbf24;
+}
+.aihub-dj[data-dj-look='retro'] .dj-panel { border-radius: 14px; }
+.aihub-dj[data-dj-look='retro'] .dj-lcd { color: #fbbf24; background: linear-gradient(180deg, #1f160a, #120c05); border-radius: 8px; }
+.aihub-dj[data-dj-look='retro'] .dj-btn, .aihub-dj[data-dj-look='retro'] .dj-tbtn, .aihub-dj[data-dj-look='retro'] .dj-mini,
+.aihub-dj[data-dj-look='retro'] .dj-stem, .aihub-dj[data-dj-look='retro'] .dj-rec-btn { border-radius: 999px; }
+.aihub-dj[data-dj-look='retro'] .dj-pad { border-radius: 50%; }
+.aihub-dj[data-dj-look='retro'] .dj-section-title, .aihub-dj[data-dj-look='retro'] .dj-knob-label,
+.aihub-dj[data-dj-look='retro'] .dj-mixer-logo { font-family: Georgia, 'Times New Roman', serif; font-style: italic; letter-spacing: 0.5px; }
+
+/* Glass: see-through panels over the theme's backdrop (a tint, not a live blur — nothing to redraw). */
+.aihub-dj[data-dj-look='glass'] .dj-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.05) 45%, rgba(255,255,255,0.03) 100%);
+  border-color: rgba(255,255,255,0.22);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 8px 24px rgba(0,0,0,0.35);
+  --dj-label: #f1f5f9; --dj-label-soft: #cbd5e1; --dj-text: #f1f5f9;
+}
+.aihub-dj[data-dj-look='glass'][data-dj-light-bg='1'] .dj-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.45));
+  border-color: rgba(0,0,0,0.12);
+  --dj-label: #1e293b; --dj-label-soft: #475569; --dj-text: #1e293b;
+}
+.aihub-dj[data-dj-look='glass'] .dj-panel::before, .aihub-dj[data-dj-look='glass'] .dj-panel::after { opacity: 0.5; }
+.aihub-dj[data-dj-look='glass'] .dj-lcd { background: rgba(0,0,0,0.55); border-color: rgba(255,255,255,0.12); border-radius: 8px; }
+.aihub-dj[data-dj-look='glass'] .dj-stems { background: rgba(0,0,0,0.18); }
+/* On a light backdrop a see-through display washes out: keep the displays solid. */
+.aihub-dj[data-dj-look='glass'][data-dj-light-bg='1'] .dj-lcd { background: linear-gradient(180deg, #1f2433, #141824); border-color: rgba(0,0,0,0.35); }
+.aihub-dj[data-dj-look='glass'][data-dj-light-bg='1'] .dj-stems { background: rgba(15,23,42,0.08); }
+
+/* ── Picker ─────────────────────────────────────────────────────────────── */
+.aihub-dj .dj-theme-menu { width: 330px; max-height: 72vh; overflow: auto; }
+.aihub-dj .dj-look-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+.aihub-dj .dj-out-menu .dj-look-row button { display: flex !important; flex-direction: column; align-items: center; gap: 3px; padding: 5px 2px; border: 1px solid #2f3136; border-radius: 6px; font-size: 11px; text-align: center; }
+.aihub-dj .dj-out-menu .dj-look-row button.on { border-color: #f97316; }
+.aihub-dj .dj-look-ico { width: 34px; height: 22px; border-radius: 4px; }
+.aihub-dj .dj-swatch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 6px; }

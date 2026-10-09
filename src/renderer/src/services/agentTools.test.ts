@@ -5,7 +5,7 @@ import { parseActionsBlock, cleanNarration } from './agentTools'
 // local ones — wrap tool calls in whatever they were fine-tuned on: the
 // documented ###ACTIONS### marker, XML-ish <ACTION> tags, Mistral's
 // [TOOL_CALLS], Harmony's <|channel|> tokens, or a bare JSON blob.
-const leaks = /<\/?\s*(?:action|actions|tool_call|tool_calls|function_call|invoke|think|thinking|reasoning|scratchpad)\b|<\|[^|]*\|>|###\s*ACTIONS?|\[\/?(?:TOOL_CALLS|INST)\]|"(?:tool|action|tool_name|arguments)"\s*:/i
+const leaks = /<\/?\s*(?:action|actions|tool_call|tool_calls|(?:dots_)?function_call|dots_function_calls|invoke|think|thinking|reasoning|scratchpad)\b|<\|[^|]*\|>|###\s*ACTIONS?|\[\/?(?:TOOL_CALLS|INST)\]|"(?:tool|action|tool_name|arguments)"\s*:/i
 
 describe('parseActionsBlock — narration is always clean prose', () => {
   it('strips XML-style action tags and still executes the call', () => {
@@ -13,6 +13,13 @@ describe('parseActionsBlock — narration is always clean prose', () => {
     const { narration, actions } = parseActionsBlock(raw)
     expect(narration).toBe('Opening YouTube ↗')
     expect(actions).toEqual([{ tool: 'open_tab', url: 'https://www.youtube.com' }])
+  })
+
+  it('parses Dots function-call tags without displaying their wrapper', () => {
+    const raw = 'Opening the page.\n<dots_function_call>{"tool":"open_tab","url":"https://example.com"}</dots_function_call>'
+    const { narration, actions } = parseActionsBlock(raw)
+    expect(narration).toBe('Opening the page.')
+    expect(actions).toEqual([{ tool: 'open_tab', url: 'https://example.com' }])
   })
 
   it('handles a tag the model never closed', () => {

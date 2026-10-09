@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickAgentModel, isTooSmallForAgentWork, suggestFasterModel, ModelInfo } from './modelRouting'
+import { pickAgentModel, isTooSmallForAgentWork, suggestFasterModel, firstTokenTimeoutForPrompt, ModelInfo } from './modelRouting'
 
 // Mirrors a real machine's installed set (this is the user's own list).
 const INSTALLED: ModelInfo[] = [
@@ -83,6 +83,7 @@ describe('suggestFasterModel', () => {
   const INSTALLED = [
     { name: 'gemma4:12b',       tools: true,  params: 11.9,  cloud: false },
     { name: 'qwen2.5:14b',      tools: true,  params: 14.8,  cloud: false },
+    { name: 'qwen2.5:7b',       tools: true,  params: 7.6,   cloud: false },
     { name: 'mistral:7b',       tools: true,  params: 7.2,   cloud: false },
     { name: 'llama3.2:3b',      tools: true,  params: 3.2,   cloud: false },
     { name: 'smollm2:135m',     tools: false, params: 0.135, cloud: false },
@@ -93,9 +94,13 @@ describe('suggestFasterModel', () => {
     expect(suggestFasterModel(INSTALLED, 'mistral:7b')).toBe('llama3.2:3b')
   })
 
+  it('prefers a materially smaller model over a near-equal 7B variant', () => {
+    expect(suggestFasterModel(INSTALLED, 'qwen2.5:7b')).toBe('llama3.2:3b')
+  })
+
   it('gives up as little quality as possible', () => {
-    // 12B failed, so 7.2B is the answer — not the tiny one.
-    expect(suggestFasterModel(INSTALLED, 'gemma4:12b')).toBe('mistral:7b')
+    // 12B failed, so the largest substantially smaller model is the answer.
+    expect(suggestFasterModel(INSTALLED, 'gemma4:12b')).toBe('qwen2.5:7b')
   })
 
   it('returns null when nothing smaller is installed', () => {
@@ -112,5 +117,20 @@ describe('suggestFasterModel', () => {
 
   it('declines to guess when the failed model has no known size', () => {
     expect(suggestFasterModel(INSTALLED, 'something-unlisted')).toBeNull()
+  })
+})
+
+describe('firstTokenTimeoutForPrompt', () => {
+  it('keeps the standard budget for small prompts', () => {
+    expect(firstTokenTimeoutForPrompt(4000)).toBe(180_000)
+  })
+
+  it('allows CPU-bound large prompts more prefill time', () => {
+    expect(firstTokenTimeoutForPrompt(31_500)).toBe(198_000)
+  })
+
+  it('caps the wait and handles invalid sizes', () => {
+    expect(firstTokenTimeoutForPrompt(100_000)).toBe(240_000)
+    expect(firstTokenTimeoutForPrompt(-1)).toBe(180_000)
   })
 })

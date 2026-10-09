@@ -16,9 +16,15 @@ const MarkdownRenderer = lazy(() => import('./MarkdownRenderer'))
 interface Props {
   content: string
   onNavigate: (url: string) => void
+  /** Optional accent color for theming (e.g., agent color, channel accent) */
+  accent?: string
+  /** The text is still arriving: unfinished fences are closed for display. */
+  streaming?: boolean
+  /** Takes over rendering of a link; return null to fall back to the default. */
+  renderLink?: (href: string, children: React.ReactNode) => React.ReactNode | null
 }
 
-export default function Markdown({ content, onNavigate }: Props) {
+export default function Markdown({ content, onNavigate, accent, streaming, renderLink }: Props) {
   // Trade plans are pulled out BEFORE markdown runs. The model does not
   // reliably use the fenced form the prompt asks for — a local model emitted
   // "[trade-plan] { … }", which markdown rendered as a wall of raw JSON in the
@@ -39,7 +45,7 @@ export default function Markdown({ content, onNavigate }: Props) {
             </div>
           }
         >
-          <MarkdownRenderer content={text} onNavigate={onNavigate} />
+          <MarkdownRenderer content={text} onNavigate={onNavigate} accent={accent} streaming={streaming} renderLink={renderLink} />
         </Suspense>
       )}
       {plans.map((plan, i) => <TradePlanCard key={i} plan={plan as any} />)}

@@ -129,6 +129,14 @@ export interface RouteFailure {
 
 export type RouteResult = RouteSuccess | RouteFailure
 
+/** Prefer a responsive general-purpose local model when the saved model is
+ * missing or unset. Explicitly selected installed models always win. */
+export function selectOllamaModel(installed: string[], configured = ''): string {
+  if (configured && installed.includes(configured)) return configured
+  const preferred = ['llama3.2:3b', 'llama3.2:latest', 'gemma4:e2b', 'phi3:mini', 'mistral:7b']
+  return preferred.find(model => installed.includes(model)) || installed[0] || configured
+}
+
 // ── Human-readable failure text ────────────────────────────────────────────
 
 function openRouterMessage(f: OpenRouterFailure): string {
@@ -187,11 +195,29 @@ function fallbackNotice(reason: FallbackReason, detail: string, ollamaModel: str
  */
 export async function routeGenerate(settings: RoutingSettings, deps: RouterDeps): Promise<RouteResult> {
   const log = deps.log ?? (() => {})
-  log(`[AI] Primary provider: ${settings.primaryProvider}`)
+  if (settings.primaryProvider === 'openrouter') {
+    log('[AI] Primary provider: openrouter')
+    if (!deps.openRouter.isConfigured()) {
+      return fallbackFrom(
+        'openrouter', 'openrouter_not_configured',
+        'No OpenRouter API key is configured (Settings → AI → OpenRouter).',
+        settings, deps, log,
+      )
+    }
 
-  return settings.primaryProvider === 'openrouter'
-    ? await openRouterPrimary(settings, deps, log)
-    : await ollamaPrimary(settings, deps, log)
+    const response = await callOpenRouter(settings, deps, log)
+    if (response.ok) {
+      return {
+        ok: true, content: response.content, provider: 'openrouter', model: response.model,
+        fallbackUsed: false,
+      }
+    }
+
+    return fallbackFrom('openrouter', 'openrouter_failed', openRouterMessage(response.failure), settings, deps, log)
+  }
+
+  log('[AI] Primary provider: ollama')
+  return await ollamaPrimary(settings, deps, log)
 }
 
 async function ollamaPrimary(settings: RoutingSettings, deps: RouterDeps, log: (s: string) => void): Promise<RouteResult> {
@@ -212,16 +238,13 @@ async function ollamaPrimary(settings: RoutingSettings, deps: RouterDeps, log: (
   // that nothing is installed — trust the user's choice and let Ollama judge.
   const known = health.models
   const configured = settings.ollamaModel
-  let model = configured
+  let model = selectOllamaModel(known, configured)
   if (known.length) {
-    if (!configured) {
-      model = known[0]
-    } else if (!known.includes(configured)) {
-      // §16: a configured-but-uninstalled model is a real failure, and the
-      // user is told which model is missing rather than just "fallback used".
-      log(`[OLLAMA] Selected model: ${configured}`)
-      log('[OLLAMA] Model NOT installed')
-      return fallbackFrom('ollama', 'ollama_model_missing', '', settings, deps, log)
+    if (configured && !known.includes(configured)) {
+      // Profiles can retain a model name from another machine or an older
+      // install. If local models are available, recover locally instead of
+      // unnecessarily sending the request to a cloud provider.
+      log(`[OLLAMA] Saved model ${configured} is not installed; using ${model}`)
     }
   }
   if (!model) {
@@ -243,19 +266,6 @@ async function ollamaPrimary(settings: RoutingSettings, deps: RouterDeps, log: (
   detail = gen.ok ? `Ollama returned an empty response (model: ${model})` : gen.error
   log(`[OLLAMA] Generation failed: ${detail}`)
   return fallbackFrom('ollama', reason, detail, settings, deps, log)
-}
-
-async function openRouterPrimary(settings: RoutingSettings, deps: RouterDeps, log: (s: string) => void): Promise<RouteResult> {
-  if (!deps.openRouter.isConfigured()) {
-    log('[OPENROUTER] No API key configured')
-    return fallbackFrom('openrouter', 'openrouter_not_configured', 'No OpenRouter API key is configured.', settings, deps, log)
-  }
-  const attempt = await callOpenRouter(settings, deps, log)
-  if (attempt.ok) {
-    log('[AI] Fallback not required')
-    return { ok: true, content: attempt.content, provider: 'openrouter', model: attempt.model, fallbackUsed: false }
-  }
-  return fallbackFrom('openrouter', 'openrouter_failed', openRouterMessage(attempt.failure), settings, deps, log)
 }
 
 /**

@@ -4,6 +4,7 @@ import { buildIndex, isReady, search, context, expandQuery, type Hit } from '../
 import { parseRef, formatRef, refKey, getTranslationMeta } from '../../services/bibleService'
 import { parseTypedRef } from './VerseSearch'
 import { cleanNarration } from '../../services/agentTools'
+import Markdown from '../ai/Markdown'
 
 interface Msg { role: 'user' | 'assistant'; content: string; cites?: Hit[] }
 
@@ -203,27 +204,30 @@ export default function BibleAssistant({
     }
   }, [busy, selectedRef, bookId, bookName, chapter, onOpenRef])
 
-  // Turn [John 3:16] citations into buttons that actually open the passage.
+  // The answer renders as markdown (the model writes lists, bold and the odd
+  // table), and each [John 3:16] citation that matches a retrieved verse
+  // becomes a link to "#cite-<index>", which renderLink turns into a button
+  // that opens the passage. Unmatched brackets stay as written.
   const render = (text: string, cites?: Hit[]) => {
-    const parts = text.split(/(\[[^\]\n]{2,40}?\])/g)
-    return parts.map((part, i) => {
-      const m = part.match(/^\[([^\]]+)\]$/)
-      if (!m) return <span key={i}>{part}</span>
-      const label = m[1]
-      const hit = cites?.find(h => `${h.book} ${h.chapter}:${h.verse}`.toLowerCase() === label.toLowerCase())
-      if (!hit) return <span key={i}>{part}</span>
+    const linked = text.replace(/\[([^\]\n]{2,40}?)\](?!\()/g, (whole, label: string) => {
+      const i = cites?.findIndex(h => `${h.book} ${h.chapter}:${h.verse}`.toLowerCase() === label.toLowerCase()) ?? -1
+      return i >= 0 ? `[${label}](#cite-${i})` : whole
+    })
+    const renderLink = (href: string, children: React.ReactNode) => {
+      const hit = href.startsWith('#cite-') ? cites?.[Number(href.slice(6))] : undefined
+      if (!hit) return null
       return (
         <button
-          key={i}
           onClick={() => onOpenRef(hit.ref)}
           title={hit.text}
           className="mx-0.5 rounded px-1.5 py-0.5 text-[0.92em] font-medium"
           style={{ background: 'rgb(var(--ds-accent) / 0.16)', color: 'rgb(var(--ds-accent-soft))' }}
         >
-          {label}
+          {children}
         </button>
       )
-    })
+    }
+    return <Markdown content={linked} onNavigate={() => {}} renderLink={renderLink} />
   }
 
   if (!open) return null
@@ -281,7 +285,7 @@ export default function BibleAssistant({
         {msgs.map((m, i) => (
           <div key={i} className={`mb-4 ${m.role === 'user' ? 'text-right' : ''}`}>
             <div
-              className={`selectable-text inline-block max-w-full rounded-2xl px-3.5 py-2.5 text-left text-[13px] leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'font-medium' : ''}`}
+              className={`selectable-text inline-block max-w-full rounded-2xl px-3.5 py-2.5 text-left text-[13px] leading-relaxed ${m.role === 'user' ? 'whitespace-pre-wrap font-medium' : ''}`}
               style={m.role === 'user'
                 ? { background: 'rgb(var(--ds-accent) / 0.16)' }
                 : { background: 'var(--ds-surface, rgba(127,127,127,0.10))' }}
