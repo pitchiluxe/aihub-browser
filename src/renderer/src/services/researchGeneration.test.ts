@@ -25,3 +25,7 @@ it('returns cancellation promptly even if the provider does not resolve', async 
   const pending = generateResearchClaims(project, { chat: () => new Promise(() => {}) }, ctrl.signal)
   ctrl.abort(); expect((await pending).ok).toBe(false)
 })
+it('retains valid findings alongside an unresolved empty model quotation', async () => {
+  const result = await generateResearchClaims(project, { chat: async () => ({ content: JSON.stringify({ claims: [{ text: 'Supported', citations: [{ sourceId: 's1', quote: 'Actual page evidence.' }] }, { text: 'Unsupported', citations: [{ sourceId: 's1', quote: '' }] }] }) }) }, new AbortController().signal)
+  expect(result.ok).toBe(true); if (result.ok) { expect(result.value).toHaveLength(2); expect(result.value[1].citations).toEqual([]); expect(result.value[1].reviewed).toBe(false) }
+})

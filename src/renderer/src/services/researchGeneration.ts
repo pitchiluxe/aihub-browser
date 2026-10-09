@@ -27,7 +27,7 @@ export async function generateResearchClaims(project: ResearchProject, ai: Resea
     if (typeof response.content !== 'string' || response.content.length > 250_000) throw new Error('The AI response is missing or too large.')
     const raw = JSON.parse(response.content.trim().replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/, '$1'))
     if (!Array.isArray(raw?.claims) || !raw.claims.length || raw.claims.length > RESEARCH_LIMITS.claims) throw new Error('The AI did not return a valid findings list.')
-    const claims = raw.claims.map((c: Record<string, unknown>) => ({ id: crypto.randomUUID(), text: c.text, citations: c.citations, reviewed: false, kind: c.kind ?? 'finding' }))
+    const claims = raw.claims.map((c: Record<string, unknown>) => ({ id: crypto.randomUUID(), text: c.text, citations: Array.isArray(c.citations) ? c.citations.filter(q => typeof q?.quote !== 'string' || q.quote.trim()) : c.citations, reviewed: false, kind: c.kind ?? 'finding' }))
     const parsed = validateProject({ ...project, claims })
     if (!parsed.ok) throw new Error(parsed.error)
     return { ok: true, value: parsed.value.claims }

@@ -3,7 +3,7 @@ import type { ResearchBridge } from '../shared/research/types'
 
 const research: ResearchBridge = {
   list: () => ipcRenderer.invoke('research:list'),
-  save: project => ipcRenderer.invoke('research:save', project),
+  save: (project, expectedUpdatedAt = null) => ipcRenderer.invoke('research:save', project, expectedUpdatedAt),
   remove: projectId => ipcRenderer.invoke('research:remove', projectId),
   capture: tabId => ipcRenderer.invoke('research:capture', tabId),
 }

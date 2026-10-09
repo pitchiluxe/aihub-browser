@@ -56,3 +56,43 @@ it('ignores a late AI response after switching to a different project', async ()
   expect(host.textContent).not.toContain('Stale result')
   expect(save.mock.calls.at(-1)![0].claims).toEqual([])
 })
+it('removes an individual finding and persists its removal after reopening', async () => {
+  act(() => host.querySelector<HTMLInputElement>('input[type=checkbox]')!.click())
+  await act(async () => button('Capture selected').click())
+  await act(async () => button('Allow capture').click())
+  await act(async () => button('Generate report').click())
+  const remove = host.querySelector<HTMLButtonElement>('button[aria-label="Remove finding 1"]')
+  expect(remove).not.toBeNull(); if (!remove) return
+  await act(async () => remove.click())
+  const stored = save.mock.calls.at(-1)![0]
+  expect(stored.claims).toHaveLength(1); expect(stored.claims[0].text).toBe('Unproven finding')
+  ;(window as any).electronAPI.research.list = async () => ({ ok: true, value: [stored] })
+  act(() => root.unmount()); root = createRoot(host)
+  await act(async () => root.render(<ResearchWorkspace />))
+  expect(host.textContent).not.toContain('Actual finding'); expect(host.textContent).toContain('Unproven finding')
+})
+it('keeps overflow and long previous notes accessible after migration and reopening', async () => {
+  const old = [...Array.from({ length: 101 }, (_, i) => ({ id: `old-${i}`, text: `Legacy note ${i}`, addedAt: Date.now() })), { id: 'long', text: 'LONG ORIGINAL ' + 'x'.repeat(4001), addedAt: Date.now() }]
+  localStorage.setItem('aihub-research-notes-v1', JSON.stringify(old))
+  act(() => root.unmount()); root = createRoot(host)
+  await act(async () => root.render(<ResearchWorkspace />))
+  expect(button('Previous notepad')).toBeDefined()
+  await act(async () => button('Previous notepad').click())
+  while (!host.textContent?.includes('Legacy note 100')) { const next = button('Next notes'); expect(next).toBeDefined(); if (!next) break; act(() => next.click()) }
+  expect(host.textContent).toContain('Legacy note 100'); expect(host.textContent).toContain('LONG ORIGINAL')
+  act(() => button('Close previous notes').click())
+  act(() => root.unmount()); root = createRoot(host)
+  await act(async () => root.render(<ResearchWorkspace />))
+  expect(button('Previous notepad')).toBeDefined(); expect(localStorage.getItem('aihub-research-notes-v1')).toBe(JSON.stringify(old))
+})
+it('exports the complete unsaved draft after a revision conflict, including notes', async () => {
+  const saveText = vi.fn().mockResolvedValue({ success: true })
+  ;(window as any).electronAPI.file = { saveText, saveMd: vi.fn().mockResolvedValue({ success: true }) }
+  save.mockResolvedValueOnce({ ok: false, error: 'This project changed in another window. Reload before editing.' })
+  const input = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="New note"]')!
+  act(() => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, 'Unsaved idea'); input.dispatchEvent(new Event('input', { bubbles: true })) })
+  await act(async () => button('Add note').click())
+  await act(async () => button('Export unsaved draft').click())
+  expect(saveText).toHaveBeenCalledOnce()
+  expect(JSON.parse(saveText.mock.calls[0][0].content).notes[0].text).toBe('Unsaved idea')
+})

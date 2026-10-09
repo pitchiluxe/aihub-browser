@@ -8,14 +8,14 @@ export function registerResearchIpc(options: { appDir: string; resolveWindow(eve
   const repo = createResearchRepository(options.appDir)
   const captures = new Map<number, Map<string, CapturedSource>>()
   const released = new Set<number>()
-  function handler(channel: string, fn: (owner: ResearchWindow, arg: unknown) => unknown) {
-    ipcMain.handle(channel, async (event, arg) => {
-      try { const owner = options.resolveWindow(event); if (!owner) throw Error('Research window unavailable.'); return await fn(owner, arg) }
+  function handler(channel: string, fn: (owner: ResearchWindow, arg: unknown, expected?: unknown) => unknown) {
+    ipcMain.handle(channel, async (event, arg, expected) => {
+      try { const owner = options.resolveWindow(event); if (!owner) throw Error('Research window unavailable.'); return await fn(owner, arg, expected) }
       catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Research request failed.' } }
     })
   }
   handler('research:list', owner => ({ ok: true, value: repo.list(owner) }))
-  handler('research:save', (owner, raw) => {
+  handler('research:save', (owner, raw, expected) => {
     const validated = validateProject(raw)
     if (!validated.ok) return validated
     const stored = repo.list(owner).flatMap(p => p.sources)
@@ -24,7 +24,8 @@ export function registerResearchIpc(options: { appDir: string; resolveWindow(eve
       const known = captures.get(owner.id)?.get(source.id) || stored.find(s => s.id === source.id)
       if (!known || JSON.stringify(known) !== JSON.stringify(source)) return { ok: false, error: 'Capture this source in the current window before saving it.' }
     }
-    return repo.save(owner, validated.value)
+    if (expected !== undefined && expected !== null && (typeof expected !== 'string' || expected.length > 32 || !Number.isFinite(Date.parse(expected)))) return { ok: false, error: 'Invalid project revision.' }
+    return repo.save(owner, validated.value, expected as string | null | undefined)
   })
   handler('research:remove', (owner, id) => { if (typeof id !== 'string' || id.length > 100) throw Error('Invalid project.'); return repo.remove(owner, id) })
   handler('research:capture', async (owner, id): Promise<ResearchResult<CapturedSource>> => {

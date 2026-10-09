@@ -1,0 +1,10 @@
+import React, { useState } from 'react'
+import ResearchDialog from './ResearchDialog'
+export interface LegacyResearchNote { text: string; sourceTitle?: string; sourceUrl?: string }
+export function loadLegacyResearchNotes(): LegacyResearchNote[] {
+  try { const raw = localStorage.getItem('aihub-research-notes-v1'); if (!raw) return []; const items = JSON.parse(raw); return Array.isArray(items) ? items.filter(n => n && typeof n.text === 'string').map(n => ({ text: n.text, ...(typeof n.sourceTitle === 'string' ? { sourceTitle: n.sourceTitle } : {}), ...(typeof n.sourceUrl === 'string' ? { sourceUrl: n.sourceUrl } : {}) })) : [] } catch { return [] }
+}
+export default function LegacyResearchNotes({ notes, onClose }: { notes: LegacyResearchNote[]; onClose: () => void }) {
+  const [page, setPage] = useState(0), [error, setError] = useState('')
+  return <ResearchDialog title="Previous research notepad" onClose={onClose}><p>All original notes remain available here, including entries beyond the new project limits. The original notepad is preserved on this computer.</p>{notes.slice(page * 20, page * 20 + 20).map((n, i) => <article className="research-card research-legacy-note" key={i}><p>{n.text}</p>{n.sourceTitle && <small>{n.sourceTitle}</small>}{n.sourceUrl && <p className="research-muted">{n.sourceUrl}</p>}</article>)}<div className="research-actions"><button disabled={!page} onClick={() => setPage(p => p - 1)}>Previous notes</button><span>{page + 1}/{Math.ceil(notes.length / 20)}</span><button disabled={(page + 1) * 20 >= notes.length} onClick={() => setPage(p => p + 1)}>Next notes</button><button onClick={async () => { try { await window.electronAPI.file.saveMd({ title: 'Previous research notepad', content: notes.map(n => `${n.text}\n${n.sourceTitle ?? ''}\n${n.sourceUrl ?? ''}`).join('\n\n---\n\n') }) } catch { setError('Could not export the previous notes.') } }}>Export all previous notes</button><button onClick={onClose}>Close previous notes</button></div>{error && <p role="alert">{error}</p>}</ResearchDialog>
+}

@@ -21,3 +21,10 @@ it('rejects invalid and over-limit JSON before import', () => {
   expect(importResearchCapsule('x'.repeat(5 * 1024 * 1024 + 1)).ok).toBe(false)
   expect(importResearchCapsule('{"kind":"wrong"}').ok).toBe(false)
 })
+it('removes excluded-source quotations from both export files', () => {
+  const result = buildResearchCapsule(p, { ...selection, sourceIds: [] })
+  expect(result.ok).toBe(true); if (!result.ok) return
+  expect(JSON.stringify(result.value)).not.toContain('Shared passage.')
+  expect(renderCapsuleHtml(result.value)).not.toContain('Shared passage.')
+  expect(result.value.claims[0].citations).toEqual([])
+})

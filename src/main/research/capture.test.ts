@@ -25,3 +25,9 @@ it('excludes an editable main container and hidden text while preserving paragra
   document.body.innerHTML = '<main><p>First paragraph.</p><p>Second paragraph.</p></main>'
   expect((await window.eval(RESEARCH_CAPTURE_SCRIPT)).text).toContain('First paragraph.\n')
 })
+it('rejects hidden ancestors of a selected main root and retains visible body evidence', async () => {
+  for (const attr of ['hidden', 'style="display:none"', 'aria-hidden="true"']) {
+    document.body.innerHTML = `<div ${attr}><main>SECRET ANCESTOR TEXT</main></div><p>Visible evidence.</p>`
+    expect((await window.eval(RESEARCH_CAPTURE_SCRIPT)).text.trim()).toBe('Visible evidence.')
+  }
+})

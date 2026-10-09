@@ -8,8 +8,9 @@ export const RESEARCH_CAPTURE_SCRIPT = `(async function(){
   function page(){
     var original=document.querySelector('main,article')||document.body;
     if(!original)return output('','page');
-    if(original.closest('[contenteditable]'))original=document.body;
-    if(!original||original.closest('[contenteditable]'))return output('','page');
+    function excludedAncestors(node){for(var el=node;el;el=el.parentElement){if(el.matches('[contenteditable],[hidden],[aria-hidden="true"]'))return true;var style=getComputedStyle(el);if(style.display==='none'||style.visibility==='hidden')return true}return false}
+    if(excludedAncestors(original))original=document.body;
+    if(!original||excludedAncestors(original))return output('','page');
     var text='';var visits=0;var stopped=false;
     function walk(node){
       if(text.length>12000||++visits>50000){stopped=true;return}

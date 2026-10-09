@@ -1,0 +1,7 @@
+import React from 'react'
+import { motion } from 'framer-motion'
+import { StickyNote, Lightbulb, X, Plus } from 'lucide-react'
+import type { ResearchProject } from '../../../../shared/research/types'
+export default function ResearchNotepad({ project, draft, onDraft, onAdd, onRemove, legacy }: { project: ResearchProject | null; draft: string; onDraft: (text: string) => void; onAdd: () => void; onRemove: (id: string) => void; legacy?: React.ReactNode }) {
+  return <aside className="research-notepad"><div className="research-pane-title"><StickyNote size={13} className="research-note-icon" /><h2>Research notes</h2><span>{project?.notes.length ?? 0}</span></div><div className="research-note-list">{!project?.notes.length && <div className="research-notes-empty"><Lightbulb size={22} /><p>Keep your ideas here as you explore.<br />Your notes stay separate from source evidence.</p></div>}{project?.notes.map(n => <motion.article initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="research-note" key={n.id}><p>{n.text}</p><button className="research-icon-button" aria-label="Remove note" title="Remove note" onClick={() => onRemove(n.id)}><X size={12} /></button></motion.article>)}</div>{project && <div className="research-note-compose"><textarea aria-label="New note" placeholder="Capture a thought…" value={draft} maxLength={4000} onChange={e => onDraft(e.target.value)} /><button disabled={!draft.trim() || project.notes.length >= 100} onClick={onAdd}><Plus size={12} />Add note</button></div>}{legacy}</aside>
+}

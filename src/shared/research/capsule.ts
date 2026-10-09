@@ -7,8 +7,9 @@ export function buildResearchCapsule(project: ResearchProject, selection: Capsul
   if (!checked.ok) return checked
   const claims = project.claims.filter(c => selection.claimIds.includes(c.id)).map(c => {
     const text = selection.claimText[c.id] ?? c.text
-    const citations = c.citations.map((x, i) => ({ ...x, quote: selection.quotes[`${c.id}:${i}`] ?? x.quote }))
-    return { ...c, text, citations, reviewed: c.reviewed && text === c.text && citations.every((x, i) => x.quote === c.citations[i].quote && selection.sourceIds.includes(x.sourceId)) }
+    const editedCitations = c.citations.map((x, i) => ({ ...x, quote: selection.quotes[`${c.id}:${i}`] ?? x.quote }))
+    const citations = editedCitations.filter(x => selection.sourceIds.includes(x.sourceId))
+    return { ...c, text, citations, reviewed: c.reviewed && text === c.text && citations.length === c.citations.length && editedCitations.every((x, i) => x.quote === c.citations[i].quote) }
   })
   const sources = project.sources.filter(s => selection.sourceIds.includes(s.id)).map(s => {
     const excerpts = [...new Set(claims.flatMap(c => c.citations.filter(x => x.sourceId === s.id && matchCitation(s, x)).map(x => normalizeEvidence(x.quote))))]
