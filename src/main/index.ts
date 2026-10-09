@@ -1563,6 +1563,9 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   attachContextMenu(wc, { tabId })
   attachAppShortcuts(wc)
   sendTabEvent(ctx, tabId, 'wc-id', { wcId: wc.id })
+  wc.on('audio-state-changed', event => {
+    sendTabEvent(ctx, tabId, 'audio-state-changed', { audible: event.audible })
+  })
 
   // Scripted popups (window.open with features — OAuth flows like
   // "Sign in with Google" on TradingView) must open as real child windows:

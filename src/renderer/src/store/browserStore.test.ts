@@ -27,4 +27,12 @@ describe('restoring a large session', () => {
     expect(state.tabs[40].asleep).not.toBe(true)
     expect(state.tabs.slice(0, 40).every(t => t.asleep)).toBe(true)
   })
+
+  it('clears stale audio state when a background tab is manually slept', () => {
+    useBrowserStore.getState().restoreTabs(entries.slice(0, 2), 0)
+    const backgroundId = useBrowserStore.getState().tabs[1].id
+    useBrowserStore.getState().updateTab(backgroundId, { isAudible: true })
+    useBrowserStore.getState().sleepTab(backgroundId)
+    expect(useBrowserStore.getState().tabs[1]).toMatchObject({ asleep: true, isAudible: false })
+  })
 })

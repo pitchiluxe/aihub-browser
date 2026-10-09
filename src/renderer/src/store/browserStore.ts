@@ -4,7 +4,7 @@ import { proposeGroups, groupColorFor, type TabGroup } from '../services/tabGrou
 import type { SiteRules } from '../extensions/siteRules'
 
 export interface Bookmark { id: string; url: string; title: string; favicon: string; category: string; addedAt: number; color: string; summary?: string; summaryAt?: number }
-export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; asleep?: boolean; /** Last load ended in an error/crash page — retried when the tab is next activated. */ loadFailed?: boolean; groupId?: string; containerId?: string; pageType?: 'browser' | PageType }
+export interface Tab { id: string; url: string; title: string; favicon: string; isLoading: boolean; isHome: boolean; fromHome?: boolean; asleep?: boolean; isAudible?: boolean; /** Last load ended in an error/crash page — retried when the tab is next activated. */ loadFailed?: boolean; groupId?: string; containerId?: string; pageType?: 'browser' | PageType }
 export interface AIMessage { role: 'user'|'assistant'|'system'; content: string; steps?: { label: string; status: 'pending' | 'done' | 'error' }[]; /** Data URLs the user attached to this turn. */ images?: string[] }
 export interface HistoryItem { id: string; url: string; title: string; favicon?: string; timestamp: number }
 export interface DownloadItem { id: string; filename: string; url: string; savePath: string; totalBytes: number; receivedBytes: number; state: string; startedAt: number; completedAt?: number }
@@ -402,7 +402,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   // loadFailed is cleared with it — waking builds a brand new view that loads
   // the URL itself, so a leftover flag would make the wake reload twice.
   sleepTab: (id) => set(s => (
-    id === s.activeTabId ? {} : { tabs: s.tabs.map(t => t.id === id ? { ...t, asleep: true, loadFailed: false } : t) }
+    id === s.activeTabId ? {} : { tabs: s.tabs.map(t => t.id === id ? { ...t, asleep: true, loadFailed: false, isAudible: false } : t) }
   )),
 
   updateTab: (id, u) => set(s => ({ tabs: s.tabs.map(t => t.id === id ? { ...t, ...u } : t) })),

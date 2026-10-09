@@ -16,6 +16,7 @@ import { loadCustomExts } from './extensions/customExts'
 import { shouldRunOn } from './extensions/siteRules'
 import { withPanelRuntime } from './extensions/panelRuntime'
 import { applyThemeToDom } from './services/themeService'
+import { pruneTabActivity, selectTabsToSleep } from './services/tabSleepPolicy'
 
 // Special pages are code-split — none are needed at startup, so keeping them
 // out of the entry chunk makes first paint faster.
@@ -784,27 +785,29 @@ export default function App() {
     return () => clearTimeout(t)
   }, [tabs, activeTabId])
 
-  // ── Tab sleeping — free the memory of tabs left in the background too long.
-  // Sleeping destroys the BrowserView (via needsTabView + the lifecycle effect
-  // above); the page is recreated and reloaded when the tab is next activated.
-  // The active tab is never slept. Increased to 2 hours to keep normal
-  // tab rotations alive without memory pressure. ──────────────────────────────
+  // ── Adaptive tab sleeping — protect useful activity while releasing idle
+  // background views sooner for larger sessions. ────────────────────────────
   const lastActiveAt = useRef<Map<string, number>>(new Map())
   useEffect(() => {
     if (activeTabId) lastActiveAt.current.set(activeTabId, Date.now())
   }, [activeTabId])
   useEffect(() => {
-    const SLEEP_AFTER_MS = 2 * 60 * 60 * 1000 // 2 hours idle in the background
     const timer = setInterval(() => {
       const now = Date.now()
       const store = useBrowserStore.getState()
-      for (const t of store.tabs) {
-        if (t.id === store.activeTabId || t.asleep) continue
-        if (t.isHome || t.pageType !== 'browser') continue
-        if (!createdViewIds.current.has(t.id)) continue // no live view to free
-        const seen = lastActiveAt.current.get(t.id) ?? now
-        if (now - seen > SLEEP_AFTER_MS) store.sleepTab(t.id)
-      }
+      const liveTabIds = new Set(store.tabs.map(tab => tab.id))
+      lastActiveAt.current = pruneTabActivity(lastActiveAt.current, liveTabIds)
+      // The first timer pass establishes a safe idle baseline for background
+      // tabs opened before they were ever selected.
+      for (const tab of store.tabs) if (!lastActiveAt.current.has(tab.id)) lastActiveAt.current.set(tab.id, now)
+      const sleepIds = selectTabsToSleep({
+        tabs: store.tabs,
+        activeTabId: store.activeTabId,
+        liveViewIds: createdViewIds.current,
+        lastUseAt: lastActiveAt.current,
+        now,
+      })
+      for (const id of sleepIds) store.sleepTab(id)
     }, 5 * 60 * 1000) // check every 5 minutes
     return () => clearInterval(timer)
   }, [])
@@ -854,6 +857,10 @@ export default function App() {
       switch (type) {
         case 'wc-id':
           store.setTabWcId(tabId, payload.wcId)
+          break
+
+        case 'audio-state-changed':
+          store.updateTab(tabId, { isAudible: payload.audible === true })
           break
 
         case 'did-start-loading': {
