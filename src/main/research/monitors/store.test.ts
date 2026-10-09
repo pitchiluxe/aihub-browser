@@ -6,7 +6,9 @@ import type { ResearchMonitor } from '../../../shared/research/monitorTypes'
 
 const roots: string[] = []
 async function tempStore() {
-  const root = await fs.mkdtemp(path.join(process.cwd(), '.superpowers', 'sdd', 'current-research-monitors-'))
+  const parent = path.join(process.cwd(), '.superpowers', 'sdd')
+  await fs.mkdir(parent, { recursive: true })
+  const root = await fs.mkdtemp(path.join(parent, 'current-research-monitors-'))
   roots.push(root)
   return createMonitorStore(root)
 }
