@@ -1,11 +1,31 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { ResearchBridge } from '../shared/research/types'
 
+let pendingResearchProject: string | null = null
+ipcRenderer.on('research:open-project', (_event, projectId: unknown) => {
+  if (typeof projectId === 'string' && projectId.length <= 100) pendingResearchProject = projectId
+})
+
 const research: ResearchBridge = {
   list: () => ipcRenderer.invoke('research:list'),
   save: (project, expectedUpdatedAt = null) => ipcRenderer.invoke('research:save', project, expectedUpdatedAt),
   remove: projectId => ipcRenderer.invoke('research:remove', projectId),
   capture: tabId => ipcRenderer.invoke('research:capture', tabId),
+  monitors: {
+    list: projectId => ipcRenderer.invoke('research:monitors-list', { projectId }),
+    preview: input => ipcRenderer.invoke('research:monitors-preview', input),
+    confirm: input => ipcRenderer.invoke('research:monitors-confirm', input),
+    check: input => ipcRenderer.invoke('research:monitors-check', input),
+    setPaused: input => ipcRenderer.invoke('research:monitors-pause', input),
+    remove: input => ipcRenderer.invoke('research:monitors-remove', input),
+    acknowledge: input => ipcRenderer.invoke('research:monitors-acknowledge', input),
+    compareLoaded: input => ipcRenderer.invoke('research:monitors-compare-loaded', input),
+    prepareProposal: input => ipcRenderer.invoke('research:monitors-proposal-prepare', input),
+    acceptProposal: input => ipcRenderer.invoke('research:monitors-proposal-accept', input),
+    onChanged: cb => { const h = (_: unknown, event: { projectId: string }) => cb(event); ipcRenderer.on('research:monitors-changed', h); return () => ipcRenderer.removeListener('research:monitors-changed', h) },
+    onOpenProject: cb => { const h = (_: unknown, projectId: string) => cb(projectId); ipcRenderer.on('research:open-project', h); return () => ipcRenderer.removeListener('research:open-project', h) },
+    consumeOpenProject: () => { const id = pendingResearchProject; pendingResearchProject = null; return id },
+  },
 }
 contextBridge.exposeInMainWorld('electronAPI', {
   research,

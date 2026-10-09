@@ -24,4 +24,5 @@ export interface ResearchMonitorBridge {
   acceptProposal(input: { token: string; expectedUpdatedAt: string; claims: ResearchClaim[] }): Promise<ResearchResult<ResearchProject>>
   onChanged(listener: (event: { projectId: string }) => void): () => void
   onOpenProject(listener: (projectId: string) => void): () => void
+  consumeOpenProject(): string | null
 }

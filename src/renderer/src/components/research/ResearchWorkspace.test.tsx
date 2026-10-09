@@ -3,7 +3,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { it, expect, beforeEach, afterEach, vi } from 'vitest'
 import ResearchWorkspace from './ResearchWorkspace'
-vi.mock('../../store/browserStore', () => ({ useBrowserStore: (select: any) => select({ tabs: [{ id: 'tab', title: 'Evidence page', url: 'https://example.org', pageType: 'browser', isHome: false, isLoading: false }] }) }))
+vi.mock('../../store/browserStore', () => ({ useBrowserStore: (select: any) => select({ activeTabId: 'tab', tabs: [{ id: 'tab', title: 'Evidence page', url: 'https://example.org', pageType: 'browser', isHome: false, isLoading: false }] }) }))
 vi.mock('../../services/incognitoMode', () => ({ IS_INCOGNITO: false }))
 let host: HTMLDivElement, root: Root
 const capture = vi.fn(), save = vi.fn()
@@ -14,7 +14,7 @@ beforeEach(async () => {
   const date = new Date().toISOString()
   capture.mockResolvedValue({ ok: true, value: { id: 'source', title: 'Evidence page', url: 'https://example.org', capturedAt: date, text: 'Actual page evidence.', truncated: false, captureType: 'page', provenance: 'captured' } })
   save.mockImplementation(async value => ({ ok: true, value }))
-  ;(window as any).electronAPI = { research: { list: async () => ({ ok: true, value: [] }), save, capture, remove: async () => ({ ok: true, value: null }) }, settings: { getAIConfig: async () => ({ primaryProvider: 'ollama' }) }, ai: { chat: async () => ({ content: JSON.stringify({ claims: [{ text: 'Actual finding', citations: [{ sourceId: 'source', quote: 'Actual page evidence.' }] }, { text: 'Unproven finding', citations: [{ sourceId: 'source', quote: 'Invented' }] }] }) }) } }
+  ;(window as any).electronAPI = { research: { list: async () => ({ ok: true, value: [] }), save, capture, remove: async () => ({ ok: true, value: null }), monitors: { list: async () => ({ ok: true, value: [] }), preview: async () => ({ ok: true, value: { token: 'token', observation: { id: 'o', requestedUrl: 'https://example.org', finalUrl: 'https://example.org', checkedAt: date, text: 'Actual page evidence.', truncated: false, kind: 'public-html' }, missingQuotes: [], expiresAt: date } }), confirm: async () => ({ ok: true, value: {} }), check: async () => ({ ok: true, value: {} }), setPaused: async () => ({ ok: true, value: {} }), remove: async () => ({ ok: true, value: null }), acknowledge: async () => ({ ok: true, value: null }), compareLoaded: async () => ({ ok: true, value: { observation: {}, impacts: [], passages: [], truncated: false } }), onChanged: () => () => {}, onOpenProject: () => () => {}, consumeOpenProject: () => null } }, settings: { getAIConfig: async () => ({ primaryProvider: 'ollama' }) }, ai: { chat: async () => ({ content: JSON.stringify({ claims: [{ text: 'Actual finding', citations: [{ sourceId: 'source', quote: 'Actual page evidence.' }] }, { text: 'Unproven finding', citations: [{ sourceId: 'source', quote: 'Invented' }] }] }) }) } }
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
   await act(async () => root.render(<ResearchWorkspace />))
   await act(async () => button('New project').click())

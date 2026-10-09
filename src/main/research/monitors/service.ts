@@ -1,30 +1,37 @@
 import { randomUUID, createHash } from 'node:crypto'
-import type { ResearchOwner } from '../store'
-import type { CapturedSource, ResearchProject, ResearchResult } from '../../../shared/research/types'
+import type { ResearchWindow } from '../index'
+import type { CapturedSource, ResearchClaim, ResearchProject, ResearchResult } from '../../../shared/research/types'
 import { MONITOR_LIMITS as L, type IntervalHours, type Observation, type ResearchMonitor, type MonitorPreview, type MonitorComparison, type MonitorChange } from '../../../shared/research/monitorTypes'
 import { compareObservation, } from '../../../shared/research/monitorDiff'
 import { fetchPublicObservation } from './publicFetch'
+import { validateProject } from '../../../shared/research/validation'
 
 type Store = { list(): ResearchMonitor[]; replace(records: ResearchMonitor[]): void }
-type Owner = ResearchOwner & { views?: Map<string, { webContents: { isDestroyed(): boolean; getURL(): string; getTitle(): string; executeJavaScript<T>(code: string, userGesture?: boolean): Promise<T> } }> }
+type Owner = ResearchWindow
 type Deps = {
   store: Store
   getProject(owner: Owner, projectId: string): ResearchProject | undefined
   getNormalProject(projectId: string): ResearchProject | undefined
   fetcher?(url: string, signal: AbortSignal): Promise<Observation>
   capture?(owner: Owner, tabId: string): Promise<CapturedSource>
+  saveProject?(owner: Owner, project: ResearchProject): ResearchResult<ResearchProject>
   now(): Date
   changed(projectId: string): void
-  notify(projectId: string): void
+  notify(projectId: string, updateCount: number): void
 }
 type PreviewRecord = { ownerId: number; projectId: string; sourceId: string; revision: string; expires: number; observation: Observation; missing: string[] }
+type ProposalRecord = { ownerId: number; projectId: string; revision: string; expires: number; project: ResearchProject; versions: Record<string, string> }
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))
 const errorText = (e: unknown) => e instanceof Error ? e.message : 'The public page could not be checked.'
+const textVersion = (text: string) => createHash('sha256').update(text.replace(/\r\n?/g, '\n').replace(/[\t\u00a0 ]+/g, ' ').replace(/ *\n */g, '\n').trim()).digest('hex')
 
 export function createMonitorService(deps: Deps) {
   const previews = new Map<string, PreviewRecord>()
+  const proposals = new Map<string, ProposalRecord>()
+  const privateComparisons = new Map<number, Map<string, Map<string, Observation>>>()
   const releasedOwners = new Set<number>()
   const previewControllers = new Map<number, Set<AbortController>>()
+  const ownerControllers = new Map<number, Set<AbortController>>()
   const inFlight = new Map<string, Promise<ResearchResult<ResearchMonitor>>>()
   const generations = new Map<string, number>()
   const controllers = new Map<string, AbortController>()
@@ -52,10 +59,11 @@ export function createMonitorService(deps: Deps) {
     generations.set(monitorId, generation)
     const controller = new AbortController()
     controllers.set(monitorId, controller)
+    if (owner) { const operations = ownerControllers.get(owner.id) || new Set<AbortController>(); operations.add(controller); ownerControllers.set(owner.id, operations) }
     const operation = (async (): Promise<ResearchResult<ResearchMonitor>> => {
       try {
         const observation = await runFetch(sourceUrl, controller.signal)
-        if (disposed || controller.signal.aborted || generations.get(monitorId) !== generation) return { ok: false, error: 'This source check was cancelled.' }
+        if (disposed || controller.signal.aborted || (owner && releasedOwners.has(owner.id)) || generations.get(monitorId) !== generation) return { ok: false, error: 'This source check was cancelled.' }
         const current = get(monitorId)
         const freshProject = owner ? deps.getProject(owner, monitor.projectId) : deps.getNormalProject(monitor.projectId)
         if (!current || current.status !== 'active' || !freshProject?.sources.some(s => s.id === monitor.sourceId)) return { ok: false, error: 'This source monitor is no longer active.' }
@@ -77,7 +85,7 @@ export function createMonitorService(deps: Deps) {
         }
         saveAll(deps.store.list().map(m => m.id === monitorId ? next : m))
         deps.changed(next.projectId)
-        if (hash !== priorHash && next.notifications) deps.notify(next.projectId)
+        if (hash !== priorHash && next.notifications) deps.notify(next.projectId, 1)
         return { ok: true, value: clone(next) }
       } catch (error) {
         if (controller.signal.aborted || generations.get(monitorId) !== generation) return { ok: false, error: 'This source check was cancelled.' }
@@ -93,6 +101,7 @@ export function createMonitorService(deps: Deps) {
         return { ok: false, error: next.error }
       } finally {
         controllers.delete(monitorId)
+        if (owner) { const operations = ownerControllers.get(owner.id); operations?.delete(controller); if (!operations?.size) ownerControllers.delete(owner.id) }
         inFlight.delete(monitorId)
       }
     })()
@@ -118,7 +127,7 @@ export function createMonitorService(deps: Deps) {
       owned.add(controller); previewControllers.set(owner.id, owned)
       try {
         const observation = await runFetch(source.url, controller.signal)
-        if (releasedOwners.has(owner.id) || controller.signal.aborted) return { ok: false, error: 'This Research window has closed.' }
+        if (disposed || releasedOwners.has(owner.id) || controller.signal.aborted) return { ok: false, error: 'This Research window has closed.' }
         if (deps.getProject(owner, projectId)?.updatedAt !== revision) return { ok: false, error: 'This project changed during the public check. Reload before continuing.' }
         const missing = compareObservation(project, sourceId, { ...observation, text: source.text }, observation).impacts.filter(i => i.status === 'missing').map(i => i.quote)
         const token = randomUUID(), expires = deps.now().getTime() + 300_000
@@ -184,11 +193,62 @@ export function createMonitorService(deps: Deps) {
         if (project.updatedAt !== deps.getProject(owner, projectId)?.updatedAt) return { ok: false, error: 'The project changed during capture. Reload before comparing.' }
         if (!source.url || !captured.url) return { ok: false, error: 'Open the selected source in this window before checking the loaded page.' }
         const actual = new URL(captured.url), expected = new URL(source.url)
-        if (actual.origin !== expected.origin || actual.pathname.replace(/\/$/, '') !== expected.pathname.replace(/\/$/, '')) return { ok: false, error: 'Open the selected source in this window before checking the loaded page.' }
+        if (actual.origin !== expected.origin || actual.pathname.replace(/\/$/, '') !== expected.pathname.replace(/\/$/, '') || actual.search !== expected.search) return { ok: false, error: 'Open the selected source in this window before checking the loaded page.' }
         const observation: Observation = { id: captured.id, requestedUrl: source.url, finalUrl: captured.url!, checkedAt: captured.capturedAt, text: captured.text, truncated: captured.truncated, kind: 'loaded-page' }
+        const ownerProjects = privateComparisons.get(owner.id) || new Map<string, Map<string, Observation>>()
+        const projectObservations = ownerProjects.get(projectId) || new Map<string, Observation>()
+        projectObservations.set(sourceId, clone(observation)); ownerProjects.set(projectId, projectObservations); privateComparisons.set(owner.id, ownerProjects)
         const diff = compareObservation(project, sourceId, { ...observation, text: source.text }, observation)
         return { ok: true, value: { observation, impacts: diff.impacts, passages: diff.passages, truncated: diff.truncated } }
       } catch (e) { return { ok: false, error: errorText(e) } }
+    },
+    async prepareProposal(owner: Owner, projectId: string, revision: string): Promise<ResearchResult<{ token: string; project: ResearchProject; monitorVersions: Record<string, string> }>> {
+      const original = deps.getProject(owner, projectId)
+      if (!original || original.updatedAt !== revision) return { ok: false, error: 'This project changed. Reload it before preparing an updated report.' }
+      const observations = new Map<string, Observation>()
+      if (owner.incognito) {
+        for (const [id, observation] of privateComparisons.get(owner.id)?.get(projectId) || []) observations.set(id, observation)
+      } else {
+        for (const monitor of deps.store.list().filter(m => m.projectId === projectId)) observations.set(monitor.sourceId, monitor.latest)
+      }
+      if (!observations.size) return { ok: false, error: owner.incognito ? 'Check a loaded source first to prepare a private proposal.' : 'Check at least one monitored source first to prepare an updated report.' }
+      const versions: Record<string, string> = {}
+      const sources = original.sources.map(source => {
+        const observation = observations.get(source.id)
+        if (!observation) return clone(source)
+        versions[source.id] = textVersion(observation.text)
+        const prefix = observation.kind === 'loaded-page' ? 'Loaded page observation: ' : 'Public HTML observation: '
+        return { id: randomUUID(), title: `${prefix}${source.title}`.slice(0, 200), url: observation.finalUrl, capturedAt: observation.checkedAt, text: observation.text, truncated: observation.truncated, captureType: 'excerpts' as const, provenance: 'imported' as const, excerpts: [observation.text] }
+      })
+      const now = deps.now().toISOString()
+      const proposed: ResearchProject = { ...clone(original), id: randomUUID(), title: `Updated research · ${original.title}`.slice(0, 200), createdAt: now, updatedAt: now, sources, claims: [] }
+      const validated = validateProject(proposed)
+      if (!validated.ok) return { ok: false, error: validated.error }
+      if (deps.getProject(owner, projectId)?.updatedAt !== revision) return { ok: false, error: 'This project changed. Reload it before preparing an updated report.' }
+      const token = randomUUID(), expires = deps.now().getTime() + 300_000
+      proposals.set(token, { ownerId: owner.id, projectId, revision, expires, project: validated.value, versions })
+      return { ok: true, value: { token, project: clone(validated.value), monitorVersions: { ...versions } } }
+    },
+    acceptProposal(owner: Owner, token: string, revision: string, claims: ResearchClaim[]): ResearchResult<ResearchProject> {
+      const record = proposals.get(token)
+      if (!record || record.ownerId !== owner.id || record.expires <= deps.now().getTime() || record.revision !== revision) return { ok: false, error: 'This updated report proposal expired. Prepare it again.' }
+      const original = deps.getProject(owner, record.projectId)
+      if (!original || original.updatedAt !== record.revision) return { ok: false, error: 'The original research changed. Prepare a fresh proposal.' }
+      for (const [sourceId, version] of Object.entries(record.versions)) {
+        let current: Observation | undefined
+        if (owner.incognito) current = privateComparisons.get(owner.id)?.get(record.projectId)?.get(sourceId)
+        else current = deps.store.list().find(m => m.projectId === record.projectId && m.sourceId === sourceId)?.latest
+        if (!current || textVersion(current.text) !== version) return { ok: false, error: 'A source changed after this proposal was prepared. Prepare a fresh proposal.' }
+      }
+      const updatedAt = new Date(Math.max(deps.now().getTime(), Date.parse(record.project.updatedAt) + 1)).toISOString()
+      const candidate = validateProject({ ...clone(record.project), updatedAt, claims })
+      if (!candidate.ok) return candidate
+      if (candidate.value.sources.length !== record.project.sources.length || candidate.value.sources.some((source, index) => JSON.stringify(source) !== JSON.stringify(record.project.sources[index]))) return { ok: false, error: 'Proposal evidence cannot be changed during acceptance.' }
+      if (candidate.value.claims.some(claim => claim.citations.some(citation => !candidate.value.sources.some(source => source.id === citation.sourceId)))) return { ok: false, error: 'A proposed finding cites unavailable evidence.' }
+      if (!deps.saveProject) return { ok: false, error: 'Saving updated proposals is unavailable.' }
+      const saved = deps.saveProject(owner, candidate.value)
+      if (saved.ok) { proposals.delete(token); if (!owner.incognito) deps.changed(record.projectId) }
+      return saved
     },
     reconcile(projects: ResearchProject[]) {
       const available = new Map(projects.map(p => [p.id, new Set(p.sources.map(s => s.id))]))
@@ -201,9 +261,13 @@ export function createMonitorService(deps: Deps) {
     },
     release(windowId: number) {
       releasedOwners.add(windowId)
+      for (const controller of ownerControllers.get(windowId) || []) controller.abort()
+      ownerControllers.delete(windowId)
       for (const controller of previewControllers.get(windowId) || []) controller.abort()
       previewControllers.delete(windowId)
       for (const [token, preview] of previews) if (preview.ownerId === windowId) previews.delete(token)
+      for (const [token, proposal] of proposals) if (proposal.ownerId === windowId) proposals.delete(token)
+      privateComparisons.delete(windowId)
     },
     async tick() {
       if (disposed || globalFetch) return
@@ -214,10 +278,14 @@ export function createMonitorService(deps: Deps) {
       if (timer) return
       void api.tick()
       timer = setInterval(() => { void api.tick() }, 60_000)
+      if (typeof timer === 'object' && timer && 'unref' in timer) timer.unref()
     },
     dispose() {
       disposed = true; if (timer) clearInterval(timer); timer = undefined
       for (const [id, controller] of controllers) { generations.set(id, (generations.get(id) || 0) + 1); controller.abort() }
+      for (const controllers of previewControllers.values()) for (const controller of controllers) controller.abort()
+      previewControllers.clear()
+      proposals.clear(); privateComparisons.clear()
     },
   }
   return api

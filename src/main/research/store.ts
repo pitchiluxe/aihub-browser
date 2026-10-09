@@ -19,6 +19,7 @@ export function createResearchRepository(appDir: string) {
   }
   return {
     list(owner: ResearchOwner): ResearchProject[] { return clone(read(owner)) },
+    getNormal(id: string): ResearchProject | undefined { const project = read({ id: -1, incognito: false }).find(p => p.id === id); return project ? clone(project) : undefined },
     save(owner: ResearchOwner, raw: unknown, expectedUpdatedAt: string | null = null): ResearchResult<ResearchProject> {
       const checked = validateProject(raw)
       if (!checked.ok) return checked

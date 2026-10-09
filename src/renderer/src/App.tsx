@@ -248,6 +248,10 @@ export default function App() {
   const openSpecialPage = useCallback((pageType: PageType) => {
     useBrowserStore.getState().addTab(`aihub://${pageType}`, pageType)
   }, [])
+  const openResearchProject = useCallback(() => {
+    useBrowserStore.getState().focusOrOpenPage('aihub://research', 'research')
+  }, [])
+  useEffect(() => window.electronAPI.research?.monitors?.onOpenProject?.(() => openResearchProject()), [openResearchProject])
 
   // ── Page content for AI assistant — runs in the tab's BrowserView via IPC ──
   const getPageContent = useCallback(async (): Promise<string> => {

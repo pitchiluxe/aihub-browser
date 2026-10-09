@@ -1,6 +1,5 @@
 import { beforeEach, afterEach, it, expect } from 'vitest'
 import fs from 'fs'
-import os from 'os'
 import { join } from 'path'
 import { createResearchRepository } from './store'
 import { flushAllJsonStores } from '../jsonStore'
@@ -8,7 +7,7 @@ let dir: string
 const normal = { id: 1, incognito: false }, privateWindow = { id: 2, incognito: true }
 const when = '2026-10-08T12:00:00.000Z'
 const project = { schemaVersion: 1 as const, id: 'p1', title: 'Study', question: '', createdAt: when, updatedAt: when, mode: 'summary' as const, sources: [], claims: [], notes: [] }
-beforeEach(() => { dir = fs.mkdtempSync(join(os.tmpdir(), 'research-store-')) })
+beforeEach(() => { dir = fs.mkdtempSync(join(process.cwd(), '.superpowers', 'sdd', 'research-store-')) })
 afterEach(() => { flushAllJsonStores(); fs.rmSync(dir, { recursive: true, force: true }) })
 it('persists normal projects while private windows neither read nor write them', () => {
   const repo = createResearchRepository(dir)

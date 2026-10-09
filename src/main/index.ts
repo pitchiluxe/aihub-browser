@@ -2077,7 +2077,7 @@ function createAppWindow(initialUrl?: string, opts: { incognito?: boolean } = {}
     ctx.views.clear()
     ctx.activeId = null
     appWins.delete(winId)
-    researchService.release(winId)
+    researchService?.release(winId)
     // Last private window gone → the private session is wiped (see incognito.ts).
     if (isIncognito) void incognito.release(winId)
     // Nobody clicks Disconnect before closing a window. Without this the room
@@ -2282,6 +2282,7 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 // rows. Flush synchronously here — 'before-quit' still runs on the main thread
 // with the process alive, which an async write would not survive.
 app.on('before-quit', () => {
+  researchService?.dispose()
   flushAllJsonStores()
   // The community's push queue lives in memory too, and a message sitting in it
   // when the app closes has been written to this disk and to nobody else's.
@@ -2291,6 +2292,7 @@ app.on('before-quit', () => {
   // retry on next launch when it does not.
   void shutdownCommunityBackend()
 })
+let researchService: ReturnType<typeof registerResearchIpc> | undefined
 
 // Network service crashes and restarts automatically — this is non-fatal.
 // Without this handler Electron 28+ may surface it as an unhandled event.
@@ -2911,7 +2913,26 @@ ipcMain.handle('window:setOpacity', (e, opacity: number) => {
 
 registerGoogleIpc(safelySend)
 registerCommunityIpc()
-const researchService = registerResearchIpc({ appDir: APP_DIR, resolveWindow: ctxFromEvent })
+researchService = registerResearchIpc({
+  appDir: APP_DIR,
+  resolveWindow: ctxFromEvent,
+  onMonitorChanged: projectId => {
+    for (const ctx of appWins.values()) if (!ctx.incognito && !ctx.win.isDestroyed()) sendTo(ctx, 'research:monitors-changed', { projectId })
+  },
+  onMonitorNotification: (projectId, updateCount) => {
+    try {
+      if (!Notification.isSupported()) return
+      const notice = new Notification({ title: 'Research update', body: `${updateCount} saved research source update${updateCount === 1 ? '' : 's'} are ready to review.`, silent: true })
+      notice.on('click', () => {
+        const normal = [...appWins.values()].filter(ctx => !ctx.incognito && !ctx.win.isDestroyed())
+        const target = normal.find(ctx => ctx.win === mainWindow) || normal[0]
+        if (!target) return
+        target.win.show(); target.win.focus(); target.win.webContents.send('research:open-project', projectId)
+      })
+      notice.show()
+    } catch {}
+  },
+})
 registerFaviconIpc({ mayRemember: mayPersistFrom })
 
 // ── IPC: Tab content views (BrowserView) ────────────────────────────────────

@@ -1,5 +1,4 @@
 import fs from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createMonitorStore } from './store'
@@ -7,7 +6,7 @@ import type { ResearchMonitor } from '../../../shared/research/monitorTypes'
 
 const roots: string[] = []
 async function tempStore() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'aihub-research-monitors-'))
+  const root = await fs.mkdtemp(path.join(process.cwd(), '.superpowers', 'sdd', 'current-research-monitors-'))
   roots.push(root)
   return createMonitorStore(root)
 }

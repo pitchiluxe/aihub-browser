@@ -4,7 +4,7 @@ import { extractPublicText } from './publicText'
 
 describe('public research observations', () => {
   it('rejects private, loopback and mapped private addresses', () => {
-    for (const address of ['127.0.0.1', '10.2.3.4', '169.254.1.2', '::1', 'fc00::1', '::ffff:127.0.0.1']) {
+    for (const address of ['127.0.0.1', '10.2.3.4', '100.64.0.1', '169.254.1.2', '192.88.99.1', '198.18.0.1', '::1', 'fc00::1', '::ffff:127.0.0.1']) {
       expect(() => assertPublicAddress(address), address).toThrow()
     }
     expect(() => assertPublicAddress('93.184.216.34')).not.toThrow()

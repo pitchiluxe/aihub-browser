@@ -3,8 +3,10 @@ import { captureResearchSource, type CaptureWebContents } from './capture'
 import { createResearchRepository } from './store'
 import { validateProject } from '../../shared/research/validation'
 import type { CapturedSource, ResearchResult } from '../../shared/research/types'
-export interface ResearchWindow { id: number; incognito: boolean; views: Map<string, { webContents: CaptureWebContents }> }
-export function registerResearchIpc(options: { appDir: string; resolveWindow(event: Electron.IpcMainInvokeEvent): ResearchWindow | undefined }) {
+import { registerMonitorIpc } from './monitors/ipc'
+import type { ResearchOwner } from './store'
+export interface ResearchWindow extends ResearchOwner { views: Map<string, { webContents: CaptureWebContents }> }
+export function registerResearchIpc(options: { appDir: string; resolveWindow(event: Electron.IpcMainInvokeEvent): ResearchWindow | undefined; onMonitorChanged?(projectId: string): void; onMonitorNotification?(projectId: string, updateCount: number): void }) {
   const repo = createResearchRepository(options.appDir)
   const captures = new Map<number, Map<string, CapturedSource>>()
   const released = new Set<number>()
@@ -25,10 +27,17 @@ export function registerResearchIpc(options: { appDir: string; resolveWindow(eve
       if (!known || JSON.stringify(known) !== JSON.stringify(source)) return { ok: false, error: 'Capture this source in the current window before saving it.' }
     }
     if (expected !== undefined && expected !== null && (typeof expected !== 'string' || expected.length > 32 || !Number.isFinite(Date.parse(expected)))) return { ok: false, error: 'Invalid project revision.' }
-    return repo.save(owner, validated.value, expected as string | null | undefined)
+    const saved = repo.save(owner, validated.value, expected as string | null | undefined)
+    if (saved.ok && !owner.incognito) monitorService.reconcile(repo.list(owner))
+    return saved
   })
-  handler('research:remove', (owner, id) => { if (typeof id !== 'string' || id.length > 100) throw Error('Invalid project.'); return repo.remove(owner, id) })
-  handler('research:capture', async (owner, id): Promise<ResearchResult<CapturedSource>> => {
+  handler('research:remove', (owner, id) => {
+    if (typeof id !== 'string' || id.length > 100) throw Error('Invalid project.')
+    const removed = repo.remove(owner, id)
+    if (removed.ok && !owner.incognito) monitorService.reconcile(repo.list(owner))
+    return removed
+  })
+  const captureForOwner = async (owner: ResearchWindow, id: string): Promise<ResearchResult<CapturedSource>> => {
     if (typeof id !== 'string') return { ok: false, error: 'Choose a loaded web tab.' }
     const view = owner.views.get(id)
     if (!view) return { ok: false, error: 'Choose a loaded tab in this window.' }
@@ -40,6 +49,26 @@ export function registerResearchIpc(options: { appDir: string; resolveWindow(eve
       map.set(result.value.id, result.value); captures.set(owner.id, map)
     }
     return result
+  }
+  handler('research:capture', async (owner, id): Promise<ResearchResult<CapturedSource>> => {
+    return captureForOwner(owner, id as string)
   })
-  return { release(windowId: number) { released.add(windowId); repo.release(windowId); captures.delete(windowId) } }
+  const monitorService = registerMonitorIpc({
+    appDir: options.appDir,
+    resolveWindow: options.resolveWindow,
+    getProject: (owner, id) => repo.list(owner).find(p => p.id === id),
+    getNormalProject: id => repo.getNormal(id),
+    saveProject: (owner, project) => repo.save(owner, project, null),
+    capture: async (owner, tabId) => {
+      const result = await captureForOwner(owner, tabId)
+      if (!result.ok) throw Error(result.error)
+      return result.value
+    },
+    changed: id => options.onMonitorChanged?.(id),
+    notify: (id, count) => options.onMonitorNotification?.(id, count),
+  })
+  return {
+    release(windowId: number) { released.add(windowId); repo.release(windowId); captures.delete(windowId); monitorService.release(windowId) },
+    dispose() { monitorService.dispose() },
+  }
 }
