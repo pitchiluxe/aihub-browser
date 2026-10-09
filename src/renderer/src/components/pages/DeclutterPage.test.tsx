@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DeclutterPage from './DeclutterPage'
 
-const state = vi.hoisted(() => ({
+const state = vi.hoisted((): { tabs: any[]; tabWcIds: Record<string, number> } => ({
   tabs: [
     { id: 'one', url: 'https://example.com/a', pageType: 'browser', isHome: false, asleep: false },
     { id: 'two', url: 'https://other.example.com/', pageType: 'browser', isHome: false, asleep: false },

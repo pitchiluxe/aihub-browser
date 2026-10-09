@@ -51,6 +51,7 @@ interface BrowserState {
   closeTabsToRight: (id: string) => void
   setActiveTab: (id: string) => void
   sleepTab: (id: string) => void
+  sleepTabs: (ids: readonly string[]) => void
   updateTab: (id: string, u: Partial<Tab>) => void
   reorderTabs: (fromId: string, toId: string) => void
   // Recently closed tabs (Ctrl+Shift+T restores the most recent)
@@ -404,6 +405,16 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   sleepTab: (id) => set(s => (
     id === s.activeTabId ? {} : { tabs: s.tabs.map(t => t.id === id ? { ...t, asleep: true, loadFailed: false, isAudible: false } : t) }
   )),
+
+  sleepTabs: (ids) => set(s => {
+    if (!ids.length) return {}
+    const requested = new Set(ids)
+    requested.delete(s.activeTabId || '')
+    if (!requested.size || !s.tabs.some(tab => requested.has(tab.id) && !tab.asleep)) return {}
+    return { tabs: s.tabs.map(tab => requested.has(tab.id) && !tab.asleep
+      ? { ...tab, asleep: true, loadFailed: false, isAudible: false }
+      : tab) }
+  }),
 
   updateTab: (id, u) => set(s => ({ tabs: s.tabs.map(t => t.id === id ? { ...t, ...u } : t) })),
 

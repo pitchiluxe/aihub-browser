@@ -3,6 +3,7 @@ import type { Tab } from '../store/browserStore'
 const HOUR_MS = 60 * 60 * 1000
 const BUSY_TAB_COUNT = 12
 const VERY_BUSY_TAB_COUNT = 30
+const EXTREME_TAB_COUNT = 50
 
 export interface TabSleepPolicyInput {
   tabs: readonly Tab[]
@@ -15,9 +16,19 @@ export interface TabSleepPolicyInput {
 /** Idle threshold for progressively larger browsing sessions. */
 export function getTabSleepIdleLimit(tabCount: number): number {
   const count = Number.isFinite(tabCount) ? Math.max(0, Math.floor(tabCount)) : 0
-  if (count >= VERY_BUSY_TAB_COUNT) return 15 * 60 * 1000
-  if (count >= BUSY_TAB_COUNT) return 45 * 60 * 1000
+  if (count >= EXTREME_TAB_COUNT) return 5 * 60 * 1000
+  if (count >= VERY_BUSY_TAB_COUNT) return 10 * 60 * 1000
+  if (count >= BUSY_TAB_COUNT) return 30 * 60 * 1000
   return 2 * HOUR_MS
+}
+
+/** Sleep-check cadence scales with open tabs while keeping small sessions quiet. */
+export function getTabSleepCheckInterval(tabCount: number): number {
+  const count = Number.isFinite(tabCount) ? Math.max(0, Math.floor(tabCount)) : 0
+  if (count >= EXTREME_TAB_COUNT) return 30 * 1000
+  if (count >= VERY_BUSY_TAB_COUNT) return 60 * 1000
+  if (count >= BUSY_TAB_COUNT) return 2 * 60 * 1000
+  return 5 * 60 * 1000
 }
 
 /** Return live background browser tabs safe to release at this check. */

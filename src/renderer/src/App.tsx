@@ -16,8 +16,8 @@ import { loadCustomExts } from './extensions/customExts'
 import { shouldRunOn } from './extensions/siteRules'
 import { withPanelRuntime } from './extensions/panelRuntime'
 import { applyThemeToDom } from './services/themeService'
-import { pruneTabActivity, selectTabsToSleep } from './services/tabSleepPolicy'
-import { buildDeclutterStyleScript, loadDeclutterRules, normalizeOrigin, selectorsForOrigin, type DeclutterRule } from './extensions/declutterRules'
+import { getTabSleepCheckInterval, pruneTabActivity, selectTabsToSleep } from './services/tabSleepPolicy'
+import { buildDeclutterStyleScript, loadDeclutterRules, normalizeOrigin, selectorsForOrigin } from './extensions/declutterRules'
 
 // Special pages are code-split — none are needed at startup, so keeping them
 // out of the entry chunk makes first paint faster.
@@ -794,13 +794,18 @@ export default function App() {
     if (activeTabId) lastActiveAt.current.set(activeTabId, Date.now())
   }, [activeTabId])
   useEffect(() => {
+    const now = Date.now()
+    const liveTabIds = new Set(tabs.map(tab => tab.id))
+    lastActiveAt.current = pruneTabActivity(lastActiveAt.current, liveTabIds)
+    for (const tab of tabs) if (!lastActiveAt.current.has(tab.id)) lastActiveAt.current.set(tab.id, now)
+  }, [tabs])
+  useEffect(() => {
     const timer = setInterval(() => {
       const now = Date.now()
       const store = useBrowserStore.getState()
       const liveTabIds = new Set(store.tabs.map(tab => tab.id))
       lastActiveAt.current = pruneTabActivity(lastActiveAt.current, liveTabIds)
-      // The first timer pass establishes a safe idle baseline for background
-      // tabs opened before they were ever selected.
+      // Seed defensively in case an activity timestamp was lost during restore.
       for (const tab of store.tabs) if (!lastActiveAt.current.has(tab.id)) lastActiveAt.current.set(tab.id, now)
       const sleepIds = selectTabsToSleep({
         tabs: store.tabs,
@@ -809,10 +814,10 @@ export default function App() {
         lastUseAt: lastActiveAt.current,
         now,
       })
-      for (const id of sleepIds) store.sleepTab(id)
-    }, 5 * 60 * 1000) // check every 5 minutes
+      if (sleepIds.length) store.sleepTabs(sleepIds)
+    }, getTabSleepCheckInterval(tabs.length))
     return () => clearInterval(timer)
-  }, [])
+  }, [tabs.length])
 
   // ── Hide the native view while a host HTML overlay must render above it —
   // BrowserView always paints above the window's own webContents, so there's

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { X, Plus, Home, ChevronDown, ChevronRight, Globe, Layers, Columns2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { useBrowserStore } from '../../store/browserStore'
+import { useBrowserStore, type Tab } from '../../store/browserStore'
 import { buildStripRows } from '../../services/tabGroups'
 
 /**
@@ -89,62 +89,43 @@ export default function VerticalTabs() {
           const tab = row.tab!
           const isActive = tab.id === activeTabId
           const isSplit = tab.id === splitTabId
-          return (
-            <div
-              key={tab.id}
-              onMouseEnter={() => setHovered(tab.id)}
-              onMouseLeave={() => setHovered(null)}
-              onClick={() => setActiveTab(tab.id)}
-              onAuxClick={e => { if (e.button === 1) { e.preventDefault(); closeTab(tab.id) } }}
-              className={`flex items-center gap-2 mx-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${
-                isActive ? 'bg-aihub-card text-aihub-text' : 'text-aihub-muted hover:bg-aihub-border/20 hover:text-aihub-text'
-              }`}
-              style={row.group ? { marginLeft: 18, borderLeft: `2px solid ${row.group.color}66`, borderTopLeftRadius: 4, borderBottomLeftRadius: 4 } : undefined}
-              title={tab.isHome ? 'Home' : tab.url}
-            >
-              {/* Container colour: which cookie jar this tab is signed into. */}
-              {tab.containerId && (
-                <span
-                  className="shrink-0 rounded-full"
-                  style={{ width: 6, height: 6, background: containerColor(tab.containerId) }}
-                  title={`Container: ${tab.containerId}`}
-                />
-              )}
-              {tab.isHome
-                ? <Home size={13} className="shrink-0" />
-                : tab.favicon
-                  ? <img src={tab.favicon} alt="" style={{ width: 14, height: 14, borderRadius: 3 }} className="shrink-0" />
-                  : <Globe size={13} className="shrink-0" />}
-
-              <span className="flex-1 min-w-0 truncate text-xs">
-                {tab.title || (tab.isHome ? 'New Tab' : tab.url)}
-              </span>
-
-              {isSplit && <Columns2 size={11} className="shrink-0 text-aihub-accent" />}
-
-              <button
-                onClick={e => { e.stopPropagation(); setSplitTab(isSplit ? null : tab.id) }}
-                title={isSplit ? 'Leave split view' : 'Show beside the current tab'}
-                className={`p-0.5 rounded transition-opacity hover:bg-aihub-border/40 ${
-                  hovered === tab.id && !isActive ? 'opacity-100' : 'opacity-0'
-                }`}
-              >
-                <Columns2 size={11} />
-              </button>
-
-              <button
-                onClick={e => { e.stopPropagation(); closeTab(tab.id) }}
-                title="Close tab"
-                className={`p-0.5 rounded transition-opacity hover:bg-aihub-border/40 ${
-                  hovered === tab.id || isActive ? 'opacity-100' : 'opacity-0'
-                }`}
-              >
-                <X size={11} />
-              </button>
-            </div>
-          )
+          return <VerticalTabItem key={tab.id} tab={tab} isActive={isActive} isSplit={isSplit} isHovered={hovered === tab.id}
+            groupColor={row.group?.color} containerColor={tab.containerId ? containerColor(tab.containerId) : undefined}
+            onHover={setHovered} onActivate={setActiveTab} onClose={closeTab} onSplit={setSplitTab} />
         })}
       </div>
     </div>
   )
 }
+
+interface VerticalTabItemProps {
+  tab: Tab
+  isActive: boolean
+  isSplit: boolean
+  isHovered: boolean
+  groupColor?: string
+  containerColor?: string
+  onHover: (id: string | null) => void
+  onActivate: (id: string) => void
+  onClose: (id: string) => void
+  onSplit: (id: string | null) => void
+}
+
+const VerticalTabItem = React.memo(function VerticalTabItem({ tab, isActive, isSplit, isHovered, groupColor, containerColor, onHover, onActivate, onClose, onSplit }: VerticalTabItemProps) {
+  return <div
+    onMouseEnter={() => onHover(tab.id)}
+    onMouseLeave={() => onHover(null)}
+    onClick={() => onActivate(tab.id)}
+    onAuxClick={e => { if (e.button === 1) { e.preventDefault(); onClose(tab.id) } }}
+    className={`flex items-center gap-2 mx-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${isActive ? 'bg-aihub-card text-aihub-text' : 'text-aihub-muted hover:bg-aihub-border/20 hover:text-aihub-text'}`}
+    style={groupColor ? { marginLeft: 18, borderLeft: `2px solid ${groupColor}66`, borderTopLeftRadius: 4, borderBottomLeftRadius: 4 } : undefined}
+    title={tab.isHome ? 'Home' : tab.url}
+  >
+    {tab.containerId && <span className="shrink-0 rounded-full" style={{ width: 6, height: 6, background: containerColor }} title={`Container: ${tab.containerId}`} />}
+    {tab.isHome ? <Home size={13} className="shrink-0" /> : tab.favicon ? <img src={tab.favicon} alt="" style={{ width: 14, height: 14, borderRadius: 3 }} className="shrink-0" /> : <Globe size={13} className="shrink-0" />}
+    <span className="flex-1 min-w-0 truncate text-xs">{tab.title || (tab.isHome ? 'New Tab' : tab.url)}</span>
+    {isSplit && <Columns2 size={11} className="shrink-0 text-aihub-accent" />}
+    <button onClick={e => { e.stopPropagation(); onSplit(isSplit ? null : tab.id) }} title={isSplit ? 'Leave split view' : 'Show beside the current tab'} className={`p-0.5 rounded transition-opacity hover:bg-aihub-border/40 ${isHovered && !isActive ? 'opacity-100' : 'opacity-0'}`}><Columns2 size={11} /></button>
+    <button onClick={e => { e.stopPropagation(); onClose(tab.id) }} title="Close tab" className={`p-0.5 rounded transition-opacity hover:bg-aihub-border/40 ${isHovered || isActive ? 'opacity-100' : 'opacity-0'}`}><X size={11} /></button>
+  </div>
+}, (previous, next) => previous.tab === next.tab && previous.isActive === next.isActive && previous.isSplit === next.isSplit && previous.isHovered === next.isHovered && previous.groupColor === next.groupColor && previous.containerColor === next.containerColor)

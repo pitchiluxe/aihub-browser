@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab } from '../store/browserStore'
-import { getTabSleepIdleLimit, pruneTabActivity, selectTabsToSleep, type TabSleepPolicyInput } from './tabSleepPolicy'
+import { getTabSleepCheckInterval, getTabSleepIdleLimit, pruneTabActivity, selectTabsToSleep, type TabSleepPolicyInput } from './tabSleepPolicy'
 
 const HOUR = 60 * 60 * 1000
 const now = 10 * HOUR
@@ -20,9 +20,10 @@ const input = (overrides: Partial<TabSleepPolicyInput> = {}): TabSleepPolicyInpu
 describe('adaptive tab sleeping policy', () => {
   it('uses progressively shorter idle windows as the open tab count grows', () => {
     expect(getTabSleepIdleLimit(11)).toBe(2 * HOUR)
-    expect(getTabSleepIdleLimit(12)).toBe(45 * 60 * 1000)
-    expect(getTabSleepIdleLimit(29)).toBe(45 * 60 * 1000)
-    expect(getTabSleepIdleLimit(30)).toBe(15 * 60 * 1000)
+    expect(getTabSleepIdleLimit(12)).toBe(30 * 60 * 1000)
+    expect(getTabSleepIdleLimit(29)).toBe(30 * 60 * 1000)
+    expect(getTabSleepIdleLimit(30)).toBe(10 * 60 * 1000)
+    expect(getTabSleepIdleLimit(50)).toBe(5 * 60 * 1000)
     expect(getTabSleepIdleLimit(-4)).toBe(2 * HOUR)
   })
 
@@ -32,13 +33,20 @@ describe('adaptive tab sleeping policy', () => {
 
   it.each([
     [10, 2 * HOUR + 1],
-    [25, 46 * 60 * 1000],
-    [50, 16 * 60 * 1000],
+    [25, 31 * 60 * 1000],
+    [50, 6 * 60 * 1000],
   ])('applies the tab-count policy to a synthetic %i-tab session', (count, idleMs) => {
     const tabs = Array.from({ length: count }, (_, index) => tab(`tab-${index}`))
     const lastUseAt = new Map(tabs.map(({ id }) => [id, now - idleMs]))
     const liveViewIds = new Set(tabs.map(({ id }) => id))
     expect(selectTabsToSleep(input({ tabs, activeTabId: 'tab-0', lastUseAt, liveViewIds }))).toHaveLength(count - 1)
+  })
+
+  it('checks more often in larger sessions to release idle memory promptly', () => {
+    expect(getTabSleepCheckInterval(11)).toBe(5 * 60 * 1000)
+    expect(getTabSleepCheckInterval(12)).toBe(2 * 60 * 1000)
+    expect(getTabSleepCheckInterval(30)).toBe(60 * 1000)
+    expect(getTabSleepCheckInterval(50)).toBe(30 * 1000)
   })
 
   it('fails safe when the active tab is not known', () => {

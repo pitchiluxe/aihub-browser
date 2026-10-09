@@ -11,8 +11,6 @@ const MAX_SELECTORS = 30
 const MAX_SELECTOR_LENGTH = 300
 const STYLE_ID = 'aihub-browser-site-declutter'
 
-type RuleStorage = Pick<Storage, 'getItem'> & Partial<Pick<Storage, 'setItem'>>
-
 function browserStorage(): Storage | undefined {
   try { return typeof localStorage === 'undefined' ? undefined : localStorage } catch { return undefined }
 }
