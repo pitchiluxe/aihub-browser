@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Sparkles, LayoutGrid, Network, RefreshCw, Zap, Clock, X,
   ChevronLeft, ChevronRight, Download, Upload, Eye, EyeOff,
-  FlaskConical, Bot, Newspaper, Search, Disc3, Globe2,
+  FlaskConical, Bot, Newspaper, Search, Disc3, Globe2, Plane,
 } from 'lucide-react'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { useBrowserStore } from '../../store/browserStore'
@@ -254,8 +254,9 @@ export default function HomePage({ onNavigate }: Props) {
         </motion.div>
 
         {/* ── Focus session — sits under the shortcut pills ── */}
-        <motion.div className="flex justify-center items-start gap-2.5 px-6 pb-5"
+        <motion.div className="flex flex-wrap justify-center items-start gap-2.5 px-6 pb-5"
           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <FlightsRentalsButton isLight={isLight} onClick={() => onNavigate('aihub://flights-rentals')} />
           <FocusWidget isLight={isLight} />
           <TravelButton isLight={isLight} onClick={() => onNavigate('aihub://travel')} />
         </motion.div>
@@ -421,6 +422,13 @@ export default function HomePage({ onNavigate }: Props) {
 }
 
 // ── Feature pill ─────────────────────────────────────────────────────────────
+function FlightsRentalsButton({ isLight, onClick }: { isLight: boolean; onClick: () => void }) {
+  return <button onClick={onClick} className="no-drag" title="Compare flights, car rentals and vacation stays"
+    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 999, cursor: 'pointer', background: isLight ? 'rgba(255,255,255,0.82)' : 'rgba(20,26,44,0.9)', border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.09)', color: isLight ? '#3a4062' : '#bcc2e0', fontSize: 12.5, fontWeight: 600 }}>
+    <Plane size={13} style={{ color: '#86c9a7' }} /> Flights &amp; Rentals
+  </button>
+}
+
 /** Opens Travel the World — styled as a sibling of the Focus button. */
 function TravelButton({ isLight, onClick }: { isLight: boolean; onClick: () => void }) {
   const panel: React.CSSProperties = isLight

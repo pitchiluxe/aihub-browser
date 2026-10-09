@@ -130,10 +130,8 @@ app.commandLine.appendSwitch('enable-http2')
 // QUIC (HTTP/3): even faster connection establishment — 0-RTT for known servers,
 // and handles packet loss better than TCP on lossy networks (mobile, spotty WiFi).
 app.commandLine.appendSwitch('enable-quic')
-// More renderer processes = better parallelism for sites with many frames/workers.
-// Default is ~1/4 of cores; bump to 1/2 so complex sites don't queue rendering.
-const CPU_COUNT = require('os').cpus().length
-app.commandLine.appendSwitch('renderer-process-limit', String(Math.max(4, Math.ceil(CPU_COUNT / 2))))
+// Let Chromium size its renderer pool from available memory. A CPU-based
+// process cap forces unrelated tabs to compete inside a small pool.
 // Keep DNS entries cached much longer in Chromium's own resolver (30 min vs ~1 min
 // default). First visits still go through Node's async resolver (with system-fallback
 // fallback); this layer caches aggressively on top so repeated internal references
@@ -1538,15 +1536,10 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
       // restarts — nothing here blocks first- or third-party cookies.
       javascript: true,
       images: true,
-      // Keep background tabs fully alive. With throttling on, a tab you
-      // switched away from had its timers/rAF frozen and its renderer marked
-      // hidden, so returning to it showed a stale or blank page until it
-      // "woke up" — which is exactly the "every previous tab goes idle, I have
-      // to reload" complaint. Off, a backgrounded page keeps running and
-      // re-appears instantly with live content when you switch back. Costs a
-      // little CPU with many heavy tabs; the 30-minute sleep still reclaims
-      // memory from tabs left untouched.
-      backgroundThrottling: false,
+      // Chromium reduces hidden-page timers and animation work. The view and
+      // its forms remain alive; syncActiveBrowserView invalidates on reattach
+      // so returning paints immediately without reloading the page.
+      backgroundThrottling: true,
       // Cache compiled JS eagerly — repeat visits skip re-parse/compile.
       v8CacheOptions: 'bypassHeatCheck',
       nodeIntegration: false,

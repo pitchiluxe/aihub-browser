@@ -192,7 +192,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     const id = `tab-${++tabN}`
     const isHome = url === 'home' && pageType === 'browser'
     set(s => ({
-      tabs: [...s.tabs, { id, url, title: isHome ? 'New Tab' : pageType === 'dj' ? 'AIHub DJ' : pageType === 'travel' ? 'Travel the World' : pageType !== 'browser' ? pageType.charAt(0).toUpperCase() + pageType.slice(1) : url, favicon: '', isLoading: false, isHome, pageType, containerId }],
+      tabs: [...s.tabs, { id, url, title: isHome ? 'New Tab' : pageType === 'dj' ? 'AIHub DJ' : pageType === 'travel' ? 'Travel the World' : pageType === 'flights-rentals' ? 'Flights & Rentals' : pageType !== 'browser' ? pageType.charAt(0).toUpperCase() + pageType.slice(1) : url, favicon: '', isLoading: false, isHome, pageType, containerId }],
       activeTabId: id,
       canGoBack: false,
       canGoForward: false,
@@ -225,7 +225,8 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   restoreTabs: (entries, activeIndex) => {
     const usable = (entries || []).filter(e => e && typeof e.url === 'string' && e.url)
     if (!usable.length) return
-    const tabs: Tab[] = usable.map(e => {
+    const idx = Number.isFinite(activeIndex) ? Math.min(Math.max(Math.trunc(activeIndex), 0), usable.length - 1) : 0
+    const tabs: Tab[] = usable.map((e, index) => {
       const pageType = (e.pageType || 'browser') as Tab['pageType']
       const isHome = e.url === 'home' && pageType === 'browser'
       return {
@@ -236,9 +237,11 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
         isLoading: false,
         isHome,
         pageType,
+        // Restore the strip immediately, loading background websites on demand.
+        // They have no live form or media state yet, so deferring is lossless.
+        asleep: index !== idx && !isHome && pageType === 'browser',
       }
     })
-    const idx = Math.min(Math.max(activeIndex ?? 0, 0), tabs.length - 1)
     set({ tabs, activeTabId: tabs[idx].id, tabWcIds: {}, canGoBack: false, canGoForward: false })
   },
 

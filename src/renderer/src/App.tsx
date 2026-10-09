@@ -42,6 +42,7 @@ const BibleStudyPage = lazy(() => import('./components/pages/BibleStudyPage'))
 const CommunityPage = lazy(() => import('./components/pages/CommunityPage'))
 const ObsidianGraphView = lazy(() => import('./components/pages/ObsidianGraphView'))
 const DjPage         = lazy(() => import('./components/dj/DjPage'))
+const FlightsRentalsPage = lazy(() => import('./components/travel/FlightsRentalsPage'))
 const TravelPage     = lazy(() => import('./components/travel/TravelPage'))
 
 import type { PageType } from '../../shared/pageTypes'
@@ -1106,6 +1107,7 @@ export default function App() {
                     {tab.pageType === 'obsidian-graph' && <ObsidianGraphView onNavigate={navigate} />}
                     {tab.pageType === 'dj'         && <DjPage />}
                     {tab.pageType === 'travel'     && <TravelPage onNavigate={navigate} />}
+                    {tab.pageType === 'flights-rentals' && <FlightsRentalsPage onNavigate={navigate} onOpenBooking={url => useBrowserStore.getState().addTab(url, 'browser')} />}
                   </Suspense>
                 </div>
               )

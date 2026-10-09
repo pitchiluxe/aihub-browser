@@ -192,6 +192,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       ['extensions', 'Extensions'], ['wifi', 'Free WiFi'], ['vpn', 'VPN / Proxy'], ['mail', 'Mail'],
       ['dj', 'AIHub DJ — mix and play your music'],
       ['travel', 'Travel the World — explore any country'],
+      ['flights-rentals', 'Flights & Rentals — compare trips and book'],
       ['manual', 'User Manual'], ['settings', 'Settings'],
     ]
     out.push({ id: 'go-home', label: 'Home', group: 'Go to', icon: <Home size={15} />, run: () => { addTab('home', 'browser'); close() }, keywords: 'start new tab' })
