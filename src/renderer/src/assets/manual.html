@@ -973,19 +973,19 @@
 
       <section id="research-workspace">
         <div class="sec-head"><span class="node" style="background:#38bdf8"></span><h2>Research Workspace <span class="pill new">new</span></h2><span class="sec-line"></span></div>
-        <p class="sec-sub">A three-pane research environment: notes, sources, and report generation in one place.</p>
+        <p class="sec-sub">Named projects, inspectable evidence, and portable research capsules.</p>
         <div class="body-col">
-          <p>Open <strong>Research</strong> from the sidebar and get a dedicated workspace for multi-source investigation. Open several tabs on a topic, switch to Research, and the workspace pulls them together.</p>
+          <p>Open <strong>Research</strong> from the sidebar, create a project and enter your research question. Select open web tabs explicitly, then choose <strong>Capture selected</strong>. Nothing is selected automatically. Pasted URLs must be opened and captured before they become evidence.</p>
           <div class="grid g2" style="margin-top:16px">
-            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Notepad pane</h4><p>Draft notes as you read. AI assists — press <em>Extract</em> on any source tab and the AI pulls the key points into your notepad automatically.</p></div>
-            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Sources pane</h4><p>Every tab you've read is listed here with its AI summary. Click to revisit any source.</p></div>
-            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Generate Report</h4><p>Pick a mode — Summary, Compare, or Bibliography — and the AI synthesises everything from your notepad and sources into a structured, cited document.</p></div>
-            <div class="feat"><h4><span class="dot" style="background:#38bdf8"></span>Source attribution</h4><p>Every claim in the generated report is linked back to the specific source it came from.</p></div>
+            <div class="feat"><h4>Dated source versions</h4><p>Captures keep the original title, URL, time and readable text. Form fields and editable drafts are excluded; other personal information on signed-in pages can still be captured. YouTube transcripts are used when available. Otherwise readable page text is captured.</p></div>
+            <div class="feat"><h4>Inspect every quote</h4><p>Generate a Summary, Comparison or Annotated Bibliography. Choose View evidence to highlight exact matching text in the saved capture. Invented or missing quotes remain visible as unmatched. A matched excerpt is not fact verification. Suggested disagreements are AI suggestions.</p></div>
+            <div class="feat"><h4>Your review matters</h4><p>Findings begin unreviewed. Mark a finding reviewed after checking it; editing it resets that status. Your notes are separate from source evidence. Earlier notepad entries are preserved and migrated into labeled user notes.</p></div>
+            <div class="feat"><h4>Share a capsule</h4><p>Choose Share capsule, exclude findings or sources, edit quotations and remove URLs in the preview. Explicitly choose Export capsule. The ZIP contains only index.html and project.aihub-research.json. Full snapshots, notes, AI settings, cookies and browsing history are omitted.</p></div>
           </div>
-          <div class="note good" style="margin-top:14px"><strong>Export as Markdown.</strong> Copy the report to clipboard, save it to Obsidian, or open it in the AI assistant for further refinement.</div>
+          <p style="margin-top:14px">Unzip a capsule and open index.html in any browser for an offline report with expandable quotes. It loads no scripts, images or remote resources. Original source links contact websites only when clicked. Import the JSON file in Research, review the import preview, and confirm to create a distinct project. Imported evidence is labeled shared excerpts only; it does not imply a full page was captured locally.</p>
+          <div class="note good" style="margin-top:14px"><strong>Privacy and limits.</strong> Capture itself does not call AI. Generation sends captured passages and your notes to the configured provider, which may use cloud fallback. Review private content manually before sharing; automatic redaction is not guaranteed. Private-window projects remain in memory until that window closes, but exported files remain on disk. Research supports 20 projects, 10 source versions per project, 12,000 characters per source, 50 findings and JSON imports up to 5 MB. Markdown export is also available.</div>
         </div>
       </section>
-
       <section id="bookmark-summaries">
         <div class="sec-head"><span class="node" style="background:var(--sky)"></span><h2>Smart Bookmark Summaries <span class="pill new">new</span></h2><span class="sec-line"></span></div>
         <p class="sec-sub">Every bookmark in your Sphere gets an AI-generated summary — so you know what it's for before you open it.</p>
@@ -2291,3 +2291,4 @@
 
 </body>
 </html>
+

@@ -18,3 +18,10 @@ it('bounds the saved text and labels truncation', async () => {
   const raw = await window.eval(RESEARCH_CAPTURE_SCRIPT)
   expect(raw.text.length).toBe(12000); expect(raw.truncated).toBe(true)
 })
+it('excludes an editable main container and hidden text while preserving paragraph boundaries', async () => {
+  document.body.innerHTML = '<main contenteditable>SECRET DRAFT</main><p>Visible evidence.</p><p hidden>HIDDEN</p><p style="display:none">ALSO HIDDEN</p>'
+  const first = await window.eval(RESEARCH_CAPTURE_SCRIPT)
+  expect(first.text.trim()).toBe('Visible evidence.')
+  document.body.innerHTML = '<main><p>First paragraph.</p><p>Second paragraph.</p></main>'
+  expect((await window.eval(RESEARCH_CAPTURE_SCRIPT)).text).toContain('First paragraph.\n')
+})

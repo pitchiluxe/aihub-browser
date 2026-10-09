@@ -7,6 +7,7 @@ export interface ResearchWindow { id: number; incognito: boolean; views: Map<str
 export function registerResearchIpc(options: { appDir: string; resolveWindow(event: Electron.IpcMainInvokeEvent): ResearchWindow | undefined }) {
   const repo = createResearchRepository(options.appDir)
   const captures = new Map<number, Map<string, CapturedSource>>()
+  const released = new Set<number>()
   function handler(channel: string, fn: (owner: ResearchWindow, arg: unknown) => unknown) {
     ipcMain.handle(channel, async (event, arg) => {
       try { const owner = options.resolveWindow(event); if (!owner) throw Error('Research window unavailable.'); return await fn(owner, arg) }
@@ -31,6 +32,7 @@ export function registerResearchIpc(options: { appDir: string; resolveWindow(eve
     const view = owner.views.get(id)
     if (!view) return { ok: false, error: 'Choose a loaded tab in this window.' }
     const result = await captureResearchSource(view.webContents)
+    if (released.has(owner.id)) return { ok: false, error: 'Research window closed during capture.' }
     if (result.ok) {
       const map = captures.get(owner.id) || new Map<string, CapturedSource>()
       if (map.size >= 200) map.delete(map.keys().next().value!)
@@ -38,5 +40,5 @@ export function registerResearchIpc(options: { appDir: string; resolveWindow(eve
     }
     return result
   })
-  return { release(windowId: number) { repo.release(windowId); captures.delete(windowId) } }
+  return { release(windowId: number) { released.add(windowId); repo.release(windowId); captures.delete(windowId) } }
 }
