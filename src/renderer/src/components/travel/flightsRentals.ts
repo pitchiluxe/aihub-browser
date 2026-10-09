@@ -1,4 +1,5 @@
 import { resolveAirport, airportLabel } from './airports'
+import { createTripEstimate, validateTripEstimate, type TripEstimate } from './tripCosts'
 
 export type TripKind = 'flights' | 'cars' | 'stays'
 
@@ -6,7 +7,7 @@ export interface Trip { kind: TripKind; origin: string; destination: string; sta
 
 export interface Source { title: string; url: string; snippet: string }
 
-export interface SavedTrip { id: string; trip: Trip }
+export interface SavedTrip { id: string; trip: Trip; estimate: TripEstimate }
 
 export interface Research { text: string; sources: Source[]; at: string; provider: string }
 interface AI { webSearch: (query: string) => Promise<any>; chat: (messages: { role: string; content: string }[]) => Promise<any> }
@@ -83,7 +84,7 @@ export function chooseBookingSearch(t: Trip, previousName?: string, random: () =
 export function readSavedTrips(raw: string | null): SavedTrip[] {
   try {
     const data = JSON.parse(raw || '[]')
-    return Array.isArray(data) ? data.filter(x => typeof x?.id === 'string' && x.trip && validateTrip(x.trip, '0000-01-01') === null).slice(0, 20) : []
+    return Array.isArray(data) ? data.filter(x => typeof x?.id === 'string' && x.trip && validateTrip(x.trip, '0000-01-01') === null).slice(0, 20).map(x => ({ id: x.id, trip: x.trip, estimate: validateTripEstimate(x.estimate) === null ? x.estimate : createTripEstimate(x.trip.currency) })) : []
   } catch { return [] }
 }
 

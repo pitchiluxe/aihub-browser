@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Plane, Car, House, ArrowRight, BookmarkPlus, Trash2, Sparkles, Loader2, ArrowLeft, ExternalLink } from 'lucide-react'
+import { Plane, Car, House, ArrowRight, BookmarkPlus, Trash2, Sparkles, Loader2, ArrowLeft, ExternalLink, Wallet } from 'lucide-react'
 import { bookingSearches, chooseBookingSearch, localDate, readSavedTrips, researchTrip, SAVED_TRIPS_KEY, tripDescription, validateTrip, type Research, type SavedTrip, type Trip, type TripKind } from './flightsRentals'
+import { createTripEstimate, validateTripEstimate } from './tripCosts'
+import TripCostBoard from './TripCostBoard'
 import AirportInput from './AirportInput'
 import ResearchBrief from './ResearchBrief'
 import DestinationGallery from './DestinationGallery'
@@ -19,6 +21,7 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
   const [trip, setTrip] = useState<Trip>(initialTrip)
   const [searched, setSearched] = useState<Trip | null>(null)
   const [saved, setSaved] = useState<SavedTrip[]>(loadSaved)
+  const [costTripId, setCostTripId] = useState('')
   const [research, setResearch] = useState<Research | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -56,7 +59,13 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
     const err = validateTrip(trip); if (err) { setError(err); return }
     if (saved.some(s => JSON.stringify(s.trip) === JSON.stringify(trip))) { setNotice('This trip is already saved.'); return }
     if (saved.length >= 20) { setError('You have 20 saved trips. Remove one before saving another.'); return }
-    if (persist([{ id: crypto.randomUUID(), trip: { ...trip } }, ...saved])) setNotice('Trip saved on this device.')
+    if (persist([{ id: crypto.randomUUID(), trip: { ...trip }, estimate: createTripEstimate(trip.currency) }, ...saved])) setNotice('Trip saved on this device.')
+  }
+  const updateEstimate = (id: string, estimate: SavedTrip['estimate']) => {
+    const invalid = validateTripEstimate(estimate)
+    if (invalid) { setError(invalid); return }
+    setError('')
+    if (persist(saved.map(item => item.id === id ? { ...item, estimate } : item))) setNotice('Trip estimate saved on this device.')
   }
   const restore = (t: Trip) => {
     generation.current++; setBusy(false); setTrip({ ...t }); setSearched(null); setResearch(null); setError(''); setNotice('Saved trip restored. Check the dates before searching.')
@@ -88,6 +97,7 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
             {error && <p className="fare-error" role="alert">{error}</p>}
             {notice && <p className="fare-notice" role="status">{notice}</p>}
           </section>
+          {saved.find(item => item.id === costTripId) && (() => { const item = saved.find(savedItem => savedItem.id === costTripId)!; return <TripCostBoard trip={item.trip} estimate={item.estimate} onChange={estimate => updateEstimate(item.id, estimate)} /> })()}
           {searched && <DestinationGallery trip={searched} onNavigate={onOpenBooking} />}
           {searched && <section className="fare-results" aria-label="Provider comparisons"><div className="fare-section-heading"><h2>Compare your options</h2><span>Searches, not live quotes</span></div><p>{tripDescription(searched)}</p><div className="fare-provider-list">{bookingSearches(searched).map(p => <button key={p.name} onClick={() => onOpenBooking(p.url)}><div><strong>{p.name}</strong><span>{p.detail}</span></div><ExternalLink size={17} /></button>)}</div><small>Confirm dates, travelers, currency and the final total on the provider’s page. Availability and prices can change. Car pickup times and driver age are selected with the rental provider.</small></section>}
           {busy && <div className="fare-research" role="status"><Loader2 size={18} className="fare-spin" /> Searching travel sources and preparing your comparison…</div>}
@@ -96,7 +106,7 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
         </main>
         <aside className="fare-aside">
           <section><h2>Before you book</h2><ul>{(trip.kind === 'flights' ? ['Include checked bags and seat fees.', 'Compare nearby airports and extra transfer costs.', 'Check layover length and separate-ticket connections.', 'Compare the airline’s direct price.'] : trip.kind === 'cars' ? ['Check the deposit and credit-card requirements.', 'Compare full insurance and excess charges.', 'Confirm mileage and fuel policy.', 'Check driver age, pickup hours and cancellation.'] : ['Include cleaning fees, taxes and deposits.', 'Compare cancellation deadlines.', 'Check the location and transport costs.', 'Read recent reviews and confirm check-in rules.']).map(t => <li key={t}>{t}</li>)}</ul></section>
-          <section><h2>Saved trips <span>{saved.length}/20</span></h2>{!saved.length && <p>Your saved plans stay on this device.</p>}{saved.map(s => <div className="fare-saved" key={s.id}><button onClick={() => restore(s.trip)}><strong>{s.trip.destination}</strong><span>{s.trip.kind} · {s.trip.start} → {s.trip.end}</span></button><button aria-label={`Remove saved trip to ${s.trip.destination}`} onClick={() => persist(saved.filter(x => x.id !== s.id))}><Trash2 size={15} /></button></div>)}</section>
+          <section><h2>Saved trips <span>{saved.length}/20</span></h2>{!saved.length && <p>Your saved plans stay on this device.</p>}{saved.map(s => <div className="fare-saved" key={s.id}><button onClick={() => restore(s.trip)}><strong>{s.trip.destination}</strong><span>{s.trip.kind} · {s.trip.start} → {s.trip.end}</span></button><button aria-label={`Open cost board for ${s.trip.destination}`} title="Open trip cost board" onClick={() => setCostTripId(s.id)}><Wallet size={15} /></button><button aria-label={`Remove saved trip to ${s.trip.destination}`} onClick={() => { if (costTripId === s.id) setCostTripId(''); persist(saved.filter(x => x.id !== s.id)) }}><Trash2 size={15} /></button></div>)}</section>
         </aside>
       </div>
     </div>

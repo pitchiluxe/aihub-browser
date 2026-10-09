@@ -75,5 +75,13 @@ describe('trip planning', () => {
   it('survives corrupt storage and discards invalid saved trips', () => {
     expect(readSavedTrips('oops')).toEqual([])
     expect(readSavedTrips(JSON.stringify([{ id: 'a', trip }, { id: 'b', trip: {} }]))).toHaveLength(1)
+    expect(readSavedTrips(JSON.stringify([{ id: 'a', trip }]))[0].estimate.lines.every(line => line.amount === '')).toBe(true)
+  })
+  it('restores saved cost estimates and replaces malformed estimate data with unknown entries', () => {
+    const valid = readSavedTrips(JSON.stringify([{ id: 'a', trip, estimate: { updatedAt: '2026-10-09T12:00:00Z', currency: 'EUR', lines: [{ id: 'flights', amount: '120.00' }, ...Array.from(['baggage', 'hotel', 'hotelFees', 'transfers', 'rental', 'rentalInsurance'], id => ({ id, amount: '' }))] } }]))[0]
+    expect(valid.estimate.currency).toBe('EUR')
+    expect(valid.estimate.lines[0].amount).toBe('120.00')
+    const recovered = readSavedTrips(JSON.stringify([{ id: 'b', trip, estimate: { currency: 'FAKE' } }]))[0]
+    expect(recovered.estimate.lines.every(line => line.amount === '')).toBe(true)
   })
 })

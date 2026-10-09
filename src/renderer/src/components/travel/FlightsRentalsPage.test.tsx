@@ -76,4 +76,18 @@ describe('Flights & Rentals page', () => {
     expect(host.textContent).not.toContain('Old trip advice')
     expect(button('AI deal research').disabled).toBe(false)
   })
+  it('opens a saved trip cost board and persists entered estimates without guessing unknown fees', async () => {
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Open cost board for Paris"]')!.click())
+    expect(host.textContent).toContain('Known subtotal')
+    expect(host.textContent).toContain('7 unknown')
+    await act(async () => {
+      const input = host.querySelector<HTMLInputElement>('[aria-label="Flight fare · all travelers amount"]')!
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(input, '245.75'); input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const stored = JSON.parse(localStorage.getItem(SAVED_TRIPS_KEY)!)
+    expect(stored[0].estimate.lines.find((line: any) => line.id === 'flights').amount).toBe('245.75')
+    expect(host.textContent).toContain('6 unknown')
+    expect(host.textContent).toContain('245.75')
+  })
 })
