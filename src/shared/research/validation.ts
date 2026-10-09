@@ -24,7 +24,7 @@ function source(value: any): CapturedSource {
   if (s.url !== undefined && !safeResearchUrl(s.url)) throw Error('Unsafe source URL.')
   if (s.provenance === 'captured' && (!s.url || s.captureType === 'excerpts')) throw Error('Captured sources require an original web URL.')
   if (s.provenance === 'imported' && s.captureType !== 'excerpts') throw Error('Imported sources contain shared excerpts only.')
-  const text = str(s.text, L.sourceChars)
+  const text = str(s.text, L.sourceChars, s.provenance === 'imported')
   const excerpts = s.provenance === 'imported' ? array(s.excerpts, L.claims).map(v => str(v, L.quoteChars)) : undefined
   if (excerpts && normalizeEvidence(excerpts.join('\n\n')) !== normalizeEvidence(text)) throw Error('Imported evidence does not match its excerpts.')
   return { id: id(s.id), title: str(s.title, L.titleChars), ...(s.url !== undefined ? { url: s.url } : {}), capturedAt: date(s.capturedAt), text, truncated: bool(s.truncated), captureType: s.captureType, provenance: s.provenance, ...(excerpts ? { excerpts } : {}) }
