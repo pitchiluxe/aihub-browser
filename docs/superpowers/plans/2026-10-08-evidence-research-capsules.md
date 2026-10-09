@@ -1,6 +1,6 @@
 # Evidence Research and Portable Capsules Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Let users capture selected sources, inspect a report's exact supporting passages, and export/import a sanitized research capsule.
 
@@ -112,7 +112,7 @@ export function claimNeedsReview(project: ResearchProject, claim: ResearchClaim)
 
 **Interfaces:** Produces all shared signatures above. `matchCitation` searches normalized captured text; for imported sources it searches individual excerpts and derives offsets in their display text. It never accepts a match spanning the separator between two imported excerpts.
 
-- [ ] Write the failing behavioral tests, including repeated phrases, normalized whitespace, unknown source IDs, unsafe URLs, duplicate IDs, oversized quotes and imported provenance:
+- [x] Write the failing behavioral tests, including repeated phrases, normalized whitespace, unknown source IDs, unsafe URLs, duplicate IDs, oversized quotes and imported provenance:
 
 ```ts
 const source: CapturedSource = {
@@ -128,8 +128,8 @@ expect(safeResearchUrl('javascript:alert(1)')).toBe(false)
 expect(safeResearchUrl('https://user:secret@example.org')).toBe(false)
 ```
 
-- [ ] Run `npx vitest run src/shared/research` and confirm the new tests fail before implementation.
-- [ ] Implement normalization/matching using deterministic exact text, not fuzzy “close enough” support:
+- [x] Run `npx vitest run src/shared/research` and confirm the new tests fail before implementation.
+- [x] Implement normalization/matching using deterministic exact text, not fuzzy “close enough” support:
 
 ```ts
 export function normalizeEvidence(text: string): string {
@@ -146,7 +146,7 @@ export function safeResearchUrl(value: unknown): boolean {
 ```
 
 Build validated objects field by field and return `ResearchResult`; reject invalid persistent project references while treating invalid model citations as unresolved in Task 4.
-- [ ] Re-run focused tests and type checks. Stage and commit only these files after they pass.
+- [x] Re-run focused tests and type checks. Stage and commit only these files after they pass.
 
 ## Task 2: Authoritative capture of selected tabs
 
@@ -162,7 +162,7 @@ export interface CaptureWebContents {
 export function captureResearchSource(wc: CaptureWebContents): Promise<ResearchResult<CapturedSource>>
 ```
 
-- [ ] Write tests using a stub WebContents: source URL comes from `getURL`, failed execution returns an error, navigation during extraction refuses capture, and input values are excluded by the extraction script.
+- [x] Write tests using a stub WebContents: source URL comes from `getURL`, failed execution returns an error, navigation during extraction refuses capture, and input values are excluded by the extraction script.
 
 ```ts
 const wc = {
@@ -175,8 +175,8 @@ const wc = {
 expect((await captureResearchSource(wc)).ok).toBe(false)
 ```
 
-- [ ] Run `npx vitest run src/main/research/capture.test.ts` and confirm failure.
-- [ ] Implement fixed-script extraction from a cloned readable document. Remove `input,textarea,select,button,script,style,noscript,[contenteditable]`; capture text from `main,article` when present, otherwise the cleaned body. Preserve passage breaks and record truncation before slicing. For supported YouTube pages, label a successfully extracted transcript; use readable page text if transcript extraction fails.
+- [x] Run `npx vitest run src/main/research/capture.test.ts` and confirm failure.
+- [x] Implement fixed-script extraction from a cloned readable document. Remove `input,textarea,select,button,script,style,noscript,[contenteditable]`; capture text from `main,article` when present, otherwise the cleaned body. Preserve passage breaks and record truncation before slicing. For supported YouTube pages, label a successfully extracted transcript; use readable page text if transcript extraction fails.
 
 ```ts
 const beforeUrl = wc.getURL()
@@ -189,7 +189,7 @@ if (wc.isDestroyed() || wc.getURL() !== beforeUrl)
 ```
 
 Assign `crypto.randomUUID()` source IDs in main, normalize text once, reject empty readable content, and keep the original captured metadata immutable. This operation performs no AI request or automatic navigation.
-- [ ] Run capture tests, including a real jsdom document with a password and draft text whose values must be absent. Commit focused files after checks pass.
+- [x] Run capture tests, including a real jsdom document with a password and draft text whose values must be absent. Commit focused files after checks pass.
 
 ## Task 3: Project repository, IPC and private-window isolation
 
@@ -220,7 +220,7 @@ export function registerResearchIpc(options: {
 }): { release(windowId: number): void }
 ```
 
-- [ ] Write failing tests for atomic normal persistence, project limit, invalid objects, immutable source IDs, rejection of unknown owners, and normal/private separation:
+- [x] Write failing tests for atomic normal persistence, project limit, invalid objects, immutable source IDs, rejection of unknown owners, and normal/private separation:
 
 ```ts
 const normal = { id: 1, incognito: false }
@@ -233,8 +233,8 @@ expect(repo.list(privateWindow)).toEqual([])
 expect(repo.list(normal)).toHaveLength(1)
 ```
 
-- [ ] Run `npx vitest run src/main/research` and observe failure.
-- [ ] Use `createManagedJsonStore` for normal storage and an in-memory map keyed by window ID for private storage. Validate/clone objects on read and write; preserve existing captures when an ID is reused. Use `research:list`, `research:save`, `research:remove`, `research:capture`; fail closed when no owning window exists.
+- [x] Run `npx vitest run src/main/research` and observe failure.
+- [x] Use `createManagedJsonStore` for normal storage and an in-memory map keyed by window ID for private storage. Validate/clone objects on read and write; preserve existing captures when an ID is reused. Use `research:list`, `research:save`, `research:remove`, `research:capture`; fail closed when no owning window exists.
 
 ```ts
 ipcMain.handle('research:capture', async (event, tabId: unknown) => {
@@ -248,7 +248,7 @@ ipcMain.handle('research:capture', async (event, tabId: unknown) => {
 ```
 
 Call returned `release(winId)` from the existing owning window's close handler. Preload methods invoke the four named channels; type the renderer bridge as `ResearchBridge`.
-- [ ] Run IPC/storage tests and type checks; confirm that no regular project file is created by an incognito-only test. Commit only Task 3 files.
+- [x] Run IPC/storage tests and type checks; confirm that no regular project file is created by an incognito-only test. Commit only Task 3 files.
 
 ## Task 4: Structured generation and request ownership
 
@@ -266,7 +266,7 @@ export function createResearchRunGuard(): {
 }
 ```
 
-- [ ] Write failing tests for unknown IDs, invented quotes, malformed JSON, errors with old findings intact, excessive output and cancellation/project switching:
+- [x] Write failing tests for unknown IDs, invented quotes, malformed JSON, errors with old findings intact, excessive output and cancellation/project switching:
 
 ```ts
 const guard = createResearchRunGuard()
@@ -276,8 +276,8 @@ expect(first.signal.aborted).toBe(true)
 expect(guard.current('project-a', first.token)).toBe(false)
 ```
 
-- [ ] Run `npx vitest run src/renderer/src/services/researchGeneration.test.ts` and confirm failure.
-- [ ] Build a prompt that treats passages as untrusted evidence, includes application IDs/capture dates, and requests JSON `{"claims":[{"text":"...","citations":[{"sourceId":"...","quote":"..."}],"kind":"finding"}]}`. Only captured source text and explicit notes enter the prompt. The total source context is bounded by the shared limits.
+- [x] Run `npx vitest run src/renderer/src/services/researchGeneration.test.ts` and confirm failure.
+- [x] Build a prompt that treats passages as untrusted evidence, includes application IDs/capture dates, and requests JSON `{"claims":[{"text":"...","citations":[{"sourceId":"...","quote":"..."}],"kind":"finding"}]}`. Only captured source text and explicit notes enter the prompt. The total source context is bounded by the shared limits.
 
 ```ts
 const passages = project.sources.map(s => ({
@@ -287,7 +287,7 @@ const passages = project.sources.map(s => ({
 ```
 
 Parse `content` directly, optionally strip one enclosing JSON fence, validate output shape and generate application IDs. Ignore model-supplied URLs, offsets, reviewed state and metadata. Keep unknown/unmatched citations visible as unresolved; do not fabricate support or discard their claim silently. Cancellation invalidates ownership even if the existing AI bridge cannot stop the provider request.
-- [ ] Run focused tests and commit. Do not modify provider fallback policy.
+- [x] Run focused tests and commit. Do not modify provider fallback policy.
 
 ## Task 5: Named projects, selected sources and evidence inspection
 
@@ -295,7 +295,7 @@ Parse `content` directly, optionally strip one enclosing JSON fence, validate ou
 
 **Interfaces:** `ResearchWorkspace({onNavigate?: (url:string)=>void})`; child components consume project objects and callbacks, not Electron directly. `ResearchReport({project:ResearchProject})` derives bibliography from project source records and renders escaped text; `EvidenceDrawer({source:CapturedSource,citation:Citation,onClose:()=>void,onNavigate?:...})` uses `matchCitation`.
 
-- [ ] Write DOM tests using a stub typed bridge/AI service. Verify no tabs are selected initially, capture only selected IDs, quote inspection, unsupported findings, edit invalidation, source-version limits and project switching.
+- [x] Write DOM tests using a stub typed bridge/AI service. Verify no tabs are selected initially, capture only selected IDs, quote inspection, unsupported findings, edit invalidation, source-version limits and project switching.
 
 ```tsx
 await userClick('Generate report')
@@ -305,8 +305,8 @@ expect(host.querySelector('mark')?.textContent).toBe('Actual page evidence')
 ```
 
 Define `userClick` and `waitFor` locally using existing React `act` test patterns; selectors must target accessible button names rather than implementation details.
-- [ ] Run `npx vitest run src/renderer/src/components/research/ResearchWorkspace.test.tsx` and confirm failure.
-- [ ] Implement state transitions: loading projects → selected project → source capture → generation → report. Save only explicit edits/capture/generation and keep previous findings until new output validates. Capture at most two tabs concurrently; show separate errors per source. Include cancellation, request tokens, keyboard navigation, dialog focus/Escape handling, and a compact layout for narrow windows.
+- [x] Run `npx vitest run src/renderer/src/components/research/ResearchWorkspace.test.tsx` and confirm failure.
+- [x] Implement state transitions: loading projects → selected project → source capture → generation → report. Save only explicit edits/capture/generation and keep previous findings until new output validates. Capture at most two tabs concurrently; show separate errors per source. Include cancellation, request tokens, keyboard navigation, dialog focus/Escape handling, and a compact layout for narrow windows.
 
 ```tsx
 const run = runGuard.begin(project.id)
@@ -316,8 +316,8 @@ if (result.ok) await saveProject({ ...project, claims: result.value })
 ```
 
 Also invalidate runs on edits, deletions, source recaptures and unmount; do not use the closed-over project alone to determine ownership.
-- [ ] Migrate the existing `aihub-research-notes-v1` array into explicitly labeled user notes once, with validation, limits and preservation of the original key. Do not call normal-project persistence in an incognito window. Keep existing Markdown export via `file.saveMd`.
-- [ ] Run UI and generation tests, then type checks. Commit the new flow and wrapper together.
+- [x] Migrate the existing `aihub-research-notes-v1` array into explicitly labeled user notes once, with validation, limits and preservation of the original key. Do not call normal-project persistence in an incognito window. Keep existing Markdown export via `file.saveMd`.
+- [x] Run UI and generation tests, then type checks. Commit the new flow and wrapper together.
 
 ## Task 6: Sanitized capsule transformation and offline HTML
 
@@ -337,7 +337,7 @@ export function renderCapsuleHtml(capsule: ResearchCapsule): string
 export function importResearchCapsule(raw: string): ResearchResult<ResearchProject>
 ```
 
-- [ ] Write failing tests covering scripts in titles, malicious URLs, exclusion of full source text/notes, missing URLs, shared-excerpt provenance, over-limit imports and citation redaction:
+- [x] Write failing tests covering scripts in titles, malicious URLs, exclusion of full source text/notes, missing URLs, shared-excerpt provenance, over-limit imports and citation redaction:
 
 ```ts
 const html = renderCapsuleHtml(capsule)
@@ -348,8 +348,8 @@ const imported = importResearchCapsule(JSON.stringify(capsule))
 expect(imported.ok && imported.value.sources.every(s => s.provenance === 'imported')).toBe(true)
 ```
 
-- [ ] Run `npx vitest run src/shared/research/capsule.test.ts` and confirm failure.
-- [ ] Construct an explicit allowlisted export DTO. Include only selected claims and cited excerpts from selected sources; missing/redacted evidence leaves the finding labeled Needs review. Do not export internal IDs that encode paths, full snapshots, notes, provider settings or history. Application-generated IDs may be retained solely for internal citation relationships. Validate edited links, allow omission, clear reviewed status for edited claims.
+- [x] Run `npx vitest run src/shared/research/capsule.test.ts` and confirm failure.
+- [x] Construct an explicit allowlisted export DTO. Include only selected claims and cited excerpts from selected sources; missing/redacted evidence leaves the finding labeled Needs review. Do not export internal IDs that encode paths, full snapshots, notes, provider settings or history. Application-generated IDs may be retained solely for internal citation relationships. Validate edited links, allow omission, clear reviewed status for edited claims.
 
 ```ts
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, c => ({
@@ -360,7 +360,7 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, c => ({
 ```
 
 Use a restrictive HTML CSP (`default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`). No script is necessary for expandable passages. Import checks UTF-8 size before JSON parsing, validates the known schema and assigns a fresh project ID. Imported excerpt sources use only the included passages; their citations cannot imply that a complete page was captured locally.
-- [ ] Re-run focused tests and commit.
+- [x] Re-run focused tests and commit.
 
 ## Task 7: Export preview, JSON import and user documentation
 
@@ -368,7 +368,7 @@ Use a restrictive HTML CSP (`default-src 'none'; style-src 'unsafe-inline'; base
 
 **Interfaces:** `CapsulePreview({project,onClose,onExport})` produces a validated `ResearchCapsule`; `onExport(capsule)` calls the existing ZIP bridge only after preview acceptance. Import reads a user-selected File, displays a validated preview and persists only after confirmation.
 
-- [ ] Write failing tests for exclusion/redaction, cancelled dialogs, unsafe edited links, import without original URLs and private export disclosure. Verify export is never called before the explicit final button.
+- [x] Write failing tests for exclusion/redaction, cancelled dialogs, unsafe edited links, import without original URLs and private export disclosure. Verify export is never called before the explicit final button.
 
 ```ts
 expect(saveZip).not.toHaveBeenCalled()
@@ -377,8 +377,8 @@ expect(saveZip.mock.calls[0][0].files.map(f => f.path))
   .toEqual(['index.html', 'project.aihub-research.json'])
 ```
 
-- [ ] Run `npx vitest run src/renderer/src/components/research/CapsulePreview.test.tsx` and confirm failure.
-- [ ] Wire only fixed archive entry paths; preserve the user's project on cancelled save or invalid import:
+- [x] Run `npx vitest run src/renderer/src/components/research/CapsulePreview.test.tsx` and confirm failure.
+- [x] Wire only fixed archive entry paths; preserve the user's project on cancelled save or invalid import:
 
 ```ts
 await window.electronAPI.file.saveZip({
@@ -391,14 +391,14 @@ await window.electronAPI.file.saveZip({
 ```
 
 Reject files by `File.size` before `File.text`; parse only JSON, never an archive or embedded executable content. Show data disclosure/capture consent and provider information; explain that quote matching is not fact verification. Default exports omit full text; preview links and excerpts explicitly for signed-in pages. Clarify manual URL removal and that automatic suggestions cannot guarantee redaction.
-- [ ] Document capture, matching, imported provenance, limits, capsule contents and offline opening in the manual. Run all research tests and type checks; commit focused files.
+- [x] Document capture, matching, imported provenance, limits, capsule contents and offline opening in the manual. Run all research tests and type checks; commit focused files.
 
 ## Task 8: Desktop verification and completion
 
 **Files:** `scripts/test-research-capsules-e2e.mjs`; plan checkboxes and documentation.
 
-- [ ] Create an isolated profile and local HTTP server with two evidence pages, a deliberately changing page and a page containing sensitive form values. Use deterministic AI fixtures only in the isolated test, as existing desktop scripts do. Include an invented citation in the fixture so unresolved status is exercised.
-- [ ] Exercise actual UI: create project, select/capture tabs, inspect valid/invalid citations, edit a claim, save/restart, export through a stubbed native save path, open HTML in a separate browser context, import JSON and confirm a distinct project.
+- [x] Create an isolated profile and local HTTP server with two evidence pages, a deliberately changing page and a page containing sensitive form values. Use deterministic AI fixtures only in the isolated test, as existing desktop scripts do. Include an invented citation in the fixture so unresolved status is exercised.
+- [x] Exercise actual UI: create project, select/capture tabs, inspect valid/invalid citations, edit a claim, save/restart, export through a stubbed native save path, open HTML in a separate browser context, import JSON and confirm a distinct project.
 
 ```js
 const requests = []
@@ -410,9 +410,9 @@ assert.equal(await previewPage.locator('script').count(), 0)
 ```
 
 Test the preview using local `file://` content; the exported HTML does not load the local test server until a source link is explicitly clicked. Verify credentials/input values are absent from capture/export, and a private project disappears after its window closes. Only test-owned processes may be closed.
-- [ ] Run `npm run typecheck`, `npm test`, and `npm run build`. Run `node scripts/test-research-capsules-e2e.mjs` against the completed build. Run the existing responsiveness desktop check once to guard against heavy capture/generation work blocking controls.
-- [ ] Perform one explicit configured-provider check using selected public test sources if a provider is available; if unavailable, report that limitation rather than presenting the deterministic fixture as a live AI check.
-- [ ] Review the full diff against the approved spec, including every Review Focus case. Fix failures before completion. Record the commands/results and any limitations in the handoff. Do not tag, push or publish a new release.
+- [x] Run `npm run typecheck`, `npm test`, and `npm run build`. Run `node scripts/test-research-capsules-e2e.mjs` against the completed build. Run the existing responsiveness desktop check once to guard against heavy capture/generation work blocking controls.
+- [x] Perform one explicit configured-provider check using selected public test sources if a provider is available; if unavailable, report that limitation rather than presenting the deterministic fixture as a live AI check.
+- [x] Review the full diff against the approved spec, including every Review Focus case. Fix failures before completion. Record the commands/results and any limitations in the handoff. Do not tag, push or publish a new release.
 
 ## Plan self-review
 
