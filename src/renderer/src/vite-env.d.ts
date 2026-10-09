@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+type AIHubResearchBridge = import('../../shared/research/types').ResearchBridge
+
 // Vite's `?raw` suffix inlines a file as a string at build time — used to
 // bundle the user manual into the app so it works offline and can be saved
 // out as one self-contained file.

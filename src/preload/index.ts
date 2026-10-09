@@ -1,6 +1,14 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { ResearchBridge } from '../shared/research/types'
 
+const research: ResearchBridge = {
+  list: () => ipcRenderer.invoke('research:list'),
+  save: project => ipcRenderer.invoke('research:save', project),
+  remove: projectId => ipcRenderer.invoke('research:remove', projectId),
+  capture: tabId => ipcRenderer.invoke('research:capture', tabId),
+}
 contextBridge.exposeInMainWorld('electronAPI', {
+  research,
   // 'darwin' | 'win32' | 'linux' — lets the renderer adapt chrome layout
   // (macOS native traffic lights vs custom window buttons).
   platform: process.platform,

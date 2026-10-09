@@ -10,6 +10,7 @@ import { pathToFileURL, fileURLToPath } from 'url'
 import { execSync, execFileSync, spawn } from 'child_process'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
+import { registerResearchIpc } from './research'
 import { registerCommunityIpc, releaseCommunityWindow, shutdownCommunityBackend } from './community'
 import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
 import { registerMediaScheme, registerMediaProtocol, registerDjIpc } from './dj/library'
@@ -2076,6 +2077,7 @@ function createAppWindow(initialUrl?: string, opts: { incognito?: boolean } = {}
     ctx.views.clear()
     ctx.activeId = null
     appWins.delete(winId)
+    researchService.release(winId)
     // Last private window gone → the private session is wiped (see incognito.ts).
     if (isIncognito) void incognito.release(winId)
     // Nobody clicks Disconnect before closing a window. Without this the room
@@ -2909,6 +2911,7 @@ ipcMain.handle('window:setOpacity', (e, opacity: number) => {
 
 registerGoogleIpc(safelySend)
 registerCommunityIpc()
+const researchService = registerResearchIpc({ appDir: APP_DIR, resolveWindow: ctxFromEvent })
 registerFaviconIpc({ mayRemember: mayPersistFrom })
 
 // ── IPC: Tab content views (BrowserView) ────────────────────────────────────
