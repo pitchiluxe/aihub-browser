@@ -192,6 +192,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     pickFolder:    () => ipcRenderer.invoke('dj:pickFolder'),
     saveRecording: (data: ArrayBuffer, ext: string) => ipcRenderer.invoke('dj:saveRecording', data, ext),
     youtubeSearch: (query: string, limit?: number) => ipcRenderer.invoke('dj:youtubeSearch', query, limit),
+    facts: {
+      getMany: (ids: string[]) => ipcRenderer.invoke('dj:facts:getMany', ids),
+      put:     (id: string, facts: unknown) => ipcRenderer.invoke('dj:facts:put', id, facts),
+    },
     // Audio files dropped from the desktop: File.path is gone in modern Electron.
     pathForFile:   (file: File) => { try { return webUtils.getPathForFile(file) } catch { return '' } },
     registerFile:  (path: string) => ipcRenderer.invoke('dj:registerFile', path),

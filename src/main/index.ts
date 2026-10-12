@@ -20,6 +20,7 @@ import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt, lighterModelToPull } from './modelRouting'
 import { sanitizeChatMessages, fitMessagesToBudget } from './chatMessages'
 import { createFareEngine } from './fares/engine'
+import { putFacts, type TrackFacts as DjTrackFacts } from './dj/facts'
 import { createElectronDriver, FARES_PARTITION } from './fares/hiddenPage'
 import { FARE_ADAPTERS, handoffLinks, isFareSiteUrl } from './fares/adapters'
 import { googleAdapter } from './fares/adapters/google'
@@ -4858,6 +4859,24 @@ ipcMain.handle('gospel:search', async (_e, query?: string) => {
 // Same key-less search page read as the Gospel room, any query. Only public,
 // embeddable videos are played, in YouTube's own embedded player.
 const djYtCache = new Map<string, { at: number; videos: YouTubeVideo[] }>()
+
+// AI DJ facts: measured tempo/key/energy per track. Debounced async store —
+// a set scans a song every couple of minutes; none of it blocks the UI.
+const djFactsStore = createManagedJsonStore<Record<string, DjTrackFacts>>(join(APP_DIR, 'dj-facts.json'), () => ({}), { debounceMs: 3000 })
+ipcMain.handle('dj:facts:getMany', (_e, ids: unknown) => {
+  const all = djFactsStore.get()
+  const out: Record<string, DjTrackFacts> = {}
+  if (Array.isArray(ids)) for (const id of ids.slice(0, 500)) if (typeof id === 'string' && all[id]) out[id] = all[id]
+  return out
+})
+handlePersistent('dj:facts:put', (_e, id: unknown, facts: unknown) => {
+  if (typeof id !== 'string') return { ok: false }
+  const before = djFactsStore.get()
+  const after = putFacts(before, id, facts as DjTrackFacts)
+  if (after === before) return { ok: false }
+  djFactsStore.set(after)
+  return { ok: true }
+}, () => ({ ok: false }))
 
 ipcMain.handle('dj:youtubeSearch', async (_e, query: string, limit = 20) => {
   const q = typeof query === 'string' ? query.trim().slice(0, 200) : ''

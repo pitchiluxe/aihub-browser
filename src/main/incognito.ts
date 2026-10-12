@@ -62,6 +62,7 @@ export const PRIVATE_BLOCKED_CHANNELS = [
   'fares:flex',             // same, for the flexible-date strip
   'fares:openSite',         // visible verify window, same persistent partition
   'fares:watch',            // saves a fare price watch to watches.json
+  'dj:facts:put',           // measured song facts (reveals what was queued)
 ] as const
 
 /**
