@@ -43,9 +43,15 @@ export function useFareSearch() {
   const start = useCallback(async (q: FareQuery) => {
     if (!api) { setState({ ...initialFareState(), phase: 'error' }); return }
     if (active.current) void api.cancel(active.current)
-    active.current = null
+    // The id is ours and set BEFORE the call: main emits each site's
+    // `loading` event while the call is still in flight, and those events
+    // would otherwise be dropped as stale — no "searching…" chips, and the
+    // search declared done as soon as the first site finished.
+    const clientId = `fr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    active.current = clientId
     setState({ ...initialFareState(), phase: 'searching' })
-    const res = await api.search(q)
+    const res = await api.search(q, clientId)
+    if (active.current !== clientId) return  // superseded while in flight
     if (res?.error === 'private') { setState({ ...initialFareState(), phase: 'private' }); return }
     if (!res?.searchId) { setState({ ...initialFareState(), phase: 'error' }); return }
     active.current = res.searchId

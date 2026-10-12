@@ -46,6 +46,17 @@ describe('createFareEngine.search', () => {
     expect(driver.closed).toBe(2)
   })
 
+  it('uses a caller-supplied search id, so a renderer can recognise events that arrive before the call returns', async () => {
+    const driver = fakeDriver(() => [ready()])
+    const engine = createFareEngine({ driver, adapters: [adapter('google', [])], ...fast })
+    const events: SiteProgress[] = []
+    const { id, done } = engine.search(q, p => events.push(p), 'client-42')
+    await done
+    expect(id).toBe('client-42')
+    expect(events.every(e => e.searchId === 'client-42')).toBe(true)
+    expect(events[0].status).toBe('loading')
+  })
+
   it('reports a bot wall as blocked', async () => {
     const driver = fakeDriver(() => [{ ready: false, blocked: true, pricesOnPage: 0, raw: {} }])
     const engine = createFareEngine({ driver, adapters: [adapter('kayak', [])], ...fast })

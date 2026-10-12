@@ -28,6 +28,13 @@ describe('FareTable', () => {
     expect(host.textContent).toMatch(/est\./)          // bag fee labelled
   })
 
+  it('keeps the overnight marker on the same line as the times (not a separate grid cell)', () => {
+    act(() => root.render(<FareTable offers={offers} adults={1} onBook={() => {}} />))
+    const sup = host.querySelector('.fare-times sup')!
+    expect(sup.parentElement!.classList.contains('fare-times')).toBe(false)
+    expect(sup.parentElement!.textContent).toMatch(/→/)
+  })
+
   it('re-sorts when the user picks Cheapest and filters Nonstop', () => {
     act(() => root.render(<FareTable offers={offers} adults={1} onBook={() => {}} />))
     const btn = (t: string) => Array.from(host.querySelectorAll('button')).find(b => b.textContent === t)!

@@ -454,7 +454,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     clear:  () => ipcRenderer.invoke('rewind:clear'),
   },
   fares: {
-    search:   (q: any) => ipcRenderer.invoke('fares:search', q),
+    search:   (q: any, clientId?: string) => ipcRenderer.invoke('fares:search', q, clientId),
     cancel:   (searchId: string) => ipcRenderer.invoke('fares:cancel', searchId),
     flex:     (q: any) => ipcRenderer.invoke('fares:flex', q),
     handoff:  (q: any) => ipcRenderer.invoke('fares:handoff', q),

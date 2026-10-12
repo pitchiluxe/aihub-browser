@@ -27,7 +27,7 @@ export default function FareTable({ offers, adults, onBook, onRowsRanked }: { of
     {rows.map(r => <article key={r.key} className="fare-row" data-fare-row>
       <div className="fare-row-main">
         <div className="fare-airline">{r.offer.airlines.join(' + ')}<small>{r.offer.stops ? `${r.offer.stops} stop${r.offer.stops > 1 ? 's' : ''}${r.offer.layovers.length ? ` · ${r.offer.layovers.join(', ')}` : ''}` : 'Nonstop'}</small></div>
-        <div className="fare-times">{t12(r.offer.departTime)} → {t12(r.offer.arriveTime)}{r.offer.arriveDayOffset ? <sup>+{r.offer.arriveDayOffset}</sup> : null}<small>{hm(r.offer.durationMin)}</small></div>
+        <div className="fare-times"><span>{t12(r.offer.departTime)} → {t12(r.offer.arriveTime)}{r.offer.arriveDayOffset ? <sup>+{r.offer.arriveDayOffset}</sup> : null}</span><small>{hm(r.offer.durationMin)}</small></div>
         <div className="fare-bags">{r.offer.bags ? `${r.offer.bags.carry ? 'carry-on incl.' : 'no carry-on'}` : 'bags unknown'}</div>
         <div className="fare-price">
           <b>${r.trueTotal}</b>

@@ -78,8 +78,10 @@ export function createFareEngine(deps: EngineDeps) {
     }
   }
 
-  function search(q: FareQuery, onProgress: (p: SiteProgress) => void) {
-    const id = `fs-${now()}-${++seq}`
+  /** `clientId` lets the caller know the id before any event fires — the
+   *  first `loading` events are emitted synchronously, ahead of the return. */
+  function search(q: FareQuery, onProgress: (p: SiteProgress) => void, clientId?: string) {
+    const id = clientId && /^[\w-]{1,64}$/.test(clientId) ? clientId : `fs-${now()}-${++seq}`
     const isLive = () => !cancelled.has(id)
     const emit = (adapter: SiteAdapter<any>, status: SiteStatus, offers: FareOffer[]) => {
       if (isLive()) onProgress({ searchId: id, site: adapter.id, label: adapter.label, status, offers, url: adapter.url(q), at: now() })

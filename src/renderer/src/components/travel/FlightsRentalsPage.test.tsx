@@ -110,6 +110,48 @@ describe('live fares', () => {
     expect(localStorage.getItem(FLIGHTS_PREFILL_KEY)).toBeNull()
   })
 
+  it('keeps the prefill when React discards a render and mounts again (lazy page inside Suspense)', async () => {
+    localStorage.setItem(FLIGHTS_PREFILL_KEY, 'NRT')
+    let resolve!: () => void
+    const gate = new Promise<void>(r => { resolve = r })
+    let suspended = false
+    // A sibling that suspends on the first attempt makes React throw away the
+    // page's first render, exactly like a lazy chunk still loading in the app.
+    const SuspendOnce = () => { if (!suspended) { suspended = true; throw gate } return null }
+    act(() => root.unmount()); root = createRoot(host)
+    await act(async () => root.render(<React.Suspense fallback={null}><FlightsRentalsPage onNavigate={navigate} /><SuspendOnce /></React.Suspense>))
+    await act(async () => { resolve(); await gate })
+    const combos = host.querySelectorAll<HTMLInputElement>('input[role="combobox"]')
+    expect(combos[1].value).toBe('NRT')
+    expect(localStorage.getItem(FLIGHTS_PREFILL_KEY)).toBeNull()
+  })
+
+  it('keeps progress events that arrive before the search call returns (real IPC ordering)', async () => {
+    const listeners: any[] = []
+    ;(window as any).electronAPI = { fares: {
+      // Main emits each site's `loading` synchronously, ahead of the invoke reply.
+      search: vi.fn(async (_q: any, id: string) => {
+        listeners.forEach(cb => cb({ searchId: id, site: 'google', label: 'Google Flights', status: 'loading', offers: [], url: 'https://g', at: 1 }))
+        listeners.forEach(cb => cb({ searchId: id, site: 'kayak', label: 'Kayak', status: 'loading', offers: [], url: 'https://k', at: 1 }))
+        return { searchId: id }
+      }),
+      cancel: vi.fn(), flex: vi.fn(async () => []), handoff: vi.fn(async () => []), openSite: vi.fn(),
+      onProgress: (cb: any) => { listeners.push(cb); return () => {} }, onFlexDay: () => () => {},
+    } }
+    localStorage.setItem(FLIGHTS_PREFILL_KEY, 'LAX')
+    remount()
+    const from = host.querySelector('input[role="combobox"]') as HTMLInputElement
+    await act(async () => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!; set.call(from, 'ATL'); from.dispatchEvent(new Event('input', { bubbles: true })) })
+    await act(async () => { button('Find live fares').click() })
+    const id = (window as any).electronAPI.fares.search.mock.calls[0][1]
+    expect(typeof id).toBe('string')
+    expect(host.querySelectorAll('.fare-chip')).toHaveLength(2)
+    expect(host.textContent).toContain('searching')
+    // Kayak finishing alone must not end the search while Google is still loading.
+    await act(async () => { listeners.forEach(cb => cb({ searchId: id, site: 'kayak', label: 'Kayak', status: 'blocked', offers: [], url: 'https://k', at: 2 })) })
+    expect(host.textContent).toContain('searching')
+  })
+
   it('starts a live search for flights and shows hand-off links when every site fails', async () => {
     const listeners: any[] = []
     ;(window as any).electronAPI = { fares: {
@@ -122,7 +164,7 @@ describe('live fares', () => {
     const from = host.querySelector('input[role="combobox"]') as HTMLInputElement
     await act(async () => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!; set.call(from, 'ATL'); from.dispatchEvent(new Event('input', { bubbles: true })) })
     await act(async () => { button('Find live fares').click() })
-    expect((window as any).electronAPI.fares.search).toHaveBeenCalledWith(expect.objectContaining({ from: 'ATL', to: 'LAX' }))
+    expect((window as any).electronAPI.fares.search.mock.calls[0][0]).toEqual(expect.objectContaining({ from: 'ATL', to: 'LAX' }))
     await act(async () => { listeners.forEach(cb => cb({ searchId: 's1', site: 'google', label: 'Google Flights', status: 'blocked', offers: [], url: 'https://www.google.com/travel/flights', at: 1 })) })
     expect(host.textContent).toContain('needs a human check')
     expect(host.textContent).toContain('Expedia')

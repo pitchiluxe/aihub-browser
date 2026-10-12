@@ -31,12 +31,18 @@ function initialTrip(): Trip {
   const end = new Date(start); end.setDate(end.getDate() + 7)
   return { kind: 'flights', origin: '', destination: '', start: localDate(start), end: localDate(end), travelers: 1, budget: '', currency: 'USD', flexible: true }
 }
-/** Travel the World hands over a destination airport code, read once. */
+/**
+ * Travel the World hands over a destination airport code.
+ *
+ * Read-only on purpose: React may run this initializer, throw the render away
+ * (a lazy chunk suspending) and run it again. Deleting the key here lost the
+ * destination on the retry; the key is consumed in an effect once mounted.
+ */
 function initialTripWithPrefill(): Trip {
   const t = initialTrip()
   try {
     const code = localStorage.getItem(FLIGHTS_PREFILL_KEY)
-    if (code) { localStorage.removeItem(FLIGHTS_PREFILL_KEY); return { ...t, destination: code } }
+    if (code) return { ...t, destination: code }
   } catch {}
   return t
 }
@@ -55,6 +61,8 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
   const generation = useRef(0)
   const previousProvider = useRef<Partial<Record<TripKind, string>>>({})
   useEffect(() => () => { generation.current++ }, [])
+  // Committed mount: now the hand-over can be consumed safely.
+  useEffect(() => { try { localStorage.removeItem(FLIGHTS_PREFILL_KEY) } catch {} }, [])
   const fares = useFareSearch()
   const [handoff, setHandoff] = useState<{ name: string; url: string }[]>([])
   const [rows, setRows] = useState<FareRow[]>([])

@@ -4634,10 +4634,10 @@ function validFareQuery(q: any): q is FareQuery {
     && ['USD', 'EUR', 'GBP', 'CAD', 'AUD'].includes(q.currency)
 }
 
-handlePersistent('fares:search', (e, q: FareQuery) => {
+handlePersistent('fares:search', (e, q: FareQuery, clientId?: string) => {
   if (!validFareQuery(q)) return { error: 'invalid' }
   const sender = e.sender
-  const { id, done } = fareEngine().search(q, p => { if (!sender.isDestroyed()) sender.send('fares:progress', p) })
+  const { id, done } = fareEngine().search(q, p => { if (!sender.isDestroyed()) sender.send('fares:progress', p) }, typeof clientId === 'string' ? clientId : undefined)
   void done.catch(() => {})
   return { searchId: id }
 }, () => ({ error: 'private' }))
