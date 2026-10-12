@@ -301,6 +301,34 @@ describe('SetConductor — final review', () => {
     expect(c.next()).toBeDefined()
   })
 
+  it('Automix asking while the very first search is still running does not end the set (live: "ran out" at once)', async () => {
+    const lib = Array.from({ length: 6 }, (_, i) => yt(`artist${i}`))
+    const d = deps(lib)
+    let release: () => void = () => {}
+    const gate = new Promise<void>(r => { release = r })
+    const search = d.pool.search
+    d.pool.search = async (q: string, n: number) => { await gate; return search(q, n) }
+    const c = new SetConductor(d)
+    const starting = c.start(parseBrief('afrobeats warm-up, 30 min'))
+    await new Promise(r => setTimeout(r, 0))
+    expect(c.next()).toBeUndefined()           // nothing yet…
+    expect(c.state.active).toBe(true)          // …but the set is still on
+    release(); await starting; await c.refill()
+    expect(c.next()).toBeDefined()
+  })
+
+  it('"Up next · measuring" never shows the song that is already playing', async () => {
+    const lib = Array.from({ length: 5 }, (_, i) => yt(`artist${i}`))
+    const c = new SetConductor(deps(lib, { analysis: { ensure: () => new Promise(() => {}), known: () => null } }))
+    void c.start(parseBrief('afrobeats, 1h'))
+    await new Promise(r => setTimeout(r, 20))
+    const shown = c.state.tentative?.candidate.track.youtubeId
+    expect(shown).toBeDefined()
+    const handed = c.next()                    // the previewed song is the one handed over
+    expect(handed?.youtubeId).toBe(shown)
+    expect(c.state.tentative?.candidate.track.youtubeId).not.toBe(shown)
+  })
+
   it('when YouTube returns nothing at all, it says so plainly instead of blaming rules', async () => {
     const d = deps([])
     d.pool.search = async () => []
@@ -309,6 +337,20 @@ describe('SetConductor — final review', () => {
     expect(c.state.active).toBe(false)
     expect(c.state.message).toMatch(/couldn'?t find any songs|connection/i)
     expect(c.state.message).not.toMatch(/rules/i)
+  })
+
+  it('searches the style as "official music video" too — plain "afrobeats" mostly finds hour-long mixes', async () => {
+    const lib = Array.from({ length: 6 }, (_, i) => yt(`artist${i}`))
+    const d = deps(lib)
+    const queries: string[] = []
+    const search = d.pool.search
+    d.pool.search = async (q: string, n: number) => { queries.push(q); return search(q, n) }
+    const c = new SetConductor(d)
+    await c.start(parseBrief('afrobeats warm-up, 30 min'))
+    expect(queries).toContain('afrobeats official music video')
+    c.instruct(parseInstruction('R&B'))
+    await new Promise(r => setTimeout(r, 0))
+    expect(queries).toContain('r&b official music video')
   })
 
   it('coming back from the console restarts the mixer', async () => {

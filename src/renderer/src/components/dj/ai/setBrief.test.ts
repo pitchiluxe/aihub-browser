@@ -11,6 +11,12 @@ describe('parseBrief', () => {
     expect(b.discoveryShare).toBe(0.25)
   })
 
+  it('a duration is never a song search ("30 min" searched YouTube for "30 min")', () => {
+    expect(parseBrief('afrobeats warm-up, 30 min').seeds).toEqual(['afrobeats'])
+    expect(parseBrief('r&b, 2 hours').seeds).toEqual(['r&b'])
+    expect(parseBrief('amapiano for 90 minutes').seeds).toEqual(['amapiano'])
+  })
+
   it('reads durations in several forms', () => {
     expect(parseBrief('house, 90 min').durationMin).toBe(90)
     expect(parseBrief('jazz for 2 hours').durationMin).toBe(120)

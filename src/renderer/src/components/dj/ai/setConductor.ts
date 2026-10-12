@@ -80,7 +80,14 @@ export class SetConductor extends Emitter {
     this.stopAfter = false
     this.seq = []; this.playNextQueue = []; this.playNextQueries = []; this.bursts = { discovery: 0, favorites: 0 }
     this.set({ active: true, paused: false, brief, upNext: [], rules: [...brief.rules], played: [], startedAt: this.now(), message: `Building your set: ${brief.vibe}` })
-    this.pool = await gatherCandidates(brief.seeds, this.deps.pool)
+    // Each seed also as "<seed> official music video": measured 2026-10-12, plain
+    // "afrobeats" returns mostly hour-long mixes (5/15 songs), the official-video
+    // phrasing 13/15 (R&B 15/15). Tagged with the seed so style rules see them.
+    const firstSeeds = brief.seeds.slice(0, 3)
+    // Counted as in flight: Automix may ask for a song before this lands, and
+    // an empty answer then must not end the set (live: "ran out" at once).
+    const lists = await this.fetching(() => Promise.all(firstSeeds.map(s => gatherCandidates([s, `${s} official music video`], this.deps.pool, { genre: s.trim().toLowerCase() }).catch(() => []))))
+    this.pool = lists.reduce((a, b) => mergePools(a, b), [] as Omit<Candidate, 'facts'>[])
     if (!this.pool.length) {
       // YouTube hiccups, or answers this exact phrasing with nothing: ask again, wider.
       // "afrobeats warm-up" mostly finds hour-long mixes (not songs): the style word alone finds songs.
@@ -273,6 +280,8 @@ export class SetConductor extends Emitter {
     const fromFacts = from ? from.facts ?? this.deps.analysis.known(from.track) : null
     const to = head.candidate.facts
     this.set({ handoff: { transition: head.transition, fromBpm: fromFacts?.bpm ?? null, toBpm: to?.bpm ?? null, fromKey: fromFacts?.camelot ?? null, toKey: to?.camelot ?? null } })
+    // The previewed "measuring…" song may be the one just handed over: never show what is playing as next.
+    if (this.state.tentative && trackId(this.state.tentative.candidate.track) === trackId(head.candidate.track)) this.set({ tentative: null })
     // The set is under way: "Building your set…" has done its job.
     if (/^Building your set/.test(this.state.message)) this.set({ message: '' })
     this.noteStarted(head.candidate.track, head.candidate.known)
@@ -398,7 +407,7 @@ function hardRules(rules: SetRule[]): SetRule[] {
 }
 
 /** Ways to ask YouTube for more of one style: one query returns only a handful. */
-const genreQueries = (g: string) => [g, `${g} songs`, `best ${g}`, `new ${g}`]
+const genreQueries = (g: string) => [`${g} official music video`, `${g} official audio`, g, `new ${g} songs`]
 
 function mergePools(a: Omit<Candidate, 'facts'>[], b: Omit<Candidate, 'facts'>[]): Omit<Candidate, 'facts'>[] {
   const out = new Map(a.map(c => [c.track.youtubeId || c.track.path, c]))
