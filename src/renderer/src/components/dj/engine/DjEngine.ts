@@ -387,6 +387,11 @@ export class Deck extends Emitter {
     if (this.isYouTube) return !!this.yt?.playing
     return !this.media.paused && !this.media.ended
   }
+  /** The song played through to its end (not paused part-way). */
+  get finished(): boolean {
+    if (!this.track || this.held) return false
+    return this.isYouTube ? !!this.yt?.finished : this.media.ended
+  }
   /** Playing, or about to be — what the transport button shows. */
   get active(): boolean { return this.held ? this.holdResume : this.playing || this.want }
   get time(): number {

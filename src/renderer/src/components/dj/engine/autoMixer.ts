@@ -114,7 +114,10 @@ export class AutoMixer extends Emitter {
       return
     }
 
-    const isSpent = (d: Deck) => !d.track || !!d.error || this.spent.get(d.id) === d.track ||
+    // A song that ENDED is spent wherever its clock stopped: YouTube can end a
+    // few seconds short of the length it reported (ads, rounding), and a length
+    // that was never known left the playlist waiting forever as "paused".
+    const isSpent = (d: Deck) => !d.track || !!d.error || d.finished || this.spent.get(d.id) === d.track ||
       (d.duration > 0 && d.time > d.duration - 2)
     const live = A.playing ? A : B.playing ? B : null
     if (!live) {

@@ -86,6 +86,8 @@ export class YouTubeDeck {
     return this.reportedT + ((performance.now() - this.reportedAt) / 1000) * this.rate
   }
   get playing(): boolean { return !this.paused && !this.ended }
+  /** The video played to its end (YouTube's "ended" state). */
+  get finished(): boolean { return this.ended }
   get hasVideo(): boolean { return !!this.videoStream }
 
   /** Load a video; resolves false (with `error` set) when it cannot play. */
