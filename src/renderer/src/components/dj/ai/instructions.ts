@@ -10,7 +10,8 @@ export type SetRule =
   | { kind: 'banArtist'; artist: string }
   | { kind: 'onlyGenres'; genres: string[] }
   | { kind: 'moreGenre'; genre: string }
-  | { kind: 'lessGenre'; genre: string }
+  /** `hard`: "no hip hop" excludes the genre; "less hip hop" only penalises it. */
+  | { kind: 'lessGenre'; genre: string; hard?: boolean }
   | { kind: 'tempoRange'; min?: number; max?: number }
   | { kind: 'minEnergy'; level: number; untilMs?: number }
   | { kind: 'maxEnergy'; level: number; untilMs?: number }
@@ -31,7 +32,16 @@ export interface Parsed { items: Instruction[]; confirm: string; understood: boo
 
 const GENRES = ['afrobeats', 'afrobeat', 'amapiano', 'hip hop', 'hip-hop', 'rap', 'r&b', 'rnb', 'house', 'deep house', 'tech house', 'techno', 'drum and bass', 'dnb', 'dancehall', 'reggae', 'reggaeton', 'pop', 'rock', 'jazz', 'gospel', 'soul', 'funk', 'disco', 'edm', 'trance', 'dubstep', 'latin', 'salsa', 'bachata', 'kpop', 'k-pop', 'country', 'lofi', 'lo-fi', 'trap', 'drill', 'bongo', 'highlife', 'soca', 'kompa', 'zouk', 'bollywood', 'classical', 'blues', 'garage', 'uk garage', 'afro house']
 const SLOW_WORDS = /\b(slow|chill|calm|mellow|sad|ballads?|quiet|soft)\b/
-const NEG = /\b(no|no more|not|don'?t|do not|stop( the)?|without|avoid|less|fewer|enough( of)?|skip the)\b/
+/** A negation that governs the MOOD WORD itself ("no slow", "no more chill songs",
+ *  "stop the calm stuff"), within the next couple of words. A negation elsewhere
+ *  in the sentence ("more chill, LESS HYPE", "something calm, NO RAP") is not it. */
+const NEGATED_MOOD = /\b(no|no more|not|don'?t want|do not want|don'?t play|do not play|never play|stop|stop the|without|avoid|less|fewer|enough( of)?|skip the|cut the)\s+(?:\w+\s+){0,2}?(slow|chill|calm|mellow|sad|ballads?|quiet|soft)\b/
+/** Double negatives that mean "keep it": "don't stop the slow songs", "I don't mind slow songs". */
+const KEEP_MOOD = /\b(don'?t|do not) (stop|mind|skip)\b/
+/** Only a mood, never a song title: "slow songs", "something chill". */
+const MOOD_ONLY = /^(?:any |some |the |more |something |a few )?(?:slow|chill|chilled|calm|mellow|sad|quiet|soft|relaxing)(?: (?:songs?|music|stuff|tracks?|ones?|vibes?|tunes?))?$/
+/** High-energy words: "no fast songs" caps the energy rather than banning an artist named "fast". */
+const FAST_ONLY = /^(?:fast|hype|hyped|upbeat|loud|hard|crazy|banging)(?: (?:songs?|music|stuff|tracks?|ones?))?$/
 const HOUR = 3_600_000
 const titleCase = (s: string) => s.replace(/\b\w/g, c => c.toUpperCase())
 
@@ -64,8 +74,20 @@ function rules(t: string, now: number): SetRule | { remove: SetRule['kind']; val
   if (/^stop after (this|the current)( one| song| track)?$|^(this is|make this) the last (song|one|track)$|^last song$/.test(t)) return { kind: 'stopAfterCurrent' }
   if (/\b(explicit|clean versions?|no swearing|no cursing|radio edits?)\b/.test(t) && /\b(no|avoid|without|clean|only|radio)\b/.test(t)) return { kind: 'noExplicit' }
 
+  if ((m = /\b(?:under|below|less than|max(?:imum)?|no faster than) (\d{2,3}) ?bpm\b/.exec(t))) return { kind: 'tempoRange', max: Number(m[1]) }
+  if ((m = /\b(?:over|above|more than|at least|min(?:imum)?) (\d{2,3}) ?bpm\b/.exec(t))) return { kind: 'tempoRange', min: Number(m[1]) }
+  if ((m = /\bbetween (\d{2,3}) and (\d{2,3}) ?bpm\b/.exec(t))) return { kind: 'tempoRange', min: Math.min(+m[1], +m[2]), max: Math.max(+m[1], +m[2]) }
+
+  // Bans before mood words: "dont play Calm Down" bans the SONG; only a bare
+  // mood ("no slow songs", "no more chill music for an hour") is about energy.
+  if ((m = /^(?:don'?t|do not|never) play (?:any )?(?:more )?(?:(?:songs?|music|tracks?|anything) (?:by|from) )?(.{2,40}?)(?: songs?| music)?$/.exec(t)) || (m = /^no (?:more )?(.{2,40}?)(?: songs?| music)?$/.exec(t))) {
+    const who = m[1].trim()
+    const moody = MOOD_ONLY.test(who) || FAST_ONLY.test(who) || (SLOW_WORDS.test(who) && /\b(songs?|music|stuff|tracks?|vibes?|ones?|for)\b/.test(who))
+    if (!genreIn(who).length && !moody) return { kind: 'banArtist', artist: who }
+  }
+
   // Negation resolved BEFORE mood words: "no more slow songs" raises the floor.
-  if (NEG.test(t) && SLOW_WORDS.test(t) && !/\b(more|keep|play some)\b.*\bslow\b/.test(t.replace(/no more/, ''))) {
+  if (NEGATED_MOOD.test(t) && !KEEP_MOOD.test(t)) {
     return { kind: 'minEnergy', level: 0.5, ...(durationMs(t) ? { untilMs: now + durationMs(t)! } : {}) }
   }
   if (/\b(keep|stay|hold)\b.*\b(energy|vibe|it)\b.*\b(high|up|hype)\b|\bhigh energy\b/.test(t)) {
@@ -77,13 +99,13 @@ function rules(t: string, now: number): SetRule | { remove: SetRule['kind']; val
     return { kind: 'maxEnergy', level: 0.45, ...(d ? { untilMs: now + d } : {}) }
   }
 
-  if ((m = /\b(?:under|below|less than|max(?:imum)?|no faster than) (\d{2,3}) ?bpm\b/.exec(t))) return { kind: 'tempoRange', max: Number(m[1]) }
-  if ((m = /\b(?:over|above|more than|at least|min(?:imum)?) (\d{2,3}) ?bpm\b/.exec(t))) return { kind: 'tempoRange', min: Number(m[1]) }
-  if ((m = /\bbetween (\d{2,3}) and (\d{2,3}) ?bpm\b/.exec(t))) return { kind: 'tempoRange', min: Math.min(+m[1], +m[2]), max: Math.max(+m[1], +m[2]) }
+  // "no fast songs": cap the energy (not an artist called "fast").
+  if ((m = /^(?:no|no more|not so many|less|fewer|stop the|without) (.{2,30})$/.exec(t)) && FAST_ONLY.test(m[1])) return { kind: 'maxEnergy', level: 0.6 }
 
   const genres = genreIn(t)
   if (genres.length) {
-    if (/^(less|fewer|not so much|enough|no more|stop the|stop playing|no) /.test(t)) return { kind: 'lessGenre', genre: genres[0] }
+    if (/^(no|no more|without|stop playing) /.test(t)) return { kind: 'lessGenre', genre: genres[0], hard: true }
+    if (/^(less|fewer|not so much|enough|stop the) /.test(t)) return { kind: 'lessGenre', genre: genres[0] }
     if (/^(only|play only|just|stick to|stick with|switch to|change to|all|nothing but)\b/.test(t) || /\bonly\b/.test(t)) return { kind: 'onlyGenres', genres }
     if (/^(more|add more|more of|extra)\b/.test(t)) return { kind: 'moreGenre', genre: genres[0] }
   }
@@ -100,10 +122,9 @@ function rules(t: string, now: number): SetRule | { remove: SetRule['kind']; val
     return { kind: 'sequence', steps: [{ query: first, count: Math.min(10, count) }, { query: second, count: 1 }] }
   }
 
-  // Bans: "don't play drake", "no more Drake", "skip the Drake songs".
-  if ((m = /^(?:don'?t|do not|never) play (?:any )?(?:more )?(.{2,40}?)(?: songs?| music)?$/.exec(t)) || (m = /^no (?:more )?(.{2,40}?)(?: songs?| music)?$/.exec(t))) {
-    const who = m[1].trim()
-    if (!genreIn(who).length && !SLOW_WORDS.test(who)) return { kind: 'banArtist', artist: who }
+  // "play only Wizkid": a long run of that artist (genres were handled above).
+  if ((m = /^(?:play only|only play|just play) (.{2,40}?)(?: songs?| music| tracks?)?$/.exec(t)) && !MOOD_ONLY.test(m[1]) && !FAST_ONLY.test(m[1])) {
+    return { kind: 'sequence', steps: [{ query: m[1].trim(), count: 10 }] }
   }
   return null
 }
@@ -113,7 +134,7 @@ export function ruleLabel(r: SetRule): string {
     case 'banArtist': return `No ${titleCase(r.artist)}`
     case 'onlyGenres': return `Only ${r.genres.map(titleCase).join(' + ')}`
     case 'moreGenre': return `More ${titleCase(r.genre)}`
-    case 'lessGenre': return `Less ${titleCase(r.genre)}`
+    case 'lessGenre': return `${r.hard ? 'No' : 'Less'} ${titleCase(r.genre)}`
     case 'tempoRange': return r.min && r.max ? `${r.min}–${r.max} BPM` : r.max ? `≤ ${r.max} BPM` : `≥ ${r.min} BPM`
     case 'minEnergy': return r.level >= 0.65 ? 'High energy' : 'No slow songs'
     case 'maxEnergy': return 'Keep it calm'
@@ -177,8 +198,20 @@ export function parseInstruction(text: string, now = Date.now()): Parsed {
     const item: Instruction = { rule: r }
     return { items: [item], confirm: confirmFor(item), understood: true }
   }
-  // "slow songs please" is a positive mood request: chill.
-  if (SLOW_WORDS.test(t) && !NEG.test(t)) return { items: [{ action: { type: 'energy', to: 'chill' } }], confirm: 'Bringing it down.', understood: true }
+  // A bare title: "play Calm Down", "put on Essence". Moods, genres and
+  // generic words ("play something chill", "play some slow songs") are not titles.
+  const bare = /^(?:play|put on|spin|drop) (.{2,80}?)(?: now)?$/.exec(t)
+  if (bare) {
+    const q = bare[1].trim()
+    const generic = /^(it|music|something|anything|some|the next|next|again|that|this|more|a song|songs?|whatever|on|my|our|me)\b/.test(q)
+    if (!generic && !MOOD_ONLY.test(q) && !FAST_ONLY.test(q) && !genreIn(q).length) {
+      const item: Instruction = { action: { type: 'mixin', query: q } }
+      return { items: [item], confirm: confirmFor(item), understood: true }
+    }
+  }
+  // "slow songs please", "more chill, less hype": a positive mood request.
+  // (A negated mood was already turned into a rule above.)
+  if (SLOW_WORDS.test(t)) return { items: [{ action: { type: 'energy', to: 'chill' } }], confirm: 'Bringing it down.', understood: true }
   const a = parseCommand(text)
   if (a) return { items: [{ action: a }], confirm: '', understood: true }
   return { items: [], confirm: "I didn't catch that — try “no Drake”, “only amapiano” or “skip”.", understood: false }
@@ -202,7 +235,7 @@ function sanitizeRule(r: any): SetRule | null {
   switch (r.kind) {
     case 'banArtist': return s(r.artist) ? { kind: 'banArtist', artist: s(r.artist) } : null
     case 'onlyGenres': return Array.isArray(r.genres) && r.genres.length ? { kind: 'onlyGenres', genres: r.genres.map(s).filter(Boolean).slice(0, 5) } : null
-    case 'moreGenre': case 'lessGenre': return s(r.genre) ? { kind: r.kind, genre: s(r.genre) } : null
+    case 'moreGenre': case 'lessGenre': return s(r.genre) ? { kind: r.kind, genre: s(r.genre), ...(r.kind === 'lessGenre' && r.hard === true ? { hard: true } : {}) } : null
     case 'tempoRange': { const min = n(r.min, 40, 220), max = n(r.max, 40, 220); return min || max ? { kind: 'tempoRange', ...(min ? { min } : {}), ...(max ? { max } : {}) } : null }
     case 'minEnergy': case 'maxEnergy': { const level = n(r.level, 0, 1); return level !== undefined ? { kind: r.kind, level } : null }
     case 'sequence': return Array.isArray(r.steps) && r.steps.length ? { kind: 'sequence', steps: r.steps.slice(0, 5).map((x: any) => ({ query: s(x?.query), count: n(x?.count, 1, 10) ?? 1 })).filter((x: any) => x.query) } : null

@@ -63,6 +63,7 @@ export function allowedByRules(c: Candidate, rules: SetRule[], nowMs: number): b
     switch (r.kind) {
       case 'banArtist': if (artist.includes(norm(r.artist)) || norm(c.track.title).includes(norm(r.artist))) return false; break
       case 'onlyGenres': if (!c.genres.some(g => r.genres.includes(g))) return false; break
+      case 'lessGenre': if (r.hard && c.genres.includes(r.genre)) return false; break
       case 'tempoRange': {
         const bpm = c.facts?.bpm
         if (bpm && ((r.min && bpm < r.min) || (r.max && bpm > r.max))) return false

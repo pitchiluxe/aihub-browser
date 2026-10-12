@@ -47,6 +47,9 @@ describe('allowedByRules', () => {
     expect(allowedByRules(cand({ energy: 0.3 }), [{ kind: 'minEnergy', level: 0.5 }], 0)).toBe(false)
     expect(allowedByRules(cand({ energy: 0.3 }), [{ kind: 'minEnergy', level: 0.5, untilMs: 10 }], 20)).toBe(true)
     expect(allowedByRules(cand({ title: 'Song (Explicit)' }), [{ kind: 'noExplicit' }], 0)).toBe(false)
+    // "no hip hop" excludes; "less hip hop" only down-ranks.
+    expect(allowedByRules(cand({ genres: ['hip hop'] }), [{ kind: 'lessGenre', genre: 'hip hop', hard: true }], 0)).toBe(false)
+    expect(allowedByRules(cand({ genres: ['hip hop'] }), [{ kind: 'lessGenre', genre: 'hip hop' }], 0)).toBe(true)
   })
 })
 

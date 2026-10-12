@@ -64,6 +64,41 @@ describe('one-shot actions still work', () => {
   ])('%s', (text, want) => { expect(action(text)).toEqual(want) })
 })
 
+describe('final review — inversions and empty chips', () => {
+  const items = (t: string) => parseInstruction(t, NOW).items
+  const isNoSlow = (t: string) => items(t).some(i => 'rule' in i && i.rule.kind === 'minEnergy')
+  const isChill = (t: string) => items(t).some(i => 'action' in i && i.action.type === 'energy' && (i.action as any).to === 'chill')
+
+  it.each(['more chill, less hype', 'something chill, not too loud', 'I want something calm, no rap', "I don't mind slow songs", "don't stop the slow songs"])(
+    '"%s" asks for calmer music, never "No slow songs"', t => {
+      expect(isNoSlow(t)).toBe(false)
+      expect(isChill(t)).toBe(true)
+    })
+
+  it.each([['play Calm Down', 'calm down'], ['put on Calm Down', 'calm down'], ['play calm down please', 'calm down']])(
+    '"%s" plays the song', (t, q) => { expect(items(t)).toEqual([{ action: { type: 'mixin', query: q } }]) })
+
+  it('"dont play Calm Down" bans the song, not slow music', () => {
+    expect(items('dont play Calm Down')).toEqual([{ rule: { kind: 'banArtist', artist: 'calm down' } }])
+  })
+  it('"don\'t play songs by drake" bans Drake', () => {
+    expect(items("don't play songs by drake")).toEqual([{ rule: { kind: 'banArtist', artist: 'drake' } }])
+  })
+  it('"no fast songs" caps the energy', () => {
+    expect(items('no fast songs')).toEqual([{ rule: { kind: 'maxEnergy', level: 0.6 } }])
+  })
+  it('"no hip hop" is a hard exclusion', () => {
+    expect(items('no hip hop')).toEqual([{ rule: { kind: 'lessGenre', genre: 'hip hop', hard: true } }])
+  })
+  it('"play only Wizkid" is a run of Wizkid songs', () => {
+    expect(items('play only Wizkid')).toEqual([{ rule: { kind: 'sequence', steps: [{ query: 'wizkid', count: 10 }] } }])
+  })
+  it('mood requests are not song titles', () => {
+    expect(isChill('play something chill')).toBe(true)
+    expect(isChill('play some slow songs')).toBe(true)
+  })
+})
+
 describe('playing a song on request', () => {
   const first = (t: string) => parseInstruction(t, NOW).items[0]
   it.each([
