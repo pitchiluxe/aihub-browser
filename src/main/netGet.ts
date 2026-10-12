@@ -43,6 +43,15 @@ export function createNetGet(fetchImpl: Fetch) {
   return (url: string, timeoutMs = 5000): Promise<{ status: number; body: string }> => send(fetchImpl, url, timeoutMs, {})
 }
 
+/** Any method, raw status + body; a non-2xx status is returned, not thrown. */
+export function createNetRequest(fetchImpl: Fetch) {
+  return (method: string, url: string, opts: { headers?: Record<string, string>; body?: string; timeoutMs?: number } = {}): Promise<{ status: number; body: string }> => {
+    // Chromium computes Content-Length itself and rejects a caller-set one.
+    const headers = Object.fromEntries(Object.entries(opts.headers ?? {}).filter(([k]) => k.toLowerCase() !== 'content-length'))
+    return send(fetchImpl, url, opts.timeoutMs ?? 30000, { method, headers, ...(opts.body != null ? { body: opts.body } : {}) })
+  }
+}
+
 /** POST a JSON body, parse a JSON reply; a non-2xx status rejects (like axios did). */
 export function createNetPostJson(fetchImpl: Fetch) {
   return async (url: string, payload: unknown, timeoutMs = 20000): Promise<{ status: number; data: any }> => {

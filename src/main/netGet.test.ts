@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createNetGet, createNetPostJson, isWebUrl } from './netGet'
+import { createNetGet, createNetPostJson, createNetRequest, isWebUrl } from './netGet'
 
 const ok = (status: number, body: string) => async () => ({ status, text: async () => body }) as any
 
@@ -18,6 +18,24 @@ describe('web URLs only — Chromium fetch can also read file:// and app schemes
     expect(isWebUrl('https://example.com/a')).toBe(true)
     expect(isWebUrl('http://127.0.0.1:11434/api/tags')).toBe(true)
     expect(isWebUrl('file:///x')).toBe(false)
+  })
+})
+
+describe('netRequest — any method (Google APIs, OAuth token calls)', () => {
+  it('sends method, headers and body and returns the raw status + body', async () => {
+    let seen: any = null
+    const req = createNetRequest(async (url, init: any) => { seen = { url, ...init }; return { status: 201, text: async () => 'ok' } as any })
+    expect(await req('PATCH', 'https://www.googleapis.com/x', { headers: { Authorization: 'Bearer t', 'Content-Length': '2' }, body: '{}' }))
+      .toEqual({ status: 201, body: 'ok' })
+    expect(seen.method).toBe('PATCH')
+    expect(seen.body).toBe('{}')
+    expect(seen.headers.Authorization).toBe('Bearer t')
+    // Chromium computes Content-Length itself and refuses a caller-set one.
+    expect(Object.keys(seen.headers).map(k => k.toLowerCase())).not.toContain('content-length')
+  })
+  it('a non-2xx status is returned, not thrown (callers read the error body)', async () => {
+    const req = createNetRequest(async () => ({ status: 401, text: async () => '{"error":"invalid_grant"}' }) as any)
+    expect(await req('POST', 'https://oauth2.googleapis.com/token')).toEqual({ status: 401, body: '{"error":"invalid_grant"}' })
   })
 })
 

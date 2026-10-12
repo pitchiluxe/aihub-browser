@@ -1,42 +1,24 @@
-import http from 'http'
-import https from 'https'
-import { URL } from 'url'
+import { net } from 'electron'
+import { createNetRequest } from '../netGet'
 
 // Minimal request helper shared by the OAuth token calls and every Google API
 // module. Returns the raw body string + status; callers parse JSON.
-export function httpJson(
+// Through Chromium's network process (Electron net.fetch), not Node sockets: a
+// timed-out Node request can block the main thread while its socket closes
+// (see netGet.ts — measured 4.4 s "Not Responding" on 2026-10-12).
+const request = createNetRequest((url, init) => net.fetch(url, { ...init, bypassCustomProtocolHandlers: true }))
+
+export async function httpJson(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   url: string,
   opts: { headers?: Record<string, string>; body?: string; timeoutMs?: number } = {}
 ): Promise<{ status: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url)
-    const lib = parsed.protocol === 'https:' ? https : http
-    const headers: Record<string, string> = { ...(opts.headers || {}) }
-    if (opts.body != null) headers['Content-Length'] = String(Buffer.byteLength(opts.body))
-    const req = lib.request(
-      {
-        hostname: parsed.hostname,
-        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-        path: parsed.pathname + parsed.search,
-        method,
-        headers,
-        timeout: opts.timeoutMs ?? 30000,
-      },
-      res => {
-        let b = ''
-        res.on('data', c => (b += c))
-        res.on('end', () => resolve({ status: res.statusCode ?? 0, body: b }))
-      }
-    )
-    req.on('error', reject)
-    req.on('timeout', () => {
-      req.destroy()
-      reject(new Error('request timed out'))
-    })
-    if (opts.body != null) req.write(opts.body)
-    req.end()
-  })
+  try {
+    return await request(method, url, opts)
+  } catch (e: any) {
+    if (e?.message === 'timeout') throw new Error('request timed out')
+    throw e
+  }
 }
 
 // application/x-www-form-urlencoded body builder for the token endpoint.
