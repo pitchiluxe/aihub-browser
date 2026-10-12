@@ -22,6 +22,8 @@ import { sanitizeChatMessages, fitMessagesToBudget } from './chatMessages'
 import { createFareEngine } from './fares/engine'
 import { createElectronDriver, FARES_PARTITION } from './fares/hiddenPage'
 import { FARE_ADAPTERS, handoffLinks } from './fares/adapters'
+import { googleAdapter } from './fares/adapters/google'
+import { fareWatchVerdict } from '../shared/fares/watch'
 import type { FareQuery } from '../shared/fares/types'
 import { invokeLookupCallback } from './networkLookup'
 import { normalizeOllamaBase, ollamaBaseCandidates } from './ollamaConnection'
@@ -4648,6 +4650,17 @@ handlePersistent('fares:flex', async (e, q: FareQuery) => {
 
 ipcMain.handle('fares:cancel', (_e, searchId: string) => { _fareEngine?.cancel(String(searchId)) })
 ipcMain.handle('fares:handoff', (_e, q: FareQuery) => validFareQuery(q) ? handoffLinks(q) : [])
+handlePersistent('fares:watch', (_e, q: FareQuery, target: number, title: string) => {
+  if (!validFareQuery(q) || !Number.isFinite(target) || target <= 20) return { ok: false }
+  const w: Watch = {
+    id: `w-${Date.now()}`, url: googleAdapter.url(q), title: String(title || `${q.from} → ${q.to}`).slice(0, 120),
+    mode: 'fare', fare: { query: q, target: Math.round(target) }, intervalMin: 360, active: true,
+  }
+  getWatches().unshift(w)
+  saveWatches()
+  return { ok: true }
+}, () => ({ ok: false }))
+
 // Guarded like the searches: the verify window writes cookies into the same
 // persistent partition, which an Incognito window must never do.
 handlePersistent('fares:openSite', (_e, url: string) => {
@@ -4967,7 +4980,9 @@ ipcMain.handle('shell:openExternal', (_e, url: string) => {
 // into a watchdog — "tell me when this drops in price / this issue closes".
 interface Watch {
   id: string; url: string; title: string
-  mode: 'change' | 'contains'; keyword?: string
+  mode: 'change' | 'contains' | 'fare'; keyword?: string
+  /** mode 'fare': a flight route re-priced through the fare engine. */
+  fare?: { query: FareQuery; target: number; lastPrice?: number }
   intervalMin: number
   active: boolean
   lastHash?: string; lastChecked?: number; lastChanged?: number
@@ -5024,6 +5039,21 @@ ipcMain.handle('watch:checkNow', async (_e, id: string) => {
 })
 
 async function checkWatch(w: Watch) {
+  if (w.mode === 'fare' && w.fare) {
+    try {
+      // Google only: one light page per check, never all three sites.
+      fareEngine()
+      const engine = createFareEngine({ driver: _fareDriver!, adapters: FARE_ADAPTERS.filter(a => a.id === 'google') })
+      const offers = await engine.search(w.fare.query, () => {}).done.catch(() => [])
+      const current = offers.length ? Math.min(...offers.map(o => o.price)) : null
+      const verdict = fareWatchVerdict(w.fare.lastPrice, current, w.fare.target)
+      if (current !== null) w.fare.lastPrice = current
+      if (verdict.notify) { w.triggered = true; w.lastChanged = Date.now(); notifyWatch(w, verdict.message) }
+    } catch { /* next interval */ }
+    w.lastChecked = Date.now()
+    saveWatches()
+    return
+  }
   try {
     const { status, body } = await fetchHtml(w.url, 12000)
     if (status >= 400) { w.lastChecked = Date.now(); saveWatches(); return }

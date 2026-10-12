@@ -61,6 +61,7 @@ export const PRIVATE_BLOCKED_CHANNELS = [
   'fares:search',           // loads booking sites into the persistent fares partition
   'fares:flex',             // same, for the flexible-date strip
   'fares:openSite',         // visible verify window, same persistent partition
+  'fares:watch',            // saves a fare price watch to watches.json
 ] as const
 
 /**

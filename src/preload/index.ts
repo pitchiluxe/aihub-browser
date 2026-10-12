@@ -459,6 +459,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     flex:     (q: any) => ipcRenderer.invoke('fares:flex', q),
     handoff:  (q: any) => ipcRenderer.invoke('fares:handoff', q),
     openSite: (url: string) => ipcRenderer.invoke('fares:openSite', url),
+    watch:    (q: any, target: number, title: string) => ipcRenderer.invoke('fares:watch', q, target, title),
     onProgress: (cb: (p: any) => void) => { const h = (_: any, p: any) => cb(p); ipcRenderer.on('fares:progress', h); return () => ipcRenderer.removeListener('fares:progress', h) },
     onFlexDay:  (cb: (d: any) => void) => { const h = (_: any, d: any) => cb(d); ipcRenderer.on('fares:flexDay', h); return () => ipcRenderer.removeListener('fares:flexDay', h) },
   },

@@ -15,6 +15,8 @@ import {
   VIDEO_TOPICS, cachedGuide, fetchFacts, fetchLeaders, fetchSummary, generateGuide, links, searchTravelVideos,
   type CountryFacts, type Leader, type TravelGuide, type TravelVideo, type WikiSummary,
 } from './travelData'
+import { searchAirports } from './airports'
+import { FLIGHTS_PREFILL_KEY } from './flightsRentals'
 import './travel.css'
 
 const LAST_KEY = 'aihub-travel-last'
@@ -169,7 +171,12 @@ Current leaders: ${who}.` : ''}`)) }
           <Fact icon={<Phone size={13} />} label="Calling code" value={facts?.callingCode || undefined} />
         </div>
         <div className="travel-actions">
-          <button onClick={() => open(links.flights(name))}><Plane size={13} /> Flights</button>
+          <button onClick={() => {
+            // Live fares in-app: hand the destination's main airport to Flights.
+            const airport = searchAirports(capital || name, 5).find(a => a.scheduled && a.country === name) ?? searchAirports(capital || name, 1)[0]
+            try { if (airport) localStorage.setItem(FLIGHTS_PREFILL_KEY, airport.iata) } catch {}
+            open('aihub://flights-rentals')
+          }}><Plane size={13} /> Fly here</button>
           <button onClick={() => open(links.booking(capital ? `${capital}, ${name}` : name))}><BedDouble size={13} /> Hotels</button>
           <button onClick={() => open(links.airbnb(name))}><Home size={13} /> Airbnb</button>
           <button onClick={() => open(links.carRental(capital || name))}><Car size={13} /> Car rental</button>

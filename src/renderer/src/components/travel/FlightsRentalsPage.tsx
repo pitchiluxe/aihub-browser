@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Plane, Car, House, ArrowRight, BookmarkPlus, Trash2, Sparkles, Loader2, ArrowLeft, ExternalLink, Wallet } from 'lucide-react'
+import { Plane, Car, House, ArrowRight, BookmarkPlus, Trash2, Sparkles, Loader2, ArrowLeft, ExternalLink, Wallet, Bell } from 'lucide-react'
 import { bookingSearches, chooseBookingSearch, localDate, readSavedTrips, researchTrip, SAVED_TRIPS_KEY, tripDescription, validateTrip, type Research, type SavedTrip, type Trip, type TripKind } from './flightsRentals'
 import { createTripEstimate, validateTripEstimate } from './tripCosts'
 import TripCostBoard from './TripCostBoard'
@@ -174,7 +174,13 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
         </main>
         <aside className="fare-aside">
           <section><h2>Before you book</h2><ul>{(trip.kind === 'flights' ? ['Include checked bags and seat fees.', 'Compare nearby airports and extra transfer costs.', 'Check layover length and separate-ticket connections.', 'Compare the airline’s direct price.'] : trip.kind === 'cars' ? ['Check the deposit and credit-card requirements.', 'Compare full insurance and excess charges.', 'Confirm mileage and fuel policy.', 'Check driver age, pickup hours and cancellation.'] : ['Include cleaning fees, taxes and deposits.', 'Compare cancellation deadlines.', 'Check the location and transport costs.', 'Read recent reviews and confirm check-in rules.']).map(t => <li key={t}>{t}</li>)}</ul></section>
-          <section><h2>Saved trips <span>{saved.length}/20</span></h2>{!saved.length && <p>Your saved plans stay on this device.</p>}{saved.map(s => <div className="fare-saved" key={s.id}><button onClick={() => restore(s.trip)}><strong>{s.trip.destination}</strong><span>{s.trip.kind} · {s.trip.start} → {s.trip.end}</span></button><button aria-label={`Open cost board for ${s.trip.destination}`} title="Open trip cost board" onClick={() => setCostTripId(s.id)}><Wallet size={15} /></button><button aria-label={`Remove saved trip to ${s.trip.destination}`} onClick={() => { if (costTripId === s.id) setCostTripId(''); persist(saved.filter(x => x.id !== s.id)) }}><Trash2 size={15} /></button></div>)}</section>
+          <section><h2>Saved trips <span>{saved.length}/20</span></h2>{!saved.length && <p>Your saved plans stay on this device.</p>}{saved.map(s => <div className="fare-saved" key={s.id}><button onClick={() => restore(s.trip)}><strong>{s.trip.destination}</strong><span>{s.trip.kind} · {s.trip.start} → {s.trip.end}</span></button>{tripToQuery(s.trip) && <button aria-label={`Watch price for ${s.trip.destination}`} title="Alert me when the price drops" onClick={() => {
+                const q = tripToQuery(s.trip); if (!q) return
+                const target = Number(window.prompt('Alert me when the round-trip price is at or below ($):', s.trip.budget || ''))
+                if (!Number.isFinite(target) || target <= 20) return
+                void (window as any).electronAPI?.fares?.watch(q, target, `${q.from} → ${q.to} ${q.depart}`)
+                  .then((r: any) => setNotice(r?.ok ? 'Price watch on — checked every 6 hours.' : 'Could not start a price watch here.'))
+              }}><Bell size={15} /></button>}<button aria-label={`Open cost board for ${s.trip.destination}`} title="Open trip cost board" onClick={() => setCostTripId(s.id)}><Wallet size={15} /></button><button aria-label={`Remove saved trip to ${s.trip.destination}`} onClick={() => { if (costTripId === s.id) setCostTripId(''); persist(saved.filter(x => x.id !== s.id)) }}><Trash2 size={15} /></button></div>)}</section>
         </aside>
       </div>
     </div>
