@@ -12,6 +12,7 @@ describe('rules — phrasings that failed on 2026-10-12', () => {
     ["don't play drake", { kind: 'banArtist', artist: 'drake' }],
     ["don't play any Drake", { kind: 'banArtist', artist: 'drake' }],
     ['no more Drake', { kind: 'banArtist', artist: 'drake' }],
+    ['no Drake', { kind: 'banArtist', artist: 'drake' }],
     ['play only afrobeats', { kind: 'onlyGenres', genres: ['afrobeats'] }],
     ['stick to amapiano', { kind: 'onlyGenres', genres: ['amapiano'] }],
     ['switch to amapiano', { kind: 'onlyGenres', genres: ['amapiano'] }],

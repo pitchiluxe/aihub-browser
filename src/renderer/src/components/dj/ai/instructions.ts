@@ -95,7 +95,7 @@ function rules(t: string, now: number): SetRule | { remove: SetRule['kind']; val
   }
 
   // Bans: "don't play drake", "no more Drake", "skip the Drake songs".
-  if ((m = /^(?:don'?t|do not|never) play (?:any )?(?:more )?(.{2,40}?)(?: songs?| music)?$/.exec(t)) || (m = /^no more (.{2,40}?)(?: songs?| music)?$/.exec(t))) {
+  if ((m = /^(?:don'?t|do not|never) play (?:any )?(?:more )?(.{2,40}?)(?: songs?| music)?$/.exec(t)) || (m = /^no (?:more )?(.{2,40}?)(?: songs?| music)?$/.exec(t))) {
     const who = m[1].trim()
     if (!genreIn(who).length && !SLOW_WORDS.test(who)) return { kind: 'banArtist', artist: who }
   }
