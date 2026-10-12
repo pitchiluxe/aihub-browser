@@ -23,6 +23,25 @@ describe('AnalysisQueue', () => {
     expect((await q.ensure(track('c'))).playable).toBe(false)
   })
 
+  it('remembers an unplayable track for this session only — a network blip never bans a song forever', async () => {
+    const cache = memCache()
+    const source = { measure: vi.fn(async () => null) }
+    const q = new AnalysisQueue(source, cache, { sleep: async () => {} })
+    expect((await q.ensure(track('f'))).playable).toBe(false)
+    expect((await q.ensure(track('f'))).playable).toBe(false)
+    expect(source.measure).toHaveBeenCalledTimes(1)
+    expect(cache.m.size).toBe(0)
+    expect(q.known(track('f'))?.playable).toBe(false)
+  })
+
+  it('keeps working after dispose (React StrictMode mounts, disposes, mounts again)', async () => {
+    const source = { measure: vi.fn(async () => measured) }
+    const q = new AnalysisQueue(source, memCache(), { sleep: async () => {} })
+    q.dispose()
+    expect((await q.ensure(track('g'))).playable).toBe(true)
+    expect(source.measure).toHaveBeenCalledTimes(1)
+  })
+
   it('waits while a transition is running before starting a scan', async () => {
     let busy = true
     const slept: number[] = []

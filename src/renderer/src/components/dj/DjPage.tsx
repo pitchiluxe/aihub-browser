@@ -30,6 +30,7 @@ import { askDj } from './stage/askPipeline'
 import { SetConductor } from './ai/setConductor'
 import { parseBrief } from './ai/setBrief'
 import { AnalysisQueue } from './engine/analysisQueue'
+import { liveSide, loadTarget } from './ai/deckChoice'
 import { createFactSource } from './engine/factScan'
 import { factsCache } from './ai/trackFacts'
 import { buildProfile, tasteEvents } from './taste'
@@ -230,9 +231,14 @@ function Console({ engine }: { engine: DjEngine }) {
   const loadDeck = useCallback(async (query: string, deckId: 'A' | 'B', play: boolean) => {
     const t = (await searchYouTube(query, 8).catch(() => [] as DjTrack[])).find(isSong)
     if (!t) { say(`Could not find "${query}" on YouTube`); return }
+    const isBusy = (id: 'A' | 'B') => engine.decks[id].active || engine.decks[id].held
+    // A busy deck is never cut off mid-song (see loadTarget).
+    const target = loadTarget(deckId, play, { A: isBusy('A'), B: isBusy('B') })
+    if ('busy' in target) { say(`Both decks are playing — say "play ${t.title} next" to queue it`); return }
+    if ('mixin' in target) { say(`Deck ${deckId} is playing — mixing ${t.title} in instead`); void mixer.mixNow(t); return }
+    if (target.moved) say(`Deck ${deckId} is playing — loading ${t.title} on deck ${target.deck}`)
+    deckId = target.deck
     const deck = engine.decks[deckId]
-    // A busy deck is never cut off mid-song: the request is mixed in instead.
-    if (deck.active || deck.held) { say(`Deck ${deckId} is playing — mixing ${t.title} in instead`); void mixer.mixNow(t); return }
     tracker.noteLoad(deckId, false)
     await deck.load(t)
     if (deck.error) { say(`Couldn't load ${t.title}: ${deck.error}`); return }
@@ -271,12 +277,13 @@ function Console({ engine }: { engine: DjEngine }) {
     },
     analysis: { ensure: t => analysis.ensure(t), known: t => analysis.known(t) },
     nowPlaying: () => {
-      const live = A.playing ? A : B.playing ? B : null
+      const side = liveSide({ A: A.playing, B: B.playing }, engine.crossfader)
+      const live = side === 'A' ? A : side === 'B' ? B : null
       return live?.track ? { track: live.track, facts: analysis.known(live.track) } : null
     },
     startMixer: () => mixer.setOn(true),
     mixNow: t => { void mixer.mixNow(t) },
-  }), [analysis, mixer, A, B])
+  }), [analysis, mixer, engine, A, B])
   conductorRef.current = conductor
   // The console is the DJ's: planning waits while it is on screen.
   useEffect(() => { conductor.setPaused(stageView === 'console') }, [conductor, stageView])

@@ -155,6 +155,69 @@ describe('SetConductor', () => {
   })
 })
 
+describe('SetConductor — final review', () => {
+  it('a rule given while a song is being measured still applies to that song', async () => {
+    const lib = [yt('Drake'), yt('Drake'), yt('Drake'), yt('Tems'), yt('Rema'), yt('Asake')]
+    const facts = new Map(lib.map(l => [l.track.youtubeId, { bpm: 120, bpmConfidence: 1, camelot: '8A', keyConfidence: 0.9, energy: 0.6, introEndSec: 5, outroStartSec: 200, durationSec: 210, playable: true, at: 1 }]))
+    const measured = new Set<string>()
+    let release: () => void = () => {}
+    const gate = new Promise<void>(r => { release = r })
+    const d = deps(lib, { analysis: { ensure: async (t: any) => { await gate; measured.add(t.youtubeId); return facts.get(t.youtubeId)! }, known: (t: any) => measured.has(t.youtubeId) ? facts.get(t.youtubeId)! : null } })
+    const c = new SetConductor(d)
+    await c.start(parseBrief('drake, 1h'))
+    const filling = c.refill()
+    await new Promise(r => setTimeout(r, 5))
+    c.instruct(parseInstruction("don't play drake"))       // arrives mid-scan
+    release()
+    await filling; await c.refill()
+    expect(c.state.upNext.length).toBeGreaterThan(0)
+    expect(c.state.upNext.every(s => !/drake/i.test(s.candidate.track.artist))).toBe(true)
+    for (let i = 0; i < 3; i++) expect(c.next()?.artist).not.toMatch(/drake/i)
+  })
+
+  it('a small pool never goes silent: artist-gap and repeat limits relax before Automix stops', async () => {
+    const lib = [yt('Wizkid'), yt('Wizkid')]
+    const c = new SetConductor(deps(lib))
+    await c.start(parseBrief('wizkid, 1h'))
+    for (let i = 0; i < 5; i++) { expect(c.next()).toBeDefined(); await c.refill() }
+  })
+
+  it('when nothing at all can play, the set ends and says so (no re-arm loop)', async () => {
+    const lib = [yt('Drake'), yt('Drake')]
+    const c = new SetConductor(deps(lib))
+    await c.start(parseBrief('drake, 1h'))
+    c.instruct(parseInstruction("don't play drake"))
+    await c.refill()
+    expect(c.next()).toBeUndefined()
+    expect(c.state.active).toBe(false)
+    expect(c.state.message).toMatch(/ran out|no songs/i)
+  })
+
+  it('coming back from the console restarts the mixer', async () => {
+    const lib = Array.from({ length: 5 }, (_, i) => yt(`artist${i}`))
+    const d = deps(lib)
+    const c = new SetConductor(d)
+    await c.start(parseBrief('house, 1h'))
+    c.setPaused(true)
+    d.startMixer.mockClear()
+    c.setPaused(false)
+    expect(d.startMixer).toHaveBeenCalledTimes(1)
+  })
+
+  it('a requested sequence skips an unplayable upload', async () => {
+    const lib = [yt('Wizkid'), yt('Wizkid'), yt('Tems'), yt('Rema')]
+    const dead = lib[0].track.youtubeId
+    const d = deps(lib)
+    const ensure = d.analysis.ensure
+    d.analysis.ensure = async (t: any) => t.youtubeId === dead ? { ...(await ensure(t)), playable: false } : ensure(t)
+    const c = new SetConductor(d)
+    await c.start(parseBrief('afrobeats, 1h'))
+    c.instruct(parseInstruction('play 2 Wizkid songs then Tems'))
+    await c.refill()
+    expect(c.state.upNext.some(s => s.candidate.track.youtubeId === dead)).toBe(false)
+  })
+})
+
 describe('gatherCandidates — songs only', () => {
   it('drops hour-long mixes, mixtapes, playlists and compilations', async () => {
     const { gatherCandidates } = await import('./candidatePool')

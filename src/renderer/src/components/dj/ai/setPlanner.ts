@@ -14,6 +14,9 @@ export interface PlanContext {
   nowMin: number
   rules: SetRule[]
   nowMs: number
+  /** Last resorts before silence on a small pool: allow the same artist back
+   *  within the gap, then allow repeats (never the song that just played). */
+  relax?: { artistGap?: boolean; repeats?: boolean }
 }
 export interface Scored {
   candidate: Candidate
@@ -88,9 +91,10 @@ function genreBias(c: Candidate, rules: SetRule[]): number {
 }
 
 export function rankCandidates(cands: Candidate[], ctx: PlanContext): Scored[] {
-  const playedIds = new Set(ctx.played.map(p => p.id))
-  const playedSongs = new Set(ctx.played.filter(p => p.title).map(p => songKey(p.artist, p.title!)))
-  const recentArtists = new Set(ctx.played.filter(p => ctx.nowMin - p.atMin < ARTIST_GAP_MIN).map(p => norm(p.artist)))
+  const blocked = ctx.relax?.repeats ? ctx.played.slice(-1) : ctx.played
+  const playedIds = new Set(blocked.map(p => p.id))
+  const playedSongs = new Set(blocked.filter(p => p.title).map(p => songKey(p.artist, p.title!)))
+  const recentArtists = new Set(ctx.relax?.artistGap ? [] : ctx.played.filter(p => ctx.nowMin - p.atMin < ARTIST_GAP_MIN).map(p => norm(p.artist)))
   const newSoFar = ctx.played.filter(p => !p.known).length
   const wantNew = ctx.played.length ? newSoFar / ctx.played.length < ctx.discoveryShare : ctx.discoveryShare >= 0.5
 

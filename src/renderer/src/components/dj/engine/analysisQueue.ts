@@ -22,23 +22,31 @@ export class AnalysisQueue {
     this.now = opts.now ?? Date.now
   }
 
-  known(track: DjTrack): TrackFacts | null { return this.cache.get(trackId(track)) }
+  /** Failed scans, kept for this session only: a network blip or an ad must
+   *  not ban a song forever, so they never reach the persistent cache. */
+  private unplayable = new Map<string, TrackFacts>()
+
+  known(track: DjTrack): TrackFacts | null { const id = trackId(track); return this.cache.get(id) ?? this.unplayable.get(id) ?? null }
   get pending(): number { return this.waiting }
 
   ensure(track: DjTrack): Promise<TrackFacts> {
     const id = trackId(track)
-    const hit = this.cache.get(id)
+    const hit = this.cache.get(id) ?? this.unplayable.get(id)
     if (hit) return Promise.resolve(hit)
     const running = this.inflight.get(id)
     if (running) return running
     this.waiting++
+    // Captured per job: dispose() cancels what is queued now, not what comes after.
+    const signal = this.signal
     const job = this.chain.then(async () => {
-      while (this.isBusy() && !this.signal.cancelled) await this.sleep(1000)
-      const m = this.signal.cancelled ? null : await this.source.measure(track, this.signal).catch(() => null)
+      while (this.isBusy() && !signal.cancelled) await this.sleep(1000)
+      const m = signal.cancelled ? null : await this.source.measure(track, signal).catch(() => null)
       const facts: TrackFacts = m
         ? { ...m, playable: true, at: this.now() }
         : { bpm: null, bpmConfidence: 0, camelot: null, keyConfidence: 0, energy: 0.5, introEndSec: 0, outroStartSec: 0, durationSec: 0, playable: false, at: this.now() }
-      if (!this.signal.cancelled) this.cache.put(id, facts)
+      if (signal.cancelled) return facts
+      if (m) this.cache.put(id, facts)
+      else this.unplayable.set(id, facts)
       return facts
     }).finally(() => { this.waiting--; this.inflight.delete(id) })
     this.chain = job.catch(() => {})
@@ -46,5 +54,7 @@ export class AnalysisQueue {
     return job
   }
 
-  dispose(): void { this.signal.cancelled = true }
+  /** Cancels the scans queued so far. Reversible: React StrictMode disposes and
+   *  re-mounts the same memoised queue, which must keep working afterwards. */
+  dispose(): void { this.signal.cancelled = true; this.signal = { cancelled: false } }
 }

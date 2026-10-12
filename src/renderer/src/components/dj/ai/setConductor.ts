@@ -6,7 +6,7 @@ import { Emitter, type DjTrack } from '../engine/DjEngine'
 import { trackId, type TrackFacts } from './types'
 import { curveAt, type SetBrief } from './setBrief'
 import { gatherCandidates, isSong, type PoolDeps } from './candidatePool'
-import { rankCandidates, type Candidate, type PlanContext, type Scored } from './setPlanner'
+import { allowedByRules, rankCandidates, type Candidate, type PlanContext, type Scored } from './setPlanner'
 import { ruleLabel, type Parsed, type SetRule } from './instructions'
 
 export interface ConductorDeps {
@@ -122,44 +122,72 @@ export class SetConductor extends Emitter {
       if (facts && !facts.playable) continue
       this.set({ upNext: [{ candidate: { track: t, facts, known: true, taste: 0, disliked: false, genres: [] }, total: 99, parts: { tempo: 0.5, key: 0.5, energy: 0.5, taste: 0.5, discovery: 0.5 }, why: 'you asked for it', transition: facts?.bpm ? 'beatmatch' : 'echo' }, ...this.state.upNext] })
     }
-    let relaxed = false
-    while (this.state.upNext.length < LOOKAHEAD) {
+    let relaxed = ''
+    let widened = false
+    const deadSeq = new Set<string>()
+    // Bounded: every pass either appends, drops a sequence step or learns a fact.
+    for (let guard = 0; this.state.upNext.length < LOOKAHEAD && guard < 16; guard++) {
       if (this.seq.length) {
         const step = this.seq[0]
-        const found = (await this.deps.pool.search(step.query, 8).catch(() => [])).filter(isSong).find(t => !this.context().played.some(p => p.id === trackId(t)))
+        const found = (await this.deps.pool.search(step.query, 8).catch(() => [])).filter(isSong)
+          .find(t => !deadSeq.has(trackId(t)) && this.deps.analysis.known(t)?.playable !== false && !this.context().played.some(p => p.id === trackId(t)))
         if (found) {
-          step.count--; if (step.count <= 0) this.seq.shift()
           const facts = await this.deps.analysis.ensure(found).catch(() => null)
+          if (facts && !facts.playable) { deadSeq.add(trackId(found)); continue }
+          step.count--; if (step.count <= 0) this.seq.shift()
           this.set({ upNext: [...this.state.upNext, { candidate: { track: found, facts, known: false, taste: 0, disliked: false, genres: [] }, total: 50, parts: { tempo: 0.5, key: 0.5, energy: 0.5, taste: 0.5, discovery: 0.5 }, why: `your request: ${step.query}`, transition: 'echo' }] })
           continue
         }
         this.seq.shift()
       }
-      const ctx = this.context()
-      let pool = this.pool.map(c => this.withFacts(c))
-      if (this.bursts.favorites > 0) pool = pool.filter(c => c.known)
-      let ranked = rankCandidates(pool, ctx)
-      if (!ranked.length) {
-        // Rules filtered everything: widen the pool once, then relax limits.
+      let first = this.ladder(this.candidates(), this.context())
+      if (first.relaxed !== '' && !widened) {
+        // Rules filtered everything: widen the pool once before relaxing anything.
+        widened = true
         const more = await gatherCandidates([...(this.state.brief?.seeds ?? []), ...this.relatedSeeds()], this.deps.pool, { perSeed: 25 })
         this.pool = mergePools(this.pool, more)
-        ranked = rankCandidates(this.pool.map(c => this.withFacts(c)), ctx)
-        if (!ranked.length) {
-          ranked = rankCandidates(this.pool.map(c => this.withFacts(c)), { ...ctx, rules: ctx.rules.filter(r => r.kind === 'banArtist' || r.kind === 'noExplicit') })
-          relaxed = ranked.length > 0
-        }
-        if (!ranked.length) break
+        first = this.ladder(this.candidates(), this.context())
       }
+      if (!first.ranked.length) break
       // Show the likely pick at once; measuring it can take a couple of minutes.
-      if (!this.state.upNext.length) this.set({ tentative: ranked[0] })
-      // Measure the shortlist (cached ones are instant), then re-rank on real facts.
-      for (const s of ranked.slice(0, SHORTLIST)) if (!s.candidate.facts) await this.deps.analysis.ensure(s.candidate.track).catch(() => null)
-      const reranked = rankCandidates(ranked.slice(0, SHORTLIST).map(s => this.withFacts(s.candidate)), relaxed ? { ...ctx, rules: ctx.rules.filter(r => r.kind === 'banArtist' || r.kind === 'noExplicit') } : ctx)
-      const pick = reranked[0] ?? ranked[0]
-      if (!pick) break
+      if (!this.state.upNext.length) this.set({ tentative: first.ranked[0] })
+      // Measure the shortlist (cached ones are instant)…
+      const shortlist = first.ranked.slice(0, SHORTLIST)
+      for (const s of shortlist) if (!s.candidate.facts) await this.deps.analysis.ensure(s.candidate.track).catch(() => null)
+      // …then re-rank on real facts against the rules as they are NOW: the
+      // listener may have said "no Drake" while the scan ran.
+      const fresh = this.ladder(shortlist.map(s => this.withFacts(s.candidate)), this.context())
+      const pick = fresh.ranked[0]
+      if (!pick) continue
+      if (fresh.relaxed) relaxed = fresh.relaxed
       this.set({ upNext: [...this.state.upNext, pick], tentative: null })
     }
-    if (relaxed) this.set({ message: "Couldn't find songs that fit every rule — I relaxed the tempo/energy limits to keep the music going." })
+    if (relaxed) this.set({ message: `Couldn't find songs that fit every rule — I relaxed ${relaxed} to keep the music going.` })
+  }
+
+  private candidates(): Candidate[] {
+    const pool = this.pool.map(c => this.withFacts(c))
+    return this.bursts.favorites > 0 ? pool.filter(c => c.known) : pool
+  }
+
+  /**
+   * Rank with every rule first, then step down only as far as needed to keep
+   * the music going: tempo/energy/genre-focus limits, then artist spacing, then
+   * repeats. Bans, clean versions and "no <genre>" are never relaxed.
+   */
+  private ladder(pool: Candidate[], ctx: PlanContext): { ranked: Scored[]; relaxed: string } {
+    const hard = ctx.rules.filter(r => r.kind === 'banArtist' || r.kind === 'noExplicit' || (r.kind === 'lessGenre' && r.hard))
+    const steps: [PlanContext, string][] = [
+      [ctx, ''],
+      [{ ...ctx, rules: hard }, 'the tempo/energy limits'],
+      [{ ...ctx, rules: hard, relax: { artistGap: true } }, 'the artist spacing'],
+      [{ ...ctx, rules: hard, relax: { artistGap: true, repeats: true } }, 'the no-repeats rule'],
+    ]
+    for (const [c, label] of steps) {
+      const ranked = rankCandidates(pool, c)
+      if (ranked.length) return { ranked, relaxed: label }
+    }
+    return { ranked: [], relaxed: 'everything' }
   }
 
   private relatedSeeds(): string[] {
@@ -171,13 +199,20 @@ export class SetConductor extends Emitter {
   next(): DjTrack | undefined {
     if (!this.state.active) return undefined
     if (this.stopAfter) { this.stop(); return undefined }
+    // A rule may have arrived after a pick was queued: never hand over a song it forbids.
+    const ok = (s: Scored) => s.why === 'you asked for it' || allowedByRules(s.candidate, this.state.rules, this.now())
+    while (this.state.upNext[0] && !ok(this.state.upNext[0])) this.set({ upNext: this.state.upNext.slice(1) })
     let head = this.state.upNext[0]
     if (!head) {
       // Still analysing: hand over the best un-analysed song (safe transition)
       // rather than nothing, which would switch Automix off.
-      const ranked = rankCandidates(this.pool.map(c => this.withFacts(c)), this.context())
-      head = ranked[0]
-      if (!head) return undefined
+      head = this.ladder(this.candidates(), this.context()).ranked[0]
+      if (!head) {
+        // Truly nothing left (every song banned or unplayable): end the set
+        // rather than let the page re-arm Automix into an empty loop.
+        this.set({ active: false, upNext: [], message: 'I ran out of songs that fit your rules — tell me a new vibe to keep going.' })
+        return undefined
+      }
     } else {
       this.set({ upNext: this.state.upNext.slice(1) })
     }
@@ -270,7 +305,12 @@ export class SetConductor extends Emitter {
     // Coming back from the console: whatever is actually playing is the new
     // starting point, so the old lookahead is stale.
     this.set({ paused: p, ...(p ? {} : { upNext: [] }) })
-    if (!p) { const now = this.deps.nowPlaying(); if (now) this.noteStarted(now.track); void this.refill() }
+    if (!p) {
+      const now = this.deps.nowPlaying(); if (now) this.noteStarted(now.track)
+      // The console may have switched Automix off; the set resumes, so the mixer does too.
+      this.deps.startMixer()
+      void this.refill()
+    }
   }
 }
 
