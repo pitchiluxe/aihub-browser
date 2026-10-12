@@ -222,6 +222,9 @@ export function createSemanticIndex(appDir: string, embed: Embedder) {
 
     /** Drop vectors whose documents no longer exist. */
     prune(liveIds: Set<string>) {
+      // Migrate first: a save of the legacy number arrays is ~4x the size and
+      // stringify time (37 MB, ~0.4 s of frozen main thread on a real profile).
+      index()
       store.update(all => {
         for (const id of Object.keys(all)) if (!liveIds.has(id)) { delete all[id]; cache?.delete(id) }
       })

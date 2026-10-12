@@ -41,8 +41,9 @@ import {
 } from './aiRouting'
 import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
 import { createSessionManager, type SessionTab } from './sessions'
-import axios from 'axios'
 import { createSemanticIndex, type SearchDoc } from './semantic'
+import { createNetGet, createNetPostJson } from './netGet'
+import { net as electronNet } from 'electron'
 import { splitPanes } from '../shared/splitLayout'
 import { writeNote, describeVault, parseTagSuggestions, type NoteKind } from './obsidian'
 import { saveMarkdown, listMarkdown, getMarkdown, deleteMarkdown, pruneMarkdown } from './markdownStore'
@@ -413,8 +414,23 @@ function fallbackLookup(
   })
 }
 
-// ── Native HTTP helpers (more reliable than axios in packaged Electron) ────
-function httpGet(url: string, timeoutMs = 5000): Promise<{ status: number; body: string }> {
+// ── HTTP GET helpers ───────────────────────────────────────────────────────
+// Chromium's network process first (see netGet.ts: a timed-out Node socket
+// froze the main thread for 4.4 s). Node sockets with the public-DNS fallback
+// only when Chromium cannot resolve the name at all.
+const chromiumFetch = (url: string, init: { signal: AbortSignal; method?: string; headers?: Record<string, string>; body?: string }) =>
+  electronNet.fetch(url, { ...init, bypassCustomProtocolHandlers: true })
+const chromiumGet = createNetGet(chromiumFetch)
+const chromiumPostJson = createNetPostJson(chromiumFetch)
+async function httpGet(url: string, timeoutMs = 5000): Promise<{ status: number; body: string }> {
+  try { return await chromiumGet(url, timeoutMs) }
+  catch (e: any) {
+    if (e?.code !== 'ENOTFOUND') throw e
+    return nodeHttpGet(url, timeoutMs)
+  }
+}
+
+function nodeHttpGet(url: string, timeoutMs = 5000): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https') ? https : http
     const req = lib.get(url, { timeout: timeoutMs, lookup: fallbackLookup }, (res) => {
@@ -3249,7 +3265,7 @@ ipcMain.handle('bookmarks:summarize', async (_e, id: string) => {
   // Try to fetch page text
   let pageText = ''
   try {
-    const res = await fetch(bm.url, { signal: AbortSignal.timeout(8000) })
+    const res = await electronNet.fetch(bm.url, { signal: AbortSignal.timeout(8000), bypassCustomProtocolHandlers: true })
     if (res.ok) {
       const html = await res.text()
       // Strip HTML tags to get text
@@ -4511,7 +4527,7 @@ async function ollamaEmbed(text: string): Promise<number[] | null> {
   }
   for (const model of candidates) {
     try {
-      const res = await axios.post(`${olBase}/api/embeddings`, { model, prompt: text }, { timeout: 20000 })
+      const res = await chromiumPostJson(`${olBase}/api/embeddings`, { model, prompt: text }, 20000)
       const vector = res.data?.embedding
       if (Array.isArray(vector) && vector.length) { embedModel = model; return vector }
     } catch {

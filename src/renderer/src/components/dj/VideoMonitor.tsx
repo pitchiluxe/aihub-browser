@@ -8,6 +8,7 @@ import React, { useEffect, useRef } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { crossfadeGains, deckSide, DECK_IDS, faderGain, type Deck, type DeckId, type DjEngine } from './engine/DjEngine'
 import { useCanvasBox, useRafThrottled } from './controls'
+import { canvasFrame } from './canvasFrame'
 
 const images = new Map<string, HTMLImageElement>()
 function imageFor(src: string): HTMLImageElement | null {
@@ -45,13 +46,10 @@ export default function VideoMonitor({ engine, big, onToggleBig, bare }: { engin
   const box = useCanvasBox(cvRef)
   // 30 fps is what the videos themselves run at; more only costs the players GPU time.
   useRafThrottled(() => {
-    const cv = cvRef.current
-    if (!cv || !cv.offsetParent) return
-    const g = cv.getContext('2d')
-    if (!g) return
-    const { w, h, k } = box.current
-    if (!w || !h) return
-    g.setTransform(k, 0, 0, k, 0, 0)
+    // No offsetParent check: it forced a page layout every frame (see canvasFrame).
+    const f = canvasFrame(cvRef.current, box.current, {})
+    if (!f) return
+    const { ctx: g, w, h } = f
     g.fillStyle = '#000'
     g.fillRect(0, 0, w, h)
 

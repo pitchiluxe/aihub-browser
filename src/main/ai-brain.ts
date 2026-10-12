@@ -5,8 +5,13 @@
  */
 import os from 'os'
 import { join } from 'path'
-import axios from 'axios'
+import { net } from 'electron'
 import { createManagedJsonStore } from './jsonStore'
+import { createNetPostJson } from './netGet'
+
+// Chromium's network process, not Node sockets: a timed-out Node request
+// can block the main thread while its socket closes (see netGet.ts).
+const postJson = createNetPostJson((url, init) => net.fetch(url, { ...init, bypassCustomProtocolHandlers: true }))
 
 const APP_DIR = join(os.homedir(), '.aihub-browser')
 
@@ -139,12 +144,12 @@ Respond with ONLY valid JSON array, no explanation:
 ]`
 
   try {
-    const res = await axios.post(`${ollamaBase}/api/chat`, {
+    const res = await postJson(`${ollamaBase}/api/chat`, {
       model: ollamaModel,
       messages: [{ role: 'user', content: prompt }],
       stream: false,
       options: { temperature: 0.7 }
-    }, { timeout: 30000 })
+    }, 30000)
 
     const content = res.data?.message?.content || ''
     const jsonMatch = content.match(/\[[\s\S]*\]/)

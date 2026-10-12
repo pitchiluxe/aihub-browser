@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
-import { app, ipcMain, safeStorage, BrowserWindow, desktopCapturer, Notification, dialog } from 'electron'
+import { app, ipcMain, safeStorage, BrowserWindow, desktopCapturer, Notification, dialog, net } from 'electron'
 import { createManagedJsonStore } from '../jsonStore'
 import { validateHandle, handleKey } from '../../shared/communityHandle'
 import {
@@ -555,7 +555,7 @@ function guide() {
 /** Installed models, so the settings panel can say what it could run. */
 async function ollamaModels(): Promise<string[]> {
   try {
-    const response = await fetch('http://127.0.0.1:11434/api/tags')
+    const response = await chromiumFetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(5000) })
     if (!response.ok) return []
     const data = await response.json() as { models?: { name?: string }[] }
     return (data.models ?? []).map(m => String(m?.name ?? '')).filter(Boolean)
@@ -573,9 +573,13 @@ async function ollamaReady(): Promise<boolean> {
   return ready
 }
 
+// Chromium's network process: an aborted Node socket can block the main thread (see netGet.ts).
+const chromiumFetch = ((url: string, init?: RequestInit) => net.fetch(url, { ...(init as any), bypassCustomProtocolHandlers: true })) as typeof fetch
+
 const ask = createOllamaAsk({
   base: () => 'http://127.0.0.1:11434',
   model: () => guide().get().model,
+  fetch: chromiumFetch,
 })
 
 function guideDeps(ollamaIsReady: boolean): GuideDeps {

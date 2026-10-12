@@ -197,3 +197,19 @@ describe('createSemanticIndex', () => {
     expect(index.vectors().has('b')).toBe(false)
   })
 })
+
+describe('createSemanticIndex — legacy number-array files', () => {
+  it('prune() never rewrites the bulky legacy format (live profile: 37 MB rewritten on every save)', () => {
+    const dir = fs.mkdtempSync(join(os.tmpdir(), 'aihub-sem-legacy-'))
+    const legacy = { a: { id: 'a', vector: [0.5, -0.25, 1], textHash: 'h', ts: 1 }, b: { id: 'b', vector: [1, 0, 0], textHash: 'h', ts: 1 } }
+    fs.writeFileSync(join(dir, 'semantic-index.json'), JSON.stringify(legacy))
+    const index = createSemanticIndex(dir, async () => null)
+    index.prune(new Set(['a']))
+    index.flush()
+    const saved = JSON.parse(fs.readFileSync(join(dir, 'semantic-index.json'), 'utf8'))
+    expect(Object.keys(saved)).toEqual(['a'])
+    expect(saved.a.vector).toBeUndefined()
+    expect(typeof saved.a.v).toBe('string')
+    expect(index.vectors().get('a')).toEqual([0.5, -0.25, 1])
+  })
+})

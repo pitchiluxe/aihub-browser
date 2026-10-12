@@ -8,6 +8,7 @@ import { Bookmark } from '../../store/browserStore'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { isBookmarkProtected } from '../../services/bookmarkService'
 import Favicon from '../common/Favicon'
+import { shownFlag } from '../../utils/shownFlag'
 // The node look is shared with the Bible verse graph so the two read as one
 // product; only the motion below belongs to this graph.
 import {
@@ -477,12 +478,19 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   // the DJ console, where it competed with the decks. So while the sphere is
   // not on screen the loop rests, and looks twice a second for its return.
   const hiddenTimerRef = useRef(0)
+  // On-screen state from a ResizeObserver, not a per-frame offsetParent read
+  // (that forced a layout of the whole browser UI every frame).
+  const shownRef = useRef<{ el: Element; f: ReturnType<typeof shownFlag> } | null>(null)
+  const isShown = (cv: HTMLCanvasElement) => {
+    if (shownRef.current?.el !== cv) { shownRef.current?.f.dispose(); shownRef.current = { el: cv, f: shownFlag(cv) } }
+    return shownRef.current.f.shown
+  }
   const startLoop = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
     window.clearTimeout(hiddenTimerRef.current)
     const loop = () => {
       const cv = canvasRef.current
-      if (cv && !cv.offsetParent) {
+      if (cv && !isShown(cv)) {
         rafRef.current = 0
         hiddenTimerRef.current = window.setTimeout(() => { rafRef.current = requestAnimationFrame(loop) }, 500)
         return
@@ -496,6 +504,7 @@ function BookmarkSphere({ bookmarks, onNavigate, onRemove, onClose }: Props) {
   const stopLoop = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
     window.clearTimeout(hiddenTimerRef.current)
+    shownRef.current?.f.dispose(); shownRef.current = null
   }, [])
 
   // ── Hit test ─────────────────────────────────────────────────────────────

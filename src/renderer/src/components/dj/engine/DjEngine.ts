@@ -12,7 +12,8 @@
  *                └→ scratch voice ┘                              └→ PFL → cue bus            │
  *  master:                                                            master gain → limiter ←┘ → speakers / recorder
  */
-import { analyze, ENV_RATE, type Analysis } from './analysis'
+import { ENV_RATE, type Analysis } from './analysis'
+import { analyzeOffThread, prepareDeckOffThread } from './analysisClient'
 import { createEffect, type Effect, type FxType } from './effects'
 import { rememberTrack } from './trackCache'
 import { YouTubeDeck } from './youtubeDeck'
@@ -138,21 +139,6 @@ function peakDb(an: AnalyserNode, buf: Float32Array): number {
   return p > 0 ? 20 * Math.log10(p) : -96
 }
 
-/** Mono, at half rate when that is still ≥ 22 kHz — scratching needs character, not hi-fi. */
-function scratchCopy(chans: Float32Array[], rate: number): { data: Float32Array; rate: number } {
-  const step = rate >= 44100 ? 2 : 1
-  const n = Math.floor(chans[0].length / step)
-  const out = new Float32Array(n)
-  const k = 1 / (chans.length * step)
-  for (const ch of chans) {
-    for (let i = 0; i < n; i++) {
-      let s = 0
-      for (let j = 0; j < step; j++) s += ch[i * step + j]
-      out[i] += s * k
-    }
-  }
-  return { data: out, rate: rate / step }
-}
 
 export class Deck extends Emitter {
   /** Plays local files; a <video> so video files have a picture for the monitor. */
@@ -523,9 +509,8 @@ export class Deck extends Emitter {
       await new Promise(r => setTimeout(r, 16))
       const chans: Float32Array[] = []
       for (let c = 0; c < Math.min(2, decoded.numberOfChannels); c++) chans.push(decoded.getChannelData(c))
-      const a = analyze(chans, decoded.sampleRate)
+      const { analysis: a, scratch: sc } = await prepareDeckOffThread(chans, decoded.sampleRate)
       if (gen !== this.gen) return
-      const sc = scratchCopy(chans, decoded.sampleRate)
       this.autoGain = autoGainFor(rmsOf(sc.data))
       this.applyTrim()
       this.scratch.setBuffer(sc.data, sc.rate)
@@ -984,7 +969,7 @@ export class Deck extends Emitter {
     try {
       const d = await this.scratch.dump()
       if (!d || gen !== this.gen || d.data.length < d.sampleRate * 12) { this.steadySince = 0; return }
-      const a = analyze([d.data], d.sampleRate)
+      const a = await analyzeOffThread([d.data], d.sampleRate)
       if (gen !== this.gen) return
       // The recording ran in real time at the deck's rate; convert to track time.
       if (a.bpm) {

@@ -20,7 +20,10 @@ const DEFAULT_TIMEOUT_MS = 120_000
 export function createOllamaAsk(deps: {
   base: () => string
   model: () => string
+  /** Electron's net.fetch in the app: an aborted Node socket can block the main thread (see netGet.ts). */
+  fetch?: typeof globalThis.fetch
 }) {
+  const fetch: typeof globalThis.fetch = deps.fetch ?? globalThis.fetch
   return async function ask(prompt: string, opts: AskOptions = {}): Promise<string | null> {
     const model = deps.model()
     if (!model) return null

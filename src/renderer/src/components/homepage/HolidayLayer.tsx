@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react'
 import { Holiday } from '../../services/holidayService'
+import { shownFlag } from '../../utils/shownFlag'
 
 // Ambient holiday particles behind the homepage content. Canvas rather than
 // DOM nodes so a few dozen glyphs cost almost nothing, and it sits behind
@@ -83,9 +84,11 @@ export default function HolidayLayer({ holiday }: { holiday: Holiday }) {
     ro.observe(canvas)
 
     let hiddenTimer = 0
+    const onScreen = shownFlag(canvas)
     const draw = () => {
       // Hidden behind another tab (display: none): rest, and look again shortly.
-      if (!canvas.offsetParent) {
+      // (ResizeObserver-tracked: a per-frame offsetParent read forces page layout.)
+      if (!onScreen.shown) {
         hiddenTimer = window.setTimeout(() => { rafRef.current = requestAnimationFrame(draw) }, 500)
         return
       }
@@ -123,6 +126,7 @@ export default function HolidayLayer({ holiday }: { holiday: Holiday }) {
       cancelAnimationFrame(rafRef.current)
       window.clearTimeout(hiddenTimer)
       ro.disconnect()
+      onScreen.dispose()
     }
   }, [holiday])
 

@@ -33,7 +33,7 @@ const OVERVIEW_MS = 100
  * speed with only the waveforms on screen). On the CPU the GPU just receives
  * the finished picture.
  */
-const CPU_CANVAS: CanvasRenderingContext2DSettings = { willReadFrequently: true }
+import { canvasFrame, CPU_CANVAS } from './canvasFrame'
 /** A song measured as it plays only grows a little each moment: rebuild its overview twice a second. */
 const LIVE_REBUILD_MS = 500
 
@@ -73,15 +73,8 @@ function envOf(deck: Deck): { amp: Float32Array; low: Float32Array | null } | nu
   return null
 }
 
-/** Start drawing at the canvas's current CSS size; null while it has none. */
-function begin(cv: HTMLCanvasElement | null, box: { w: number; h: number; k: number }) {
-  // Not on screen (another tab is in front): draw nothing — the music plays on regardless.
-  if (!cv || !box.w || !box.h || !cv.offsetParent) return null
-  const ctx = cv.getContext('2d', CPU_CANVAS)
-  if (!ctx) return null
-  ctx.setTransform(box.k, 0, 0, box.k, 0, 0)
-  return { ctx, w: box.w, h: box.h }
-}
+/** Start drawing at the canvas's current CSS size; null while it has none or is off screen. */
+const begin = canvasFrame
 
 /** Everything that changes what a deck's waveform looks like, apart from time. */
 function deckState(d: Deck): string {

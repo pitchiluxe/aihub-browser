@@ -57,32 +57,26 @@ function trackFor(full: string, size: number): DjTrack {
 }
 
 // ── Listing ─────────────────────────────────────────────────────────────────
-function roots(): { places: DjFolder[]; drives: DjFolder[] } {
-  const places: DjFolder[] = []
-  const add = (name: string, key: Parameters<typeof app.getPath>[0]) => {
-    try {
-      const p = app.getPath(key)
-      if (fs.existsSync(p)) places.push({ name, path: p })
-    } catch { /* not available on this platform */ }
-  }
-  add('Music', 'music')
-  add('Desktop', 'desktop')
-  add('Downloads', 'downloads')
-  add('Documents', 'documents')
-  add('Videos', 'videos')
+/** Exists, checked off the main thread: a sleeping network drive or an empty
+ *  card-reader slot can make a synchronous check block for seconds. */
+const exists = (p: string) => fs.promises.access(p).then(() => true, () => false)
+
+async function roots(): Promise<{ places: DjFolder[]; drives: DjFolder[] }> {
+  const wanted: [string, Parameters<typeof app.getPath>[0]][] = [['Music', 'music'], ['Desktop', 'desktop'], ['Downloads', 'downloads'], ['Documents', 'documents'], ['Videos', 'videos']]
+  const candidates = wanted.flatMap(([name, key]) => { try { return [{ name, path: app.getPath(key) }] } catch { return [] } })
+  const places: DjFolder[] = (await Promise.all(candidates.map(async c => (await exists(c.path)) ? c : null))).filter((c): c is DjFolder => !!c)
   places.push({ name: 'Home', path: os.homedir() })
 
   const drives: DjFolder[] = []
   if (process.platform === 'win32') {
-    for (let c = 67; c <= 90; c++) { // C: … Z:
-      const d = `${String.fromCharCode(c)}:\\`
-      try { if (fs.existsSync(d)) drives.push({ name: `${String.fromCharCode(c)}:`, path: d }) } catch { /* ignore */ }
-    }
+    const letters = Array.from({ length: 24 }, (_, i) => String.fromCharCode(67 + i)) // C: … Z:
+    const found = await Promise.all(letters.map(async l => (await exists(`${l}:\\`)) ? { name: `${l}:`, path: `${l}:\\` } : null))
+    for (const d of found) if (d) drives.push(d)
   } else {
     drives.push({ name: '/', path: '/' })
     for (const base of ['/Volumes', '/media', '/mnt']) {
       try {
-        for (const e of fs.readdirSync(base, { withFileTypes: true })) {
+        for (const e of await fs.promises.readdir(base, { withFileTypes: true })) {
           if (e.isDirectory()) drives.push({ name: e.name, path: path.join(base, e.name) })
         }
       } catch { /* not present */ }
