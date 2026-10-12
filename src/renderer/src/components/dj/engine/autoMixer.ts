@@ -15,6 +15,8 @@ const LEAD = 12
 /** Load it this much earlier still, so a YouTube player is ready in time. */
 const PRELOAD = 30
 const TICK_MS = 150
+/** Longest the outgoing song waits, at full volume, for the incoming one to make a sound. */
+const MAX_START_WAIT = 4000
 
 export interface AutoMixerHooks {
   /** Next song to play, removed from wherever it came from; undefined when there is none. */
@@ -93,10 +95,26 @@ export class AutoMixer extends Emitter {
       this.fx.prepare()
     }
     await target.play()
+    // A YouTube deck buffers (or plays an ad) for a moment before it makes a
+    // sound; fading the outgoing song meanwhile was the ~3 s gap between songs.
+    // (The transition is only recorded once the fade starts: before that, the
+    // tick would read "transition, no fade" as finished and stop the outgoing song.)
+    await this.untilAudible(target)
     this.transition = { from: live.id, to: target.id }
     this.engine.fadeTo(this.side(target.id), plan.seconds)
     this.fx?.run()
     this.emit()
+  }
+
+  /** Resolves once the deck is really playing (not loading, not in an ad), or after MAX_START_WAIT. */
+  private untilAudible(d: Deck): Promise<void> {
+    const audible = () => d.playing && !d.loading && !d.adPlaying
+    if (audible()) return Promise.resolve()
+    return new Promise(resolve => {
+      const started = Date.now()
+      const check = () => { if (audible() || Date.now() - started >= MAX_START_WAIT) resolve(); else setTimeout(check, 50) }
+      setTimeout(check, 50)
+    })
   }
 
   private tick(): void {
