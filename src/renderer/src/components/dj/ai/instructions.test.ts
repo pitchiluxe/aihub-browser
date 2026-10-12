@@ -99,6 +99,32 @@ describe('final review — inversions and empty chips', () => {
   })
 })
 
+describe('a style on its own means "play that, and stick to it"', () => {
+  it.each(['R&B', 'rnb', 'play r&b', 'some r&b please', 'I want R&B', 'r&b music', 'Amapiano', 'play afrobeats songs'])('%s', t => {
+    const r = rule(t) as any
+    expect(r?.kind).toBe('onlyGenres')
+    expect(r.genres.length).toBe(1)
+  })
+  it('"R&B" is the r&b genre, not a search', () => {
+    expect(parseInstruction('R&B', NOW).items).toEqual([{ rule: { kind: 'onlyGenres', genres: ['r&b'] } }])
+  })
+})
+
+describe('searching the library', () => {
+  const first = (t: string) => parseInstruction(t, NOW).items[0]
+  it.each([
+    ['search wizkid', 'wizkid'],
+    ['find Burna Boy', 'burna boy'],
+    ['songs by Tems', 'tems'],
+    ['show me Asake songs', 'asake'],
+    ['show me songs by Rema', 'rema'],
+    ['list Davido', 'davido'],
+  ])('%s', (text, q) => { expect(first(text)).toEqual({ search: q }) })
+  it('confirms the search', () => {
+    expect(parseInstruction('songs by Tems', NOW).confirm).toMatch(/tems/i)
+  })
+})
+
 describe('playing a song on request', () => {
   const first = (t: string) => parseInstruction(t, NOW).items[0]
   it.each([

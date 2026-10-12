@@ -31,6 +31,7 @@ import { SetConductor } from './ai/setConductor'
 import { parseBrief } from './ai/setBrief'
 import { AnalysisQueue } from './engine/analysisQueue'
 import { liveSide, loadTarget } from './ai/deckChoice'
+import type { PickHow, StageResults } from './stage/SearchResults'
 import { createFactSource } from './engine/factScan'
 import { factsCache } from './ai/trackFacts'
 import { buildProfile, tasteEvents } from './taste'
@@ -227,10 +228,8 @@ function Console({ engine }: { engine: DjEngine }) {
 
   const mixNow = useCallback((track: DjTrack) => { void mixer.mixNow(track) }, [mixer])
 
-  // "load X on deck A" / "play X on deck B": a real song on the named deck.
-  const loadDeck = useCallback(async (query: string, deckId: 'A' | 'B', play: boolean) => {
-    const t = (await searchYouTube(query, 8).catch(() => [] as DjTrack[])).find(isSong)
-    if (!t) { say(`Could not find "${query}" on YouTube`); return }
+  // A specific track on a named deck (a picked search result, or loadDeck above).
+  const loadTrackOnDeck = useCallback(async (t: DjTrack, deckId: 'A' | 'B', play: boolean) => {
     const isBusy = (id: 'A' | 'B') => engine.decks[id].active || engine.decks[id].held
     // A busy deck is never cut off mid-song (see loadTarget).
     const target = loadTarget(deckId, play, { A: isBusy('A'), B: isBusy('B') })
@@ -248,6 +247,13 @@ function Console({ engine }: { engine: DjEngine }) {
       await deck.play()
     }
   }, [engine, mixer, say, tracker])
+
+  // "load X on deck A" / "play X on deck B": a real song on the named deck.
+  const loadDeck = useCallback(async (query: string, deckId: 'A' | 'B', play: boolean) => {
+    const t = (await searchYouTube(query, 8).catch(() => [] as DjTrack[])).find(isSong)
+    if (!t) { say(`Could not find "${query}" on YouTube`); return }
+    await loadTrackOnDeck(t, deckId, play)
+  }, [say, loadTrackOnDeck])
 
   // What the AI DJ assistant may reach — the same calls the buttons make.
   const env = useMemo<DjEnv>(() => ({
@@ -307,15 +313,37 @@ function Console({ engine }: { engine: DjEngine }) {
     setTakeover: on => { if (!on) conductor.stop() },
     planVibe: text => { void conductor.start(parseBrief(text)) },
   }), [conductor])
+  // "Wizkid" typed on the stage: their songs, to play now, next or on a deck.
+  const [stageResults, setStageResults] = useState<StageResults | null>(null)
+  const searchSeq = useRef(0)
+  const searchSongs = useCallback(async (query: string) => {
+    const seq = ++searchSeq.current
+    setStageResults({ query, tracks: [], loading: true })
+    const found = await searchYouTube(query, 24).catch(() => [] as DjTrack[])
+    if (seq !== searchSeq.current) return   // a newer search won
+    setStageResults({ query, tracks: found.filter(isSong).slice(0, 15), loading: false })
+  }, [])
+  const pickResult = useCallback((t: DjTrack, how: PickHow) => {
+    if (how === 'now') { say(`Mixing in ${t.title}`); void mixer.mixNow(t); return }
+    if (how === 'next') {
+      if (conductor.state.active && !conductor.state.paused) conductor.queueTrack(t)
+      else { setSidelist(s => [t, ...s]); say(`${t.title} plays next`) }
+      return
+    }
+    void loadTrackOnDeck(t, how, false)
+  }, [conductor, mixer, say, setSidelist, loadTrackOnDeck])
   const ask = useCallback((text: string) => {
     void askDj(text, {
-      conductor,
+      conductor: conductor.state.active ? conductor : null,
+      startSet: brief => conductor.start(parseBrief(brief)),
+      activeConductor: () => conductor.state.active ? conductor : null,
       runAction: a => { void runIntent(a, env, stageControls).then(r => { if (r) say(r) }) },
       loadDeck: (q, d, p) => { void loadDeck(q, d, p) },
       chat: (m: any[]) => (window as any).electronAPI?.ai?.chat(m),
       say,
+      search: q => { void searchSongs(q) },
     })
-  }, [conductor, env, stageControls, say, loadDeck])
+  }, [conductor, env, stageControls, say, loadDeck, searchSongs])
 
   const dropOn = (id: DeckId) => async (src: string | File) => {
     if (typeof src === 'string') {
@@ -337,7 +365,8 @@ function Console({ engine }: { engine: DjEngine }) {
     {/* The stage sits beside the console, not inside it: the console is
         CSS-zoomed to fit the tab and the stage must not be scaled with it. */}
     <div className="dj-host">
-    {stageView === 'stage' && <StagePage engine={engine} conductor={conductor} onTakeDecks={() => showView('console')} onStop={stopMusic} onAsk={ask} />}
+    {stageView === 'stage' && <StagePage engine={engine} conductor={conductor} onTakeDecks={() => showView('console')} onStop={stopMusic} onAsk={ask}
+      results={stageResults} onPick={pickResult} onCloseResults={() => setStageResults(null)} />}
     {stageView === 'console' && <button className="dj-back-to-stage" onClick={() => showView('stage')}>{conductor.state.active ? 'Back to stage' : '✨ AI DJ stage'}</button>}
     <div className="aihub-dj" data-dj-theme={theme} data-dj-look={look} data-dj-layout={layout} data-dj-dark={themeInfo?.dark ? '1' : '0'}
       data-dj-light-bg={themeInfo?.lightBg ? '1' : '0'} ref={fit.ref} style={fit.style}>

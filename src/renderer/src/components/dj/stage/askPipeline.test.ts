@@ -33,6 +33,27 @@ describe('askDj', () => {
     expect(chat).toHaveBeenCalledTimes(1)
     expect(d.conductor.instruct).toHaveBeenCalledWith(expect.objectContaining({ items: [{ rule: { kind: 'lessGenre', genre: 'trap' } }] }))
   })
+  it('an artist or title on its own lists matching songs (no model call, no "didn\'t catch")', async () => {
+    const chat = vi.fn()
+    const d = { ...deps(chat), search: vi.fn() }
+    await askDj('Wizkid', d)
+    expect(d.search).toHaveBeenCalledWith('Wizkid')
+    expect(chat).not.toHaveBeenCalled()
+    expect(d.say).not.toHaveBeenCalledWith(expect.stringMatching(/didn'?t catch/i))
+  })
+  it('a style with no set running starts one in that style, and keeps to it', async () => {
+    const instruct = vi.fn()
+    const startSet = vi.fn(async () => {})
+    const d = { ...deps(), conductor: null, startSet, activeConductor: () => ({ instruct }) }
+    await askDj('R&B', d as any)
+    expect(startSet).toHaveBeenCalledWith('r&b')
+    expect(instruct).toHaveBeenCalledWith(expect.objectContaining({ items: [{ rule: { kind: 'onlyGenres', genres: ['r&b'] } }] }))
+  })
+  it('"songs by X" searches too', async () => {
+    const d = { ...deps(), search: vi.fn() }
+    await askDj('songs by Burna Boy', d)
+    expect(d.search).toHaveBeenCalledWith('burna boy')
+  })
   it('says what it could not do when nothing understood it', async () => {
     const d = deps(async () => ({ provider: 'none', content: 'AI providers are currently unavailable.' }))
     await askDj('the moon is made of cheese', d)

@@ -19,7 +19,7 @@ export function isSong(t: DjTrack): boolean {
   return !NOT_A_SONG.test(`${t.title} ${t.name}`)
 }
 
-export async function gatherCandidates(seeds: string[], deps: PoolDeps, opts: { perSeed?: number; favoritesOnly?: boolean } = {}): Promise<Omit<Candidate, 'facts'>[]> {
+export async function gatherCandidates(seeds: string[], deps: PoolDeps, opts: { perSeed?: number; favoritesOnly?: boolean; /** Tag every result with this genre (seeds are phrasings of it). */ genre?: string } = {}): Promise<Omit<Candidate, 'facts'>[]> {
   const p = deps.profile()
   const artistScore = new Map(p.topArtists.map(a => [norm(a.artist), a.score]))
   const maxScore = Math.max(1, ...p.topArtists.map(a => a.score))
@@ -39,7 +39,7 @@ export async function gatherCandidates(seeds: string[], deps: PoolDeps, opts: { 
   if (!opts.favoritesOnly) {
     const per = opts.perSeed ?? 15
     const lists = await Promise.all(seeds.slice(0, 4).map(s => deps.search(s, per).then(l => ({ s, l })).catch(() => ({ s, l: [] as DjTrack[] }))))
-    for (const { s, l } of lists) for (const t of l) add(t, norm(s))
+    for (const { s, l } of lists) for (const t of l) add(t, opts.genre ?? norm(s))
   }
   return [...out.values()]
 }

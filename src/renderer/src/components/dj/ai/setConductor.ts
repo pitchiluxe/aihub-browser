@@ -60,6 +60,8 @@ export class SetConductor extends Emitter {
   private playNextQueue: DjTrack[] = []
   /** Requested songs still to look up — resolved at the start of a refill so the request wins the race. */
   private playNextQueries: string[] = []
+  /** Style searches still running ("R&B" was just asked for). */
+  private genreGathering = 0
   /** Picks queued after limits were relaxed (see ladder). */
   private relaxedPicks = new Set<string>()
   private readonly now: () => number
@@ -155,8 +157,12 @@ export class SetConductor extends Emitter {
       if (first.relaxed !== '' && !widened) {
         // Rules filtered everything: widen the pool once before relaxing anything.
         widened = true
-        const more = await gatherCandidates([...(this.state.brief?.seeds ?? []), ...this.relatedSeeds()], this.deps.pool, { perSeed: 25 })
-        this.pool = mergePools(this.pool, more)
+        const only = this.state.rules.flatMap(r => r.kind === 'onlyGenres' ? r.genres : [])
+        if (only.length) await this.gatherGenres(only)   // more of THAT style, tagged as it
+        else {
+          const more = await gatherCandidates([...(this.state.brief?.seeds ?? []), ...this.relatedSeeds()], this.deps.pool, { perSeed: 25 })
+          this.pool = mergePools(this.pool, more)
+        }
         first = this.ladder(this.candidates(), this.context())
       }
       if (!first.ranked.length) break
@@ -242,6 +248,8 @@ export class SetConductor extends Emitter {
       // Still analysing: hand over the best un-analysed song (safe transition)
       // rather than nothing, which would switch Automix off.
       head = this.ladder(this.candidates(), this.context()).ranked[0]
+      // The asked-for style is still being fetched: wait for it, keep the set.
+      if (!head && this.genreGathering > 0) return undefined
       if (!head) {
         // Truly nothing left (every song banned or unplayable): end the set
         // rather than let the page re-arm Automix into an empty loop.
@@ -287,7 +295,7 @@ export class SetConductor extends Emitter {
         case 'favoritesOnly': this.bursts.favorites = r.tracks; this.set({ upNext: [] }); break
         case 'onlyGenres':
           rules = rules.filter(x => x.kind !== 'onlyGenres'); rules.push(r)
-          void gatherCandidates(r.genres, this.deps.pool).then(more => { this.pool = mergePools(this.pool, more); void this.refill() })
+          void this.gatherGenres(r.genres)
           break
         default: rules = rules.filter(x => JSON.stringify(x) !== JSON.stringify(r)); rules.push(r)
       }
@@ -296,6 +304,25 @@ export class SetConductor extends Emitter {
     const ctxRules = rules
     const keep = this.state.upNext.filter(s => rankCandidates([s.candidate], { ...this.context(), rules: ctxRules, played: [] }).length > 0 || s.why === 'you asked for it')
     this.set({ rules, upNext: keep, message: p.confirm || this.state.message })
+    void this.refill()
+  }
+
+  /** Songs of these styles, tagged so "only R&B" can recognise them. */
+  private async gatherGenres(genres: string[]): Promise<void> {
+    this.genreGathering++
+    try {
+      for (const g of genres) {
+        const more = await gatherCandidates(genreQueries(g), this.deps.pool, { perSeed: 20, genre: g }).catch(() => [])
+        this.pool = mergePools(this.pool, more)
+      }
+    } finally { this.genreGathering-- }
+    void this.refill()
+  }
+
+  /** A song the listener picked (search results): next, ahead of the plan. */
+  queueTrack(t: DjTrack): void {
+    this.playNextQueue.unshift(t)
+    this.set({ message: `Up next: ${t.title}` })
     void this.refill()
   }
 
@@ -349,10 +376,14 @@ export class SetConductor extends Emitter {
   }
 }
 
-/** The rules that are never relaxed: bans, clean versions, "no <genre>". */
+/** The rules that are never relaxed: bans, clean versions, "no <genre>", and
+ *  "only R&B" — a listener who asks for a style wants that style, not a drift. */
 function hardRules(rules: SetRule[]): SetRule[] {
-  return rules.filter(r => r.kind === 'banArtist' || r.kind === 'noExplicit' || (r.kind === 'lessGenre' && r.hard))
+  return rules.filter(r => r.kind === 'banArtist' || r.kind === 'noExplicit' || r.kind === 'onlyGenres' || (r.kind === 'lessGenre' && r.hard))
 }
+
+/** Ways to ask YouTube for more of one style: one query returns only a handful. */
+const genreQueries = (g: string) => [g, `${g} songs`, `best ${g}`, `new ${g}`]
 
 function mergePools(a: Omit<Candidate, 'facts'>[], b: Omit<Candidate, 'facts'>[]): Omit<Candidate, 'facts'>[] {
   const out = new Map(a.map(c => [c.track.youtubeId || c.track.path, c]))

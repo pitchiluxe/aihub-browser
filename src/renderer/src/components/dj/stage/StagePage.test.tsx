@@ -100,6 +100,23 @@ describe('StagePage', () => {
     expect(onTake).toHaveBeenCalledTimes(1)
   })
 
+  it('search results list the songs, and each can be played now, next or on a deck', () => {
+    const onPick = vi.fn(), onClose = vi.fn()
+    const tracks = [{ title: 'Essence', artist: 'Wizkid', youtubeId: 'aaaaaaaaaaa', durationHint: 248 }, { title: 'Joro', artist: 'Wizkid', youtubeId: 'bbbbbbbbbbb' }] as any
+    const brief = { vibe: 'x', durationMin: 60, curve: [{ atMin: 0, level: 0.5 }], discoveryShare: 0.25, seeds: [], rules: [] }
+    act(() => root.render(<StagePage engine={engine} conductor={fakeConductor({ active: true, brief })} onTakeDecks={() => {}} onAsk={() => {}}
+      results={{ query: 'Wizkid', tracks, loading: false }} onPick={onPick} onCloseResults={onClose} />))
+    const panel = host.querySelector('[aria-label="Songs for Wizkid"]') as HTMLElement
+    expect(panel.textContent).toContain('Essence')
+    expect(panel.textContent).toContain('Joro')
+    expect(panel.textContent).toContain('4:08')
+    const rowBtn = (row: number, label: string) => Array.from(panel.querySelectorAll('li')[row].querySelectorAll('button')).find(b => b.textContent?.includes(label)) as HTMLButtonElement
+    act(() => rowBtn(0, 'Play').click()); expect(onPick).toHaveBeenLastCalledWith(tracks[0], 'now')
+    act(() => rowBtn(1, 'Next').click()); expect(onPick).toHaveBeenLastCalledWith(tracks[1], 'next')
+    act(() => rowBtn(1, 'B').click()); expect(onPick).toHaveBeenLastCalledWith(tracks[1], 'B')
+    act(() => (panel.querySelector('[aria-label="Close results"]') as HTMLButtonElement).click()); expect(onClose).toHaveBeenCalled()
+  })
+
   it('Take the decks hands over to the console', () => {
     const onTake = vi.fn()
     act(() => root.render(<StagePage engine={engine} conductor={fakeConductor({ active: true, brief: { vibe: 'x', durationMin: 60, curve: [{ atMin: 0, level: 0.5 }], discoveryShare: 0.25, seeds: [], rules: [] } })} onTakeDecks={onTake} onAsk={() => {}} />))

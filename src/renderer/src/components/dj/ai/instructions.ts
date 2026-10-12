@@ -28,6 +28,8 @@ export type Instruction =
   | { removeRule: SetRule['kind']; value?: string }
   /** "load X on deck A" / "play X on deck B": a specific deck, now. */
   | { load: { query: string; deck: 'A' | 'B'; play: boolean } }
+  /** "search Wizkid", "songs by Tems": list matching songs to pick from. */
+  | { search: string }
 export interface Parsed { items: Instruction[]; confirm: string; understood: boolean }
 
 const GENRES = ['afrobeats', 'afrobeat', 'amapiano', 'hip hop', 'hip-hop', 'rap', 'r&b', 'rnb', 'house', 'deep house', 'tech house', 'techno', 'drum and bass', 'dnb', 'dancehall', 'reggae', 'reggaeton', 'pop', 'rock', 'jazz', 'gospel', 'soul', 'funk', 'disco', 'edm', 'trance', 'dubstep', 'latin', 'salsa', 'bachata', 'kpop', 'k-pop', 'country', 'lofi', 'lo-fi', 'trap', 'drill', 'bongo', 'highlife', 'soca', 'kompa', 'zouk', 'bollywood', 'classical', 'blues', 'garage', 'uk garage', 'afro house']
@@ -108,6 +110,14 @@ function rules(t: string, now: number): SetRule | { remove: SetRule['kind']; val
     if (/^(less|fewer|not so much|enough|stop the) /.test(t)) return { kind: 'lessGenre', genre: genres[0] }
     if (/^(only|play only|just|stick to|stick with|switch to|change to|all|nothing but)\b/.test(t) || /\bonly\b/.test(t)) return { kind: 'onlyGenres', genres }
     if (/^(more|add more|more of|extra)\b/.test(t)) return { kind: 'moreGenre', genre: genres[0] }
+    // A style on its own ("R&B", "play some amapiano", "I want r&b music"):
+    // play that and stay with it.
+    const bare = t.replace(/^(?:(?:play|put on|i want|i'?d like|give me|let'?s (?:have|go)|some|any|me)\s+)+/, '')
+      .replace(/\s+(?:songs?|music|tracks?|vibes?|only)$/, '').trim()
+    if (GENRES.some(g => g === bare)) {
+      const g = genreIn(bare).sort((a, b) => b.length - a.length)[0]
+      return { kind: 'onlyGenres', genres: [g] }
+    }
   }
 
   if (/\b(never heard|something new|new (music|songs|stuff)|surprise me with new|discover)\b/.test(t)) return { kind: 'discoveryBurst', tracks: 3 }
@@ -160,6 +170,7 @@ function confirmFor(i: Instruction): string {
   }
   if ('removeRule' in i) return `Okay — ${i.value ? titleCase(i.value) : 'that'} is allowed again.`
   if ('load' in i) return `${i.load.play ? 'Playing' : 'Loading'} ${titleCase(i.load.query)} on deck ${i.load.deck}.`
+  if ('search' in i) return `Songs for ${titleCase(i.search)} — pick one to play.`
   if (i.action.type === 'mixin') return `Playing ${titleCase(i.action.query)} now.`
   return ''
 }
@@ -187,6 +198,12 @@ function songNow(t: string): Instruction | null {
 export function parseInstruction(text: string, now = Date.now()): Parsed {
   const t = strip(clean(text))
   if (!t) return { items: [], confirm: '', understood: false }
+  // "search Wizkid", "songs by Tems", "show me Asake songs": a list to pick from.
+  const sm = /^(?:search(?: for)?|find|look up|list|show me(?: songs by)?|songs by|tracks by|music by)\s+(.{2,60}?)(?:\s+(?:songs|tracks|music))?$/.exec(t)
+  if (sm) {
+    const item: Instruction = { search: sm[1].trim() }
+    return { items: [item], confirm: confirmFor(item), understood: true }
+  }
   const song = songNow(t)
   if (song) return { items: [song], confirm: confirmFor(song), understood: true }
   const r = rules(t, now)

@@ -8,9 +8,14 @@ import EnergyGraph from './EnergyGraph'
 import SteerBar from './SteerBar'
 import RulesChips from './RulesChips'
 import Backdrop from './Backdrop'
+import SearchResults, { type PickHow, type StageResults } from './SearchResults'
+import type { DjTrack } from '../engine/DjEngine'
 import './stage.css'
 
-export default function StagePage({ engine, conductor, onTakeDecks, onStop, onAsk }: { engine: DjEngine; conductor: SetConductor; onTakeDecks: () => void; onStop?: () => void; onAsk: (text: string) => void }) {
+export default function StagePage({ engine, conductor, onTakeDecks, onStop, onAsk, results, onPick, onCloseResults }: {
+  engine: DjEngine; conductor: SetConductor; onTakeDecks: () => void; onStop?: () => void; onAsk: (text: string) => void
+  results?: StageResults | null; onPick?: (t: DjTrack, how: PickHow) => void; onCloseResults?: () => void
+}) {
   useSyncExternalStore(conductor.subscribe, conductor.getVersion)
   const s = conductor.state
   const [discovery, setDiscovery] = useState(s.brief?.discoveryShare ?? 0.25)
@@ -26,6 +31,7 @@ export default function StagePage({ engine, conductor, onTakeDecks, onStop, onAs
       {s.message && <div className="dj-stage-message" role="status">{s.message}</div>}
       <RulesChips rules={s.rules} onRemove={i => conductor.removeRule(i)} />
     </div>
+    {results && onPick && <SearchResults results={results} onPick={onPick} onClose={() => onCloseResults?.()} />}
     <EnergyGraph brief={s.brief} startedAt={s.startedAt} played={s.played.length} onPeak={m => conductor.setPeak(m)} />
     <SteerBar
       discovery={discovery}

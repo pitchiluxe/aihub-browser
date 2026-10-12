@@ -257,6 +257,36 @@ describe('SetConductor — final review', () => {
     expect(c.state.upNext.map(s => s.candidate.track.youtubeId)).toContain(queued[1])
   })
 
+  it('a song picked from search results plays next, ahead of the plan', async () => {
+    const lib = Array.from({ length: 6 }, (_, i) => yt(`artist${i}`))
+    const picked = yt('Wizkid').track
+    const c = new SetConductor(deps(lib))
+    await c.start(parseBrief('afrobeats, 1h'))
+    await c.refill()
+    c.queueTrack(picked)
+    await c.refill()
+    expect(c.next()?.youtubeId).toBe(picked.youtubeId)
+  })
+
+  it('"R&B" sticks: every song handed over is R&B, even as the R&B pool runs low', async () => {
+    const rnb = Array.from({ length: 12 }, (_, i) => yt(`rnbartist${i}`))
+    const other = Array.from({ length: 12 }, (_, i) => yt(`afroartist${i}`))
+    const rnbIds = new Set(rnb.map(l => l.track.youtubeId))
+    const d = deps([...rnb, ...other])
+    // Like YouTube: one search returns a handful; R&B queries return R&B songs.
+    let page = 0
+    d.pool.search = async (q: string) => (/r&b/.test(q) ? rnb.slice((page++ % 3) * 4, (page % 3 || 3) * 4) : other.slice(0, 4)).map(l => l.track)
+    const c = new SetConductor(d)
+    await c.start(parseBrief('afrobeats warm-up, 1h'))     // an afrobeats set…
+    c.instruct(parseInstruction('R&B'))                    // …switched to R&B mid-set
+    await new Promise(r => setTimeout(r, 0))
+    for (let i = 0; i < 8; i++) {
+      await c.refill()
+      const t = c.next()
+      expect(t && rnbIds.has(t.youtubeId!)).toBe(true)
+    }
+  })
+
   it('coming back from the console restarts the mixer', async () => {
     const lib = Array.from({ length: 5 }, (_, i) => yt(`artist${i}`))
     const d = deps(lib)
