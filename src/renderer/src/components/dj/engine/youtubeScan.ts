@@ -44,15 +44,22 @@ export class YouTubeScan {
     this.duration = duration
     this.reach = 0
     this.anchor = null
-    if (!(await loadScratchWorklet(this.ctx))) return
-    const r = await ytBridge().load(this.key, videoId).catch(() => null)
-    if (gen !== this.gen) return
-    if (!r?.ok) { this.onEnd(false); return }
-    if (!(await this.ensureCapture()) || gen !== this.gen) { this.onEnd(false); return }
-    await ytBridge().cmd(this.key, 'keyLock', false)
-    await ytBridge().cmd(this.key, 'volume', 1)
-    await ytBridge().cmd(this.key, 'rate', SCAN_RATE)
-    await ytBridge().cmd(this.key, 'play')
+    // Every way out reports back (onEnd): the scan holds the one shared scan
+    // slot, and an unreported failure left the other deck at "0%" forever.
+    try {
+      if (!(await loadScratchWorklet(this.ctx))) { if (gen === this.gen) this.onEnd(false); return }
+      const r = await ytBridge().load(this.key, videoId).catch(() => null)
+      if (gen !== this.gen) return
+      if (!r?.ok) { this.onEnd(false); return }
+      if (!(await this.ensureCapture()) || gen !== this.gen) { this.onEnd(false); return }
+      await ytBridge().cmd(this.key, 'keyLock', false)
+      await ytBridge().cmd(this.key, 'volume', 1)
+      await ytBridge().cmd(this.key, 'rate', SCAN_RATE)
+      await ytBridge().cmd(this.key, 'play')
+    } catch {
+      if (gen === this.gen) { this.stop(true); this.onEnd(false) }
+      return
+    }
     if (gen !== this.gen) return
     this.running = true
     this.lastProgress = performance.now()
@@ -93,7 +100,9 @@ export class YouTubeScan {
   private async poll(gen: number): Promise<void> {
     const c0 = this.ctx.currentTime
     const s = await ytBridge().state(this.key).catch(() => null)
-    if (gen !== this.gen || !this.running || !s) return
+    if (gen !== this.gen || !this.running) return
+    // A player that stops answering is a stall too — give the slot back.
+    if (!s) { if (performance.now() - this.lastProgress > STALL_MS) this.finish(false); return }
     const c1 = this.ctx.currentTime
     // Adverts and stalls are not the song: stop mapping until it plays again.
     if (s.ad || s.paused || s.state === 3) {
