@@ -4648,11 +4648,13 @@ handlePersistent('fares:flex', async (e, q: FareQuery) => {
 
 ipcMain.handle('fares:cancel', (_e, searchId: string) => { _fareEngine?.cancel(String(searchId)) })
 ipcMain.handle('fares:handoff', (_e, q: FareQuery) => validFareQuery(q) ? handoffLinks(q) : [])
-ipcMain.handle('fares:openSite', (_e, url: string) => {
+// Guarded like the searches: the verify window writes cookies into the same
+// persistent partition, which an Incognito window must never do.
+handlePersistent('fares:openSite', (_e, url: string) => {
   // Only the sites the engine itself loads — never an arbitrary URL.
   if (!/^https:\/\/www\.(google\.com\/travel\/flights|kayak\.com|momondo\.com)\//.test(String(url))) return
   fareEngine(); _fareDriver!.openVisible(String(url))
-})
+}, () => undefined)
 
 // ── Bible marks — highlights, saved verses, notes, reading position ────────
 interface BibleMarks {

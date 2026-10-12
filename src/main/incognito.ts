@@ -60,6 +60,7 @@ export const PRIVATE_BLOCKED_CHANNELS = [
   'trading:saveMemory',     // Trading Coach per-symbol autosave
   'fares:search',           // loads booking sites into the persistent fares partition
   'fares:flex',             // same, for the flexible-date strip
+  'fares:openSite',         // visible verify window, same persistent partition
 ] as const
 
 /**
