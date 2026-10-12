@@ -19,7 +19,7 @@ export default function StagePage({ engine, conductor, onTakeDecks, onAsk }: { e
     <Backdrop engine={engine} />
     <div className="dj-stage-top">
       <NowCard engine={engine} conductor={conductor} />
-      <NextStrip upNext={s.upNext} />
+      <NextStrip upNext={s.upNext} tentative={s.tentative} />
     </div>
     <div className="dj-stage-centre">
       {(engine as any).fading && s.handoff && <div className="dj-caption" role="status">{handoffCaption(s.handoff)}</div>}

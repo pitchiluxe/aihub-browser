@@ -4,6 +4,7 @@
 import React, { useEffect, useRef, useSyncExternalStore } from 'react'
 import type { DjEngine } from '../engine/DjEngine'
 import VideoMonitor from '../VideoMonitor'
+import { stageLevel } from './stageLevel'
 
 export default function Backdrop({ engine }: { engine: DjEngine }) {
   useSyncExternalStore(engine.subscribe, engine.getVersion)
@@ -13,9 +14,7 @@ export default function Backdrop({ engine }: { engine: DjEngine }) {
     let raf = 0
     const tick = () => {
       if (!document.hidden && glow.current) {
-        const db = (engine as any).meterDb?.() ?? -60
-        const level = Math.max(0, Math.min(1, (db + 40) / 40))
-        glow.current.style.setProperty('--level', level.toFixed(3))
+        glow.current.style.setProperty('--level', stageLevel(engine).toFixed(3))
       }
       raf = requestAnimationFrame(tick)
     }

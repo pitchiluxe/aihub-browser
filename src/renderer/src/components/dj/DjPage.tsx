@@ -106,7 +106,7 @@ export const DJ_LAYOUTS: { id: string; name: string; hint: string }[] = [
 const LAYOUT_KEY = 'aihub-dj-layout'
 const THEME_KEY = 'aihub-dj-theme'
 const VIEW_KEY = 'aihub-dj-mixer-view'
-/** AI DJ stage (default) or the console behind "Take the decks". */
+/** Console (default) or the AI DJ stage, opened from the console. */
 const STAGE_VIEW_KEY = 'aihub-dj-view'
 const FADE_KEY = 'aihub-dj-fade-seconds'
 const AUTOGAIN_KEY = 'aihub-dj-autogain'
@@ -249,8 +249,10 @@ function Console({ engine }: { engine: DjEngine }) {
   }), [engine, mixer, mixNow, say, setSidelist, loadDeck])
 
   // ── AI DJ: conductor + stage (the default view) ──
-  const [stageView, setStageView] = useState<'stage' | 'console'>(() => readPref(STAGE_VIEW_KEY) === 'console' ? 'console' : 'stage')
-  const showView = useCallback((v: 'stage' | 'console') => { setStageView(v); writePref(STAGE_VIEW_KEY, v) }, [])
+  const [stageView, setStageView] = useState<'stage' | 'console'>(() => readPref(STAGE_VIEW_KEY) === 'stage' ? 'stage' : 'console')
+  const showView = useCallback((v: 'stage' | 'console') => {
+    setStageView(v); writePref(STAGE_VIEW_KEY, v)
+  }, [])
   const analysis = useMemo(() => new AnalysisQueue(createFactSource(engine.ctx), factsCache, { isBusy: () => mixer.busy }), [engine, mixer])
   useEffect(() => () => analysis.dispose(), [analysis])
   const conductor = useMemo(() => new SetConductor({
@@ -310,7 +312,7 @@ function Console({ engine }: { engine: DjEngine }) {
         CSS-zoomed to fit the tab and the stage must not be scaled with it. */}
     <div className="dj-host">
     {stageView === 'stage' && <StagePage engine={engine} conductor={conductor} onTakeDecks={() => showView('console')} onAsk={ask} />}
-    {stageView === 'console' && conductor.state.active && <button className="dj-back-to-stage" onClick={() => showView('stage')}>Back to stage</button>}
+    {stageView === 'console' && <button className="dj-back-to-stage" onClick={() => showView('stage')}>{conductor.state.active ? 'Back to stage' : '✨ AI DJ stage'}</button>}
     <div className="aihub-dj" data-dj-theme={theme} data-dj-look={look} data-dj-layout={layout} data-dj-dark={themeInfo?.dark ? '1' : '0'}
       data-dj-light-bg={themeInfo?.lightBg ? '1' : '0'} ref={fit.ref} style={fit.style}>
       <TopBar engine={engine} mixer={mixer} setLog={setLog} say={say} theme={theme} setTheme={setTheme} look={look} setLook={setLook}

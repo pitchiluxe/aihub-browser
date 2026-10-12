@@ -172,3 +172,23 @@ describe('gatherCandidates — songs only', () => {
     expect(c.map(x => x.track.title)).toEqual(['Burna Boy - Last Last', 'Tems - Free Mind'])
   })
 })
+
+describe('SetConductor — what the stage shows', () => {
+  it('shows a tentative next song while it is still being measured', async () => {
+    const lib = Array.from({ length: 5 }, (_, i) => yt(`artist${i}`))
+    const c = new SetConductor(deps(lib, { analysis: { ensure: () => new Promise(() => {}), known: () => null } }))
+    void c.start(parseBrief('afrobeats, 1h'))
+    await new Promise(r => setTimeout(r, 20))
+    expect(c.state.upNext).toEqual([])
+    expect(c.state.tentative?.candidate.track.artist).toMatch(/^artist/)
+  })
+
+  it('clears "Building your set" once the first song is handed over', async () => {
+    const lib = Array.from({ length: 5 }, (_, i) => yt(`artist${i}`))
+    const c = new SetConductor(deps(lib))
+    await c.start(parseBrief('afrobeats, 1h'))
+    expect(c.state.message).toMatch(/building/i)
+    c.next()
+    expect(c.state.message).toBe('')
+  })
+})

@@ -29,6 +29,8 @@ export interface ConductorState {
   played: PlanContext['played']
   /** The last song handed to the mixer and how it will come in — the transition caption. */
   handoff: Handoff | null
+  /** The likely next song while it is still being measured (a 2x scan takes ~2 min). */
+  tentative: Scored | null
 }
 
 export interface Handoff { transition: 'beatmatch' | 'echo' | 'filter'; fromBpm: number | null; toBpm: number | null; fromKey: string | null; toKey: string | null }
@@ -45,7 +47,7 @@ const LOOKAHEAD = 3
 const SHORTLIST = 2
 
 export class SetConductor extends Emitter {
-  state: ConductorState = { active: false, paused: false, brief: null, upNext: [], rules: [], message: '', startedAt: 0, played: [], handoff: null }
+  state: ConductorState = { active: false, paused: false, brief: null, upNext: [], rules: [], message: '', startedAt: 0, played: [], handoff: null, tentative: null }
   private pool: Omit<Candidate, 'facts'>[] = []
   private energyOffset = 0
   private discovery = 0.25
@@ -90,7 +92,7 @@ export class SetConductor extends Emitter {
       current: cur ? { bpm: cur.bpm, camelot: cur.camelot } : null,
       targetEnergy: Math.max(0, Math.min(1, target + this.energyOffset)),
       discoveryShare: this.bursts.discovery > 0 ? 1 : this.discovery,
-      played: [...this.state.played, ...this.state.upNext.map(s => ({ id: trackId(s.candidate.track), artist: s.candidate.track.artist, atMin: this.minutesIn(), known: s.candidate.known }))],
+      played: [...this.state.played, ...this.state.upNext.map(s => ({ id: trackId(s.candidate.track), artist: s.candidate.track.artist, title: s.candidate.track.title, atMin: this.minutesIn(), known: s.candidate.known }))],
       nowMin: this.minutesIn(),
       rules: this.state.rules,
       nowMs: this.now(),
@@ -148,12 +150,14 @@ export class SetConductor extends Emitter {
         }
         if (!ranked.length) break
       }
+      // Show the likely pick at once; measuring it can take a couple of minutes.
+      if (!this.state.upNext.length) this.set({ tentative: ranked[0] })
       // Measure the shortlist (cached ones are instant), then re-rank on real facts.
       for (const s of ranked.slice(0, SHORTLIST)) if (!s.candidate.facts) await this.deps.analysis.ensure(s.candidate.track).catch(() => null)
       const reranked = rankCandidates(ranked.slice(0, SHORTLIST).map(s => this.withFacts(s.candidate)), relaxed ? { ...ctx, rules: ctx.rules.filter(r => r.kind === 'banArtist' || r.kind === 'noExplicit') } : ctx)
       const pick = reranked[0] ?? ranked[0]
       if (!pick) break
-      this.set({ upNext: [...this.state.upNext, pick] })
+      this.set({ upNext: [...this.state.upNext, pick], tentative: null })
     }
     if (relaxed) this.set({ message: "Couldn't find songs that fit every rule — I relaxed the tempo/energy limits to keep the music going." })
   }
@@ -181,6 +185,8 @@ export class SetConductor extends Emitter {
     const fromFacts = from ? from.facts ?? this.deps.analysis.known(from.track) : null
     const to = head.candidate.facts
     this.set({ handoff: { transition: head.transition, fromBpm: fromFacts?.bpm ?? null, toBpm: to?.bpm ?? null, fromKey: fromFacts?.camelot ?? null, toKey: to?.camelot ?? null } })
+    // The set is under way: "Building your set…" has done its job.
+    if (/^Building your set/.test(this.state.message)) this.set({ message: '' })
     this.noteStarted(head.candidate.track, head.candidate.known)
     if (this.bursts.discovery > 0 && !head.candidate.known) this.bursts.discovery--
     if (this.bursts.favorites > 0 && head.candidate.known) this.bursts.favorites--
@@ -191,7 +197,7 @@ export class SetConductor extends Emitter {
   noteStarted(t: DjTrack, known = true): void {
     const id = trackId(t)
     if (this.state.played.some(p => p.id === id)) return
-    this.set({ played: [...this.state.played, { id, artist: t.artist, atMin: this.minutesIn(), known }] })
+    this.set({ played: [...this.state.played, { id, artist: t.artist, title: t.title, atMin: this.minutesIn(), known }] })
   }
 
   instruct(p: Parsed): void {

@@ -10,7 +10,7 @@ export interface PlanContext {
   current: { bpm: number | null; camelot: string | null } | null
   targetEnergy: number
   discoveryShare: number
-  played: { id: string; artist: string; atMin: number; known: boolean }[]
+  played: { id: string; artist: string; atMin: number; known: boolean; title?: string }[]
   nowMin: number
   rules: SetRule[]
   nowMs: number
@@ -26,6 +26,12 @@ export interface Scored {
 const W = { tempo: 0.3, key: 0.2, energy: 0.2, taste: 0.2, discovery: 0.1 }
 const ARTIST_GAP_MIN = 45
 const norm = (s: string) => s.trim().toLowerCase()
+
+/** One song across its uploads: 'B4 B4 (Official Video)' and '(Official Audio)' are the same song. */
+export function songKey(artist: string, title: string): string {
+  const t = norm(title).replace(/[([][^)\]]*[)\]]/g, ' ').replace(/\b(official|music|video|audio|lyrics?|visuali[sz]er|hd|4k|remaster(ed)?)\b/g, ' ').replace(/\s(ft|feat)\.?\s.*$/, '').replace(/[^a-z0-9]+/g, ' ').trim()
+  return `${norm(artist).split(/,|&| x | ft\.? | feat\.? /)[0].trim()}|${t}`
+}
 
 export function tempoFit(cur: number | null, bpm: number | null): number {
   if (!cur || !bpm) return 0.5
@@ -82,6 +88,7 @@ function genreBias(c: Candidate, rules: SetRule[]): number {
 
 export function rankCandidates(cands: Candidate[], ctx: PlanContext): Scored[] {
   const playedIds = new Set(ctx.played.map(p => p.id))
+  const playedSongs = new Set(ctx.played.filter(p => p.title).map(p => songKey(p.artist, p.title!)))
   const recentArtists = new Set(ctx.played.filter(p => ctx.nowMin - p.atMin < ARTIST_GAP_MIN).map(p => norm(p.artist)))
   const newSoFar = ctx.played.filter(p => !p.known).length
   const wantNew = ctx.played.length ? newSoFar / ctx.played.length < ctx.discoveryShare : ctx.discoveryShare >= 0.5
@@ -89,7 +96,7 @@ export function rankCandidates(cands: Candidate[], ctx: PlanContext): Scored[] {
   const out: Scored[] = []
   for (const c of cands) {
     if (c.disliked || c.facts?.playable === false) continue
-    if (playedIds.has(trackId(c.track))) continue
+    if (playedIds.has(trackId(c.track)) || playedSongs.has(songKey(c.track.artist, c.track.title))) continue
     if (recentArtists.has(norm(c.track.artist))) continue
     if (!allowedByRules(c, ctx.rules, ctx.nowMs)) continue
 

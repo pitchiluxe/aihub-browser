@@ -93,3 +93,13 @@ describe('rankCandidates', () => {
     expect(top.candidate).toBe(house)
   })
 })
+
+describe('same song, different upload', () => {
+  it('never queues a song that already played under another video id', () => {
+    const played = cand({ artist: 'Davido, Mayorkun, FOLA', title: 'B4 B4 (Official Video)' })
+    const again = cand({ artist: 'Davido, Mayorkun, FOLA', title: 'B4 B4 (Official Audio)' })
+    const other = cand()
+    const ranked = rankCandidates([again, other], ctx({ played: [{ id: `yt:${played.track.youtubeId}`, artist: 'Davido, Mayorkun, FOLA', atMin: 100, known: true, title: 'B4 B4 (Official Video)' } as any], nowMin: 200 }))
+    expect(ranked.map(r => r.candidate)).toEqual([other])
+  })
+})

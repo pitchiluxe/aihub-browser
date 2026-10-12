@@ -1,7 +1,15 @@
 import React from 'react'
 import type { Scored } from '../ai/setPlanner'
 
-export default function NextStrip({ upNext }: { upNext: Scored[] }) {
+export default function NextStrip({ upNext, tentative }: { upNext: Scored[]; tentative?: Scored | null }) {
+  if (!upNext.length && tentative) {
+    // Shown at once; tempo and key arrive when the 2x scan finishes.
+    return <div className="dj-next">
+      <span className="dj-label">Up next · measuring…</span>
+      <h3>{tentative.candidate.track.title}</h3>
+      <p>{tentative.candidate.track.artist}</p>
+    </div>
+  }
   if (!upNext.length) return <div className="dj-next is-empty"><span className="dj-label">Up next</span><p>Picking the next song…</p></div>
   const [head, ...rest] = upNext
   const f = head.candidate.facts

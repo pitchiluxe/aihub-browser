@@ -56,9 +56,11 @@ interface Player {
 }
 
 const players = new Map<string, Player>()
-/** Deck player sizes: SD while unseen (audio only), HD while the video is shown. */
-const SD = { w: 640, h: 360 }
-const HD = { w: 1280, h: 720 }
+/** Deck players are created at HD size once and never resized: resizing a
+    live player left the video drawn at its old size in a corner of the capture
+    (the mixer video filled ~1/4 of its frame). With the stage blur gone, a
+    hidden HD player plays at 1.00x (measured 2026-10-12). */
+const DECK = { w: 1280, h: 720 }
 const keyOf = (owner: WebContents, deck: YtDeckId) => `${owner.id}:${deck}`
 
 function validDeck(d: unknown): d is YtDeckId {
@@ -88,8 +90,8 @@ async function ensurePlayer(owner: WebContents, deck: YtDeckId): Promise<Player>
 
   const win = new BrowserWindow({
     show: false,
-    width: isScan(deck) ? 256 : SD.w,
-    height: isScan(deck) ? 144 : SD.h,
+    width: isScan(deck) ? 256 : DECK.w,
+    height: isScan(deck) ? 144 : DECK.h,
     // Exact 16:9 content: a frame-sized window letterboxed the picture.
     useContentSize: true,
     skipTaskbar: true,
@@ -305,11 +307,6 @@ export function registerYouTubeDeckIpc(): void {
     if (cmd === 'video') {
       // Scan players feed only the waveform reader: their picture stays hidden.
       p.showVideo = value === true && !isScan(deck)
-      // HD only while someone watches: YouTube picks its stream from the
-      // player size, and a hidden player drawing big frames is what made the
-      // music stutter before (v1.70.4).
-      const size = p.showVideo ? HD : SD
-      if (!p.win.isDestroyed()) p.win.setContentSize(size.w, size.h)
       await inFrame(p, videoJs(p.showVideo))
       return true
     }

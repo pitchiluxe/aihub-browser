@@ -63,6 +63,14 @@ describe('StagePage', () => {
     expect(onAsk).toHaveBeenCalledWith('no slow songs')
   })
 
+  it('shows the likely next song with "measuring" while it is being analysed', () => {
+    const c = fakeConductor({ active: true, brief: { vibe: 'x', durationMin: 60, curve: [{ atMin: 0, level: 0.5 }], discoveryShare: 0.25, seeds: [], rules: [] },
+      upNext: [], tentative: { candidate: { track: { title: 'Essence', artist: 'Wizkid' }, facts: null, known: true }, why: 'fits the vibe', transition: 'echo' } })
+    act(() => root.render(<StagePage engine={engine} conductor={c} onTakeDecks={() => {}} onAsk={() => {}} />))
+    expect(host.textContent).toContain('Essence')
+    expect(host.textContent).toMatch(/measuring/i)
+  })
+
   it('clicking the energy graph moves the peak', () => {
     const c = fakeConductor({ active: true, setPeak: vi.fn(), brief: { vibe: 'x', durationMin: 60, curve: [{ atMin: 0, level: 0.5 }], discoveryShare: 0.25, seeds: [], rules: [] } })
     c.setPeak = vi.fn()

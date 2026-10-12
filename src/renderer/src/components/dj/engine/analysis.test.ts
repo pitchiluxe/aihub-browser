@@ -89,3 +89,19 @@ describe('detectBpm on real songs', () => {
     expect(Math.abs((got as number) - s.bpm)).toBeLessThanOrEqual(2)
   })
 })
+
+describe('detectBpm does not over-correct', () => {
+  // Afrobeats/house: kick on every beat, shaker on every half-beat. The 3/2
+  // tempo (187.5) explains those onsets well too, but no such song is 187.5.
+  it.each([118, 122, 125])('%i BPM with half-beat shakers stays %i', bpm => {
+    const sr = 11025, seconds = 40
+    const out = kicks(bpm, seconds, sr)
+    const half = 60 / bpm / 2
+    for (let t = half; t < seconds; t += 60 / bpm) {
+      const s0 = Math.floor(t * sr)
+      for (let k = 0; k < sr * 0.03 && s0 + k < out.length; k++) out[s0 + k] += 0.35 * Math.sin((2 * Math.PI * 4000 * k) / sr) * Math.exp(-k / (sr * 0.008))
+    }
+    const got = analyze([out], sr).bpm as number
+    expect(Math.abs(got - bpm)).toBeLessThanOrEqual(1)
+  })
+})
