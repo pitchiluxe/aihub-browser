@@ -17,7 +17,8 @@ import { registerMediaScheme, registerMediaProtocol, registerDjIpc } from './dj/
 import { viewRect } from './viewBounds'
 import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
-import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt } from './modelRouting'
+import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt, lighterModelToPull } from './modelRouting'
+import { sanitizeChatMessages, fitMessagesToBudget } from './chatMessages'
 import { invokeLookupCallback } from './networkLookup'
 import { normalizeOllamaBase, ollamaBaseCandidates } from './ollamaConnection'
 import { ollamaLaunchCommand, parseLoadedModels, type LoadedModel } from './ollamaLauncher'
@@ -478,6 +479,17 @@ function httpPost(url: string, data: object, headers: Record<string, string> = {
 // four minutes. A cold CPU-bound 7B model can spend over two minutes loading
 // and evaluating the prompt before its first token; shorter budgets abandon
 // viable local work, while the cap keeps an unusable model from hanging chat.
+const OLLAMA_MAX_CTX = 16384
+// What fits in OLLAMA_MAX_CTX with room left for the reply (~3.5 chars/token).
+const OLLAMA_PROMPT_BUDGET_CHARS = Math.floor((OLLAMA_MAX_CTX - 1536) * 3.5)
+const ollamaCtxByModel = new Map<string, number>()
+
+/** Ask Ollama to drop a model from memory now. Fire-and-forget. */
+function unloadOllamaModel(base: string, model: string): void {
+  ollamaCtxByModel.delete(model)
+  httpPost(`${base}/api/generate`, { model, keep_alive: 0 }, {}, 5000).catch(() => {})
+}
+
 function ollamaChatStream(
   base: string, model: string, messages: any[],
   idleTimeoutMs = 120000, firstTokenTimeoutMs?: number,
@@ -498,7 +510,12 @@ function ollamaChatStream(
     const promptChars = messages.reduce((n, m) => n + String(m?.content || '').length, 0)
     const firstTokenBudgetMs = firstTokenTimeoutMs ?? firstTokenTimeoutForPrompt(promptChars)
     const needed = Math.ceil(promptChars / 3.5) + 1536 // + room for the reply
-    const numCtx = needed <= 8192 ? 8192 : needed <= 12288 ? 12288 : 16384
+    // Never shrinks for a model once grown: a different num_ctx makes Ollama
+    // reload the runner, which throws away the cached system-prompt prefix —
+    // on a CPU-only machine that is minutes of re-evaluation per turn.
+    const tier = needed <= 8192 ? 8192 : needed <= 12288 ? 12288 : OLLAMA_MAX_CTX
+    const numCtx = Math.max(tier, ollamaCtxByModel.get(model) || 0)
+    ollamaCtxByModel.set(model, numCtx)
     const body = JSON.stringify({
       model, messages, stream: true, keep_alive: '30m', options: { num_ctx: numCtx },
     })
@@ -1039,7 +1056,10 @@ async function suggestTags(title: string, body: string): Promise<string[]> {
     const ol = await checkOllamaRunning()
     if (ol.running && ol.models.length > 0) {
       const pref = getData().settings.aiModel || ''
-      const model = (pref && ol.models.includes(pref)) ? pref : ol.models[0]
+      // Never "first listed": Ollama lists newest first, which on a machine
+      // with a 26B model means categorising one bookmark loads 18 GB onto
+      // the CPU and freezes the whole PC. Prefer the small chat models.
+      const model = selectOllamaModel(ol.models, pref)
       const { body: respBody } = await httpPost(`${olBase}/api/chat`,
         { model, messages: [{ role: 'user', content: prompt }], stream: false, options: { temperature: 0.2 } }, {}, 10000)
       const raw = JSON.parse(respBody)?.message?.content?.trim() || ''
@@ -4429,8 +4449,16 @@ ipcMain.handle('siteMemory:getAll', () => getSiteMemory())
 // SAID, not just its URL. Stored locally, capped, never leaves the machine.
 interface RewindEntry { id: string; url: string; title: string; favicon: string; text: string; ts: number }
 const REWIND_FILE = join(APP_DIR, 'rewind.json')
-let _rewind: RewindEntry[] | null = null
-function getRewind(): RewindEntry[] { if (!_rewind) _rewind = (readJson(REWIND_FILE, []) as RewindEntry[]) || []; return _rewind! }
+// Debounced, async, compact. This file reaches ~11 MB at the cap, and it was
+// pretty-printed and written synchronously on EVERY page dwell — 100 ms+ of
+// frozen main thread per page on a fast machine, seconds on a slow disk.
+const rewindStore = createManagedJsonStore<RewindEntry[]>(REWIND_FILE, () => [], { debounceMs: 4000 })
+function getRewind(): RewindEntry[] {
+  const v = rewindStore.get()
+  if (Array.isArray(v)) return v
+  rewindStore.set([])
+  return rewindStore.get()
+}
 const REWIND_CAP = 3000
 
 function rewindListItem(e: RewindEntry, snippet?: string) {
@@ -4454,9 +4482,19 @@ function rewindSnippet(text: string, terms: string[]): string {
 const EMBED_MODELS = ['nomic-embed-text', 'all-minilm']
 let embedModel: string | null = null
 
+// Dedicated embedding models only. Falling back to the chat model meant every
+// page the user dwelt on loaded a multi-billion-parameter model in the
+// background — on a CPU-only PC that froze the whole machine to save a vector.
+// No embedding model simply means keyword search, which is what the user had.
 async function ollamaEmbed(text: string): Promise<number[] | null> {
   const { olBase } = getAIConfig()
-  const candidates = embedModel ? [embedModel] : [...EMBED_MODELS, getData().settings?.aiModel || 'llama3.2:3b']
+  const candidates = embedModel ? [embedModel] : EMBED_MODELS
+  // Background work waits for the user's own request: on a CPU both share
+  // the same cores, and an embedding queued ahead of a chat turn is felt as
+  // the assistant being slow.
+  for (let waited = 0; aiInFlight > 0 && waited < 120_000; waited += 1000) {
+    await new Promise(r => setTimeout(r, 1000))
+  }
   for (const model of candidates) {
     try {
       const res = await axios.post(`${olBase}/api/embeddings`, { model, prompt: text }, { timeout: 20000 })
@@ -4470,6 +4508,13 @@ async function ollamaEmbed(text: string): Promise<number[] | null> {
 }
 
 const semanticIndex = createSemanticIndex(APP_DIR, ollamaEmbed)
+
+// Rewind evicts its oldest pages at the cap but nothing removed their vectors,
+// so the index only ever grew. Reconcile once, well after startup, so loading
+// both files never competes with the first window paint.
+setTimeout(() => {
+  try { semanticIndex.prune(new Set(getRewind().map(e => e.id))) } catch { /* next launch */ }
+}, 60_000)
 
 const rewindDocs = (): SearchDoc[] =>
   getRewind().map(e => ({ id: e.id, title: e.title, url: e.url, text: e.text, ts: e.ts }))
@@ -4512,7 +4557,7 @@ handlePersistent('rewind:add', (_e, entry: { url: string; title?: string; favico
       })
       if (store.length > REWIND_CAP) store.length = REWIND_CAP
     }
-    writeJson(REWIND_FILE, store)
+    rewindStore.set(store)
     // Queue the page for background embedding. No-op when Ollama is absent.
     const saved = store.find(e => e.url === entry.url)
     if (saved) semanticIndex.index({ id: saved.id, title: saved.title, url: saved.url, text: saved.text, ts: saved.ts })
@@ -4548,11 +4593,11 @@ ipcMain.handle('rewind:stats', () => {
 })
 ipcMain.handle('rewind:remove', (_e, id: string) => {
   const store = getRewind(); const i = store.findIndex(e => e.id === id)
-  if (i !== -1) { store.splice(i, 1); writeJson(REWIND_FILE, store) }
+  if (i !== -1) { store.splice(i, 1); rewindStore.set(store) }
   return { ok: true }
 })
 ipcMain.handle('rewind:clear', () => {
-  _rewind = []; writeJson(REWIND_FILE, [])
+  rewindStore.set([]); rewindStore.flush()
   semanticIndex.prune(new Set())
   return { ok: true }
 })
@@ -5086,7 +5131,10 @@ ipcMain.handle('ai:categorizeBookmark', async (_e, url: string, title: string) =
     const ol = await checkOllamaRunning()
     if (ol.running && ol.models.length > 0) {
       const pref  = getData().settings.aiModel || ''
-      const model = (pref && ol.models.includes(pref)) ? pref : ol.models[0]
+      // Never "first listed": Ollama lists newest first, which on a machine
+      // with a 26B model means categorising one bookmark loads 18 GB onto
+      // the CPU and freezes the whole PC. Prefer the small chat models.
+      const model = selectOllamaModel(ol.models, pref)
       const { body } = await httpPost(`${olBase}/api/chat`,
         { model, messages: [{ role: 'user', content: prompt }], stream: false, options: { temperature: 0 } }, {}, 10000)
       const raw = JSON.parse(body)?.message?.content?.trim() || ''
@@ -5438,6 +5486,9 @@ async function runAiRequestRouted(
   preferredModel?: string,
   opts?: AiRequestOpts,
 ) {
+  // One empty or doubled-up turn from any caller used to fail the whole
+  // request at OpenRouter (HTTP 400, "must have at least 1 item").
+  messages = sanitizeChatMessages(messages || [])
   const { olBase, orKey, orBase } = getAIConfig()
   const settings = getRoutingSettings(preferredModel)
 
@@ -5528,9 +5579,12 @@ async function runAiRequestRouted(
             opts?.onDelta?.('', true)
             // Converted per attempt, because whether the pictures survive
             // depends on which model this attempt is using.
-            const payload = !carriesImages ? messages
-              : looksVisionCapable(attempt) ? forOllama(messages)
-              : withoutImages(messages)
+            // Fitted before sending: past num_ctx Ollama cuts from the front
+            // and the system prompt is the first thing lost.
+            const fitted = fitMessagesToBudget(messages, OLLAMA_PROMPT_BUDGET_CHARS)
+            const payload = !carriesImages ? fitted
+              : looksVisionCapable(attempt) ? forOllama(fitted)
+              : withoutImages(fitted)
             const raw = await ollamaChatStream(
               probe.base || olBase, attempt, payload, 120000, isRoutedUpgrade ? 60000 : undefined, opts?.onDelta,
             )
@@ -5547,6 +5601,17 @@ async function runAiRequestRouted(
             // not.
             if (/timeout/i.test(msg)) {
               slowModels.add(attempt)
+              // keep_alive is 30m, so a model that just proved too slow would
+              // otherwise stay resident while the next one loads beside it —
+              // three CPU models in RAM at once is how a PC starts swapping.
+              unloadOllamaModel(probe.base || olBase, attempt)
+              // A busy Ollama often can't list its models inside the probe's
+              // 4s window, which left `info` empty and produced "no smaller
+              // model is installed" on machines with several. The generation
+              // has been abandoned now, so ask again.
+              if (!probe.info?.length) {
+                try { probe = await checkOllamaRunning(true) } catch { /* keep the old probe */ }
+              }
               const faster = suggestFasterModel(probe.info || [], attempt)
               if (attempt !== model && !slowModels.has(model)) {
                 console.warn(`[aihub] ${attempt} timed out on this machine — falling back to ${model}`)
@@ -5560,7 +5625,9 @@ async function runAiRequestRouted(
               }
               lastError += faster
                 ? `\n\n${faster} is installed and smaller — switch to it in Settings → AI.`
-                : '\n\nNo smaller model is installed. Pull a lighter one (ollama pull llama3.2:3b) or use a shorter prompt.'
+                : probe.info?.length
+                  ? `\n\nNo smaller model is installed. Pull a lighter one (ollama pull ${lighterModelToPull(attempt)}) or use a shorter prompt.`
+                  : '\n\nOllama was too busy to list its installed models. Close other AI features that are using Ollama, or pick a smaller model in Settings → AI.'
             }
           }
           break

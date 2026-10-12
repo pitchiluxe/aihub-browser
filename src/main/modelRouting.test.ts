@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickAgentModel, isTooSmallForAgentWork, suggestFasterModel, firstTokenTimeoutForPrompt, ModelInfo } from './modelRouting'
+import { pickAgentModel, isTooSmallForAgentWork, suggestFasterModel, firstTokenTimeoutForPrompt, lighterModelToPull, ModelInfo } from './modelRouting'
 
 // Mirrors a real machine's installed set (this is the user's own list).
 const INSTALLED: ModelInfo[] = [
@@ -132,5 +132,13 @@ describe('firstTokenTimeoutForPrompt', () => {
   it('caps the wait and handles invalid sizes', () => {
     expect(firstTokenTimeoutForPrompt(100_000)).toBe(240_000)
     expect(firstTokenTimeoutForPrompt(-1)).toBe(180_000)
+  })
+})
+
+describe('lighterModelToPull', () => {
+  it('never suggests the model that just timed out', () => {
+    expect(lighterModelToPull('llama3.2:3b')).toBe('llama3.2:1b')
+    expect(lighterModelToPull('mistral:7b')).toBe('llama3.2:3b')
+    expect(lighterModelToPull('llama3.2:1b')).not.toBe('llama3.2:1b')
   })
 })

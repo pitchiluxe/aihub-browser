@@ -188,3 +188,16 @@ export function firstTokenTimeoutForPrompt(promptChars: number): number {
   const estimatedTokens = Math.ceil(Math.max(0, promptChars) / 3.5)
   return Math.min(240_000, Math.max(180_000, estimatedTokens * 22))
 }
+
+/**
+ * The model to suggest pulling after a timeout.
+ *
+ * It must be lighter than the one that just timed out — the old hint told a
+ * user whose llama3.2:3b had timed out to go and pull llama3.2:3b.
+ */
+export function lighterModelToPull(timedOut: string): string {
+  const name = timedOut.toLowerCase()
+  if (/^(llama3\.2:(1b|latest)|qwen2\.5:0\.5b|smollm)/.test(name)) return 'qwen2.5:0.5b'
+  if (/^llama3\.2/.test(name)) return 'llama3.2:1b'
+  return 'llama3.2:3b'
+}

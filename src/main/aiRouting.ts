@@ -134,7 +134,30 @@ export type RouteResult = RouteSuccess | RouteFailure
 export function selectOllamaModel(installed: string[], configured = ''): string {
   if (configured && installed.includes(configured)) return configured
   const preferred = ['llama3.2:3b', 'llama3.2:latest', 'gemma4:e2b', 'phi3:mini', 'mistral:7b']
-  return preferred.find(model => installed.includes(model)) || installed[0] || configured
+  return preferred.find(model => installed.includes(model)) || lightestWorkable(installed) || configured
+}
+
+/** Billions of parameters named in the tag ("qwen2.5:14b" → 14), else null. */
+function tagSizeB(name: string): number | null {
+  const m = /:(?:[a-z-]*?)(\d+(?:\.\d+)?)([bm])\b/i.exec(name)
+  if (!m) return null
+  return m[2].toLowerCase() === 'm' ? Number(m[1]) / 1000 : Number(m[1])
+}
+
+/**
+ * Ollama lists models newest-first, so "the first installed model" is often
+ * the biggest one the user just tried out. On a CPU that is the difference
+ * between a background task finishing and the machine swapping itself to a
+ * standstill. Pick the smallest model that is still big enough to follow
+ * instructions (≥ 1B); untagged names count as mid-sized.
+ */
+function lightestWorkable(installed: string[]): string {
+  const local = installed.filter(n => !/(:|-)cloud\b/i.test(n) && !/embed/i.test(n))
+  const ranked = local
+    .map(name => ({ name, size: tagSizeB(name) ?? 7 }))
+    .filter(m => m.size >= 1)
+    .sort((a, b) => a.size - b.size)
+  return ranked[0]?.name || local[0] || ''
 }
 
 // ── Human-readable failure text ────────────────────────────────────────────

@@ -161,6 +161,31 @@ describe('createSemanticIndex', () => {
     expect((await index.search('   ', [doc('a', 't', 'b')])).results).toEqual([])
   })
 
+  it('persists vectors compactly, not as JSON number arrays', async () => {
+    const vec = Array.from({ length: 768 }, (_, i) => Math.sin(i) * 0.123456789)
+    const index = createSemanticIndex(dir, async () => vec)
+    index.index(doc('a', 'A', 'x'))
+    await wait(30)
+    index.flush()
+    const raw = fs.readFileSync(join(dir, 'semantic-index.json'), 'utf-8')
+    expect(raw).not.toContain('"vector":[')
+    // 768 floats as JSON text is ~14 KB; Float32 base64 is ~4 KB.
+    expect(raw.length).toBeLessThan(5000)
+    const back = index.vectors().get('a')!
+    expect(back).toHaveLength(768)
+    expect(back[5]).toBeCloseTo(vec[5], 6)
+  })
+
+  it('reads and migrates an index written in the old number-array format', () => {
+    fs.writeFileSync(join(dir, 'semantic-index.json'), JSON.stringify({
+      old: { id: 'old', vector: [0.5, 0.25, 0], textHash: 'h', ts: 1 },
+    }))
+    const index = createSemanticIndex(dir, async () => null)
+    expect(index.vectors().get('old')).toEqual([0.5, 0.25, 0])
+    index.flush()
+    expect(fs.readFileSync(join(dir, 'semantic-index.json'), 'utf-8')).not.toContain('"vector":[')
+  })
+
   it('prunes vectors for documents that no longer exist', async () => {
     const index = createSemanticIndex(dir, async () => [1, 0, 0])
     index.index(doc('a', 'A', 'x'))

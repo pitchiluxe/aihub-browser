@@ -367,3 +367,14 @@ describe('summarizeOpenRouterSkips', () => {
     expect(out).toEqual({ kind: 'restricted', message: 'only available on agentic harnesses' })
   })
 })
+
+describe('selectOllamaModel without a preferred match', () => {
+  it('picks the lightest workable model instead of whatever Ollama lists first', () => {
+    expect(selectOllamaModel(['gemma4:26b', 'qwen3-coder:30b', 'qwen2.5:7b', 'phi:2.7b'])).toBe('phi:2.7b')
+    expect(selectOllamaModel(['gpt-oss:20b', 'qwen2.5:14b'])).toBe('qwen2.5:14b')
+  })
+
+  it('skips cloud-hosted and embedding models', () => {
+    expect(selectOllamaModel(['minimax-m2:cloud', 'nomic-embed-text:latest', 'mistral:latest'])).toBe('mistral:latest')
+  })
+})
