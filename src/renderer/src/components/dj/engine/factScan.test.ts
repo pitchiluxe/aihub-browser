@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { decimate, FACT_SCAN_RATE } from './factScan'
+import { decimate, FACT_SCAN_RATE, scanStep } from './factScan'
 
 describe('decimate', () => {
   it('box-averages across chunk boundaries', () => {
@@ -14,5 +14,22 @@ describe('decimate', () => {
 describe('scan rate', () => {
   it('is 2× — 4× measurably lost accuracy in the 2026-10-12 probe', () => {
     expect(FACT_SCAN_RATE).toBe(2)
+  })
+})
+
+describe('scanStep — ads never pollute a measurement', () => {
+  const base = { ad: false, paused: false, ended: false, t: 10, d: 200 }
+  it('records the song, not the ad', () => {
+    expect(scanStep(false, base).record).toBe(true)
+    expect(scanStep(false, { ...base, ad: true }).record).toBe(false)
+  })
+  it('the end of an ad is not the end of the song', () => {
+    expect(scanStep(false, { ...base, ad: true, t: 14.5, d: 15 }).complete).toBe(false)
+    expect(scanStep(false, { ...base, ad: true, ended: true }).complete).toBe(false)
+    expect(scanStep(false, { ...base, t: 199.5 }).complete).toBe(true)
+  })
+  it('re-applies the 2x scan rate when an ad finishes', () => {
+    expect(scanStep(true, base).reapplyRate).toBe(true)
+    expect(scanStep(false, base).reapplyRate).toBe(false)
   })
 })

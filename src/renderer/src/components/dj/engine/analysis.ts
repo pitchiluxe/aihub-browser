@@ -133,8 +133,7 @@ export function detectBpm(onset: Float32Array, rate = ENV_RATE): number | null {
   // favours 107. If the tempo one and a half times faster explains the
   // onsets nearly as well WITHOUT the prior, it is the real beat.
   const raw = (bpm: number) => score(bpm) / (0.75 + 0.25 * Math.exp(-Math.pow(Math.log2(bpm / 120), 2) / (2 * 0.5 * 0.5)))
-  const up = bestBpm * 1.5
-  if (up <= MAX_CORRECTED_BPM && raw(up) >= TWO_THIRDS_RATIO * raw(bestBpm)) bestBpm = up
+  if (takeThreeHalves(bestBpm, raw(bestBpm), raw(bestBpm * 1.5))) bestBpm *= 1.5
 
   // Precise value. The two-tap comb above finds the right tempo FAMILY but
   // its peaks are broad — Blinding Lights scores flat from 167 to 174 BPM.
@@ -172,6 +171,14 @@ export function detectBpm(onset: Float32Array, rate = ENV_RATE): number | null {
 
 /** Corrected readings may go above the 180 search ceiling (drum & bass, fast pop). */
 const MAX_CORRECTED_BPM = 200
+/** Only a slow reading can be a fast song's ⅔ alias: 160→107 qualifies; a
+ *  125 dance tempo with triplet hats is not a 187.5 song ("Bandana"). */
+const MAX_GUARDED_BPM = 118
+
+/** The ⅔ guard's decision: is `best` really two-thirds of the true tempo? */
+export function takeThreeHalves(best: number, rawBest: number, rawUp: number): boolean {
+  return best <= MAX_GUARDED_BPM && best * 1.5 <= MAX_CORRECTED_BPM && rawUp >= TWO_THIRDS_RATIO * rawBest
+}
 /** How close the 3/2 tempo's raw comb score must come to the winner's. Tuned on the real-song fixtures. */
 const TWO_THIRDS_RATIO = 0.9
 /** Beats ahead the precision comb weighs (1/k each). 16 reads every fixture exactly. */

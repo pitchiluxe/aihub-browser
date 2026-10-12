@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyze, bestLag, buildEnvelope, detectBpm, ENV_RATE } from './analysis'
+import { analyze, bestLag, buildEnvelope, detectBpm, ENV_RATE, takeThreeHalves } from './analysis'
 import onsets from './__fixtures__/onsets.json'
 
 /** Decaying 60 Hz kicks at `bpm`, starting `offset` seconds in, over quiet noise. */
@@ -100,6 +100,26 @@ describe('detectBpm does not over-correct', () => {
     for (let t = half; t < seconds; t += 60 / bpm) {
       const s0 = Math.floor(t * sr)
       for (let k = 0; k < sr * 0.03 && s0 + k < out.length; k++) out[s0 + k] += 0.35 * Math.sin((2 * Math.PI * 4000 * k) / sr) * Math.exp(-k / (sr * 0.008))
+    }
+    const got = analyze([out], sr).bpm as number
+    expect(Math.abs(got - bpm)).toBeLessThanOrEqual(1)
+  })
+
+  // Afrobeats swing: strong triplet hats over a 125 kick ("Bandana" read 187.5).
+  // The ⅔ guard exists for slow readings of fast songs (107 → 160); a 125
+  // reading is already a dance tempo and must not be pushed to 187.5.
+  it('the ⅔ guard only lifts slow readings (107 → 160), never a dance tempo (125 ↛ 187.5)', () => {
+    expect(takeThreeHalves(107, 1, 0.95)).toBe(true)
+    expect(takeThreeHalves(125, 1, 0.95)).toBe(false)
+    expect(takeThreeHalves(107, 1, 0.5)).toBe(false)
+  })
+
+  it.each([122, 125])('%i BPM with triplet hats stays %i', bpm => {
+    const sr = 11025, seconds = 40
+    const out = kicks(bpm, seconds, sr)
+    for (let t = 0; t < seconds; t += 60 / bpm / 3) {
+      const s0 = Math.floor(t * sr)
+      for (let k = 0; k < sr * 0.03 && s0 + k < out.length; k++) out[s0 + k] += 3 * Math.sin((2 * Math.PI * 4000 * k) / sr) * Math.exp(-k / (sr * 0.008))
     }
     const got = analyze([out], sr).bpm as number
     expect(Math.abs(got - bpm)).toBeLessThanOrEqual(1)

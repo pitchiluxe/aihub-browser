@@ -18,6 +18,7 @@
  * with it. Only an 11-character YouTube video id ever reaches the window.
  */
 import { BrowserWindow, ipcMain, type WebContents, type WebFrameMain } from 'electron'
+import { DECK_CLEAN_CSS } from './deckCss'
 
 /**
  * A deck's player, or its scan player: a second, silent copy of the same
@@ -164,20 +165,10 @@ const INSTALL_JS = `(() => {
   const v = document.querySelector('video')
   if (!v) return false
   if (!document.getElementById('aihub-dj-clean')) {
-    // The picture goes to the DJ's video monitor: keep YouTube's own overlays
-    // (title bar, pause screen, "more videos", end cards) out of it.
+    // The picture goes to the DJ's video monitor (see deckCss.ts).
     const css = document.createElement('style')
     css.id = 'aihub-dj-clean'
-    css.textContent = '.ytp-chrome-top,.ytp-chrome-bottom,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-pause-overlay,' +
-      '.ytp-large-play-button,.ytp-bezel,.ytp-bezel-text-wrapper,.ytp-watermark,.ytp-ce-element,.html5-endscreen,' +
-      '.ytp-cards-teaser,.ytp-paid-content-overlay,.ytp-impression-link,.iv-branding,.annotation{display:none!important}' +
-      // YouTube renames its overlay layers (2026: ytp-timely-actions-content, captions):
-      // hide every player layer except the video itself, and make it cover the window.
-      '#movie_player>:not(.html5-video-container){display:none!important}' +
-      // …and the 2026 embed draws its bezel, share and logo OUTSIDE #movie_player:
-      // anything that is not the video and does not contain it is hidden.
-      'body *:not(video):not(:has(video)){visibility:hidden!important}' +
-      '.html5-video-container,video{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;object-fit:cover!important}'
+    css.textContent = ${JSON.stringify(DECK_CLEAN_CSS)}
     document.head.appendChild(css)
   }
   if (!window.__aihubDj) {

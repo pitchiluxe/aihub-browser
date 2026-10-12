@@ -193,6 +193,18 @@ describe('SetConductor — final review', () => {
     expect(c.state.message).toMatch(/ran out|no songs/i)
   })
 
+  it('never hands over the song that is already playing, even on a tiny pool', async () => {
+    const lib = [yt('Wizkid'), yt('Drake')]
+    const c = new SetConductor(deps(lib))
+    await c.start(parseBrief('afrobeats, 1h'))
+    await c.refill()
+    const first = c.next()!
+    await c.refill()
+    c.instruct(parseInstruction("don't play drake"))
+    const second = c.next()
+    expect(second?.youtubeId).not.toBe(first.youtubeId)
+  })
+
   it('coming back from the console restarts the mixer', async () => {
     const lib = Array.from({ length: 5 }, (_, i) => yt(`artist${i}`))
     const d = deps(lib)

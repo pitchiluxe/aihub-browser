@@ -199,8 +199,11 @@ export class SetConductor extends Emitter {
   next(): DjTrack | undefined {
     if (!this.state.active) return undefined
     if (this.stopAfter) { this.stop(); return undefined }
-    // A rule may have arrived after a pick was queued: never hand over a song it forbids.
-    const ok = (s: Scored) => s.why === 'you asked for it' || allowedByRules(s.candidate, this.state.rules, this.now())
+    // A rule may have arrived after a pick was queued: never hand over a song it
+    // forbids — nor the song already playing (a repeat-relaxed pick can sit
+    // right behind a dropped one).
+    const playingId = this.state.played[this.state.played.length - 1]?.id
+    const ok = (s: Scored) => trackId(s.candidate.track) !== playingId && (s.why === 'you asked for it' || allowedByRules(s.candidate, this.state.rules, this.now()))
     while (this.state.upNext[0] && !ok(this.state.upNext[0])) this.set({ upNext: this.state.upNext.slice(1) })
     let head = this.state.upNext[0]
     if (!head) {

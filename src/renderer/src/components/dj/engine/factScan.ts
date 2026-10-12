@@ -29,6 +29,22 @@ export function decimate(chunks: Float32Array[], factor: number): Float32Array {
   return out
 }
 
+export interface ScanPoll { ad?: boolean; paused?: boolean; ended?: boolean; t: number; d: number }
+
+/**
+ * One poll of the scan player. An ad is never recorded (its audio would be
+ * measured as the song) and its end is never the song's end; when it finishes
+ * the 2x rate is applied again, since YouTube resets it for the content.
+ */
+export function scanStep(wasAd: boolean, s: ScanPoll): { record: boolean; complete: boolean; reapplyRate: boolean } {
+  const ad = !!s.ad
+  return {
+    record: !ad,
+    complete: !ad && (!!s.ended || (!!s.d && s.t >= s.d - 1)),
+    reapplyRate: wasAd && !ad,
+  }
+}
+
 let worker: Worker | null = null
 let seq = 0
 const pending = new Map<number, (r: MeasuredFacts | null) => void>()
@@ -57,7 +73,9 @@ async function captureYouTube(ctx: AudioContext, videoId: string, signal: { canc
   const proc = ctx.createScriptProcessor(4096, 1, 1)
   const sink = ctx.createGain(); sink.gain.value = 0
   const chunks: Float32Array[] = []
-  proc.onaudioprocess = e => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)))
+  // Off until the first poll says the song (not a pre-roll ad) is playing.
+  let recording = false, wasAd = false
+  proc.onaudioprocess = e => { if (recording) chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))) }
   src.connect(proc); proc.connect(sink); sink.connect(ctx.destination)
   await yt.cmd(SCAN_DECK, 'play'); await yt.cmd(SCAN_DECK, 'rate', FACT_SCAN_RATE)
   const started = Date.now(); let lastT = -1, lastMove = Date.now(), complete = false
@@ -68,7 +86,12 @@ async function captureYouTube(ctx: AudioContext, videoId: string, signal: { canc
       if (!s) break
       if (s.error) return null
       if (s.paused && !s.ended && !s.ad) void yt.cmd(SCAN_DECK, 'play')
-      if (s.ended || (s.d && s.t >= s.d - 1)) { complete = true; break }
+      const step = scanStep(wasAd, s)
+      wasAd = !!s.ad; recording = step.record
+      if (step.reapplyRate) void yt.cmd(SCAN_DECK, 'rate', FACT_SCAN_RATE)
+      if (step.complete) { complete = true; break }
+      // An ad's clock is not the song's: it neither counts as progress nor as a stall.
+      if (s.ad) { lastMove = Date.now(); continue }
       if (Math.abs(s.t - lastT) > 0.01) { lastT = s.t; lastMove = Date.now() }
       else if (Date.now() - lastMove > STALL_MS) return null
     }
