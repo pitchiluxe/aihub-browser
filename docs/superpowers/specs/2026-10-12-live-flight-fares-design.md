@@ -58,7 +58,7 @@ results ◄── fares:progress {site,status,offers} ┤
 | Types + normalize | `src/main/fares/types.ts` | `FareOffer` = `{ id, price, currency, airlines[], stops, departAt, arriveAt, durationMin, layovers[], bags: { carry, checked } \| null, source, bookUrl, foundAt }`; `normalize()` rejects price ≤ 20 or > 50,000, arrive ≤ depart, unknown currency, missing airline |
 | Google adapter | `src/main/fares/adapters/google.ts` | URL builder; extract = per-offer aria-labels; parse the "From N US dollars round trip total. …" sentence grammar |
 | Kayak/Momondo adapter | `src/main/fares/adapters/kayak.ts` | One adapter, two hosts; extract = result-card innerText blocks; parse card text |
-| Expedia adapter | `src/main/fares/adapters/expedia.ts` | Secondary; same contract; failures never block results |
+| Expedia | hand-off link only (`handoffLinks`) | Returned 0 prices on 2 of 3 spike runs; no fixture to test a parser against |
 | Adapter contract | `src/main/fares/adapters/index.ts` | `{ id, label, url(trip), readyScript, extractScript, blockedScript, parse(raw): FareOffer[] }` |
 | Hidden page pool | `src/main/fares/hiddenPage.ts` | Off-screen `BrowserWindow`, partition `persist:fares`, sandbox on, no preload, no nodeIntegration, real Chrome UA, max 3 alive, 60 s watchdog, destroyed after each search |
 | Merge + rank | `src/main/fares/rank.ts` | Same flight across sites (airline + departAt + arriveAt) → one row with per-site prices; true total = fare + bag fees not included; sort modes best-value / cheapest / fastest / fewest-stops |
