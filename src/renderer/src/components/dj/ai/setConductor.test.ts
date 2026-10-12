@@ -219,6 +219,32 @@ describe('SetConductor — final review', () => {
     expect(c.state.message).not.toMatch(/repeats/)
   })
 
+  it('a pool running low is widened before a repeat is ever queued (live: Bandana queued twice)', async () => {
+    const lib = Array.from({ length: 20 }, (_, i) => yt(`artist${i % 5}`))
+    const d = deps(lib)
+    d.pool.search = async (q: string) => (/^artist\d$/.test(q) ? lib.filter(l => l.track.artist === q) : lib.slice(0, 5)).map(l => l.track)
+    const c = new SetConductor(d)
+    await c.start(parseBrief('afrobeats warm-up, 1h'))
+    for (let i = 0; i < 4; i++) {
+      await c.refill()
+      const played = new Set(c.state.played.map(p => p.id))
+      expect(c.state.upNext.filter(s => played.has(s.candidate.track.youtubeId ? `yt:${s.candidate.track.youtubeId}` : '')).length).toBe(0)
+      expect(c.state.message).not.toMatch(/repeats/)
+      c.next()
+    }
+  })
+
+  it('a thin first search is widened right away, by the artists it found', async () => {
+    const lib = Array.from({ length: 20 }, (_, i) => yt(`artist${i % 5}`))
+    const d = deps(lib)
+    const queries: string[] = []
+    d.pool.search = async (q: string) => { queries.push(q); return (/^artist\d$/.test(q) ? lib.filter(l => l.track.artist === q) : lib.slice(0, 5)).map(l => l.track) }
+    const c = new SetConductor(d)
+    await c.start(parseBrief('afrobeats warm-up, 1h'))
+    await new Promise(r => setTimeout(r, 0))
+    expect(queries.some(q => /^artist\d$/.test(q))).toBe(true)
+  })
+
   it('a pick queued under relaxed limits is played, not thrown away at hand-over', async () => {
     const lib = [yt('a', 120, 0.3), yt('b', 120, 0.3), yt('c', 120, 0.3)]
     const c = new SetConductor(deps(lib))

@@ -45,6 +45,8 @@ export function handoffCaption(h: Handoff): string {
 const LOOKAHEAD = 3
 /** Candidates measured per pick: a 2x scan is ~2 minutes, so more would starve the lookahead. */
 const SHORTLIST = 2
+/** Fewer candidates than this after the first search: widen straight away. */
+const THIN_POOL = 15
 
 export class SetConductor extends Emitter {
   state: ConductorState = { active: false, paused: false, brief: null, upNext: [], rules: [], message: '', startedAt: 0, played: [], handoff: null, tentative: null }
@@ -81,6 +83,13 @@ export class SetConductor extends Emitter {
     // the lookahead fills in the background while it plays.
     this.deps.startMixer()
     void this.refill()
+    // YouTube often answers the brief with only a handful of songs: widen by the
+    // artists it found now, in the background, rather than when the set runs dry.
+    if (this.pool.length < THIN_POOL) {
+      const setStarted = this.state.startedAt
+      void gatherCandidates(this.relatedSeeds(), this.deps.pool, { perSeed: 10 })
+        .then(more => { if (this.state.active && this.state.startedAt === setStarted) this.pool = mergePools(this.pool, more) }).catch(() => {})
+    }
   }
 
   stop(): void { this.set({ active: false, upNext: [], message: 'Set finished.' }) }
