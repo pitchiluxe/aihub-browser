@@ -3,7 +3,8 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import FlightsRentalsPage from './FlightsRentalsPage'
-import { SAVED_TRIPS_KEY, type Trip } from './flightsRentals'
+import { SAVED_TRIPS_KEY, FLIGHTS_PREFILL_KEY, type Trip } from './flightsRentals'
+import { tripToQuery } from './FlightsRentalsPage'
 import { pageTypeForUrl, resolveNavTarget } from '../../services/navIntent'
 
 const trip: Trip = { kind: 'stays', origin: '', destination: 'Paris', start: '2099-06-10', end: '2099-06-17', travelers: 2, budget: '', currency: 'USD', flexible: true }
@@ -50,12 +51,12 @@ describe('Flights & Rentals page', () => {
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Remove saved trip to Paris"]')!.click())
     expect(JSON.parse(localStorage.getItem(SAVED_TRIPS_KEY)!)).toEqual([])
   })
-  it('opens a prefilled flight route when Compare providers is clicked', async () => {
+  it('opens a prefilled flight route when Open a booking site is clicked', async () => {
     localStorage.setItem(SAVED_TRIPS_KEY, JSON.stringify([{ id: 'flight-trip', trip: { ...trip, kind: 'flights', origin: 'KJFK', destination: 'LFPG' } }]))
     act(() => root.unmount()); root = createRoot(host)
     act(() => root.render(<FlightsRentalsPage onNavigate={navigate} />))
     act(() => button('LFPG').click())
-    await act(async () => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+    await act(async () => button('Open a booking site').click())
     expect(new URL(navigate.mock.calls[0][0]).pathname).toBe('/flights/JFK-CDG/2099-06-10/2099-06-17/2adults')
   })
   it('keeps provider comparison available when AI research fails', async () => {
@@ -89,5 +90,41 @@ describe('Flights & Rentals page', () => {
     expect(stored[0].estimate.lines.find((line: any) => line.id === 'flights').amount).toBe('245.75')
     expect(host.textContent).toContain('6 unknown')
     expect(host.textContent).toContain('245.75')
+  })
+})
+
+describe('live fares', () => {
+  const remount = () => { act(() => root.unmount()); root = createRoot(host); act(() => root.render(<FlightsRentalsPage onNavigate={navigate} />)) }
+
+  it('turns a flights trip into an IATA fare query', () => {
+    expect(tripToQuery({ kind: 'flights', origin: 'ATL', destination: 'LAX', start: '2099-11-10', end: '2099-11-17', travelers: 2, budget: '', currency: 'USD', flexible: true }))
+      .toEqual({ from: 'ATL', to: 'LAX', depart: '2099-11-10', ret: '2099-11-17', adults: 2, currency: 'USD' })
+    expect(tripToQuery({ ...trip, kind: 'stays' })).toBeNull()
+  })
+
+  it('prefills the destination handed over from Travel the World', () => {
+    localStorage.setItem(FLIGHTS_PREFILL_KEY, 'NRT')
+    remount()
+    const combos = host.querySelectorAll<HTMLInputElement>('input[role="combobox"]')  // [From, Destination]
+    expect(combos[1].value).toBe('NRT')
+    expect(localStorage.getItem(FLIGHTS_PREFILL_KEY)).toBeNull()
+  })
+
+  it('starts a live search for flights and shows hand-off links when every site fails', async () => {
+    const listeners: any[] = []
+    ;(window as any).electronAPI = { fares: {
+      search: vi.fn(async () => ({ searchId: 's1' })), cancel: vi.fn(), flex: vi.fn(async () => []),
+      handoff: vi.fn(async () => [{ name: 'Expedia', url: 'https://www.expedia.com/x' }]), openSite: vi.fn(),
+      onProgress: (cb: any) => { listeners.push(cb); return () => {} }, onFlexDay: () => () => {},
+    } }
+    localStorage.setItem(FLIGHTS_PREFILL_KEY, 'LAX')
+    remount()
+    const from = host.querySelector('input[role="combobox"]') as HTMLInputElement
+    await act(async () => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!; set.call(from, 'ATL'); from.dispatchEvent(new Event('input', { bubbles: true })) })
+    await act(async () => { button('Find live fares').click() })
+    expect((window as any).electronAPI.fares.search).toHaveBeenCalledWith(expect.objectContaining({ from: 'ATL', to: 'LAX' }))
+    await act(async () => { listeners.forEach(cb => cb({ searchId: 's1', site: 'google', label: 'Google Flights', status: 'blocked', offers: [], url: 'https://www.google.com/travel/flights', at: 1 })) })
+    expect(host.textContent).toContain('needs a human check')
+    expect(host.textContent).toContain('Expedia')
   })
 })

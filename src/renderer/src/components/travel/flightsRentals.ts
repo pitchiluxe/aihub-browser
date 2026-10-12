@@ -105,3 +105,6 @@ export async function researchTrip(t: Trip, ai: AI): Promise<Research> {
   if (!result?.content || ['error', 'none'].includes(result.provider)) throw new Error('AI research is unavailable. Check your AI provider in Settings, or use the provider searches below.')
   return { text: String(result.content).slice(0, 16000), sources, at: new Date().toISOString(), provider: String(result.provider || 'AI') }
 }
+
+/** Travel the World → Flights hand-over: an IATA code, read once on mount. */
+export const FLIGHTS_PREFILL_KEY = 'aihub-flights-prefill'
