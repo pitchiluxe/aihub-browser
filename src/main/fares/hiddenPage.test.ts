@@ -1,7 +1,49 @@
 // src/main/fares/hiddenPage.test.ts
 import { describe, it, expect, vi } from 'vitest'
-vi.mock('electron', () => ({ BrowserWindow: class {}, session: { fromPartition: () => ({ getUserAgent: () => '' }) } }))
-import { createSemaphore, chromeUserAgent } from './hiddenPage'
+
+const ses = vi.hoisted(() => ({
+  getUserAgent: () => 'Chrome/152.0.0.0',
+  setPermissionRequestHandler: vi.fn(),
+  setPermissionCheckHandler: vi.fn(),
+  on: vi.fn(),
+}))
+const windows = vi.hoisted(() => [] as any[])
+vi.mock('electron', () => ({
+  session: { fromPartition: () => ses },
+  BrowserWindow: class {
+    webContents = { setUserAgent: vi.fn(), setWindowOpenHandler: vi.fn(), executeJavaScript: vi.fn() }
+    constructor(public opts: any) { windows.push(this) }
+    loadURL() { return Promise.resolve() }
+    isDestroyed() { return false }
+    destroy() {}
+  },
+}))
+import { createSemaphore, chromeUserAgent, createElectronDriver } from './hiddenPage'
+
+describe('createElectronDriver security', () => {
+  it('denies every permission request on the fares session, installed once', async () => {
+    const driver = createElectronDriver()
+    const page = await driver.open('https://www.kayak.com/x')
+    page.close()
+    await (await driver.open('https://www.kayak.com/y')).close()
+    expect(ses.setPermissionRequestHandler).toHaveBeenCalledTimes(1)
+    const handler = ses.setPermissionRequestHandler.mock.calls[0][0]
+    const cb = vi.fn()
+    handler({}, 'geolocation', cb)
+    expect(cb).toHaveBeenCalledWith(false)
+    expect(ses.setPermissionCheckHandler.mock.calls[0][0]({}, 'notifications')).toBe(false)
+    expect(ses.on.mock.calls.filter(c => c[0] === 'will-download')).toHaveLength(1)
+  })
+
+  it('the visible verify window gets the same popup guard as hidden pages', () => {
+    windows.length = 0
+    createElectronDriver().openVisible('https://www.kayak.com/x')
+    const win = windows[0]
+    expect(win.opts.webPreferences.sandbox).toBe(true)
+    expect(win.webContents.setWindowOpenHandler).toHaveBeenCalled()
+    expect(win.webContents.setWindowOpenHandler.mock.calls[0][0]()).toEqual({ action: 'deny' })
+  })
+})
 
 describe('createSemaphore', () => {
   it('never lets more than max holders run at once', async () => {

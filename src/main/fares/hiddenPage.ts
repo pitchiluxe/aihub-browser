@@ -44,16 +44,32 @@ export function createElectronDriver(opts: { max?: number; watchdogMs?: number }
   const webPreferences = { partition: FARES_PARTITION, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false }
   const ua = () => chromeUserAgent(session.fromPartition(FARES_PARTITION).getUserAgent())
 
+  // Session-wide, installed once. Electron GRANTS permission requests by
+  // default, so without these a booking site could ask for geolocation,
+  // notifications or the camera and get them. Downloads are refused for the
+  // same reason: nothing a fare page offers should land on disk.
+  let sessionGuarded = false
+  const guardSession = () => {
+    if (sessionGuarded) return
+    sessionGuarded = true
+    const ses = session.fromPartition(FARES_PARTITION)
+    ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+    ses.setPermissionCheckHandler(() => false)
+    ses.on('will-download', e => e.preventDefault())
+  }
+  const guardWindow = (win: BrowserWindow) => {
+    win.webContents.setUserAgent(ua())
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  }
+
   return {
     alive: () => live.size,
     async open(url) {
       const release = await sem.acquire()
+      guardSession()
       const win = new BrowserWindow({ show: false, width: 1366, height: 900, webPreferences })
       live.add(win)
-      win.webContents.setUserAgent(ua())
-      // Read-only: the page may not open windows or start downloads.
-      win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-      win.webContents.session.on('will-download', e => e.preventDefault())
+      guardWindow(win)
       let closed = false
       const close = () => {
         if (closed) return
@@ -76,8 +92,9 @@ export function createElectronDriver(opts: { max?: number; watchdogMs?: number }
     openVisible(url) {
       // For a human check (CAPTCHA): same partition, so solving it once
       // unblocks later hidden searches.
+      guardSession()
       const win = new BrowserWindow({ show: true, width: 1200, height: 860, title: 'Verify — AIHub fares', webPreferences })
-      win.webContents.setUserAgent(ua())
+      guardWindow(win)
       win.loadURL(url).catch(() => {})
     },
   }
