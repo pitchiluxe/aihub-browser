@@ -11,7 +11,7 @@ const offer = (price: number, source: any = 'google'): FareOffer => ({
   arriveDayOffset: 0, durationMin: 305, bags: null, bookUrl: 'https://x.example', ret: null,
 })
 
-function adapter(id: any, probes: PageProbe<any>[], parsed: FareOffer[] = [offer(150, id)]): SiteAdapter<any> {
+function adapter(id: any, _probes: PageProbe<any>[], parsed: FareOffer[] = [offer(150, id)]): SiteAdapter<any> {
   return { id, label: id, url: x => `https://${id}.example/${x.depart}`, script: `probe:${id}`, parse: () => parsed }
 }
 
@@ -23,7 +23,7 @@ function fakeDriver(byUrl: (url: string) => PageProbe<any>[]): PageDriver & { op
     async open(url: string) {
       d.opened.push(url)
       const seq = byUrl(url); let i = 0
-      return { evaluate: async () => seq[Math.min(i++, seq.length - 1)], close: () => { d.closed++ } }
+      return { evaluate: (async () => seq[Math.min(i++, seq.length - 1)]) as any, close: () => { d.closed++ } }
     },
   }
   return d

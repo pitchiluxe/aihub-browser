@@ -58,6 +58,8 @@ export const PRIVATE_BLOCKED_CHANNELS = [
   'agents:saveConversation',// agent conversation archive
   'siteMemory:set',         // per-origin AI memory (the model can write it)
   'trading:saveMemory',     // Trading Coach per-symbol autosave
+  'fares:search',           // loads booking sites into the persistent fares partition
+  'fares:flex',             // same, for the flexible-date strip
 ] as const
 
 /**

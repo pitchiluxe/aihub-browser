@@ -5,7 +5,7 @@
 // showing it a CAPTCHA.
 import type { FareOffer, FareQuery, SiteId } from '../../shared/fares/types'
 import type { PageProbe, SiteAdapter } from './adapters/types'
-import type { PageDriver } from './hiddenPage'
+import type { PageDriver, PageHandle } from './hiddenPage'
 
 export type SiteStatus = 'loading' | 'done' | 'cached' | 'blocked' | 'unreadable' | 'empty' | 'timeout' | 'error'
 export interface SiteProgress { searchId: string; site: SiteId; label: string; status: SiteStatus; offers: FareOffer[]; url: string; at: number }
@@ -52,7 +52,7 @@ export function createFareEngine(deps: EngineDeps) {
     }
     if (!isLive()) return { status: 'loading', offers: [] }
     lastLoad.set(adapter.id, now())
-    let page
+    let page: PageHandle
     try { page = await deps.driver.open(adapter.url(q)) } catch { return { status: 'error', offers: [] } }
     try {
       const started = now()

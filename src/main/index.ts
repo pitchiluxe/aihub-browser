@@ -19,6 +19,10 @@ import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt, lighterModelToPull } from './modelRouting'
 import { sanitizeChatMessages, fitMessagesToBudget } from './chatMessages'
+import { createFareEngine } from './fares/engine'
+import { createElectronDriver, FARES_PARTITION } from './fares/hiddenPage'
+import { FARE_ADAPTERS, handoffLinks } from './fares/adapters'
+import type { FareQuery } from '../shared/fares/types'
 import { invokeLookupCallback } from './networkLookup'
 import { normalizeOllamaBase, ollamaBaseCandidates } from './ollamaConnection'
 import { ollamaLaunchCommand, parseLoadedModels, type LoadedModel } from './ollamaLauncher'
@@ -4048,10 +4052,14 @@ ipcMain.handle('cache:clear', async () => {
   // its storage deleted every installed extension. Web-content storage lives
   // in the tab partition, which still gets the full clear.
   const tabSession = session.fromPartition('persist:main')
+  // Booking-site cookies from live fare searches go with the rest.
+  const faresSession = session.fromPartition(FARES_PARTITION)
   await Promise.all([
     session.defaultSession.clearCache(),
     tabSession.clearCache(),
     tabSession.clearStorageData(),
+    faresSession.clearCache(),
+    faresSession.clearStorageData(),
   ])
   return true
 })
@@ -4600,6 +4608,50 @@ ipcMain.handle('rewind:clear', () => {
   rewindStore.set([]); rewindStore.flush()
   semanticIndex.prune(new Set())
   return { ok: true }
+})
+
+// ── Live flight fares ──────────────────────────────────────────────────────
+// Booking sites are read in sandboxed hidden pages on their own partition;
+// see src/main/fares/. Created lazily: most sessions never search a flight.
+let _fareDriver: ReturnType<typeof createElectronDriver> | null = null
+let _fareEngine: ReturnType<typeof createFareEngine> | null = null
+function fareEngine() {
+  if (!_fareEngine) {
+    _fareDriver = createElectronDriver({ max: 3 })
+    _fareEngine = createFareEngine({ driver: _fareDriver, adapters: FARE_ADAPTERS })
+  }
+  return _fareEngine
+}
+
+const IATA = /^[A-Z]{3}$/
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
+function validFareQuery(q: any): q is FareQuery {
+  return !!q && IATA.test(q.from) && IATA.test(q.to) && q.from !== q.to
+    && ISO_DAY.test(q.depart) && ISO_DAY.test(q.ret) && q.ret > q.depart
+    && Number.isInteger(q.adults) && q.adults >= 1 && q.adults <= 9
+    && ['USD', 'EUR', 'GBP', 'CAD', 'AUD'].includes(q.currency)
+}
+
+handlePersistent('fares:search', (e, q: FareQuery) => {
+  if (!validFareQuery(q)) return { error: 'invalid' }
+  const sender = e.sender
+  const { id, done } = fareEngine().search(q, p => { if (!sender.isDestroyed()) sender.send('fares:progress', p) })
+  void done.catch(() => {})
+  return { searchId: id }
+}, () => ({ error: 'private' }))
+
+handlePersistent('fares:flex', async (e, q: FareQuery) => {
+  if (!validFareQuery(q)) return []
+  const sender = e.sender
+  return fareEngine().flexDates(q, d => { if (!sender.isDestroyed()) sender.send('fares:flexDay', d) })
+}, () => ({ error: 'private' }))
+
+ipcMain.handle('fares:cancel', (_e, searchId: string) => { _fareEngine?.cancel(String(searchId)) })
+ipcMain.handle('fares:handoff', (_e, q: FareQuery) => validFareQuery(q) ? handoffLinks(q) : [])
+ipcMain.handle('fares:openSite', (_e, url: string) => {
+  // Only the sites the engine itself loads — never an arbitrary URL.
+  if (!/^https:\/\/www\.(google\.com\/travel\/flights|kayak\.com|momondo\.com)\//.test(String(url))) return
+  fareEngine(); _fareDriver!.openVisible(String(url))
 })
 
 // ── Bible marks — highlights, saved verses, notes, reading position ────────

@@ -453,6 +453,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     remove: (id: string) => ipcRenderer.invoke('rewind:remove', id),
     clear:  () => ipcRenderer.invoke('rewind:clear'),
   },
+  fares: {
+    search:   (q: any) => ipcRenderer.invoke('fares:search', q),
+    cancel:   (searchId: string) => ipcRenderer.invoke('fares:cancel', searchId),
+    flex:     (q: any) => ipcRenderer.invoke('fares:flex', q),
+    handoff:  (q: any) => ipcRenderer.invoke('fares:handoff', q),
+    openSite: (url: string) => ipcRenderer.invoke('fares:openSite', url),
+    onProgress: (cb: (p: any) => void) => { const h = (_: any, p: any) => cb(p); ipcRenderer.on('fares:progress', h); return () => ipcRenderer.removeListener('fares:progress', h) },
+    onFlexDay:  (cb: (d: any) => void) => { const h = (_: any, d: any) => cb(d); ipcRenderer.on('fares:flexDay', h); return () => ipcRenderer.removeListener('fares:flexDay', h) },
+  },
   gospel: {
     /** Gospel music from YouTube. Omit the query for a random tradition. */
     search: (query?: string) => ipcRenderer.invoke('gospel:search', query),
