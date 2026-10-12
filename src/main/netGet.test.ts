@@ -1,7 +1,25 @@
 import { describe, it, expect } from 'vitest'
-import { createNetGet, createNetPostJson } from './netGet'
+import { createNetGet, createNetPostJson, isWebUrl } from './netGet'
 
 const ok = (status: number, body: string) => async () => ({ status, text: async () => body }) as any
+
+describe('web URLs only — Chromium fetch can also read file:// and app schemes', () => {
+  it('refuses anything but http(s), without calling fetch', async () => {
+    let called = 0
+    const f = async () => { called++; return { status: 200, text: async () => 'secret' } as any }
+    const get = createNetGet(f), post = createNetPostJson(f)
+    for (const url of ['file:///C:/Users/me/.aihub-browser/secrets.enc', 'FILE:///etc/passwd', 'aihub-media://tok/', 'data:text/plain,x', 'javascript:alert(1)', 'not a url']) {
+      await expect(get(url)).rejects.toThrow(/not an http/i)
+      await expect(post(url, {})).rejects.toThrow(/not an http/i)
+    }
+    expect(called).toBe(0)
+  })
+  it('isWebUrl accepts http and https only', () => {
+    expect(isWebUrl('https://example.com/a')).toBe(true)
+    expect(isWebUrl('http://127.0.0.1:11434/api/tags')).toBe(true)
+    expect(isWebUrl('file:///x')).toBe(false)
+  })
+})
 
 describe('netPostJson — JSON POSTs (Ollama chat/embeddings) the same way', () => {
   it('sends JSON and parses the JSON reply', async () => {

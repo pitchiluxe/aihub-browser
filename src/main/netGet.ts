@@ -17,7 +17,13 @@ const CODES: [RegExp, string][] = [
   [/ERR_TIMED_OUT|ERR_CONNECTION_TIMED_OUT/, 'ETIMEDOUT'],
 ]
 
+/** Chromium's fetch also reads file:// and app schemes; these helpers are for the web only. */
+export function isWebUrl(url: string): boolean {
+  try { const p = new URL(url).protocol; return p === 'http:' || p === 'https:' } catch { return false }
+}
+
 async function send(fetchImpl: Fetch, url: string, timeoutMs: number, init: { method?: string; headers?: Record<string, string>; body?: string }) {
+  if (!isWebUrl(url)) throw new Error(`Not an http(s) URL: ${String(url).slice(0, 60)}`)
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {

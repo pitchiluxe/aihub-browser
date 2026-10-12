@@ -42,7 +42,7 @@ import {
 import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
 import { createSessionManager, type SessionTab } from './sessions'
 import { createSemanticIndex, type SearchDoc } from './semantic'
-import { createNetGet, createNetPostJson } from './netGet'
+import { createNetGet, createNetPostJson, isWebUrl } from './netGet'
 import { net as electronNet } from 'electron'
 import { splitPanes } from '../shared/splitLayout'
 import { writeNote, describeVault, parseTagSuggestions, type NoteKind } from './obsidian'
@@ -3265,6 +3265,8 @@ ipcMain.handle('bookmarks:summarize', async (_e, id: string) => {
   // Try to fetch page text
   let pageText = ''
   try {
+    // Web pages only: Chromium's fetch would also read file:// bookmarks.
+    if (!isWebUrl(bm.url)) throw new Error('not a web page')
     const res = await electronNet.fetch(bm.url, { signal: AbortSignal.timeout(8000), bypassCustomProtocolHandlers: true })
     if (res.ok) {
       const html = await res.text()
