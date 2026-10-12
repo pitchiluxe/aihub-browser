@@ -10,7 +10,7 @@ import RulesChips from './RulesChips'
 import Backdrop from './Backdrop'
 import './stage.css'
 
-export default function StagePage({ engine, conductor, onTakeDecks, onAsk }: { engine: DjEngine; conductor: SetConductor; onTakeDecks: () => void; onAsk: (text: string) => void }) {
+export default function StagePage({ engine, conductor, onTakeDecks, onStop, onAsk }: { engine: DjEngine; conductor: SetConductor; onTakeDecks: () => void; onStop?: () => void; onAsk: (text: string) => void }) {
   useSyncExternalStore(conductor.subscribe, conductor.getVersion)
   const s = conductor.state
   const [discovery, setDiscovery] = useState(s.brief?.discoveryShare ?? 0.25)
@@ -31,6 +31,7 @@ export default function StagePage({ engine, conductor, onTakeDecks, onAsk }: { e
       discovery={discovery}
       onDiscovery={v => { setDiscovery(v); conductor.setDiscovery(v) }}
       onSkip={() => conductor.skip()}
+      onStop={onStop}
       onSteer={k => conductor.steer(k)}
       onAsk={onAsk}
       onTakeDecks={onTakeDecks}

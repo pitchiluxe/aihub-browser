@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 
-export default function SteerBar({ discovery, onDiscovery, onSkip, onSteer, onAsk, onTakeDecks }: {
-  discovery: number; onDiscovery: (v: number) => void; onSkip: () => void
+export default function SteerBar({ discovery, onDiscovery, onSkip, onStop, onSteer, onAsk, onTakeDecks }: {
+  discovery: number; onDiscovery: (v: number) => void; onSkip: () => void; onStop?: () => void
   onSteer: (k: 'more-energy' | 'calmer' | 'more-like-this') => void; onAsk: (t: string) => void; onTakeDecks: () => void
 }) {
   const [text, setText] = useState('')
   return <div className="dj-dock" role="toolbar" aria-label="Steer the set">
     <div className="dj-steer-buttons">
+      {onStop && <button className="dj-stop" onClick={onStop} title="Stop the music and end the set">⏹ Stop</button>}
       <button onClick={onSkip} title="Mix the next song in now">⏭ Skip</button>
       <button onClick={() => onSteer('more-energy')}>🔥 More energy</button>
       <button onClick={() => onSteer('calmer')}>🌙 Calmer</button>

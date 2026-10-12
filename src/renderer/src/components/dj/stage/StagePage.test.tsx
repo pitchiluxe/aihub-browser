@@ -81,6 +81,13 @@ describe('StagePage', () => {
     expect(c.setPeak).toHaveBeenCalledWith(30)
   })
 
+  it('Stop ends the music from the stage', () => {
+    const onStop = vi.fn()
+    act(() => root.render(<StagePage engine={engine} conductor={fakeConductor({ active: true, brief: { vibe: 'x', durationMin: 60, curve: [{ atMin: 0, level: 0.5 }], discoveryShare: 0.25, seeds: [], rules: [] } })} onTakeDecks={() => {}} onStop={onStop} onAsk={() => {}} />))
+    act(() => btn('Stop').click())
+    expect(onStop).toHaveBeenCalledTimes(1)
+  })
+
   it('Take the decks hands over to the console', () => {
     const onTake = vi.fn()
     act(() => root.render(<StagePage engine={engine} conductor={fakeConductor({ active: true, brief: { vibe: 'x', durationMin: 60, curve: [{ atMin: 0, level: 0.5 }], discoveryShare: 0.25, seeds: [], rules: [] } })} onTakeDecks={onTake} onAsk={() => {}} />))

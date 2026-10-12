@@ -30,6 +30,8 @@ const MINUTES = Number(process.argv[2] || 20)
   await page.waitForSelector('input[aria-label="Tell the DJ"]', { timeout: 60000 })
   await ask("don't play drake")
   await ask('no more slow songs')
+  // From here the script only reads: any click is a person touching the test window.
+  await page.evaluate(() => document.addEventListener('pointerdown', e => { (window.__clicks = window.__clicks || []).push(String(e.target?.className || e.target?.tagName).slice(0, 60)) }, true))
   const chips = await page.locator('.dj-rule').allInnerTexts()
   const msg = await page.locator('.dj-stage-message').innerText().catch(() => '')
 
@@ -44,7 +46,8 @@ const MINUTES = Number(process.argv[2] || 20)
     if (meter === 'missing') {
       const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows().find(x => x.isVisible()).webContents.capturePage()).toPNG().toString('base64'))
       fs.writeFileSync(path.join(os.tmpdir(), 'ai-dj-missing.png'), Buffer.from(png, 'base64'))
-      console.log('STAGE MISSING at', Math.round((Date.now() - (end - MINUTES * 60_000)) / 1000), 's; errors:', JSON.stringify(errors.slice(-6)))
+      const clicks = await page.evaluate(() => window.__clicks || [])
+      console.log('STAGE MISSING at', Math.round((Date.now() - (end - MINUTES * 60_000)) / 1000), 's; errors:', JSON.stringify(errors.slice(-6)), '; clicks in window:', JSON.stringify(clicks))
       break
     }
     if (Number(meter) < 0.02) { silentSince ||= Date.now(); longestSilence = Math.max(longestSilence, Date.now() - silentSince) } else silentSince = 0

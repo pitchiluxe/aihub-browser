@@ -69,6 +69,8 @@
 .dj-ask { flex: 1; min-width: 160px; }
 .dj-ask input { width: 100%; height: 32px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--st-line); background: var(--st-field); color: inherit; font-size: 12.5px; }
 .dj-ask input:focus { outline: none; border-color: color-mix(in srgb, var(--st-accent) 70%, transparent); }
+.dj-dock .dj-stop { border-color: rgba(244, 63, 94, .55); color: #fda4af; }
+.dj-dock .dj-stop:hover { background: rgba(244, 63, 94, .18); }
 .dj-dock .dj-take { background: var(--st-accent); color: #fff; font-weight: 600; }
 .dj-dock .dj-take:hover { background: #be123c; border-color: transparent; }
 .dj-sep { width: 1px; height: 20px; background: var(--st-line); flex-shrink: 0; }

@@ -291,6 +291,13 @@ function Console({ engine }: { engine: DjEngine }) {
   useEffect(() => mixer.subscribe(() => {
     if (!mixer.on && conductor.state.active && !conductor.state.paused) mixer.setOn(true)
   }), [mixer, conductor])
+  // Stop from the stage: end the set FIRST (so the re-arm above cannot restart
+  // Automix), then switch Automix off and pause every deck.
+  const stopMusic = useCallback(() => {
+    conductor.stop()
+    mixer.setOn(false)
+    for (const d of Object.values(engine.decks)) d.pause()
+  }, [conductor, mixer, engine])
   const stageControls = useMemo<PanelControls>(() => ({
     setEnergy: e => { setEnergy(e); conductor.steer(e === 'chill' ? 'calmer' : 'more-energy') },
     setTakeover: on => { if (!on) conductor.stop() },
@@ -326,7 +333,7 @@ function Console({ engine }: { engine: DjEngine }) {
     {/* The stage sits beside the console, not inside it: the console is
         CSS-zoomed to fit the tab and the stage must not be scaled with it. */}
     <div className="dj-host">
-    {stageView === 'stage' && <StagePage engine={engine} conductor={conductor} onTakeDecks={() => showView('console')} onAsk={ask} />}
+    {stageView === 'stage' && <StagePage engine={engine} conductor={conductor} onTakeDecks={() => showView('console')} onStop={stopMusic} onAsk={ask} />}
     {stageView === 'console' && <button className="dj-back-to-stage" onClick={() => showView('stage')}>{conductor.state.active ? 'Back to stage' : '✨ AI DJ stage'}</button>}
     <div className="aihub-dj" data-dj-theme={theme} data-dj-look={look} data-dj-layout={layout} data-dj-dark={themeInfo?.dark ? '1' : '0'}
       data-dj-light-bg={themeInfo?.lightBg ? '1' : '0'} ref={fit.ref} style={fit.style}>
