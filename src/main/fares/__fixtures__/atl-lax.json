@@ -1,0 +1,25 @@
+{
+  "google": {
+    "labels": [
+      "From 162 US dollars round trip total. 1 stop flight with Frontier. Leaves Hartsfield-Jackson Atlanta International Airport at 10:29 AM on Tuesday, November 10 and arrives at Los Angeles International Airport at 4:16 PM on Tuesday, November 10. Total duration 8 hr 47 min.  Layover (1 of 1) is a 2 hr 43 min layover at Harry Reid International Airport in Las Vegas. 0 carry-on bags included. 0 checked bags included.  Select flight",
+      "From 178 US dollars round trip total. Nonstop flight with Frontier. Leaves Hartsfield-Jackson Atlanta International Airport at 10:19 AM on Tuesday, November 10 and arrives at Los Angeles International Airport at 12:19 PM on Tuesday, November 10. Total duration 5 hr.   0 carry-on bags included. 0 checked bags included.  Select flight",
+      "From 198 US dollars round trip total. Nonstop flight with Frontier. Leaves Hartsfield-Jackson Atlanta International Airport at 3:45 PM on Tuesday, November 10 and arrives at Los Angeles International Airport at 5:53 PM on Tuesday, November 10. Total duration 5 hr 8 min.   0 carry-on bags included. 0 checked bags included.  Select flight",
+      "From 152 US dollars round trip total. 1 stop flight with Frontier. Leaves Hartsfield-Jackson Atlanta International Airport at 9:32 PM on Tuesday, November 10 and arrives at Los Angeles International Airport at 9:19 AM on Wednesday, November 11. Total duration 14 hr 47 min.  Layover (1 of 1) is a 8 hr 52 min layover at Harry Reid International Airport in Las Vegas. 0 carry-on bags included. 0 checked bags included.  Select flight",
+      "From 196 US dollars round trip total. 1 stop flight with Frontier. Leaves Hartsfield-Jackson Atlanta International Airport at 7:57 PM on Tuesday, November 10 and arrives at Los Angeles International Airport at 12:23 AM on Wednesday, November 11. Total duration 7 hr 26 min.  Layover (1 of 1) is a 1 hr 23 min layover at Denver International Airport in Denver. 0 carry-on bags included. 0 checked bags included.  Select flight",
+      "From 205 US dollars round trip total. 1 stop flight with Frontier. Leaves Hartsfield-Jackson Atlanta International Airport at 10:27 AM on Tuesday, November 10 and arrives at Los Angeles International Airport at 2:53 PM on Tuesday, November 10. Total duration 7 hr 26 min.  Layover (1 of 1) is a 1 hr 8 min layover at Dallas Fort Worth International Airport in Dallas. 0 carry-on bags included. 0 checked bags included.  Select flight"
+    ]
+  },
+  "kayak": {
+    "cards": [
+      { "text": "Go to next result\nGo to price section\nGo to result details\n9:32 pm – 9:19 am+1\nFrontier\n1 stop\nLAS\n 8h 52m layover, Las Vegas Harry Reid Intl\n14h 47m\nATL\n-\nLAX\n1:20 pm – 8:59 pm\nFrontier\nnonstop\n4h 39m\nLAX\n-\nATL\n0\n0\n$150\nBasic\nSelect", "href": "/book/flight?code=FIXTURE1" },
+      { "text": "Go to next result\nGo to previous result\nGo to price section\nGo to result details\n9:32 pm – 9:19 am+1\nFrontier\n1 stop\nLAS\n 8h 52m layover, Las Vegas Harry Reid Intl\n14h 47m\nATL\n-\nLAX\n12:26 am – 8:06 am\nFrontier\nnonstop\n4h 40m\nLAX\n-\nATL\n0\n0\n$150\nBasic\nSelect", "href": "/book/flight?code=FIXTURE2" },
+      { "text": "Go to next result\nGo to previous result\nGo to price section\nGo to result details\n9:32 pm – 4:16 pm+1\nFrontier\n1 stop\nLAS\n 15h 47m layover, Las Vegas Harry Reid Intl\n21h 44m\nATL\n-\nLAX\n1:20 pm – 8:59 pm\nFrontier\nnonstop\n4h 39m\nLAX\n-\nATL\n0\n0\n$150\nBasic\nSelect", "href": null },
+      { "text": "Go to next result\nGo to previous result\nGo to price section\nGo to result details\n10:29 am – 4:16 pm\nFrontier\n1 stop\nLAS\n 2h 43m layover, Las Vegas Harry Reid Intl\n8h 47m\nATL\n-\nLAX\n1:20 pm – 8:59 pm\nFrontier\nnonstop\n4h 39m\nLAX\n-\nATL\n0\n0\n$160\nBasic\nSelect", "href": "/book/flight?code=FIXTURE4" }
+    ]
+  },
+  "momondo": {
+    "cards": [
+      { "text": "Go to next result\nGo to price section\nGo to result details\n9:32 pm – 9:19 am+1\nFrontier\n1 stop\nLAS\n 8h 52m layover, Las Vegas Harry Reid Intl\n14h 47m\nATL\n-\nLAX\n1:20 pm – 8:59 pm\nFrontier\nnonstop\n4h 39m\nLAX\n-\nATL\n$145\nBasic\nSelect", "href": "/book/flight?code=FIXTUREM1" }
+    ]
+  }
+}
