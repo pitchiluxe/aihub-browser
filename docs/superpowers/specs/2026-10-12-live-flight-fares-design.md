@@ -63,7 +63,7 @@ results ◄── fares:progress {site,status,offers} ┤
 | Hidden page pool | `src/main/fares/hiddenPage.ts` | Off-screen `BrowserWindow`, partition `persist:fares`, sandbox on, no preload, no nodeIntegration, real Chrome UA, max 3 alive, 60 s watchdog, destroyed after each search |
 | Merge + rank | `src/main/fares/rank.ts` | Same flight across sites (airline + departAt + arriveAt) → one row with per-site prices; true total = fare + bag fees not included; sort modes best-value / cheapest / fastest / fewest-stops |
 | Engine | `src/main/fares/engine.ts` | Orchestration, cache, per-site rate limit (≥ 20 s between loads), cancellation, progress events; depends on adapters + pool through injected interfaces |
-| Flex-date strip | in engine | ±3 days, Google adapter only, sequential, stops at first block |
+| Flex-date strip | in engine | ±3 days (6 extra loads), Google adapter only, runs after the main search finishes, sequential with a 3 s gap (its own budget, not the 20 s per-site spacing), cached like main results, stops at first block |
 | IPC | `src/main/index.ts`, `src/preload/index.ts` | `fares:search(trip) → searchId`, `fares:cancel(searchId)`, events `fares:progress`, `fares:done` |
 | Bag fees | `src/main/fares/bagFees.ts` | Static per-airline first-checked / carry-on fee table (US carriers), labelled "estimated" in UI |
 | UI | `src/renderer/src/components/travel/` | `FareSearchBar`, `SourceChips`, `FlexDateStrip`, `AiPickCard`, `FareTable`, `FareRow`; page composes them |
