@@ -1,4 +1,3 @@
-// src/main/fares/hiddenPage.test.ts
 import { describe, it, expect, vi } from 'vitest'
 
 const ses = vi.hoisted(() => ({

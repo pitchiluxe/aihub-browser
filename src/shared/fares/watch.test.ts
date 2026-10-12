@@ -1,4 +1,3 @@
-// src/shared/fares/watch.test.ts
 import { describe, it, expect } from 'vitest'
 import { fareWatchVerdict } from './watch'
 
@@ -14,5 +13,13 @@ describe('fareWatchVerdict', () => {
   })
   it('notifies on first check if already below target', () => {
     expect(fareWatchVerdict(undefined, 140, 160).notify).toBe(true)
+  })
+})
+
+describe('fareWatchExpired', () => {
+  it('expires once the departure date has passed', async () => {
+    const { fareWatchExpired } = await import('./watch')
+    expect(fareWatchExpired('2026-11-10', '2026-11-11')).toBe(true)
+    expect(fareWatchExpired('2026-11-10', '2026-11-10')).toBe(false)
   })
 })

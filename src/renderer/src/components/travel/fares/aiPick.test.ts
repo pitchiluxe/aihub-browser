@@ -1,4 +1,3 @@
-// src/renderer/src/components/travel/fares/aiPick.test.ts
 import { describe, it, expect } from 'vitest'
 import { buildPickPrompt, parsePick, fetchAiPick } from './aiPick'
 import { mergeOffers, rankRows } from '../../../../../shared/fares/rank'

@@ -1,4 +1,3 @@
-// src/main/fares/adapters/google.test.ts
 import { describe, it, expect } from 'vitest'
 import fixture from '../__fixtures__/atl-lax.json'
 import { googleAdapter, parseGoogleLabel } from './google'

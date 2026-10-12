@@ -1,4 +1,3 @@
-// src/shared/fares/types.ts
 // The one shape every fare source is turned into. Each site describes the
 // same flight differently ("9:32 pm" vs "9:32 PM on Tuesday"); everything
 // downstream — merging, ranking, the AI pick — only ever sees this.
@@ -72,6 +71,13 @@ export function normalizeOffer(o: FareOffer): FareOffer | null {
   return o
 }
 
+/** "American Airlines" and "American" are one carrier: Google uses short
+ *  names, Kayak often the long form. Unmatched names split one flight into
+ *  two rows and miss its bag-fee entry. */
+export function canonicalAirline(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+(airlines?|air lines|airways)$/, '')
+}
+
 export function offerKey(o: Pick<Leg, 'airlines' | 'departTime' | 'arriveTime' | 'arriveDayOffset'>): string {
-  return `${o.airlines[0].toLowerCase()}|${o.departTime}|${o.arriveTime}|${o.arriveDayOffset}`
+  return `${canonicalAirline(o.airlines[0])}|${o.departTime}|${o.arriveTime}|${o.arriveDayOffset}`
 }

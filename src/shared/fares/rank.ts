@@ -1,4 +1,3 @@
-// src/shared/fares/rank.ts
 import { estimatedBagFee } from './bagFees'
 import { offerKey, type FareOffer, type SiteId } from './types'
 

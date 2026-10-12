@@ -1,4 +1,3 @@
-// src/main/fares/hiddenPage.ts
 // Off-screen pages for reading fare sites. Isolated on their own partition so
 // booking-site cookies and trackers never touch the user's browsing profile,
 // sandboxed with no preload so a hostile page cannot reach the app, capped so

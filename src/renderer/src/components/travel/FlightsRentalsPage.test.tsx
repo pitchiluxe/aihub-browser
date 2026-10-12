@@ -152,6 +152,66 @@ describe('live fares', () => {
     expect(host.textContent).toContain('searching')
   })
 
+  // Shared harness for the review-fix tests below.
+  const offer = (over: any = {}) => ({ source: 'google', price: 178, currency: 'USD', airlines: ['Delta'], stops: 0, layovers: [], departTime: '07:05', arriveTime: '09:10', arriveDayOffset: 0, durationMin: 305, bags: { carry: 1, checked: 0 }, bookUrl: 'https://g.example', ret: null, ...over })
+  async function liveHarness(chat?: any) {
+    const progress: any[] = [], flexDay: any[] = []
+    const api = {
+      search: vi.fn(async (_q: any, id: string) => ({ searchId: id })), cancel: vi.fn(), flex: vi.fn(async (_q: any, _id?: string) => []),
+      handoff: vi.fn(async () => []), openSite: vi.fn(),
+      onProgress: (cb: any) => { progress.push(cb); return () => {} }, onFlexDay: (cb: any) => { flexDay.push(cb); return () => {} },
+    }
+    ;(window as any).electronAPI = { fares: api, ...(chat ? { ai: { chat } } : {}) }
+    localStorage.setItem(FLIGHTS_PREFILL_KEY, 'LAX')
+    remount()
+    const from = host.querySelector('input[role="combobox"]') as HTMLInputElement
+    await act(async () => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!; set.call(from, 'ATL'); from.dispatchEvent(new Event('input', { bubbles: true })) })
+    const search = async () => { await act(async () => { button('Find live fares').click() }); return api.search.mock.calls.at(-1)![1] as string }
+    const emit = async (ev: any) => { await act(async () => { progress.forEach(cb => cb(ev)) }) }
+    const emitDay = async (d: any) => { await act(async () => { flexDay.forEach(cb => cb(d)) }) }
+    const finish = async (id: string, offers = [offer(), offer({ airlines: ['Frontier'], price: 152, departTime: '21:32' })]) =>
+      emit({ searchId: id, site: 'google', label: 'Google Flights', status: 'done', offers, url: 'https://g', at: 1, total: 1 })
+    return { api, search, emit, emitDay, finish }
+  }
+
+  it('asks for live fares in USD whatever the form currency (USD-first; UI prints $)', () => {
+    expect(tripToQuery({ kind: 'flights', origin: 'ATL', destination: 'LAX', start: '2099-11-10', end: '2099-11-17', travelers: 1, budget: '', currency: 'EUR', flexible: true })!.currency).toBe('USD')
+  })
+
+  it('starts the flex strip once, for this search id, only after every site is final', async () => {
+    const h = await liveHarness()
+    const id = await h.search()
+    expect(h.api.flex).not.toHaveBeenCalled()
+    await h.finish(id)
+    expect(h.api.flex).toHaveBeenCalledTimes(1)
+    expect(h.api.flex.mock.calls[0][1]).toBe(id)
+  })
+
+  it('drops flex days that belong to an older search', async () => {
+    const h = await liveHarness()
+    const id = await h.search()
+    await h.finish(id)
+    await h.emitDay({ searchId: 'old-search', depart: '2099-01-01', ret: '2099-01-08', price: 99 })
+    expect(host.querySelector('.fare-flex-strip')).toBeNull()
+    await h.emitDay({ searchId: id, depart: '2099-01-02', ret: '2099-01-09', price: 120 })
+    expect(host.querySelector('.fare-flex-strip')).not.toBeNull()
+  })
+
+  it('a late AI reply from a previous search does not block the next search\'s pick', async () => {
+    let releaseFirst!: (v: any) => void
+    const chat = vi.fn()
+      .mockImplementationOnce(() => new Promise(r => { releaseFirst = r }))
+      .mockImplementation(async () => ({ provider: 'ollama', content: '{"key":"none","reason":"x"}' }))
+    const h = await liveHarness(chat)
+    const id1 = await h.search()
+    await h.finish(id1)
+    expect(chat).toHaveBeenCalledTimes(1)
+    const id2 = await h.search()
+    await act(async () => { releaseFirst({ provider: 'ollama', content: '{"key":"delta|07:05|09:10|0","reason":"old"}' }) })
+    await h.finish(id2)
+    expect(chat).toHaveBeenCalledTimes(2)
+  })
+
   it('starts a live search for flights and shows hand-off links when every site fails', async () => {
     const listeners: any[] = []
     ;(window as any).electronAPI = { fares: {

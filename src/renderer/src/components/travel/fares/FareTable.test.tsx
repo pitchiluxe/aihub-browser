@@ -1,4 +1,3 @@
-// src/renderer/src/components/travel/fares/FareTable.test.tsx
 // @vitest-environment jsdom
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

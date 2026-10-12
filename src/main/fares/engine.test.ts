@@ -1,4 +1,3 @@
-// src/main/fares/engine.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import { createFareEngine, shiftDate, type SiteProgress } from './engine'
 import type { SiteAdapter, PageProbe } from './adapters/types'
@@ -55,6 +54,15 @@ describe('createFareEngine.search', () => {
     expect(id).toBe('client-42')
     expect(events.every(e => e.searchId === 'client-42')).toBe(true)
     expect(events[0].status).toBe('loading')
+  })
+
+  it('tells the renderer how many sites the search covers on every event', async () => {
+    const driver = fakeDriver(() => [ready()])
+    const engine = createFareEngine({ driver, adapters: [adapter('google', []), adapter('kayak', []), adapter('momondo', [])], ...fast })
+    await engine.search(q, () => {}).done
+    const events: SiteProgress[] = []
+    await engine.search(q, p => events.push(p)).done  // all cached now
+    expect(events.every(e => e.total === 3)).toBe(true)
   })
 
   it('reports a bot wall as blocked', async () => {
@@ -139,6 +147,17 @@ describe('flexDates', () => {
     expect(driver.opened.every(u => u.startsWith('https://google.example'))).toBe(true)
     expect(days.filter(d => d.price !== null)).toHaveLength(2)
     expect(driver.opened).toHaveLength(3)
+  })
+
+  it('tags each day with the search id and stops when that search is cancelled', async () => {
+    const driver = fakeDriver(() => [ready()])
+    let engine!: ReturnType<typeof createFareEngine>
+    const days: any[] = []
+    engine = createFareEngine({ driver, adapters: [adapter('google', [])], ...fast, spacingMs: 0 })
+    await engine.flexDates(q, d => { days.push(d); if (days.length === 2) engine.cancel('s-9') }, 's-9')
+    expect(days.every(d => d.searchId === 's-9')).toBe(true)
+    expect(days).toHaveLength(2)
+    expect(driver.opened).toHaveLength(2)
   })
 
   it('shiftDate moves both directions across month ends', () => {

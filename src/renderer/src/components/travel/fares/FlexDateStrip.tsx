@@ -1,4 +1,3 @@
-// src/renderer/src/components/travel/fares/FlexDateStrip.tsx
 import React from 'react'
 import type { FlexDay } from './useFareSearch'
 

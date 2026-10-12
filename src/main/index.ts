@@ -21,9 +21,9 @@ import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutF
 import { sanitizeChatMessages, fitMessagesToBudget } from './chatMessages'
 import { createFareEngine } from './fares/engine'
 import { createElectronDriver, FARES_PARTITION } from './fares/hiddenPage'
-import { FARE_ADAPTERS, handoffLinks } from './fares/adapters'
+import { FARE_ADAPTERS, handoffLinks, isFareSiteUrl } from './fares/adapters'
 import { googleAdapter } from './fares/adapters/google'
-import { fareWatchVerdict } from '../shared/fares/watch'
+import { fareWatchVerdict, fareWatchExpired } from '../shared/fares/watch'
 import type { FareQuery } from '../shared/fares/types'
 import { invokeLookupCallback } from './networkLookup'
 import { normalizeOllamaBase, ollamaBaseCandidates } from './ollamaConnection'
@@ -4625,6 +4625,19 @@ function fareEngine() {
   return _fareEngine
 }
 
+// Price watches get their own Google-only engine — but ONE, shared, so its
+// per-site spacing and cache persist across checks. A fresh engine per check
+// forgot when Google was last loaded, and every overdue watch fired at once
+// on startup.
+let _fareWatchEngine: ReturnType<typeof createFareEngine> | null = null
+function fareWatchEngine() {
+  if (!_fareWatchEngine) {
+    fareEngine()
+    _fareWatchEngine = createFareEngine({ driver: _fareDriver!, adapters: FARE_ADAPTERS.filter(a => a.id === 'google') })
+  }
+  return _fareWatchEngine
+}
+
 const IATA = /^[A-Z]{3}$/
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
 function validFareQuery(q: any): q is FareQuery {
@@ -4642,10 +4655,12 @@ handlePersistent('fares:search', (e, q: FareQuery, clientId?: string) => {
   return { searchId: id }
 }, () => ({ error: 'private' }))
 
-handlePersistent('fares:flex', async (e, q: FareQuery) => {
+handlePersistent('fares:flex', async (e, q: FareQuery, searchId?: string) => {
   if (!validFareQuery(q)) return []
   const sender = e.sender
-  return fareEngine().flexDates(q, d => { if (!sender.isDestroyed()) sender.send('fares:flexDay', d) })
+  // Same id as the search: cancelling the search stops its flex strip too.
+  const id = typeof searchId === 'string' && /^[\w-]{1,64}$/.test(searchId) ? searchId : undefined
+  return fareEngine().flexDates(q, d => { if (!sender.isDestroyed()) sender.send('fares:flexDay', d) }, id)
 }, () => ({ error: 'private' }))
 
 ipcMain.handle('fares:cancel', (_e, searchId: string) => { _fareEngine?.cancel(String(searchId)) })
@@ -4665,7 +4680,7 @@ handlePersistent('fares:watch', (_e, q: FareQuery, target: number, title: string
 // persistent partition, which an Incognito window must never do.
 handlePersistent('fares:openSite', (_e, url: string) => {
   // Only the sites the engine itself loads — never an arbitrary URL.
-  if (!/^https:\/\/www\.(google\.com\/travel\/flights|kayak\.com|momondo\.com)\//.test(String(url))) return
+  if (!isFareSiteUrl(String(url))) return
   fareEngine(); _fareDriver!.openVisible(String(url))
 }, () => undefined)
 
@@ -5040,11 +5055,16 @@ ipcMain.handle('watch:checkNow', async (_e, id: string) => {
 
 async function checkWatch(w: Watch) {
   if (w.mode === 'fare' && w.fare) {
+    // Stamped before the slow part: the scheduler ticks every minute, and a
+    // check waiting on a busy driver must not be started a second time.
+    w.lastChecked = Date.now()
+    if (fareWatchExpired(w.fare.query.depart, new Date().toISOString().slice(0, 10))) {
+      w.active = false
+      saveWatches()
+      return
+    }
     try {
-      // Google only: one light page per check, never all three sites.
-      fareEngine()
-      const engine = createFareEngine({ driver: _fareDriver!, adapters: FARE_ADAPTERS.filter(a => a.id === 'google') })
-      const offers = await engine.search(w.fare.query, () => {}).done.catch(() => [])
+      const offers = await fareWatchEngine().search(w.fare.query, () => {}).done.catch(() => [])
       const current = offers.length ? Math.min(...offers.map(o => o.price)) : null
       const verdict = fareWatchVerdict(w.fare.lastPrice, current, w.fare.target)
       if (current !== null) w.fare.lastPrice = current

@@ -22,7 +22,9 @@ export function tripToQuery(t: Trip): FareQuery | null {
   if (t.kind !== 'flights') return null
   const from = resolveAirport(t.origin)?.iata, to = resolveAirport(t.destination)?.iata
   if (!from || !to || from === to) return null
-  return { from, to, depart: t.start, ret: t.end, adults: t.travelers, currency: t.currency as FareQuery['currency'] }
+  // Live fares are USD-first (spec assumption): the table prints "$" and the
+  // bag-fee estimates are USD, so asking sites for euros would mix currencies.
+  return { from, to, depart: t.start, ret: t.end, adults: t.travelers, currency: 'USD' }
 }
 
 const MODES = [{ kind: 'flights', label: 'Flights', Icon: Plane }, { kind: 'cars', label: 'Car rentals', Icon: Car }, { kind: 'stays', label: 'Vacation stays', Icon: House }] as const
@@ -73,27 +75,34 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
   const runLive = () => {
     const err = validateTrip(trip); setError(err || '')
     if (err || !query) return
-    setPick(null); setRows([]); setSearched({ ...trip }); setNotice('')
+    setPick(null); setPicking(false); setRows([]); setSearched({ ...trip }); setNotice('')
     void fares.start(query)
     void (window as any).electronAPI?.fares?.handoff(query).then((l: any) => setHandoff(Array.isArray(l) ? l : [])).catch(() => setHandoff([]))
   }
 
-  // One AI pick per finished search, from the ranked rows only.
+  // One AI pick per finished search, from the ranked rows only. Keyed to the
+  // search id: a slow local model can answer after the user has searched
+  // again, and that late answer must neither show nor block the new pick.
+  const pickFor = useRef<string | null>(null)
+  const currentSearch = useRef<string | null>(null)
+  currentSearch.current = fares.state.searchId
   useEffect(() => {
-    if (fares.state.phase !== 'done' || rows.length < 2 || pick || picking) return
+    const id = fares.state.searchId
+    if (fares.state.phase !== 'done' || !id || rows.length < 2 || pickFor.current === id) return
     const chat = (window as any).electronAPI?.ai?.chat
     if (!chat) return
+    pickFor.current = id
     setPicking(true)
     void fetchAiPick(rows, { adults: trip.travelers, needs: { carry: true, checked: false } }, m => chat(m))
-      .then(p => setPick(p)).finally(() => setPicking(false))
-  }, [fares.state.phase, rows, pick, picking, trip.travelers])
+      .then(p => { if (currentSearch.current === id) { setPick(p); setPicking(false) } })
+  }, [fares.state.phase, fares.state.searchId, rows, trip.travelers])
 
   const onRowsRanked = useCallback((r: FareRow[]) => setRows(r), [])
   const openVisible = (url: string) => { void (window as any).electronAPI?.fares?.openSite(url) }
   const allFailed = fares.state.phase === 'done' && fares.state.offers.length === 0
 
   const change = (patch: Partial<Trip>) => {
-    fares.cancel(); setPick(null); setRows([]); setHandoff([])
+    fares.cancel(); setPick(null); setPicking(false); setRows([]); setHandoff([])
     generation.current++; setBusy(false); setTrip(t => ({ ...t, ...patch })); setSearched(null); setResearch(null); setError(''); setNotice('')
   }
   const persist = (next: SavedTrip[]) => {

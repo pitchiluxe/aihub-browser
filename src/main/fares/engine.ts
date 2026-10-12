@@ -1,4 +1,3 @@
-// src/main/fares/engine.ts
 // Runs one fare search across every live site: pages in parallel (the driver
 // caps how many), results streamed per site as they land, a cache so a
 // re-run costs nothing, and spacing so the app never hammers a site into
@@ -8,8 +7,11 @@ import type { PageProbe, SiteAdapter } from './adapters/types'
 import type { PageDriver, PageHandle } from './hiddenPage'
 
 export type SiteStatus = 'loading' | 'done' | 'cached' | 'blocked' | 'unreadable' | 'empty' | 'timeout' | 'error'
-export interface SiteProgress { searchId: string; site: SiteId; label: string; status: SiteStatus; offers: FareOffer[]; url: string; at: number }
-export interface FlexDay { depart: string; ret: string; price: number | null }
+/** `total` is how many sites this search covers — a cached site can report
+ *  before the others have even said "loading", so the renderer cannot infer
+ *  "all done" from the sites it has heard from. */
+export interface SiteProgress { searchId: string; site: SiteId; label: string; status: SiteStatus; offers: FareOffer[]; url: string; at: number; total: number }
+export interface FlexDay { searchId?: string; depart: string; ret: string; price: number | null }
 export interface EngineDeps {
   driver: PageDriver
   adapters: SiteAdapter<any>[]
@@ -42,6 +44,7 @@ export function createFareEngine(deps: EngineDeps) {
   const cache = new Map<string, { at: number; offers: FareOffer[] }>()
   const lastLoad = new Map<SiteId, number>()
   const cancelled = new Set<string>()
+  const running = new Set<string>()
   let seq = 0
 
   /** Load one site and read it. Never throws. */
@@ -82,9 +85,10 @@ export function createFareEngine(deps: EngineDeps) {
    *  first `loading` events are emitted synchronously, ahead of the return. */
   function search(q: FareQuery, onProgress: (p: SiteProgress) => void, clientId?: string) {
     const id = clientId && /^[\w-]{1,64}$/.test(clientId) ? clientId : `fs-${now()}-${++seq}`
+    running.add(id)
     const isLive = () => !cancelled.has(id)
     const emit = (adapter: SiteAdapter<any>, status: SiteStatus, offers: FareOffer[]) => {
-      if (isLive()) onProgress({ searchId: id, site: adapter.id, label: adapter.label, status, offers, url: adapter.url(q), at: now() })
+      if (isLive()) onProgress({ searchId: id, site: adapter.id, label: adapter.label, status, offers, url: adapter.url(q), at: now(), total: deps.adapters.length })
     }
     const done = Promise.all(deps.adapters.map(async adapter => {
       const k = keyOf(q, adapter.id)
@@ -97,34 +101,46 @@ export function createFareEngine(deps: EngineDeps) {
       emit(adapter, r.status, r.offers)
       return r.offers
     })).then(lists => isLive() ? lists.flat() : [])
-      .finally(() => { cancelled.delete(id) })
+      .finally(() => { running.delete(id); cancelled.delete(id) })
     return { id, done }
   }
 
-  async function flexDates(q: FareQuery, onDay: (d: FlexDay) => void): Promise<FlexDay[]> {
+  async function flexDates(q: FareQuery, onDay: (d: FlexDay) => void, searchId?: string): Promise<FlexDay[]> {
     const google = deps.adapters.find(a => a.id === 'google')
     if (!google) return []
+    // Tied to the search it belongs to: a new search cancels the old id, and
+    // a superseded strip must stop loading pages and stop reporting days.
+    const id = searchId ?? `flex-${now()}-${++seq}`
+    running.add(id)
+    const isLive = () => !cancelled.has(id)
     const out: FlexDay[] = []
-    for (const shift of [-3, -2, -1, 1, 2, 3]) {
-      const day = { ...q, depart: shiftDate(q.depart, shift), ret: shiftDate(q.ret, shift) }
-      const k = keyOf(day, 'google')
-      const hit = cache.get(k)
-      let price: number | null
-      if (hit && now() - hit.at < cacheMs) {
-        price = hit.offers.length ? Math.min(...hit.offers.map(o => o.price)) : null
-      } else {
-        const r = await runSite(google, day, () => true, false)
-        if (r.status === 'blocked') break
-        if (r.status === 'done') cache.set(k, { at: now(), offers: r.offers })
-        price = r.offers.length ? Math.min(...r.offers.map(o => o.price)) : null
-        await sleep(flexGapMs)
+    try {
+      for (const shift of [-3, -2, -1, 1, 2, 3]) {
+        if (!isLive()) break
+        const day = { ...q, depart: shiftDate(q.depart, shift), ret: shiftDate(q.ret, shift) }
+        const k = keyOf(day, 'google')
+        const hit = cache.get(k)
+        let price: number | null
+        if (hit && now() - hit.at < cacheMs) {
+          price = hit.offers.length ? Math.min(...hit.offers.map(o => o.price)) : null
+        } else {
+          const r = await runSite(google, day, isLive, false)
+          if (!isLive() || r.status === 'blocked') break
+          if (r.status === 'done') cache.set(k, { at: now(), offers: r.offers })
+          price = r.offers.length ? Math.min(...r.offers.map(o => o.price)) : null
+          await sleep(flexGapMs)
+        }
+        const d: FlexDay = { searchId: id, depart: day.depart, ret: day.ret, price }
+        out.push(d)
+        onDay(d)
       }
-      const d = { depart: day.depart, ret: day.ret, price }
-      out.push(d)
-      onDay(d)
+    } finally {
+      running.delete(id); cancelled.delete(id)
     }
     return out
   }
 
-  return { search, flexDates, cancel: (id: string) => { cancelled.add(id) } }
+  // Only running ids are recorded, so cancelling a finished search (the form
+  // cancels on every edit) does not grow the set forever.
+  return { search, flexDates, cancel: (id: string) => { if (running.has(id)) cancelled.add(id) } }
 }

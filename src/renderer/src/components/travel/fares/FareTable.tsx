@@ -1,4 +1,3 @@
-// src/renderer/src/components/travel/fares/FareTable.tsx
 import React, { useEffect, useMemo, useState } from 'react'
 import { mergeOffers, rankRows, type BagNeeds, type FareRow, type SortMode } from '../../../../../shared/fares/rank'
 import type { FareOffer, SiteId } from '../../../../../shared/fares/types'

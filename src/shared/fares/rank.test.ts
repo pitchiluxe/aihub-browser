@@ -1,4 +1,3 @@
-// src/shared/fares/rank.test.ts
 import { describe, it, expect } from 'vitest'
 import { mergeOffers, rankRows } from './rank'
 import { estimatedBagFee } from './bagFees'
@@ -82,5 +81,18 @@ describe('estimatedBagFee', () => {
     expect(estimatedBagFee('Frontier', 'carry')).toBeGreaterThan(0)
     expect(estimatedBagFee('Delta', 'carry')).toBe(0)
     expect(estimatedBagFee('Unknown Air', 'checked')).toBeGreaterThan(0)
+  })
+})
+
+describe('airline name canonicalisation', () => {
+  it('matches "American" and "American Airlines" as the same flight', async () => {
+    const { offerKey } = await import('./types')
+    const a = offer({ airlines: ['American'] }), b = offer({ airlines: ['American Airlines'] })
+    expect(offerKey(a)).toBe(offerKey(b))
+    expect(mergeOffers([a, { ...b, source: 'kayak' }])).toHaveLength(1)
+  })
+  it('finds bag fees for long-form names', () => {
+    expect(estimatedBagFee('Spirit Airlines', 'carry')).toBe(estimatedBagFee('Spirit', 'carry'))
+    expect(estimatedBagFee('Frontier Airlines', 'carry')).toBeGreaterThan(0)
   })
 })

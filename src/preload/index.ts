@@ -456,7 +456,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fares: {
     search:   (q: any, clientId?: string) => ipcRenderer.invoke('fares:search', q, clientId),
     cancel:   (searchId: string) => ipcRenderer.invoke('fares:cancel', searchId),
-    flex:     (q: any) => ipcRenderer.invoke('fares:flex', q),
+    flex:     (q: any, searchId?: string) => ipcRenderer.invoke('fares:flex', q, searchId),
     handoff:  (q: any) => ipcRenderer.invoke('fares:handoff', q),
     openSite: (url: string) => ipcRenderer.invoke('fares:openSite', url),
     watch:    (q: any, target: number, title: string) => ipcRenderer.invoke('fares:watch', q, target, title),

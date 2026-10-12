@@ -1,4 +1,3 @@
-// src/renderer/src/components/travel/fares/aiPick.ts
 // The AI never sees a booking page. It gets the normalized table — numbers the
 // parsers already validated — and must answer with one row key from it. A
 // pick for a row that isn't there is a hallucination and is dropped.

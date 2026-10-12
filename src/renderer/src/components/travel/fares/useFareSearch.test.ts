@@ -1,4 +1,3 @@
-// src/renderer/src/components/travel/fares/useFareSearch.test.ts
 import { describe, it, expect } from 'vitest'
 import { reduceProgress, initialFareState, type SiteProgress, type FareSearchState } from './useFareSearch'
 import type { FareOffer } from '../../../../../shared/fares/types'
@@ -17,6 +16,15 @@ describe('reduceProgress', () => {
     s = reduceProgress(s, p({ site: 'kayak', label: 'Kayak', status: 'blocked' }), 's1')
     expect(s.phase).toBe('done')
     expect(s.sites.find(x => x.site === 'kayak')!.status).toBe('blocked')
+  })
+
+  it('stays searching when a cached site reports before the others have said loading', () => {
+    let s: FareSearchState = { ...initialFareState(), phase: 'searching' }
+    s = reduceProgress(s, p({ status: 'cached', offers: [o(150, 'google')], total: 3 }), 's1')
+    expect(s.phase).toBe('searching')
+    s = reduceProgress(s, p({ site: 'kayak', label: 'Kayak', status: 'done', offers: [], total: 3 }), 's1')
+    s = reduceProgress(s, p({ site: 'momondo', label: 'Momondo', status: 'blocked', offers: [], total: 3 }), 's1')
+    expect(s.phase).toBe('done')
   })
 
   it('ignores events from a stale search (form edited mid-search)', () => {

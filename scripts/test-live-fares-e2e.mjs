@@ -1,4 +1,3 @@
-// scripts/test-live-fares-e2e.mjs
 // Real search in the built app against live sites. Isolated profile; asserts
 // merged results, at least two sources, and no main-process freeze.
 import path from 'node:path'

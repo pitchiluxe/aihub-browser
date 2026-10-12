@@ -1,4 +1,3 @@
-// src/main/fares/adapters/kayak.test.ts
 import { describe, it, expect } from 'vitest'
 import fixture from '../__fixtures__/atl-lax.json'
 import { kayakAdapter, momondoAdapter, parseKayakCard } from './kayak'
@@ -63,5 +62,23 @@ describe('adapter registry', () => {
   })
   it('parses every Kayak fixture card', () => {
     expect(kayakAdapter.parse(fixture.kayak, q)).toHaveLength(4)
+  })
+})
+
+describe('review fixes', () => {
+  it('allows the visible verify window for every live adapter URL, and nothing else', async () => {
+    const { isFareSiteUrl } = await import('./index')
+    const { googleAdapter } = await import('./google')
+    for (const a of [googleAdapter, kayakAdapter, momondoAdapter]) expect(isFareSiteUrl(a.url(q))).toBe(true)
+    expect(isFareSiteUrl('https://www.google.com/search?q=x')).toBe(false)
+    expect(isFareSiteUrl('https://www.kayak.com.evil.example/flights')).toBe(false)
+    expect(isFareSiteUrl('http://www.kayak.com/flights')).toBe(false)
+  })
+
+  it('counts four-digit prices with separators, so a broken layout reads as unreadable not empty', async () => {
+    const { PRICE_COUNT_SOURCE, COMMON_PROBE } = await import('./types')
+    const re = new RegExp(PRICE_COUNT_SOURCE, 'g')
+    expect('Delta $1,204 · United $2,310 · €89'.match(re)).toHaveLength(3)
+    expect(COMMON_PROBE).toContain(JSON.stringify(PRICE_COUNT_SOURCE))
   })
 })

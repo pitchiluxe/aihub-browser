@@ -1,4 +1,3 @@
-// src/renderer/src/components/travel/fares/AiPickCard.tsx
 import React from 'react'
 import { Sparkles, Loader2 } from 'lucide-react'
 import type { FareRow } from '../../../../../shared/fares/rank'

@@ -1,4 +1,3 @@
-// src/main/fares/adapters/kayak.ts
 // Kayak and Momondo are one platform with one result layout. Each result is a
 // [role="group"] container whose text starts with the keyboard-navigation
 // lines ("Go to next result"…) followed by one block per leg:

@@ -1,4 +1,3 @@
-// src/shared/fares/types.test.ts
 import { describe, it, expect } from 'vitest'
 import { to24h, parseDuration, splitAirlines, parseMoney, normalizeOffer, offerKey, type FareOffer } from './types'
 

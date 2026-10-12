@@ -1,4 +1,3 @@
-// src/main/fares/adapters/google.ts
 // Google Flights renders every offer with a full screen-reader sentence:
 // "From 162 US dollars round trip total. 1 stop flight with Frontier. Leaves …".
 // Accessibility labels change far less often than Google's obfuscated class

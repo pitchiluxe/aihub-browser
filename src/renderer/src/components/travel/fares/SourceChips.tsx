@@ -1,4 +1,3 @@
-// src/renderer/src/components/travel/fares/SourceChips.tsx
 import React from 'react'
 import { Check, Loader2, ShieldAlert, Clock, AlertTriangle, ExternalLink, Database } from 'lucide-react'
 import type { SiteState } from './useFareSearch'
