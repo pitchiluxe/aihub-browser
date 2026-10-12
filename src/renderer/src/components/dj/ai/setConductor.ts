@@ -58,6 +58,8 @@ export class SetConductor extends Emitter {
   private playNextQueue: DjTrack[] = []
   /** Requested songs still to look up — resolved at the start of a refill so the request wins the race. */
   private playNextQueries: string[] = []
+  /** Picks queued after limits were relaxed (see ladder). */
+  private relaxedPicks = new Set<string>()
   private readonly now: () => number
 
   constructor(private deps: ConductorDeps) {
@@ -159,7 +161,7 @@ export class SetConductor extends Emitter {
       const fresh = this.ladder(shortlist.map(s => this.withFacts(s.candidate)), this.context())
       const pick = fresh.ranked[0]
       if (!pick) continue
-      if (fresh.relaxed) relaxed = fresh.relaxed
+      if (fresh.relaxed) { relaxed = fresh.relaxed; this.relaxedPicks.add(trackId(pick.candidate.track)) }
       this.set({ upNext: [...this.state.upNext, pick], tentative: null })
     }
     if (relaxed) this.set({ message: `Couldn't find songs that fit every rule — I relaxed ${relaxed} to keep the music going.` })
@@ -176,7 +178,7 @@ export class SetConductor extends Emitter {
    * repeats. Bans, clean versions and "no <genre>" are never relaxed.
    */
   private ladder(pool: Candidate[], ctx: PlanContext): { ranked: Scored[]; relaxed: string } {
-    const hard = ctx.rules.filter(r => r.kind === 'banArtist' || r.kind === 'noExplicit' || (r.kind === 'lessGenre' && r.hard))
+    const hard = hardRules(ctx.rules)
     const steps: [PlanContext, string][] = [
       [ctx, ''],
       [{ ...ctx, rules: hard }, 'the tempo/energy limits'],
@@ -190,9 +192,24 @@ export class SetConductor extends Emitter {
     return { ranked: [], relaxed: 'everything' }
   }
 
+  /**
+   * Where to look for more songs. A fresh profile has no favourite artists and
+   * YouTube returns the same few results for the brief's words however many are
+   * asked for, so the artists already in this set are searched too.
+   */
   private relatedSeeds(): string[] {
     const p = this.deps.pool.profile()
-    return [...p.nowArtists.slice(0, 2), ...p.topArtists.slice(0, 2).map(a => a.artist)]
+    const banned = this.state.rules.flatMap(r => r.kind === 'banArtist' ? [r.artist] : [])
+    const inSet = [...this.state.played.map(x => x.artist), ...this.pool.map(c => c.track.artist)]
+      .map(a => a.split(/,|&| x | ft\.? | feat\.? /i)[0].trim()).filter(Boolean)
+    const seeds = [...p.nowArtists.slice(0, 2), ...p.topArtists.slice(0, 2).map(a => a.artist), ...inSet]
+    const out: string[] = []
+    for (const s of seeds) {
+      const k = s.toLowerCase()
+      if (!out.some(o => o.toLowerCase() === k) && !banned.some(b => k.includes(b))) out.push(s)
+      if (out.length >= 8) break
+    }
+    return out
   }
 
   /** The AutoMixer's hook. Synchronous; never empty while songs remain. */
@@ -203,7 +220,13 @@ export class SetConductor extends Emitter {
     // forbids — nor the song already playing (a repeat-relaxed pick can sit
     // right behind a dropped one).
     const playingId = this.state.played[this.state.played.length - 1]?.id
-    const ok = (s: Scored) => trackId(s.candidate.track) !== playingId && (s.why === 'you asked for it' || allowedByRules(s.candidate, this.state.rules, this.now()))
+    // A pick queued under relaxed limits answers only to the rules that never relax.
+    const ok = (s: Scored) => {
+      const id = trackId(s.candidate.track)
+      if (id === playingId) return false
+      if (s.why === 'you asked for it') return true
+      return allowedByRules(s.candidate, this.relaxedPicks.has(id) ? hardRules(this.state.rules) : this.state.rules, this.now())
+    }
     while (this.state.upNext[0] && !ok(this.state.upNext[0])) this.set({ upNext: this.state.upNext.slice(1) })
     let head = this.state.upNext[0]
     if (!head) {
@@ -315,6 +338,11 @@ export class SetConductor extends Emitter {
       void this.refill()
     }
   }
+}
+
+/** The rules that are never relaxed: bans, clean versions, "no <genre>". */
+function hardRules(rules: SetRule[]): SetRule[] {
+  return rules.filter(r => r.kind === 'banArtist' || r.kind === 'noExplicit' || (r.kind === 'lessGenre' && r.hard))
 }
 
 function mergePools(a: Omit<Candidate, 'facts'>[], b: Omit<Candidate, 'facts'>[]): Omit<Candidate, 'facts'>[] {

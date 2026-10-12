@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
 import { PRESETS, parseBrief, type SetBrief, type PresetId } from '../ai/setBrief'
 
-export default function StartScreen({ onStart, onTakeDecks }: { onStart: (b: SetBrief) => void; onTakeDecks?: () => void }) {
+export default function StartScreen({ onStart, onTakeDecks, notice }: { onStart: (b: SetBrief) => void; onTakeDecks?: () => void; notice?: string }) {
   const [text, setText] = useState('')
   const [minutes, setMinutes] = useState(60)
   const go = (t: string) => { const b = parseBrief(t); onStart(/\d/.test(t) ? b : { ...b, durationMin: minutes }) }
   return <div className="dj-stage-start">
+    {/* Why the last set ended ("Set finished.", "I ran out of songs…"). */}
+    {notice && <div className="dj-stage-message" role="status">{notice}</div>}
     <h1>What's the vibe?</h1>
     <p className="dj-stage-sub">Describe a set — AIHub picks the songs, mixes them, and follows what you tell it.</p>
     <form onSubmit={e => { e.preventDefault(); if (text.trim()) go(text) }}>

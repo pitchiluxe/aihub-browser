@@ -205,6 +205,32 @@ describe('SetConductor — final review', () => {
     expect(second?.youtubeId).not.toBe(first.youtubeId)
   })
 
+  it('a thin first search is topped up before anything repeats (live run: pool of 4 → Soweto twice)', async () => {
+    const lib = Array.from({ length: 20 }, (_, i) => yt(`artist${i % 4}`))
+    const d = deps(lib)
+    // Like YouTube on a fresh profile: the brief's search keeps returning the same
+    // 4 songs however many are asked for; searching an ARTIST finds their other songs.
+    d.pool.search = async (q: string) => (/^artist\d$/.test(q) ? lib.filter(l => l.track.artist === q) : lib.slice(0, 4)).map(l => l.track)
+    const c = new SetConductor(d)
+    await c.start(parseBrief('afrobeats warm-up, 1h'))
+    const seen: string[] = []
+    for (let i = 0; i < 8; i++) { await c.refill(); const t = c.next(); expect(t).toBeDefined(); seen.push(t!.youtubeId!) }
+    expect(new Set(seen).size).toBe(8)
+    expect(c.state.message).not.toMatch(/repeats/)
+  })
+
+  it('a pick queued under relaxed limits is played, not thrown away at hand-over', async () => {
+    const lib = [yt('a', 120, 0.3), yt('b', 120, 0.3), yt('c', 120, 0.3)]
+    const c = new SetConductor(deps(lib))
+    await c.start(parseBrief('afrobeats, 1h'))
+    c.instruct(parseInstruction('no more slow songs'))   // nothing fits: limits relax
+    await c.refill()
+    const queued = c.state.upNext.map(s => s.candidate.track.youtubeId)
+    expect(queued.length).toBeGreaterThan(1)
+    expect(c.next()?.youtubeId).toBe(queued[0])
+    expect(c.state.upNext.map(s => s.candidate.track.youtubeId)).toContain(queued[1])
+  })
+
   it('coming back from the console restarts the mixer', async () => {
     const lib = Array.from({ length: 5 }, (_, i) => yt(`artist${i}`))
     const d = deps(lib)

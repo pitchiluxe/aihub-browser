@@ -291,6 +291,10 @@ function Console({ engine }: { engine: DjEngine }) {
   useEffect(() => mixer.subscribe(() => {
     if (!mixer.on && conductor.state.active && !conductor.state.paused) mixer.setOn(true)
   }), [mixer, conductor])
+  // Opt-in handle for the end-to-end script (scripts/test-ai-dj-e2e.cjs); off for everyone else.
+  useEffect(() => {
+    try { if (localStorage.getItem('aihub-dj-debug') === '1') (window as any).__aihubDj = { conductor, mixer, engine } } catch { /* storage blocked */ }
+  }, [conductor, mixer, engine])
   // Stop from the stage: end the set FIRST (so the re-arm above cannot restart
   // Automix), then switch Automix off and pause every deck.
   const stopMusic = useCallback(() => {

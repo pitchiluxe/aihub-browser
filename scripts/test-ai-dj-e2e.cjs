@@ -18,8 +18,22 @@ const MINUTES = Number(process.argv[2] || 20)
   page.on('pageerror', e => errors.push('PAGEERROR ' + String(e.message || e).slice(0, 300)))
   await page.waitForTimeout(8000)
   await app.evaluate(() => { const g = globalThis; g.__lag = []; g.__stalls = []; const t0 = Date.now(); let l = Date.now(); g.__t = setInterval(() => { const n = Date.now(); const d = n - l - 50; g.__lag.push(d); if (d > 150) g.__stalls.push({ atS: Math.round((n - t0) / 1000), ms: d }); l = n }, 50) })
+  await page.evaluate(() => localStorage.setItem('aihub-dj-debug', '1'))
   await page.locator('text=AIHub DJ').first().click()
   await page.waitForTimeout(3000)
+  // Log every conductor state change and every next() answer (debug handle).
+  await page.evaluate(() => {
+    const { conductor: c } = window.__aihubDj; const t0 = Date.now(); const log = window.__djLog = []
+    const at = () => Math.round((Date.now() - t0) / 1000)
+    let last = ''
+    c.subscribe(() => {
+      const s = c.state
+      const line = JSON.stringify({ active: s.active, paused: s.paused, msg: s.message, up: s.upNext.map(u => u.candidate.track.title.slice(0, 24)), played: s.played.length, pool: c.pool.length, tent: s.tentative?.candidate.track.title.slice(0, 24) || null })
+      if (line !== last) { last = line; log.push(at() + ' ' + line) }
+    })
+    const next = c.next.bind(c)
+    c.next = () => { const t = next(); log.push(at() + ' next() -> ' + (t ? t.title.slice(0, 30) : 'UNDEFINED') + ' pool=' + c.pool.length + ' ' + JSON.stringify(c.pool.map(p => [p.track.title.slice(0, 18), (window.__aihubDj.conductor.deps.analysis.known(p.track) || {}).playable]))); return t }
+  })
   // The DJ opens on the console; the AI stage is one click away.
   await page.locator('button:has-text("AI DJ stage")').click()
   await page.waitForTimeout(1000)
@@ -35,7 +49,7 @@ const MINUTES = Number(process.argv[2] || 20)
   const chips = await page.locator('.dj-rule').allInnerTexts()
   const msg = await page.locator('.dj-stage-message').innerText().catch(() => '')
 
-  const titleLog = []
+  const titleLog = [], trace = []; let tick = 0
   const titles = new Set(); let silentSince = 0, longestSilence = 0, transitions = 0, lastTitle = ''
   const end = Date.now() + MINUTES * 60_000
   while (Date.now() < end) {
@@ -51,11 +65,20 @@ const MINUTES = Number(process.argv[2] || 20)
       break
     }
     if (Number(meter) < 0.02) { silentSince ||= Date.now(); longestSilence = Math.max(longestSilence, Date.now() - silentSince) } else silentSince = 0
+    if (++tick % 15 === 0) trace.push(await page.evaluate(() => ({
+      now: document.querySelector('.dj-now h2')?.textContent || null,
+      left: document.querySelector('.dj-now-left')?.textContent || null,
+      msg: document.querySelector('.dj-stage-message')?.textContent || null,
+      next: (document.querySelector('.dj-next')?.textContent || '').slice(0, 160),
+      start: !!document.querySelector('input[aria-label="Describe the set"]'),
+      level: getComputedStyle(document.querySelector('.dj-backdrop-glow') || document.body).getPropertyValue('--level'),
+    })).then(s => ({ atS: tick, ...s })).catch(e => ({ atS: tick, err: String(e) })))
   }
+  const djLog = await page.evaluate(() => window.__djLog || []).catch(() => [])
   const lag = await app.evaluate(() => { clearInterval(globalThis.__t); return globalThis.__lag })
   const stalls = await app.evaluate(() => globalThis.__stalls)
   await app.close()
-  const report = { errors: errors.slice(-8), chips, msg, tracks: titles.size, transitions, longestSilenceMs: longestSilence, maxStallMs: Math.max(...lag), stalls, titleLog }
+  const report = { errors: errors.slice(-8), chips, msg, tracks: titles.size, transitions, longestSilenceMs: longestSilence, maxStallMs: Math.max(...lag), stalls, titleLog, trace, djLog }
   console.log(JSON.stringify(report, null, 2))
   const ok = chips.some(c => /no drake/i.test(c)) && chips.some(c => /slow/i.test(c)) && titles.size >= 3 && transitions >= 2 && longestSilence <= 2000 && report.maxStallMs <= 250
   console.log(ok ? 'PASS' : 'FAIL'); process.exit(ok ? 0 : 1)

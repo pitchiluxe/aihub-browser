@@ -88,6 +88,11 @@ describe('StagePage', () => {
     expect(onStop).toHaveBeenCalledTimes(1)
   })
 
+  it('when a set ends, the start screen says why', () => {
+    act(() => root.render(<StagePage engine={engine} conductor={fakeConductor({ message: 'I ran out of songs that fit your rules — tell me a new vibe to keep going.' })} onTakeDecks={() => {}} onAsk={() => {}} />))
+    expect(host.querySelector('.dj-stage-message')?.textContent).toMatch(/ran out of songs/)
+  })
+
   it('after Stop (no set running) the start screen still leads back to the decks', () => {
     const onTake = vi.fn()
     act(() => root.render(<StagePage engine={engine} conductor={fakeConductor()} onTakeDecks={onTake} onAsk={() => {}} />))
