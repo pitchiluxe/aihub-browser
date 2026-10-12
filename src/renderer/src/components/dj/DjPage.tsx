@@ -43,6 +43,7 @@ import './dj-pro.css'
 import './dj-themes.css'
 import './dj-layouts.css'
 import './dj-real.css'
+import './dj-skins.css'
 
 export interface DjTheme { id: string; name: string; swatch: string; dark?: boolean; lightBg?: boolean }
 export const DJ_THEMES: DjTheme[] = [
@@ -90,6 +91,13 @@ export const DJ_LOOKS: { id: string; name: string; preview: string }[] = [
   { id: 'club', name: 'Club', preview: 'linear-gradient(#111, #111) padding-box, linear-gradient(90deg, #22d3ee, #c026d3) border-box' },
   { id: 'retro', name: 'Retro', preview: 'linear-gradient(90deg, #6e4428 0 18%, #e7d6b7 18% 82%, #6e4428 82%)' },
   { id: 'glass', name: 'Glass', preview: 'linear-gradient(135deg, rgba(255,255,255,0.75), rgba(148,163,184,0.35))' },
+  // DJ-software and hardware skins (dj-skins.css).
+  { id: 'pro-dark', name: 'Pro Dark', preview: 'linear-gradient(90deg, #2f9bff 0 10%, #16181b 10% 90%, #ff7a1a 90%)' },
+  { id: 'carbon', name: 'Carbon', preview: 'repeating-linear-gradient(45deg, #1b1c1f 0 4px, #26272b 4px 8px)' },
+  { id: 'cdj', name: 'CDJ', preview: 'radial-gradient(circle, #2b2d30 40%, #3ea6ff 42% 50%, #26282b 52%)' },
+  { id: 'neon-night', name: 'Neon Night', preview: 'linear-gradient(#07070d, #07070d) padding-box, linear-gradient(90deg, #22d3ee, #e879f9) border-box' },
+  { id: 'gold-elite', name: 'Gold Elite', preview: 'linear-gradient(#0f0e0c, #0f0e0c) padding-box, linear-gradient(135deg, #8a6a2b, #e6c66e, #b8913f) border-box' },
+  { id: 'daylight', name: 'Daylight Pro', preview: 'linear-gradient(90deg, #2563eb 0 10%, #f1f2f4 10% 90%, #ea580c 90%)' },
 ]
 const LOOK_KEY = 'aihub-dj-look'
 
