@@ -1,7 +1,7 @@
 # AI DJ Stage — Design
 
 Date: 2026-10-12
-Status: approved in conversation (sections 1–4), pending written-spec review
+Status: approved in conversation (sections 1–4 + revision after probe and new requests), pending written-spec review
 
 ## Intent
 
@@ -41,7 +41,7 @@ English UI text.
 | Piece | File | Used for |
 |---|---|---|
 | Deck engine, YouTube decks (hidden player windows + tab capture) | `components/dj/engine/DjEngine.ts`, `engine/youtubeDeck.ts`, `src/main/dj/youtubeDeck.ts` | Playback |
-| 4× silent scan player | `engine/youtubeScan.ts` (`SCAN_RATE = 4`) | Pre-analysis, extended to collect audio |
+| Silent scan player | `engine/youtubeScan.ts` (runs at 4× for waveforms) | Pre-analysis at **2×**, extended to collect audio |
 | Tempo / key analysis | `engine/analysis.ts` (`measureTempo`), `engine/key.ts` (Camelot) | Track facts |
 | AutoMixer + transitions | `engine/autoMixer.ts`, `engine/transitionFx.ts` | Executing transitions |
 | Taste learning | `taste.ts`, `listeningTracker.ts` | Familiar/disliked scoring |
@@ -58,7 +58,7 @@ CandidatePool ──► SetPlanner (pure) ──► SetConductor (lookahead = 3)
   favourites/liked     flow + taste +         │        ▲
   local library        discovery fit          ▼        │ facts
   YouTube search                        AnalysisQueue ─┘
-  (AI seeds → rule fallback)            4× scan → tempo, key, energy, cue points
+  (AI seeds → rule fallback)            2× scan → tempo, key, energy, cue points
                                               │
                          AutoMixer + transitionFx (existing) ──► decks
                                               │
@@ -72,7 +72,7 @@ CandidatePool ──► SetPlanner (pure) ──► SetConductor (lookahead = 3)
 | `SetBrief` | `ai/setBrief.ts` | Parse a brief into `{ vibe, durationMin, curve: EnergyPoint[], discoveryShare }`; rule parser for presets and common phrasing ("2h", "peak at 11", "warm-up into"), AI model only for the rest |
 | `CandidatePool` | `ai/candidatePool.ts` | Collect candidates from taste favourites/likes, local library and YouTube searches; dedupe by `videoId` / path; mark `known` (played before) vs `discovery` |
 | `TrackFacts` | `ai/trackFacts.ts` | Per-track `{ bpm, bpmConfidence, camelot, keyConfidence, energy, introEndSec, outroStartSec, playable }`; persisted through the debounced async JSON store, capped at 5,000 entries |
-| `AnalysisQueue` | `engine/analysisQueue.ts` | Sequential pre-scan of lookahead tracks (YouTube via `YouTubeScan` extended to collect audio; local files via direct decode); one scan player at a time; pauses during transitions |
+| `AnalysisQueue` | `engine/analysisQueue.ts` | Sequential pre-scan of lookahead tracks at 2× (YouTube via a scan player extended to collect audio; local files via direct decode); one scan player at a time; pauses during transitions |
 | `SetPlanner` | `ai/setPlanner.ts` | Pure ranking of candidates for the next slot; returns score parts for "why" |
 | `SetConductor` | `ai/setConductor.ts` | Owns the set: keeps 3 tracks of analysed lookahead, hands the next track to the AutoMixer, applies steering, pauses/resumes around "Take the decks" |
 | Stage | `stage/StagePage.tsx`, `stage/NowCard.tsx`, `stage/NextStrip.tsx`, `stage/EnergyGraph.tsx`, `stage/SteerBar.tsx`, `stage/Backdrop.tsx`, `stage/Visualizer.tsx`, `stage/StartScreen.tsx`, `stage/stage.css` | UI |
@@ -113,6 +113,75 @@ CandidatePool ──► SetPlanner (pure) ──► SetConductor (lookahead = 3)
   follow the app theme, backdrop stays dark; fills the tab without
   scrolling; bottom-sheet layout on narrow windows.
 
+## Probe findings (2026-10-12) and analysis changes
+
+Scanned real YouTube songs in the built app (hidden player, tab capture,
+`keyLock` off so speed-up is exact time compression), analysed with the
+app's own `detectBpm` / `detectKey`:
+
+| Song | 4× | 2× | 1× | True |
+|---|---|---|---|---|
+| Get Lucky | 115.4 · 11A | — | — | 116 · 11A |
+| Shape of You | 126.3 · 12A | 96.0 · 11A | 96.0 · 11A | 96 · 12A |
+| Levitating | 103.4 · 1B | 103.4 · 11A | — | 103 · 10A |
+| Happy | 107.0 · 4A | — | 106.0 · 4A | 160 · 4A |
+| Blinding Lights | 115.4 · 6B | 115.4 · 4A | 115.4 · 4A | 171 · 4A |
+
+Decisions:
+- **Scan at 2×** (4× loses accuracy; 2× matches 1×). A 4-minute song is read
+  in ~2 minutes, still within one track's playtime.
+- **Fix `detectBpm`'s ⅔ confusion** (Happy and Blinding Lights read ⅔ of the
+  true tempo even at 1×). This also fixes the BPM the existing console shows.
+- Keys with confidence < 0.4 count as low-confidence (neutral key score).
+
+## Following instructions
+
+Measured today (`parseCommand`): "no more slow songs" and "no slow songs" →
+chill (the opposite); "play Calm Down by Rema next" → chill; "play my
+favorites" / "play only afrobeats" / "play 3 Wizkid songs then Davido" are
+searched literally; "don't play Drake", "stick to amapiano", "switch to
+amapiano", "keep it under 110 bpm", "less hip hop", "avoid explicit songs",
+"stop after this song", "keep the energy high for the next hour" are not
+understood and fall through to a slow or failing model.
+
+Design:
+- **Set rules** — standing constraints held by the conductor and enforced by
+  the planner on every pick until removed: `banArtist`, `onlyGenres` /
+  `lessGenre` / `moreGenre`, `tempoRange`, `minEnergy` / `maxEnergy` (with
+  optional expiry, e.g. "for the next hour"), `noExplicit` (title/metadata
+  markers), `stopAfterCurrent`, `sequence` (e.g. 3 × Wizkid then Davido),
+  `playNext` (a specific song).
+- **Instruction parser** (`ai/instructions.ts`) — replaces keyword matching
+  for steering: handles negation scope ("no more slow songs" → `minEnergy`),
+  quoted or "X by Y" song titles before mood words, references ("my
+  favorites" → favourites pool, "never heard" → discovery 100% for N tracks),
+  sequences, durations, and the existing one-shot actions (skip, pause,
+  volume, sampler hits).
+- **Model fallback** only for unparsed text; its reply must be the same
+  rule/action JSON (whitelisted fields); anything else is dropped and the
+  stage says what it could not do.
+- **Confirmation** for every instruction ("Got it — no Drake for the rest of
+  the set"), and an **active-rules chip row** on the stage; tapping a chip
+  removes the rule.
+
+## Stage themes
+
+Each theme is a distinct experience — its own layout composition,
+typography, motion and visualizer — over the same conductor state and
+controls. The console's existing 12 colour themes are unchanged.
+
+| Theme | Character |
+|---|---|
+| Cinema (default) | Full-bleed video, glass cards |
+| Club Neon | Black, laser-line visualizer, giant BPM pulsing on the beat, condensed bold type, edge HUD |
+| Vinyl Lounge | Warm analog: spinning record with album art at centre, serif type, cream/wood tones, slow motion |
+| Minimal Studio | Light, Swiss-grid typography, full-width waveform timeline, no video |
+| Festival | Sunset-gradient sky, huge now-playing type, crowd-energy meter, burst on drops |
+| Radio | Compact "on air" strip for small windows |
+
+A theme picker shows a live mini-preview of each; the choice persists.
+Switching themes never interrupts playback.
+
 ## Failure handling
 
 | Failure | Behaviour |
@@ -135,10 +204,17 @@ CandidatePool ──► SetPlanner (pure) ──► SetConductor (lookahead = 3)
 
 ## Testing
 
-- **Probe (build task 1, gate):** scan 5 real YouTube tracks with known
-  tempo and key at 4×. Pass: tempo within ±2 BPM on ≥4/5, key within
-  Camelot ±1 on ≥3/5. Fail: switch to measuring in the first 24 s of play and
-  ordering only the next track; report to the user before continuing.
+- **Tempo-detector regression tests:** real onset curves of Happy (160 BPM)
+  and Blinding Lights (171 BPM), captured once into fixtures, must read
+  within ±2 BPM (today both read ⅔: 106/107 and 115.4); existing
+  `analysis.test.ts` cases keep passing.
+- **Live scan check:** the 5 probe songs scanned at 2× in the built app —
+  tempo within ±2 BPM on ≥4/5 and key within Camelot ±1 on ≥4/5.
+- **Instruction corpus:** ≥40 real phrasings (every failing phrase in
+  "Following instructions" included) each map to the expected action or
+  rule; none map to an opposite action.
+- **Themes:** each theme renders now/next/steering and switches without
+  interrupting playback.
 - Unit: `SetBrief` parsing; every `SetPlanner` rule; `SetConductor`
   lookahead refill, skip, steering, take-the-decks pause/resume (fake decks,
   fake scanner); `TrackFacts` cap and confidence handling.
