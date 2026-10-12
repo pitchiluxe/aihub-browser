@@ -14,7 +14,7 @@ export default function StagePage({ engine, conductor, onTakeDecks, onStop, onAs
   useSyncExternalStore(conductor.subscribe, conductor.getVersion)
   const s = conductor.state
   const [discovery, setDiscovery] = useState(s.brief?.discoveryShare ?? 0.25)
-  if (!s.active || !s.brief) return <div className="dj-stage theme-cinema"><Backdrop engine={engine} /><StartScreen onStart={b => { void conductor.start(b) }} /></div>
+  if (!s.active || !s.brief) return <div className="dj-stage theme-cinema"><Backdrop engine={engine} /><StartScreen onStart={b => { void conductor.start(b) }} onTakeDecks={onTakeDecks} /></div>
   return <div className="dj-stage theme-cinema">
     <Backdrop engine={engine} />
     <div className="dj-stage-top">

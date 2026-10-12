@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { PRESETS, parseBrief, type SetBrief, type PresetId } from '../ai/setBrief'
 
-export default function StartScreen({ onStart }: { onStart: (b: SetBrief) => void }) {
+export default function StartScreen({ onStart, onTakeDecks }: { onStart: (b: SetBrief) => void; onTakeDecks?: () => void }) {
   const [text, setText] = useState('')
   const [minutes, setMinutes] = useState(60)
   const go = (t: string) => { const b = parseBrief(t); onStart(/\d/.test(t) ? b : { ...b, durationMin: minutes }) }
@@ -18,5 +18,6 @@ export default function StartScreen({ onStart }: { onStart: (b: SetBrief) => voi
     <div className="dj-stage-presets">
       {(Object.keys(PRESETS) as PresetId[]).map(id => <button key={id} onClick={() => go(PRESETS[id].text)}>{PRESETS[id].label}</button>)}
     </div>
+    {onTakeDecks && <button className="dj-stage-decks" onClick={onTakeDecks}>🎛 Go to the decks</button>}
   </div>
 }

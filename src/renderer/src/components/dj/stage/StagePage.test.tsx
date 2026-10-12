@@ -88,6 +88,13 @@ describe('StagePage', () => {
     expect(onStop).toHaveBeenCalledTimes(1)
   })
 
+  it('after Stop (no set running) the start screen still leads back to the decks', () => {
+    const onTake = vi.fn()
+    act(() => root.render(<StagePage engine={engine} conductor={fakeConductor()} onTakeDecks={onTake} onAsk={() => {}} />))
+    act(() => btn('Go to the decks').click())
+    expect(onTake).toHaveBeenCalledTimes(1)
+  })
+
   it('Take the decks hands over to the console', () => {
     const onTake = vi.fn()
     act(() => root.render(<StagePage engine={engine} conductor={fakeConductor({ active: true, brief: { vibe: 'x', durationMin: 60, curve: [{ atMin: 0, level: 0.5 }], discoveryShare: 0.25, seeds: [], rules: [] } })} onTakeDecks={onTake} onAsk={() => {}} />))
