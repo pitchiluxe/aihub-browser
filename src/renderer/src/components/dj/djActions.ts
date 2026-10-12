@@ -22,6 +22,10 @@ export interface DjEnv {
   /** The next song waiting in the set list or the YouTube queue, taken out of it. */
   pullNext(): DjTrack | undefined
   say(msg: string): void
+  /** "load X on deck A" / "play X on deck B". */
+  loadDeck?(query: string, deck: 'A' | 'B', play: boolean): void
+  /** The running AI set, when there is one — standing rules ("no Drake") go to it. */
+  conductor?(): { instruct(p: import('./ai/instructions').Parsed): void; state: { active: boolean } } | null
 }
 
 export const DjEnvContext = createContext<DjEnv | null>(null)

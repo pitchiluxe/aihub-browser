@@ -66,7 +66,7 @@ describe('SetConductor', () => {
 
   it('scans at most two candidates per pick (a 2x scan is ~2 minutes each)', async () => {
     const lib = Array.from({ length: 10 }, (_, i) => yt(`artist${i}`))
-    const ensure = vi.fn(async (t: any) => ({ bpm: 120, bpmConfidence: 1, camelot: '8A', keyConfidence: 0.9, energy: 0.6, introEndSec: 5, outroStartSec: 200, durationSec: 210, playable: true, at: 1 }))
+    const ensure = vi.fn(async (_t: any) => ({ bpm: 120, bpmConfidence: 1, camelot: '8A', keyConfidence: 0.9, energy: 0.6, introEndSec: 5, outroStartSec: 200, durationSec: 210, playable: true, at: 1 }))
     const c = new SetConductor(deps(lib, { analysis: { ensure, known: () => null } }))
     await c.start(parseBrief('afrobeats, 1h'))
     await c.refill()

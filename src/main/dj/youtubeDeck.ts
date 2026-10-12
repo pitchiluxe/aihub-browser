@@ -56,6 +56,9 @@ interface Player {
 }
 
 const players = new Map<string, Player>()
+/** Deck player sizes: SD while unseen (audio only), HD while the video is shown. */
+const SD = { w: 640, h: 360 }
+const HD = { w: 1280, h: 720 }
 const keyOf = (owner: WebContents, deck: YtDeckId) => `${owner.id}:${deck}`
 
 function validDeck(d: unknown): d is YtDeckId {
@@ -85,8 +88,10 @@ async function ensurePlayer(owner: WebContents, deck: YtDeckId): Promise<Player>
 
   const win = new BrowserWindow({
     show: false,
-    width: isScan(deck) ? 256 : 640,
-    height: isScan(deck) ? 144 : 360,
+    width: isScan(deck) ? 256 : SD.w,
+    height: isScan(deck) ? 144 : SD.h,
+    // Exact 16:9 content: a frame-sized window letterboxed the picture.
+    useContentSize: true,
     skipTaskbar: true,
     focusable: false,
     title: `AIHub DJ deck ${deck}`,
@@ -163,7 +168,14 @@ const INSTALL_JS = `(() => {
     css.id = 'aihub-dj-clean'
     css.textContent = '.ytp-chrome-top,.ytp-chrome-bottom,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-pause-overlay,' +
       '.ytp-large-play-button,.ytp-bezel,.ytp-bezel-text-wrapper,.ytp-watermark,.ytp-ce-element,.html5-endscreen,' +
-      '.ytp-cards-teaser,.ytp-paid-content-overlay,.ytp-impression-link,.iv-branding,.annotation{display:none!important}'
+      '.ytp-cards-teaser,.ytp-paid-content-overlay,.ytp-impression-link,.iv-branding,.annotation{display:none!important}' +
+      // YouTube renames its overlay layers (2026: ytp-timely-actions-content, captions):
+      // hide every player layer except the video itself, and make it cover the window.
+      '#movie_player>:not(.html5-video-container){display:none!important}' +
+      // …and the 2026 embed draws its bezel, share and logo OUTSIDE #movie_player:
+      // anything that is not the video and does not contain it is hidden.
+      'body *:not(video):not(:has(video)){visibility:hidden!important}' +
+      '.html5-video-container,video{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;object-fit:cover!important}'
     document.head.appendChild(css)
   }
   if (!window.__aihubDj) {
@@ -293,6 +305,11 @@ export function registerYouTubeDeckIpc(): void {
     if (cmd === 'video') {
       // Scan players feed only the waveform reader: their picture stays hidden.
       p.showVideo = value === true && !isScan(deck)
+      // HD only while someone watches: YouTube picks its stream from the
+      // player size, and a hidden player drawing big frames is what made the
+      // music stutter before (v1.70.4).
+      const size = p.showVideo ? HD : SD
+      if (!p.win.isDestroyed()) p.win.setContentSize(size.w, size.h)
       await inFrame(p, videoJs(p.showVideo))
       return true
     }

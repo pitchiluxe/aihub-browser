@@ -29,7 +29,8 @@ function cover(g: CanvasRenderingContext2D, src: CanvasImageSource, sw: number, 
   g.drawImage(src, (w - dw) / 2 + dx, (h - dh) / 2, dw, dh)
 }
 
-export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjEngine; big?: boolean; onToggleBig?: () => void }) {
+/** `bare`: picture only — no beat outline or caption strip (the AI DJ stage shows those itself). */
+export default function VideoMonitor({ engine, big, onToggleBig, bare }: { engine: DjEngine; big?: boolean; onToggleBig?: () => void; bare?: boolean }) {
   const cvRef = useRef<HTMLCanvasElement>(null)
   const lastLive = useRef<DeckId>('A')
   const all = DECK_IDS.map(id => engine.decks[id])
@@ -103,7 +104,7 @@ export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjE
 
     // Beat pulse on the dominant deck.
     const dom = picks[0].d
-    if (dom.playing && dom.gridKnown) {
+    if (!bare && dom.playing && dom.gridKnown) {
       const phase = ((dom.time - dom.firstBeat) / dom.beatLen) % 1
       const p = Math.pow(1 - (phase < 0 ? phase + 1 : phase), 6)
       g.strokeStyle = `rgba(255,255,255,${0.35 * p})`
@@ -112,6 +113,7 @@ export default function VideoMonitor({ engine, big, onToggleBig }: { engine: DjE
     }
 
     // Caption: what is on.
+    if (bare) return
     g.fillStyle = 'rgba(0,0,0,0.45)'
     g.fillRect(0, h - 20, w, 20)
     g.font = `600 ${big ? 13 : 10.5}px Inter, Arial`

@@ -64,6 +64,26 @@ describe('one-shot actions still work', () => {
   ])('%s', (text, want) => { expect(action(text)).toEqual(want) })
 })
 
+describe('playing a song on request', () => {
+  const first = (t: string) => parseInstruction(t, NOW).items[0]
+  it.each([
+    ['play Calm Down by Rema', { action: { type: 'mixin', query: 'calm down rema' } }],
+    ['play Essence by Wizkid now', { action: { type: 'mixin', query: 'essence wizkid' } }],
+    ['play "Last Last"', { action: { type: 'mixin', query: 'last last' } }],
+    ['put Last Last by Burna Boy on deck B', { load: { query: 'last last burna boy', deck: 'B', play: false } }],
+    ['load Essence on deck a', { load: { query: 'essence', deck: 'A', play: false } }],
+    ['play Peru by Fireboy on deck B', { load: { query: 'peru fireboy', deck: 'B', play: true } }],
+  ])('%s', (text, want) => { expect(first(text)).toEqual(want) })
+
+  it('"next" still queues instead of interrupting', () => {
+    expect(first('play Calm Down by Rema next')).toEqual({ rule: { kind: 'playNext', query: 'calm down rema' } })
+  })
+  it('confirms what it will play', () => {
+    expect(parseInstruction('play Calm Down by Rema', NOW).confirm).toMatch(/calm down/i)
+    expect(parseInstruction('load Essence on deck a', NOW).confirm).toMatch(/deck a/i)
+  })
+})
+
 describe('removing rules and confirmations', () => {
   it('"you can play Drake again" removes the ban', () => {
     expect(parseInstruction('you can play Drake again', NOW).items[0]).toEqual({ removeRule: 'banArtist', value: 'drake' })

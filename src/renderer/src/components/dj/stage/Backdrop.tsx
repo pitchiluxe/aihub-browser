@@ -23,7 +23,7 @@ export default function Backdrop({ engine }: { engine: DjEngine }) {
     return () => cancelAnimationFrame(raf)
   }, [engine])
   return <div className="dj-backdrop">
-    {hasVideo ? <div className="dj-backdrop-video"><VideoMonitor engine={engine} big /></div> : null}
+    {hasVideo ? <div className="dj-backdrop-video"><VideoMonitor engine={engine} big bare /></div> : null}
     <div ref={glow} className="dj-backdrop-glow" />
     <div className="dj-backdrop-shade" />
   </div>

@@ -35,6 +35,7 @@ import { factsCache } from './ai/trackFacts'
 import { buildProfile, tasteEvents } from './taste'
 import { queueStore, FAVORITES_ID, trackFrom } from './ytQueue'
 import { searchYouTube } from './libraryData'
+import { isSong } from './ai/candidatePool'
 import { runIntent, type PanelControls } from './djActions'
 import { setEnergy } from './djBrain'
 import './dj.css'
@@ -217,16 +218,35 @@ function Console({ engine }: { engine: DjEngine }) {
 
   const mixNow = useCallback((track: DjTrack) => { void mixer.mixNow(track) }, [mixer])
 
+  // "load X on deck A" / "play X on deck B": a real song on the named deck.
+  const loadDeck = useCallback(async (query: string, deckId: 'A' | 'B', play: boolean) => {
+    const t = (await searchYouTube(query, 8).catch(() => [] as DjTrack[])).find(isSong)
+    if (!t) { say(`Could not find "${query}" on YouTube`); return }
+    const deck = engine.decks[deckId]
+    // A busy deck is never cut off mid-song: the request is mixed in instead.
+    if (deck.active || deck.held) { say(`Deck ${deckId} is playing — mixing ${t.title} in instead`); void mixer.mixNow(t); return }
+    tracker.noteLoad(deckId, false)
+    await deck.load(t)
+    if (deck.error) { say(`Couldn't load ${t.title}: ${deck.error}`); return }
+    if (play) {
+      const other = engine.decks[deckId === 'A' ? 'B' : 'A']
+      if (!other.playing) engine.setCrossfader(deckId === 'A' ? 0 : 1)
+      await deck.play()
+    }
+  }, [engine, mixer, say, tracker])
+
   // What the AI DJ assistant may reach — the same calls the buttons make.
   const env = useMemo<DjEnv>(() => ({
     engine, mixer, mixNow, say,
+    loadDeck: (q, d, p) => { void loadDeck(q, d, p) },
+    conductor: () => conductorRef.current,
     playNext: ts => setSidelist(s => [...ts, ...s]),
     pullNext: () => {
       const [t, ...rest] = sideRef.current
       if (t) { setSidelist(() => rest); return t }
       return takeNext()
     },
-  }), [engine, mixer, mixNow, say, setSidelist])
+  }), [engine, mixer, mixNow, say, setSidelist, loadDeck])
 
   // ── AI DJ: conductor + stage (the default view) ──
   const [stageView, setStageView] = useState<'stage' | 'console'>(() => readPref(STAGE_VIEW_KEY) === 'console' ? 'console' : 'stage')
@@ -263,10 +283,11 @@ function Console({ engine }: { engine: DjEngine }) {
     void askDj(text, {
       conductor,
       runAction: a => { void runIntent(a, env, stageControls).then(r => { if (r) say(r) }) },
+      loadDeck: (q, d, p) => { void loadDeck(q, d, p) },
       chat: (m: any[]) => (window as any).electronAPI?.ai?.chat(m),
       say,
     })
-  }, [conductor, env, stageControls, say])
+  }, [conductor, env, stageControls, say, loadDeck])
 
   const dropOn = (id: DeckId) => async (src: string | File) => {
     if (typeof src === 'string') {

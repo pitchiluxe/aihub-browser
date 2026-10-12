@@ -21,10 +21,12 @@ export default function StagePage({ engine, conductor, onTakeDecks, onAsk }: { e
       <NowCard engine={engine} conductor={conductor} />
       <NextStrip upNext={s.upNext} />
     </div>
-    {s.message && <div className="dj-stage-message" role="status">{s.message}</div>}
-    <RulesChips rules={s.rules} onRemove={i => conductor.removeRule(i)} />
+    <div className="dj-stage-centre">
+      {(engine as any).fading && s.handoff && <div className="dj-caption" role="status">{handoffCaption(s.handoff)}</div>}
+      {s.message && <div className="dj-stage-message" role="status">{s.message}</div>}
+      <RulesChips rules={s.rules} onRemove={i => conductor.removeRule(i)} />
+    </div>
     <EnergyGraph brief={s.brief} startedAt={s.startedAt} played={s.played.length} onPeak={m => conductor.setPeak(m)} />
-    {(engine as any).fading && s.handoff && <div className="dj-caption" role="status">{handoffCaption(s.handoff)}</div>}
     <SteerBar
       discovery={discovery}
       onDiscovery={v => { setDiscovery(v); conductor.setDiscovery(v) }}

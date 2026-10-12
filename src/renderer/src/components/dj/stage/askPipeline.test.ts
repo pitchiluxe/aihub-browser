@@ -10,6 +10,17 @@ describe('askDj', () => {
     expect(d.conductor.instruct).toHaveBeenCalledWith(expect.objectContaining({ items: [{ rule: { kind: 'banArtist', artist: 'drake' } }] }))
     expect(d.runAction).not.toHaveBeenCalled()
   })
+  it('plays a named song now through the existing mix-in action', async () => {
+    const d = deps()
+    await askDj('play Calm Down by Rema', d)
+    expect(d.runAction).toHaveBeenCalledWith({ type: 'mixin', query: 'calm down rema' })
+  })
+  it('loads a named deck when asked', async () => {
+    const d = { ...deps(), loadDeck: vi.fn() }
+    await askDj('play Peru by Fireboy on deck B', d)
+    expect(d.loadDeck).toHaveBeenCalledWith('peru fireboy', 'B', true)
+    expect(d.say).toHaveBeenCalledWith(expect.stringMatching(/deck b/i))
+  })
   it('runs one-shot actions through the existing executor', async () => {
     const d = deps()
     await askDj('skip', d)

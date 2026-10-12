@@ -39,7 +39,7 @@ export async function captureTab(id: string, video: boolean): Promise<MediaStrea
   const src = { chromeMediaSource: 'tab', chromeMediaSourceId: id }
   return navigator.mediaDevices.getUserMedia({
     audio: video ? false : ({ mandatory: src } as any),
-    video: video ? ({ mandatory: { ...src, maxWidth: 640, maxHeight: 360, maxFrameRate: 24 } } as any) : false,
+    video: video ? ({ mandatory: { ...src, maxWidth: 1280, maxHeight: 720, maxFrameRate: 30 } } as any) : false,
   })
 }
 

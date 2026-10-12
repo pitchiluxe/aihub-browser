@@ -21,7 +21,12 @@ export type SetRule =
   | { kind: 'discoveryBurst'; tracks: number }
   | { kind: 'favoritesOnly'; tracks: number }
 
-export type Instruction = { action: DjIntent } | { rule: SetRule } | { removeRule: SetRule['kind']; value?: string }
+export type Instruction =
+  | { action: DjIntent }
+  | { rule: SetRule }
+  | { removeRule: SetRule['kind']; value?: string }
+  /** "load X on deck A" / "play X on deck B": a specific deck, now. */
+  | { load: { query: string; deck: 'A' | 'B'; play: boolean } }
 export interface Parsed { items: Instruction[]; confirm: string; understood: boolean }
 
 const GENRES = ['afrobeats', 'afrobeat', 'amapiano', 'hip hop', 'hip-hop', 'rap', 'r&b', 'rnb', 'house', 'deep house', 'tech house', 'techno', 'drum and bass', 'dnb', 'dancehall', 'reggae', 'reggaeton', 'pop', 'rock', 'jazz', 'gospel', 'soul', 'funk', 'disco', 'edm', 'trance', 'dubstep', 'latin', 'salsa', 'bachata', 'kpop', 'k-pop', 'country', 'lofi', 'lo-fi', 'trap', 'drill', 'bongo', 'highlife', 'soca', 'kompa', 'zouk', 'bollywood', 'classical', 'blues', 'garage', 'uk garage', 'afro house']
@@ -51,9 +56,10 @@ function rules(t: string, now: number): SetRule | { remove: SetRule['kind']; val
   // Lifting a ban comes before banning: "you can play Drake again".
   if ((m = /^(?:you can |it'?s ok(?:ay)? to )?play (.+?) again$/.exec(t))) return { remove: 'banArtist', value: m[1].replace(/^any /, '').trim() }
 
-  // Song titles before anything mood-shaped: "play Calm Down by Rema next".
-  if ((m = /^(?:play|put on|queue|cue up) "([^"]{2,80})"(?: by ([^,]{2,60}))?(?: next| now)?$/.exec(t))) return { kind: 'playNext', query: [m[1], m[2]].filter(Boolean).join(' ').trim() }
-  if ((m = /^(?:play|put on|queue|cue up) (.{2,80}?) by (.{2,60}?)(?: next| now)?$/.exec(t))) return { kind: 'playNext', query: `${m[1]} ${m[2]}`.trim() }
+  // Song titles before anything mood-shaped: "play Calm Down by Rema next"
+  // queues it. (Without "next" it plays now — see songNow in parseInstruction.)
+  if ((m = /^(?:play|put on|queue|cue up) "([^"]{2,80})"(?: by ([^,]{2,60}))? next$/.exec(t))) return { kind: 'playNext', query: [m[1], m[2]].filter(Boolean).join(' ').trim() }
+  if ((m = /^(?:play|put on|queue|cue up) (.{2,80}?) by (.{2,60}?) next$/.exec(t))) return { kind: 'playNext', query: `${m[1]} ${m[2]}`.trim() }
 
   if (/^stop after (this|the current)( one| song| track)?$|^(this is|make this) the last (song|one|track)$|^last song$/.test(t)) return { kind: 'stopAfterCurrent' }
   if (/\b(explicit|clean versions?|no swearing|no cursing|radio edits?)\b/.test(t) && /\b(no|avoid|without|clean|only|radio)\b/.test(t)) return { kind: 'noExplicit' }
@@ -132,12 +138,36 @@ function confirmFor(i: Instruction): string {
     }
   }
   if ('removeRule' in i) return `Okay — ${i.value ? titleCase(i.value) : 'that'} is allowed again.`
+  if ('load' in i) return `${i.load.play ? 'Playing' : 'Loading'} ${titleCase(i.load.query)} on deck ${i.load.deck}.`
+  if (i.action.type === 'mixin') return `Playing ${titleCase(i.action.query)} now.`
   return ''
+}
+
+/**
+ * A named song, to play NOW (or on a named deck). Checked before the rules:
+ * "play Calm Down by Rema" is a song, not a request for calm music.
+ */
+function songNow(t: string): Instruction | null {
+  let m: RegExpExecArray | null
+  const title = (s: string) => s.replace(/^"|"$/g, '').replace(/"/g, '').replace(/ by /, ' ').replace(/\s+/g, ' ').trim()
+  if ((m = /^(play|put|load|cue up|throw|drop) (?:on )?(.{2,100}?) (?:on|onto|to|in) deck ([ab])$/.exec(t))) {
+    return { load: { query: title(m[2]), deck: m[3].toUpperCase() as 'A' | 'B', play: m[1] === 'play' || m[1] === 'drop' } }
+  }
+  if (/ next$/.test(t)) return null
+  if ((m = /^(?:play|put on|spin|drop) "([^"]{2,80})"(?: by ([^,]{2,60}?))?(?: now)?$/.exec(t))) {
+    return { action: { type: 'mixin', query: [m[1], m[2]].filter(Boolean).join(' ').trim() } }
+  }
+  if ((m = /^(?:play|put on|spin|drop) (.{2,80}?) by (.{2,60}?)(?: now)?$/.exec(t))) {
+    return { action: { type: 'mixin', query: `${m[1]} ${m[2]}`.trim() } }
+  }
+  return null
 }
 
 export function parseInstruction(text: string, now = Date.now()): Parsed {
   const t = strip(clean(text))
   if (!t) return { items: [], confirm: '', understood: false }
+  const song = songNow(t)
+  if (song) return { items: [song], confirm: confirmFor(song), understood: true }
   const r = rules(t, now)
   if (r && 'remove' in r) {
     const item: Instruction = { removeRule: r.remove, ...(r.value ? { value: r.value } : {}) }

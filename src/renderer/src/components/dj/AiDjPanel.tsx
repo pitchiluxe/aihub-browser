@@ -18,11 +18,12 @@ import {
   clearTaste, currentProfile, describeTaste, learningEnabled, setLearning, subscribeTaste, tasteEvents, tasteVersion,
 } from './taste'
 import {
-  buildCommandPrompt, fallbackQueries, getEnergy, parseCommand, parseModelIntents, setEnergy, subscribeEnergy,
+  buildCommandPrompt, fallbackQueries, getEnergy, parseModelIntents, setEnergy, subscribeEnergy,
   type DjIntent, type Energy, type SetContext,
 } from './djBrain'
 import { DjEnvContext, describeDeck, onAir, runIntent, type PanelControls } from './djActions'
 import { setVoiceEnabled, subscribeVoice, voiceEnabled } from './djVoice'
+import { parseInstruction } from './ai/instructions'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
 
 const VIBES = ['Afrobeats party', 'Chill R&B evening', 'Deep house sunset', '90s hip-hop classics', 'Gospel praise', 'Amapiano groove']
@@ -210,9 +211,23 @@ export default function AiDjPanel({ sidelistCount, addTracks, automix, setAutomi
     setAsking(true)
     try {
       let intents: DjIntent[] = []
-      const rule = parseCommand(text)
-      if (rule) intents = [rule]
-      else {
+      // The instruction reader understands negation, song titles and decks —
+      // the old keyword parser turned "no more slow songs" into "chill".
+      const parsed = parseInstruction(text)
+      const loads = parsed.items.filter(i => 'load' in i)
+      const rules = parsed.items.filter(i => 'rule' in i || 'removeRule' in i)
+      if (loads.length || rules.length) {
+        for (const i of loads) if ('load' in i) env.loadDeck?.(i.load.query, i.load.deck, i.load.play)
+        if (rules.length) {
+          const c = env.conductor?.()
+          if (c?.state.active) c.instruct({ ...parsed, items: rules })
+          else note('Rules like that apply to an AI set — open the stage (Back to stage) and start one.', 'dj')
+        }
+        if (parsed.confirm) note(parsed.confirm, 'dj')
+        return
+      }
+      for (const i of parsed.items) if ('action' in i) intents.push(i.action)
+      if (!intents.length) {
         try {
           const d = onAir(env.engine)
           const r = await (window as any).electronAPI.ai.chat([{ role: 'user', content: buildCommandPrompt(text, d ? describeDeck(d) : undefined) }])
