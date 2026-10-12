@@ -25,6 +25,18 @@ import { CpuMeter, NowPlaying, SamplerBank, SandboxBar, ScopeButton } from './To
 import { IS_INCOGNITO } from '../../services/incognitoMode'
 import { djApi, trackByToken, toTrack, loadMeta } from './libraryData'
 import { HFader, useRafThrottled, VuMeter } from './controls'
+import StagePage from './stage/StagePage'
+import { askDj } from './stage/askPipeline'
+import { SetConductor } from './ai/setConductor'
+import { parseBrief } from './ai/setBrief'
+import { AnalysisQueue } from './engine/analysisQueue'
+import { createFactSource } from './engine/factScan'
+import { factsCache } from './ai/trackFacts'
+import { buildProfile, tasteEvents } from './taste'
+import { queueStore, FAVORITES_ID, trackFrom } from './ytQueue'
+import { searchYouTube } from './libraryData'
+import { runIntent, type PanelControls } from './djActions'
+import { setEnergy } from './djBrain'
 import './dj.css'
 import './dj-pro.css'
 import './dj-themes.css'
@@ -93,6 +105,8 @@ export const DJ_LAYOUTS: { id: string; name: string; hint: string }[] = [
 const LAYOUT_KEY = 'aihub-dj-layout'
 const THEME_KEY = 'aihub-dj-theme'
 const VIEW_KEY = 'aihub-dj-mixer-view'
+/** AI DJ stage (default) or the console behind "Take the decks". */
+const STAGE_VIEW_KEY = 'aihub-dj-view'
 const FADE_KEY = 'aihub-dj-fade-seconds'
 const AUTOGAIN_KEY = 'aihub-dj-autogain'
 const PROFX_KEY = 'aihub-dj-pro-transitions'
@@ -160,10 +174,14 @@ function Console({ engine }: { engine: DjEngine }) {
   // ── Listening history (what the AI DJ learns from) and Automix ──
   const tracker = useMemo(() => new ListeningTracker(engine), [engine])
   useEffect(() => () => tracker.dispose(), [tracker])
+  const conductorRef = useRef<SetConductor | null>(null)
   const mixer = useMemo(() => {
     const m = new AutoMixer(engine, {
-      // The set list first, then the YouTube queue when a list is playing.
+      // The AI set owns the queue while it runs; otherwise the set list
+      // first, then the YouTube queue when a list is playing.
       next: () => {
+        const c = conductorRef.current
+        if (c?.state.active && !c.state.paused) return c.next()
         const [t, ...rest] = sideRef.current
         if (t) { setSidelist(() => rest); return t }
         return takeNext()
@@ -210,6 +228,46 @@ function Console({ engine }: { engine: DjEngine }) {
     },
   }), [engine, mixer, mixNow, say, setSidelist])
 
+  // ── AI DJ: conductor + stage (the default view) ──
+  const [stageView, setStageView] = useState<'stage' | 'console'>(() => readPref(STAGE_VIEW_KEY) === 'console' ? 'console' : 'stage')
+  const showView = useCallback((v: 'stage' | 'console') => { setStageView(v); writePref(STAGE_VIEW_KEY, v) }, [])
+  const analysis = useMemo(() => new AnalysisQueue(createFactSource(engine.ctx), factsCache, { isBusy: () => mixer.busy }), [engine, mixer])
+  useEffect(() => () => analysis.dispose(), [analysis])
+  const conductor = useMemo(() => new SetConductor({
+    pool: {
+      profile: () => buildProfile([...tasteEvents()]),
+      favorites: () => (queueStore.get().lists.find(l => l.id === FAVORITES_ID)?.items ?? []).map(trackFrom),
+      search: (q, n) => searchYouTube(q, n).catch(() => []),
+    },
+    analysis: { ensure: t => analysis.ensure(t), known: t => analysis.known(t) },
+    nowPlaying: () => {
+      const live = A.playing ? A : B.playing ? B : null
+      return live?.track ? { track: live.track, facts: analysis.known(live.track) } : null
+    },
+    startMixer: () => mixer.setOn(true),
+    mixNow: t => { void mixer.mixNow(t) },
+  }), [analysis, mixer, A, B])
+  conductorRef.current = conductor
+  // The console is the DJ's: planning waits while it is on screen.
+  useEffect(() => { conductor.setPaused(stageView === 'console') }, [conductor, stageView])
+  // Automix switches itself off when `next()` is empty; a running set re-arms it.
+  useEffect(() => mixer.subscribe(() => {
+    if (!mixer.on && conductor.state.active && !conductor.state.paused) mixer.setOn(true)
+  }), [mixer, conductor])
+  const stageControls = useMemo<PanelControls>(() => ({
+    setEnergy: e => { setEnergy(e); conductor.steer(e === 'chill' ? 'calmer' : 'more-energy') },
+    setTakeover: on => { if (!on) conductor.stop() },
+    planVibe: text => { void conductor.start(parseBrief(text)) },
+  }), [conductor])
+  const ask = useCallback((text: string) => {
+    void askDj(text, {
+      conductor,
+      runAction: a => { void runIntent(a, env, stageControls).then(r => { if (r) say(r) }) },
+      chat: (m: any[]) => (window as any).electronAPI?.ai?.chat(m),
+      say,
+    })
+  }, [conductor, env, stageControls, say])
+
   const dropOn = (id: DeckId) => async (src: string | File) => {
     if (typeof src === 'string') {
       const t = trackByToken(src)
@@ -227,6 +285,11 @@ function Console({ engine }: { engine: DjEngine }) {
 
   return (
     <DjEnvContext.Provider value={env}>
+    {/* The stage sits beside the console, not inside it: the console is
+        CSS-zoomed to fit the tab and the stage must not be scaled with it. */}
+    <div className="dj-host">
+    {stageView === 'stage' && <StagePage engine={engine} conductor={conductor} onTakeDecks={() => showView('console')} onAsk={ask} />}
+    {stageView === 'console' && conductor.state.active && <button className="dj-back-to-stage" onClick={() => showView('stage')}>Back to stage</button>}
     <div className="aihub-dj" data-dj-theme={theme} data-dj-look={look} data-dj-layout={layout} data-dj-dark={themeInfo?.dark ? '1' : '0'}
       data-dj-light-bg={themeInfo?.lightBg ? '1' : '0'} ref={fit.ref} style={fit.style}>
       <TopBar engine={engine} mixer={mixer} setLog={setLog} say={say} theme={theme} setTheme={setTheme} look={look} setLook={setLook}
@@ -289,6 +352,7 @@ function Console({ engine }: { engine: DjEngine }) {
         deckIds={layout === '4deck' ? ['A', 'B', 'C', 'D'] : ['A', 'B']} />
 
       {toast && <div className="dj-toast">{toast}</div>}
+    </div>
     </div>
     </DjEnvContext.Provider>
   )

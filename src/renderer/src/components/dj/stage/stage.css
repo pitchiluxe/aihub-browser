@@ -53,3 +53,7 @@ body.light-mode .dj-ask input, body.light-mode .dj-stage-start input { backgroun
   .dj-stage-start form { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .dj-backdrop-glow { transition: none; transform: none; } }
+
+/* Host: the stage overlays the CSS-zoomed console without being scaled by it. */
+.dj-host { position: relative; width: 100%; height: 100%; }
+.dj-back-to-stage { position: absolute; right: 18px; bottom: 18px; z-index: 45; padding: 10px 16px; border-radius: 12px; border: 0; background: #e11d48; color: #fff; font-weight: 650; cursor: pointer; }
