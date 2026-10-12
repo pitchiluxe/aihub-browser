@@ -31,6 +31,7 @@ describe('SetConductor', () => {
     const d = deps(lib)
     const c = new SetConductor(d)
     await c.start(parseBrief('afrobeats, 1h'))
+    await c.refill()
     expect(c.state.active).toBe(true)
     expect(c.state.upNext.length).toBe(3)
     expect(d.startMixer).toHaveBeenCalled()
@@ -52,6 +53,24 @@ describe('SetConductor', () => {
     void c.start(parseBrief('afrobeats, 1h'))
     await new Promise(r => setTimeout(r, 10))
     expect(c.next()).toBeDefined()
+  })
+
+  it('starts the music at once — the first song never waits for analysis', async () => {
+    const lib = Array.from({ length: 6 }, (_, i) => yt(`artist${i}`))
+    const d = deps(lib, { analysis: { ensure: () => new Promise(() => {}), known: () => null } })
+    const c = new SetConductor(d)
+    await Promise.race([c.start(parseBrief('afrobeats, 1h')), new Promise((_, rej) => setTimeout(() => rej(new Error('start() waited on analysis')), 200))])
+    expect(d.startMixer).toHaveBeenCalled()
+    expect(c.next()).toBeDefined()
+  })
+
+  it('scans at most two candidates per pick (a 2x scan is ~2 minutes each)', async () => {
+    const lib = Array.from({ length: 10 }, (_, i) => yt(`artist${i}`))
+    const ensure = vi.fn(async (t: any) => ({ bpm: 120, bpmConfidence: 1, camelot: '8A', keyConfidence: 0.9, energy: 0.6, introEndSec: 5, outroStartSec: 200, durationSec: 210, playable: true, at: 1 }))
+    const c = new SetConductor(deps(lib, { analysis: { ensure, known: () => null } }))
+    await c.start(parseBrief('afrobeats, 1h'))
+    await c.refill()
+    expect(ensure.mock.calls.length).toBeLessThanOrEqual(2 * 3)
   })
 
   it('a ban rule removes that artist from the lookahead immediately and confirms it', async () => {
@@ -133,5 +152,23 @@ describe('SetConductor', () => {
     c.setPaused(false)
     await c.refill()
     expect(c.state.upNext[0].candidate.facts!.bpm).toBeGreaterThanOrEqual(132)
+  })
+})
+
+describe('gatherCandidates — songs only', () => {
+  it('drops hour-long mixes, mixtapes, playlists and compilations', async () => {
+    const { gatherCandidates } = await import('./candidatePool')
+    const mk = (title: string, durationHint?: number) => ({ token: title, path: '', name: title, title, artist: 'x', size: 0, youtubeId: title.slice(0, 11).padEnd(11, '0'), durationHint }) as any
+    const results = [
+      mk('NAIJA AFROBEAT MIX, AFROBEAT VIDEO MIX | BURNA BOY, AYRA STARR', 3739),
+      mk('Afrobeats Mixtape 2026'), mk('Amapiano Nonstop Playlist'), mk('Best of Wizkid Full Album'),
+      mk('1 Hour of Afro House', 3600), mk('DJ Set Live at Boiler Room'),
+      mk('Burna Boy - Last Last', 172), mk('Tems - Free Mind', 246),
+    ]
+    const c = await gatherCandidates(['afrobeats'], {
+      profile: () => ({ topArtists: [], avoidArtists: [], lovedTracks: [], recentSearches: [], nowArtists: [], stats: { minutes: 0, plays: 0, completes: 0, skips: 0 } }),
+      favorites: () => [], search: async () => results,
+    })
+    expect(c.map(x => x.track.title)).toEqual(['Burna Boy - Last Last', 'Tems - Free Mind'])
   })
 })

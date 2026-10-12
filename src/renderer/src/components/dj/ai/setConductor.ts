@@ -5,7 +5,7 @@
 import { Emitter, type DjTrack } from '../engine/DjEngine'
 import { trackId, type TrackFacts } from './types'
 import { curveAt, type SetBrief } from './setBrief'
-import { gatherCandidates, type PoolDeps } from './candidatePool'
+import { gatherCandidates, isSong, type PoolDeps } from './candidatePool'
 import { rankCandidates, type Candidate, type PlanContext, type Scored } from './setPlanner'
 import { ruleLabel, type Parsed, type SetRule } from './instructions'
 
@@ -41,7 +41,8 @@ export function handoffCaption(h: Handoff): string {
 }
 
 const LOOKAHEAD = 3
-const SHORTLIST = 5
+/** Candidates measured per pick: a 2x scan is ~2 minutes, so more would starve the lookahead. */
+const SHORTLIST = 2
 
 export class SetConductor extends Emitter {
   state: ConductorState = { active: false, paused: false, brief: null, upNext: [], rules: [], message: '', startedAt: 0, played: [], handoff: null }
@@ -72,8 +73,10 @@ export class SetConductor extends Emitter {
     this.seq = []; this.playNextQueue = []; this.playNextQueries = []; this.bursts = { discovery: 0, favorites: 0 }
     this.set({ active: true, paused: false, brief, upNext: [], rules: [...brief.rules], played: [], startedAt: this.now(), message: `Building your set: ${brief.vibe}` })
     this.pool = await gatherCandidates(brief.seeds, this.deps.pool)
-    await this.refill()
+    // Music first: the mixer's first next() gets a safe un-analysed pick, and
+    // the lookahead fills in the background while it plays.
     this.deps.startMixer()
+    void this.refill()
   }
 
   stop(): void { this.set({ active: false, upNext: [], message: 'Set finished.' }) }
@@ -121,7 +124,7 @@ export class SetConductor extends Emitter {
     while (this.state.upNext.length < LOOKAHEAD) {
       if (this.seq.length) {
         const step = this.seq[0]
-        const found = (await this.deps.pool.search(step.query, 8).catch(() => [])).find(t => !this.context().played.some(p => p.id === trackId(t)))
+        const found = (await this.deps.pool.search(step.query, 8).catch(() => [])).filter(isSong).find(t => !this.context().played.some(p => p.id === trackId(t)))
         if (found) {
           step.count--; if (step.count <= 0) this.seq.shift()
           const facts = await this.deps.analysis.ensure(found).catch(() => null)
