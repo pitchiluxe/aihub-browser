@@ -60,8 +60,8 @@ export class SetConductor extends Emitter {
   private playNextQueue: DjTrack[] = []
   /** Requested songs still to look up — resolved at the start of a refill so the request wins the race. */
   private playNextQueries: string[] = []
-  /** Style searches still running ("R&B" was just asked for). */
-  private genreGathering = 0
+  /** Song searches still running (a thin first search being widened, "R&B" just asked for). */
+  private searchesInFlight = 0
   /** Picks queued after limits were relaxed (see ladder). */
   private relaxedPicks = new Set<string>()
   private readonly now: () => number
@@ -81,6 +81,16 @@ export class SetConductor extends Emitter {
     this.seq = []; this.playNextQueue = []; this.playNextQueries = []; this.bursts = { discovery: 0, favorites: 0 }
     this.set({ active: true, paused: false, brief, upNext: [], rules: [...brief.rules], played: [], startedAt: this.now(), message: `Building your set: ${brief.vibe}` })
     this.pool = await gatherCandidates(brief.seeds, this.deps.pool)
+    if (!this.pool.length) {
+      // YouTube hiccups, or answers this exact phrasing with nothing: ask again, wider.
+      // "afrobeats warm-up" mostly finds hour-long mixes (not songs): the style word alone finds songs.
+      const wider = [...new Set(brief.seeds.flatMap(s => [`${s} songs`, s.split(/\s+/)[0], `${s.split(/\s+/)[0]} songs`, `best ${s.split(/\s+/)[0]}`]))]
+      this.pool = await this.fetching(() => gatherCandidates(wider, this.deps.pool, { perSeed: 20 }))
+    }
+    if (!this.pool.length) {
+      this.set({ active: false, upNext: [], message: `I couldn't find any songs for “${brief.vibe}” — check your connection, or try another vibe.` })
+      return
+    }
     // Music first: the mixer's first next() gets a safe un-analysed pick, and
     // the lookahead fills in the background while it plays.
     this.deps.startMixer()
@@ -89,7 +99,7 @@ export class SetConductor extends Emitter {
     // artists it found now, in the background, rather than when the set runs dry.
     if (this.pool.length < THIN_POOL) {
       const setStarted = this.state.startedAt
-      void gatherCandidates(this.relatedSeeds(), this.deps.pool, { perSeed: 10 })
+      void this.fetching(() => gatherCandidates(this.relatedSeeds(), this.deps.pool, { perSeed: 10 }))
         .then(more => { if (this.state.active && this.state.startedAt === setStarted) this.pool = mergePools(this.pool, more) }).catch(() => {})
     }
   }
@@ -248,8 +258,8 @@ export class SetConductor extends Emitter {
       // Still analysing: hand over the best un-analysed song (safe transition)
       // rather than nothing, which would switch Automix off.
       head = this.ladder(this.candidates(), this.context()).ranked[0]
-      // The asked-for style is still being fetched: wait for it, keep the set.
-      if (!head && this.genreGathering > 0) return undefined
+      // More songs are still being fetched: wait for them, keep the set.
+      if (!head && this.searchesInFlight > 0) return undefined
       if (!head) {
         // Truly nothing left (every song banned or unplayable): end the set
         // rather than let the page re-arm Automix into an empty loop.
@@ -309,14 +319,19 @@ export class SetConductor extends Emitter {
 
   /** Songs of these styles, tagged so "only R&B" can recognise them. */
   private async gatherGenres(genres: string[]): Promise<void> {
-    this.genreGathering++
-    try {
+    await this.fetching(async () => {
       for (const g of genres) {
         const more = await gatherCandidates(genreQueries(g), this.deps.pool, { perSeed: 20, genre: g }).catch(() => [])
         this.pool = mergePools(this.pool, more)
       }
-    } finally { this.genreGathering-- }
+    })
     void this.refill()
+  }
+
+  /** Runs a song search, counted: while any is in flight the set never "runs out". */
+  private async fetching<T>(job: () => Promise<T>): Promise<T> {
+    this.searchesInFlight++
+    try { return await job() } finally { this.searchesInFlight-- }
   }
 
   /** A song the listener picked (search results): next, ahead of the plan. */

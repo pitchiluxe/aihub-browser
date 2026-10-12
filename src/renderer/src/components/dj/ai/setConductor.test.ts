@@ -287,6 +287,30 @@ describe('SetConductor — final review', () => {
     }
   })
 
+  it('a first search that comes back empty does not end the set — it searches wider', async () => {
+    const lib = Array.from({ length: 8 }, (_, i) => yt(`artist${i}`))
+    const d = deps(lib)
+    let calls = 0
+    d.pool.search = async () => (calls++ === 0 ? [] : lib.map(l => l.track))   // YouTube hiccup, then fine
+    const c = new SetConductor(d)
+    await c.start(parseBrief('afrobeats warm-up, 30 min'))
+    c.next()                                   // Automix asks at once, before the wider search lands
+    expect(c.state.active).toBe(true)
+    expect(c.state.message).not.toMatch(/ran out/i)
+    await new Promise(r => setTimeout(r, 0)); await c.refill()
+    expect(c.next()).toBeDefined()
+  })
+
+  it('when YouTube returns nothing at all, it says so plainly instead of blaming rules', async () => {
+    const d = deps([])
+    d.pool.search = async () => []
+    const c = new SetConductor(d)
+    await c.start(parseBrief('afrobeats warm-up, 30 min'))
+    expect(c.state.active).toBe(false)
+    expect(c.state.message).toMatch(/couldn'?t find any songs|connection/i)
+    expect(c.state.message).not.toMatch(/rules/i)
+  })
+
   it('coming back from the console restarts the mixer', async () => {
     const lib = Array.from({ length: 5 }, (_, i) => yt(`artist${i}`))
     const d = deps(lib)
