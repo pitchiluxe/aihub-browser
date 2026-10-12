@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  ChevronLeft, ChevronRight, RotateCw, Home, Bookmark, Bot,
+  ChevronLeft, ChevronRight, RotateCw, Home, Bookmark, Bot, WandSparkles,
   Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe, Camera, Video, Square, X,
   Crop, Monitor, BookOpen, GitCompare, AppWindow,
 } from 'lucide-react'
@@ -648,6 +648,10 @@ export default function NavigationBar({
 
         {/* VPN quick-toggle — green while protected, right-click to switch country */}
         <VpnButton />
+
+        <button type="button" title="Site Declutter" aria-label="Site Declutter" onClick={() => onNavigate('aihub://declutter')} className="h-8 w-8 rounded-lg flex items-center justify-center transition-colors" style={{ color: 'rgb(var(--ds-text-3))' }}>
+          <WandSparkles size={15} />
+        </button>
 
         {/* Trading Coach — gold accent — only renders on TradingView chart
             URLs. Lives in the navbar so it is above the chart's BrowserView,

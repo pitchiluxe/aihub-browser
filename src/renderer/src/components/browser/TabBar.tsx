@@ -14,8 +14,8 @@ export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compa
   // Narrow subscription — without a selector every store mutation (AI chat
   // streaming, download progress…) re-rendered the whole tab strip.
   const {
-    tabs, activeTabId, addTab, closeTab, closeOtherTabs, closeTabsToRight,
-    setActiveTab, reorderTabs, sleepTab, splitTabId, setSplitTab,
+    tabs, activeTabId, addTab, closeTab,
+    setActiveTab, reorderTabs,
   } = useBrowserStore(
     useShallow(s => ({
       tabs: s.tabs, activeTabId: s.activeTabId, addTab: s.addTab, closeTab: s.closeTab,
@@ -28,34 +28,38 @@ export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compa
   // and painted over by the active tab's BrowserView.
   const handleContextMenu = async (e: React.MouseEvent, tab: Tab) => {
     e.preventDefault()
-    const idx = tabs.findIndex(t => t.id === tab.id)
-    const isBrowser = !tab.isHome && tab.pageType === 'browser'
+    // Rows are memoized across unrelated tab updates, so read current state
+    // when the user opens the native menu instead of relying on a stale list.
+    const current = useBrowserStore.getState()
+    const currentTab = current.tabs.find(item => item.id === tab.id) || tab
+    const idx = current.tabs.findIndex(t => t.id === currentTab.id)
+    const isBrowser = !currentTab.isHome && currentTab.pageType === 'browser'
     const action = await window.electronAPI.tabs.showContextMenu({
-      tabId: tab.id,
+      tabId: currentTab.id,
       isBrowser,
-      hasRight: idx !== -1 && idx < tabs.length - 1,
-      count: tabs.length,
+      hasRight: idx !== -1 && idx < current.tabs.length - 1,
+      count: current.tabs.length,
       // Can sleep a background browser tab that isn't already asleep.
-      canSleep: isBrowser && tab.id !== activeTabId && !tab.asleep,
+      canSleep: isBrowser && currentTab.id !== current.activeTabId && !currentTab.asleep,
       // Split view pairs THIS tab with the active one, so it is meaningless on
       // the active tab itself.
-      isActive: tab.id === activeTabId,
-      isSplit: tab.id === splitTabId,
+      isActive: currentTab.id === current.activeTabId,
+      isSplit: currentTab.id === current.splitTabId,
     })
     switch (action) {
-      case 'new-tab':      addTab(); break
-      case 'duplicate':    addTab(tab.isHome ? 'home' : tab.url, tab.pageType); break
-      case 'detach':       detachTab(tab); break
-      case 'sleep':        sleepTab(tab.id); break
-      case 'reload':       window.electronAPI.tabView.reload(tab.id); break
-      case 'close':        closeTab(tab.id); break
-      case 'close-others': closeOtherTabs(tab.id); break
-      case 'close-right':  closeTabsToRight(tab.id); break
+      case 'new-tab':      current.addTab(); break
+      case 'duplicate':    current.addTab(currentTab.isHome ? 'home' : currentTab.url, currentTab.pageType); break
+      case 'detach':       detachTab(currentTab); break
+      case 'sleep':        current.sleepTab(currentTab.id); break
+      case 'reload':       window.electronAPI.tabView.reload(currentTab.id); break
+      case 'close':        current.closeTab(currentTab.id); break
+      case 'close-others': current.closeOtherTabs(currentTab.id); break
+      case 'close-right':  current.closeTabsToRight(currentTab.id); break
       case 'merge-all':    window.electronAPI.window.mergeAllInto(); break
-      case 'split':        setSplitTab(tab.id === splitTabId ? null : tab.id); break
+      case 'split':        current.setSplitTab(currentTab.id === current.splitTabId ? null : currentTab.id); break
       default:
         // "Move Tab to Window ▸ <name>" comes back as move:<windowId>.
-        if (action.startsWith('move:')) moveTabToWindow(tab, Number(action.slice(5)))
+        if (action.startsWith('move:')) moveTabToWindow(currentTab, Number(action.slice(5)))
     }
   }
 
@@ -157,7 +161,7 @@ export default function TabBar({ variant = 'full' }: { variant?: 'full' | 'compa
       >
         <AnimatePresence initial={false}>
           {tabs.map(tab => (
-            <TabItem
+            <MemoTabItem
               key={tab.id}
               tab={tab}
               isActive={tab.id === activeTabId}
@@ -332,6 +336,15 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
     </motion.div>
   )
 }
+
+// Updating one tab (e.g. its loading spinner) should not re-render every other
+// row. Store actions and drag refs are stable; context-menu handlers read the
+// latest store snapshot when invoked.
+const MemoTabItem = React.memo(TabItem, (previous, next) =>
+  previous.tab === next.tab &&
+  previous.isActive === next.isActive &&
+  previous.isDropTarget === next.isDropTarget
+)
 
 // Says "private" in words, not just with an icon, and opens the Incognito menu
 // (new window / close) natively so it is never hidden behind page content.

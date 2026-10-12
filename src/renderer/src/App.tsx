@@ -16,6 +16,8 @@ import { loadCustomExts } from './extensions/customExts'
 import { shouldRunOn } from './extensions/siteRules'
 import { withPanelRuntime } from './extensions/panelRuntime'
 import { applyThemeToDom } from './services/themeService'
+import { getTabSleepCheckInterval, pruneTabActivity, selectTabsToSleep } from './services/tabSleepPolicy'
+import { buildDeclutterStyleScript, loadDeclutterRules, normalizeOrigin, selectorsForOrigin } from './extensions/declutterRules'
 
 // Special pages are code-split — none are needed at startup, so keeping them
 // out of the entry chunk makes first paint faster.
@@ -44,6 +46,7 @@ const ObsidianGraphView = lazy(() => import('./components/pages/ObsidianGraphVie
 const DjPage         = lazy(() => import('./components/dj/DjPage'))
 const FlightsRentalsPage = lazy(() => import('./components/travel/FlightsRentalsPage'))
 const TravelPage     = lazy(() => import('./components/travel/TravelPage'))
+const DeclutterPage = lazy(() => import('./components/pages/DeclutterPage'))
 
 import type { PageType } from '../../shared/pageTypes'
 
@@ -784,30 +787,37 @@ export default function App() {
     return () => clearTimeout(t)
   }, [tabs, activeTabId])
 
-  // ── Tab sleeping — free the memory of tabs left in the background too long.
-  // Sleeping destroys the BrowserView (via needsTabView + the lifecycle effect
-  // above); the page is recreated and reloaded when the tab is next activated.
-  // The active tab is never slept. Increased to 2 hours to keep normal
-  // tab rotations alive without memory pressure. ──────────────────────────────
+  // ── Adaptive tab sleeping — protect useful activity while releasing idle
+  // background views sooner for larger sessions. ────────────────────────────
   const lastActiveAt = useRef<Map<string, number>>(new Map())
   useEffect(() => {
     if (activeTabId) lastActiveAt.current.set(activeTabId, Date.now())
   }, [activeTabId])
   useEffect(() => {
-    const SLEEP_AFTER_MS = 2 * 60 * 60 * 1000 // 2 hours idle in the background
+    const now = Date.now()
+    const liveTabIds = new Set(tabs.map(tab => tab.id))
+    lastActiveAt.current = pruneTabActivity(lastActiveAt.current, liveTabIds)
+    for (const tab of tabs) if (!lastActiveAt.current.has(tab.id)) lastActiveAt.current.set(tab.id, now)
+  }, [tabs])
+  useEffect(() => {
     const timer = setInterval(() => {
       const now = Date.now()
       const store = useBrowserStore.getState()
-      for (const t of store.tabs) {
-        if (t.id === store.activeTabId || t.asleep) continue
-        if (t.isHome || t.pageType !== 'browser') continue
-        if (!createdViewIds.current.has(t.id)) continue // no live view to free
-        const seen = lastActiveAt.current.get(t.id) ?? now
-        if (now - seen > SLEEP_AFTER_MS) store.sleepTab(t.id)
-      }
-    }, 5 * 60 * 1000) // check every 5 minutes
+      const liveTabIds = new Set(store.tabs.map(tab => tab.id))
+      lastActiveAt.current = pruneTabActivity(lastActiveAt.current, liveTabIds)
+      // Seed defensively in case an activity timestamp was lost during restore.
+      for (const tab of store.tabs) if (!lastActiveAt.current.has(tab.id)) lastActiveAt.current.set(tab.id, now)
+      const sleepIds = selectTabsToSleep({
+        tabs: store.tabs,
+        activeTabId: store.activeTabId,
+        liveViewIds: createdViewIds.current,
+        lastUseAt: lastActiveAt.current,
+        now,
+      })
+      if (sleepIds.length) store.sleepTabs(sleepIds)
+    }, getTabSleepCheckInterval(tabs.length))
     return () => clearInterval(timer)
-  }, [])
+  }, [tabs.length])
 
   // ── Hide the native view while a host HTML overlay must render above it —
   // BrowserView always paints above the window's own webContents, so there's
@@ -856,6 +866,10 @@ export default function App() {
           store.setTabWcId(tabId, payload.wcId)
           break
 
+        case 'audio-state-changed':
+          store.updateTab(tabId, { isAudible: payload.audible === true })
+          break
+
         case 'did-start-loading': {
           const existing = loadTimers.current.get(tabId)
           if (existing) clearTimeout(existing)
@@ -901,6 +915,15 @@ export default function App() {
           const url = payload.url
           if (!url || url === 'about:blank') break
           store.updateTab(tabId, { url })
+          if (url.startsWith('http://') || url.startsWith('https://')) {
+            const tab = store.tabs.find(item => item.id === tabId)
+            const wcId = store.tabWcIds[tabId]
+            if (tab?.pageType === 'browser' && !tab.asleep && wcId != null) {
+              const rules = loadDeclutterRules()
+              const selectors = selectorsForOrigin(normalizeOrigin(url) || '', rules)
+              void window.electronAPI.webview.execScript(wcId, buildDeclutterStyleScript(selectors)).catch(() => {})
+            }
+          }
           if (tabId === store.activeTabId) {
             window.electronAPI.tabView.getNavState(tabId).then((s: any) => store.setNavState(s)).catch(() => {})
           }
@@ -1095,6 +1118,7 @@ export default function App() {
                     {tab.pageType === 'research'   && <ResearchPage onNavigate={navigate} />}
                     {tab.pageType === 'agents'     && <AgentsPage />}
                     {tab.pageType === 'extensions' && <ExtensionsPage />}
+                    {tab.pageType === 'declutter' && <DeclutterPage />}
                     {tab.pageType === 'mail'       && <MailPage />}
                     {tab.pageType === 'notes'      && <NotesPage onNavigate={navigate} />}
                     {tab.pageType === 'manual'     && <ManualPage />}
