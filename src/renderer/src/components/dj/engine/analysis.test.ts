@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { analyze, bestLag, buildEnvelope, ENV_RATE } from './analysis'
+import { analyze, bestLag, buildEnvelope, detectBpm, ENV_RATE } from './analysis'
+import onsets from './__fixtures__/onsets.json'
 
 /** Decaying 60 Hz kicks at `bpm`, starting `offset` seconds in, over quiet noise. */
 function kicks(bpm: number, seconds: number, sr: number, offset = 0): Float32Array {
@@ -75,5 +76,16 @@ describe('bestLag', () => {
     expect(bestLag(play, scan, 0, 100, 50)).toBeNull()
     const noise = env(3000).reverse()
     expect(bestLag(noise, scan, 0, 1500, 50)).toBeNull()
+  })
+})
+
+describe('detectBpm on real songs', () => {
+  // Onset curves captured from the songs themselves (scripts/capture-dj-onsets.cjs).
+  const songs = onsets as Record<string, { bpm: number; onset: number[] }>
+  it.each(Object.keys(songs))('%s reads within ±2 BPM of its published tempo', name => {
+    const s = songs[name]
+    const got = detectBpm(Float32Array.from(s.onset))
+    expect(got).not.toBeNull()
+    expect(Math.abs((got as number) - s.bpm)).toBeLessThanOrEqual(2)
   })
 })

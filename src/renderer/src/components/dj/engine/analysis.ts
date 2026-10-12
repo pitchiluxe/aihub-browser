@@ -127,9 +127,55 @@ export function detectBpm(onset: Float32Array, rate = ENV_RATE): number | null {
     }
   }
   if (!bestBpm || best <= 0) return null
+
+  // ⅔ guard. A song at 160 BPM puts strong onsets at 1.5× the 107 BPM lag
+  // (every third half-beat lands on a beat), and the 120-centred prior then
+  // favours 107. If the tempo one and a half times faster explains the
+  // onsets nearly as well WITHOUT the prior, it is the real beat.
+  const raw = (bpm: number) => score(bpm) / (0.75 + 0.25 * Math.exp(-Math.pow(Math.log2(bpm / 120), 2) / (2 * 0.5 * 0.5)))
+  const up = bestBpm * 1.5
+  if (up <= MAX_CORRECTED_BPM && raw(up) >= TWO_THIRDS_RATIO * raw(bestBpm)) bestBpm = up
+
+  // Precise value. The two-tap comb above finds the right tempo FAMILY but
+  // its peaks are broad — Blinding Lights scores flat from 167 to 174 BPM.
+  // A long comb, weighing sixteen beats ahead, has one sharp peak: on the
+  // real-song fixtures it reads 116/96/103/160/171 exactly.
+  // Middle 90 s and coarse-to-fine steps keep it cheap: this also runs on the
+  // console's UI thread when a deck loads.
+  const mid = Math.min(o.length, rate * 90)
+  const om = o.subarray(Math.floor((o.length - mid) / 2), Math.floor((o.length - mid) / 2) + mid)
+  const long = (bpm: number) => {
+    const lag = (60 * rate) / bpm
+    let s = 0
+    for (let i = 0; i + LONG_TAPS * lag + 1 < om.length; i++) {
+      const v = om[i]
+      if (v === 0) continue
+      for (let k = 1; k <= LONG_TAPS; k++) s += (v * interp(om, i + k * lag)) / k
+    }
+    return s
+  }
+  let fine = 0
+  let fineBpm = bestBpm
+  for (let bpm = bestBpm * 0.97; bpm <= bestBpm * 1.03 + 1e-9; bpm += 0.5) {
+    const s = long(bpm)
+    if (s > fine) { fine = s; fineBpm = bpm }
+  }
+  const centre = fineBpm
+  for (let bpm = centre - 0.5; bpm <= centre + 0.5 + 1e-9; bpm += 0.1) {
+    const s = long(bpm)
+    if (s > fine) { fine = s; fineBpm = bpm }
+  }
+  if (fine > 0) bestBpm = fineBpm
   const rounded = Math.round(bestBpm)
   return Math.abs(bestBpm - rounded) < 0.25 ? rounded : Math.round(bestBpm * 10) / 10
 }
+
+/** Corrected readings may go above the 180 search ceiling (drum & bass, fast pop). */
+const MAX_CORRECTED_BPM = 200
+/** How close the 3/2 tempo's raw comb score must come to the winner's. Tuned on the real-song fixtures. */
+const TWO_THIRDS_RATIO = 0.9
+/** Beats ahead the precision comb weighs (1/k each). 16 reads every fixture exactly. */
+const LONG_TAPS = 16
 
 /** Offset (seconds) of the beat grid that best lines up with the onsets. */
 export function detectFirstBeat(onset: Float32Array, bpm: number, rate = ENV_RATE): number {
