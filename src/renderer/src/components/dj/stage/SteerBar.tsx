@@ -1,8 +1,12 @@
 import React, { useState } from 'react'
 
-export default function SteerBar({ discovery, onDiscovery, onSkip, onStop, onSteer, onAsk, onTakeDecks }: {
+export default function SteerBar({ discovery, onDiscovery, onSkip, onStop, onSteer, onAsk, onTakeDecks, onSongs, onMixer }: {
   discovery: number; onDiscovery: (v: number) => void; onSkip: () => void; onStop?: () => void
   onSteer: (k: 'more-energy' | 'calmer' | 'more-like-this') => void; onAsk: (t: string) => void; onTakeDecks: () => void
+  /** Pull the song list back up (last search) to switch songs. */
+  onSongs?: () => void
+  /** Bass / mid / treble / filter / volume. */
+  onMixer?: () => void
 }) {
   const [text, setText] = useState('')
   return <div className="dj-dock" role="toolbar" aria-label="Steer the set">
@@ -12,6 +16,8 @@ export default function SteerBar({ discovery, onDiscovery, onSkip, onStop, onSte
       <button onClick={() => onSteer('more-energy')}>🔥 More energy</button>
       <button onClick={() => onSteer('calmer')}>🌙 Calmer</button>
       <button onClick={() => onSteer('more-like-this')}>≈ More like this</button>
+      {onSongs && <button onClick={onSongs} title="Show the song list to switch songs">🎵 Songs</button>}
+      {onMixer && <button onClick={onMixer} title="Bass, mid, treble, filter, volume">🎚 Mixer</button>}
     </div>
     <span className="dj-sep" />
     <label className="dj-slider">familiar

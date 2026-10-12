@@ -117,6 +117,18 @@ describe('StagePage', () => {
     act(() => (panel.querySelector('[aria-label="Close results"]') as HTMLButtonElement).click()); expect(onClose).toHaveBeenCalled()
   })
 
+  it('the dock reopens the song list and opens the mixer', () => {
+    const onToggleSongs = vi.fn()
+    const brief = { vibe: 'x', durationMin: 60, curve: [{ atMin: 0, level: 0.5 }], discoveryShare: 0.25, seeds: [], rules: [] }
+    const strip = { eq: { low: 0.5, mid: 0.5, high: 0.5 }, filterKnob: 0.5, volume: 1, subscribe: () => () => {}, getVersion: () => 1 }
+    const e = { ...engine, decks: { A: { ...engine.decks.A, ...strip }, B: { ...engine.decks.B, ...strip } }, masterVolume: 0.75 }
+    act(() => root.render(<StagePage engine={e} conductor={fakeConductor({ active: true, brief })} onTakeDecks={() => {}} onAsk={() => {}} onToggleSongs={onToggleSongs} />))
+    act(() => btn('Songs').click())
+    expect(onToggleSongs).toHaveBeenCalledTimes(1)
+    act(() => btn('Mixer').click())
+    expect(host.querySelector('[aria-label="Deck A bass"]')).not.toBeNull()
+  })
+
   it('Take the decks hands over to the console', () => {
     const onTake = vi.fn()
     act(() => root.render(<StagePage engine={engine} conductor={fakeConductor({ active: true, brief: { vibe: 'x', durationMin: 60, curve: [{ atMin: 0, level: 0.5 }], discoveryShare: 0.25, seeds: [], rules: [] } })} onTakeDecks={onTake} onAsk={() => {}} />))

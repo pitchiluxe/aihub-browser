@@ -14,6 +14,7 @@ const ARTIST = process.argv[2] || 'Wizkid'
   await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.setSize(1440, 900); w.center() })
   const errors = []; page.on('pageerror', e => errors.push(String(e.message || e).slice(0, 200)))
   await page.waitForTimeout(7000)
+  await page.evaluate(() => localStorage.setItem('aihub-dj-debug', '1'))
   await page.locator('text=AIHub DJ').first().click()
   await page.waitForTimeout(3000)
   await page.locator('button:has-text("AI DJ stage")').click()
@@ -48,9 +49,19 @@ const ARTIST = process.argv[2] || 'Wizkid'
   await ask('R&B')
   await page.waitForTimeout(1500)
   const chips = await page.locator('.dj-rule').allInnerTexts()
+  // 🎵 Songs pulls the last list back up.
+  await page.locator('.dj-dock button:has-text("Songs")').click()
+  const reopened = await page.locator('.dj-results li').count()
+  // 🎚 Mixer: bass on deck A follows the slider.
+  await page.locator('.dj-dock button:has-text("Mixer")').click()
+  await page.locator('input[aria-label="Deck A bass"]').fill('80')
+  await page.waitForTimeout(300)
+  const bass = await page.evaluate(() => window.__aihubDj?.engine?.decks.A.eq.low ?? null).catch(() => null)
+  const shot = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows().find(x => x.isVisible()).webContents.capturePage()).toPNG().toString('base64'))
+  fs.writeFileSync(path.join(os.tmpdir(), 'stage-mixer.png'), Buffer.from(shot, 'base64'))
   await app.close()
-  const report = { rows: rows.length, first: rows.slice(0, 5), nextMsg, chips, errors }
+  const report = { rows: rows.length, first: rows.slice(0, 5), nextMsg, chips, reopened, bass, errors }
   console.log(JSON.stringify(report, null, 1))
-  const ok = rows.length >= 5 && /up next/i.test(nextMsg) && chips.some(c => /only r&b/i.test(c)) && !errors.length
+  const ok = rows.length >= 5 && reopened >= 5 && Math.abs((bass ?? 0) - 0.8) < 0.01 && /up next/i.test(nextMsg) && chips.some(c => /only r&b/i.test(c)) && !errors.length
   console.log(ok ? 'PASS' : 'FAIL'); process.exit(ok ? 0 : 1)
 })().catch(async e => { console.error(String(e).slice(0, 200)); await globalThis.__diag?.().catch(() => {}); process.exit(1) })

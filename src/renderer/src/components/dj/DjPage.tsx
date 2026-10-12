@@ -315,6 +315,12 @@ function Console({ engine }: { engine: DjEngine }) {
   }), [conductor])
   // "Wizkid" typed on the stage: their songs, to play now, next or on a deck.
   const [stageResults, setStageResults] = useState<StageResults | null>(null)
+  // The last list stays available: "🎵 Songs" pulls it back up to switch songs.
+  const lastResults = useRef<StageResults | null>(null)
+  useEffect(() => { if (stageResults && !stageResults.loading) lastResults.current = stageResults }, [stageResults])
+  const toggleSongs = useCallback(() => {
+    setStageResults(open => open ? null : (lastResults.current ?? { query: '', tracks: [], loading: false }))
+  }, [])
   const searchSeq = useRef(0)
   const searchSongs = useCallback(async (query: string) => {
     const seq = ++searchSeq.current
@@ -366,7 +372,7 @@ function Console({ engine }: { engine: DjEngine }) {
         CSS-zoomed to fit the tab and the stage must not be scaled with it. */}
     <div className="dj-host">
     {stageView === 'stage' && <StagePage engine={engine} conductor={conductor} onTakeDecks={() => showView('console')} onStop={stopMusic} onAsk={ask}
-      results={stageResults} onPick={pickResult} onCloseResults={() => setStageResults(null)} />}
+      results={stageResults} onPick={pickResult} onCloseResults={() => setStageResults(null)} onToggleSongs={toggleSongs} />}
     {stageView === 'console' && <button className="dj-back-to-stage" onClick={() => showView('stage')}>{conductor.state.active ? 'Back to stage' : '✨ AI DJ stage'}</button>}
     <div className="aihub-dj" data-dj-theme={theme} data-dj-look={look} data-dj-layout={layout} data-dj-dark={themeInfo?.dark ? '1' : '0'}
       data-dj-light-bg={themeInfo?.lightBg ? '1' : '0'} ref={fit.ref} style={fit.style}>

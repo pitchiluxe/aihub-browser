@@ -60,8 +60,10 @@
 .dj-energy .here { fill: var(--st-accent); }
 
 /* ── Dock: one slim row of controls ──────────────────────────────────────── */
-.dj-dock { justify-self: center; width: min(1000px, 100%); display: flex; align-items: center; gap: 8px; padding: 7px 8px; }
-.dj-steer-buttons { display: flex; gap: 4px; flex-shrink: 0; }
+/* Everything stays inside the dock's border: it wraps onto a second row
+   rather than spilling past the edge when the window is narrower than the controls. */
+.dj-dock { justify-self: center; box-sizing: border-box; width: min(1320px, 100%); max-width: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 8px; padding: 7px 8px; }
+.dj-steer-buttons { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .dj-dock button { height: 32px; padding: 0 11px; border-radius: 9px; border: 1px solid transparent; background: transparent; color: inherit; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
 .dj-dock button:hover { background: var(--st-field); border-color: var(--st-line); }
 .dj-slider { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--st-muted); flex-shrink: 0; }
@@ -124,3 +126,22 @@ body.light-mode .dj-badge, body.light-mode .dj-mix.is-beatmatch, body.light-mode
 .dj-results li button { height: 26px; padding: 0 9px; border-radius: 7px; border: 1px solid var(--st-line); background: transparent; color: inherit; cursor: pointer; font-size: 12px; }
 .dj-results li button:hover { border-color: var(--st-accent); }
 .dj-results li .dj-results-play { background: var(--st-accent); border-color: transparent; color: #fff; font-weight: 600; }
+
+/* Mixer (🎚 in the dock): bass / mid / treble / filter / volume per deck, crossfader, master. */
+.dj-stage > .dj-mixer-panel { position: absolute; z-index: 5; right: 22px; bottom: 76px; width: min(620px, calc(100% - 44px));
+  background: var(--st-card); border: 1px solid var(--st-line); border-radius: 14px; box-shadow: 0 18px 48px rgba(0, 0, 0, .45); padding-bottom: 10px; }
+.dj-mixer-panel > header { display: flex; align-items: center; gap: 10px; padding: 10px 12px 4px 14px; }
+.dj-mixer-panel > header .dj-results-close { margin-left: auto; }
+.dj-mx-tip { font-size: 11px; color: var(--st-muted); }
+.dj-mx-strips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 6px 12px; }
+.dj-mx-strip { border: 1px solid var(--st-line); border-radius: 11px; padding: 8px 10px; background: var(--st-field); }
+.dj-mx-strip header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.dj-mx-strip header b { font-size: 12.5px; }
+.dj-mx-track { flex: 1; min-width: 0; font-size: 11.5px; color: var(--st-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dj-mx-strip header button { height: 22px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--st-line); background: transparent; color: inherit; font-size: 11px; cursor: pointer; }
+.dj-mx-slider { display: grid; grid-template-columns: 54px 1fr 58px; align-items: center; gap: 8px; height: 26px; font-size: 12px; }
+.dj-mx-name { text-transform: capitalize; color: var(--st-muted); }
+.dj-mx-hint { font-size: 11px; color: var(--st-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.dj-mx-slider input[type=range] { width: 100%; accent-color: var(--st-accent); cursor: pointer; }
+.dj-mixer-panel > footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 22px 0; }
+.dj-mixer-panel > footer .dj-mx-slider { grid-template-columns: 92px 1fr 46px; }

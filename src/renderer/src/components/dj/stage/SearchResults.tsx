@@ -8,13 +8,15 @@ const mmss = (s?: number) => s && isFinite(s) ? `${Math.floor(s / 60)}:${String(
 
 /** "Wizkid" typed on the stage: their songs, each playable now, next or on a deck. */
 export default function SearchResults({ results, onPick, onClose }: { results: StageResults; onPick: (t: DjTrack, how: PickHow) => void; onClose: () => void }) {
-  return <section className="dj-results" aria-label={`Songs for ${results.query}`}>
+  return <section className="dj-results" aria-label={results.query ? `Songs for ${results.query}` : 'Songs'}>
     <header>
-      <span className="dj-label">Songs for “{results.query}”</span>
+      <span className="dj-label">{results.query ? <>Songs for “{results.query}”</> : 'Songs'}</span>
       <button className="dj-results-close" aria-label="Close results" onClick={onClose}>×</button>
     </header>
     {results.loading && <p className="dj-results-note">Searching…</p>}
-    {!results.loading && !results.tracks.length && <p className="dj-results-note">No songs found — try another spelling.</p>}
+    {!results.loading && !results.tracks.length && <p className="dj-results-note">{results.query
+      ? 'No songs found — try another spelling.'
+      : 'Type an artist or a song in “Tell the DJ” below — e.g. “Beyoncé” — and its songs appear here.'}</p>}
     <ul>
       {results.tracks.map(t => <li key={t.youtubeId || t.path || t.token}>
         <div className="dj-results-title"><b>{t.title}</b><span>{t.artist}</span></div>
