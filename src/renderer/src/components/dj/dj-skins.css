@@ -180,3 +180,6 @@
   50%      { box-shadow: 0 0 16px rgba(255, 25, 25, .95), inset 0 0 8px rgba(255, 120, 120, .45); }
 }
 @media (prefers-reduced-motion: reduce) { .aihub-dj .dj-side-tab.dj-side-tab-ai { animation: none; } }
+
+/* Online → AI DJ finds: the songs found on the AI DJ stage. */
+.aihub-dj .dj-ic-ai { color: #ff3b3b; filter: drop-shadow(0 0 3px rgba(255, 40, 40, .7)); }

@@ -9,7 +9,8 @@ import {
   FileText, Video, Home, Plus, Search, X, ListMusic, Shuffle, Trash2, Loader2, FolderPlus, Youtube, Sparkles, Images, ListPlus, Heart, ArrowLeftRight,
 } from 'lucide-react'
 import QueuePanel from './QueuePanel'
-import { addToList, isFavorite, queueStore, toggleFavorite } from './ytQueue'
+import { addToList, isFavorite, queueStore, toggleFavorite, trackFrom } from './ytQueue'
+import { aiFinds } from './aiFinds'
 import { recordTaste } from './taste'
 import AiDjPanel from './AiDjPanel'
 import type { DeckId, DjTrack } from './engine/DjEngine'
@@ -91,7 +92,10 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
     if (d?.moved) window.setTimeout(() => { sortBlock.current = false }, 0)
   }
   const sortBlock = useRef(false)
-  const [source, setSource] = useState<'local' | 'youtube'>('local')
+  const [source, setSource] = useState<'local' | 'youtube' | 'aifinds'>('local')
+  // Songs the AI DJ found on the stage (search), with thumbnails.
+  const finds = useSyncExternalStore(aiFinds.subscribe, aiFinds.get)
+  const findTracks = useMemo(() => finds.map(trackFrom), [finds])
   const [ytTracks, setYtTracks] = useState<DjTrack[]>([])
   const [ytQuery, setYtQuery] = useState('')
   const [sideTab, setSideTab] = useState<'list' | 'queue' | 'ai'>('list')
@@ -173,9 +177,19 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
     setSelected(ytTracks[0]?.token ?? null)
   }
 
+  const openFinds = () => {
+    cancelPendingProbes()
+    setSource('aifinds')
+    setCurrent(null)
+    setQuery('')
+    setError(null)
+    setSelected(findTracks[0]?.token ?? null)
+  }
+
   const runSearch = async () => {
     const q = query.trim()
     if (source === 'youtube') { await runYouTube(q); return }
+    if (source === 'aifinds') return   // the box filters this list as you type
     if (!q || !current) return
     cancelPendingProbes()
     setLoading(true)
@@ -205,6 +219,10 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
 
   const rows = useMemo(() => {
     if (source === 'youtube') return ytTracks.map(t => ({ t, length: t.durationHint ?? null, bpm: null as number | null }))
+    if (source === 'aifinds') {
+      const q = query.trim().toLowerCase()
+      return findTracks.filter(t => !q || `${t.title} ${t.artist}`.toLowerCase().includes(q)).map(t => ({ t, length: t.durationHint ?? null, bpm: null as number | null }))
+    }
     const q = searchResults ? '' : query.trim().toLowerCase()
     let list = raws.map(raw => {
       const t = toTrack(raw, knownMeta(raw.token))
@@ -235,7 +253,7 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
       })
     }
     return list
-  }, [raws, query, sort, searchResults, tick, source, ytTracks])
+  }, [raws, query, sort, searchResults, tick, source, ytTracks, findTracks])
 
   const selIndex = Math.max(0, rows.findIndex(r => r.t.token === selected))
 
@@ -296,6 +314,12 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
               <Youtube size={13} className="dj-ic-yt" />
               <span className="dj-node-name">YouTube</span>
             </div>
+            <div className={`dj-node ${source === 'aifinds' ? 'dj-node-on' : ''}`} style={{ paddingLeft: 6 }} onClick={openFinds} title="Every song the AI DJ found on the stage">
+              <span style={{ width: 14 }} />
+              <Sparkles size={13} className="dj-ic-ai" />
+              <span className="dj-node-name">AI DJ finds</span>
+              {finds.length > 0 && <span className="dj-side-n">{finds.length}</span>}
+            </div>
           </TreeGroup>
           <TreeGroup title="My Folders" action={<button type="button" className="dj-icon-btn" onClick={addFolder} title="Add a music folder"><FolderPlus size={13} /></button>}>
             {mine.length === 0 && <div className="dj-tree-hint">Add any folder with music in it</div>}
@@ -313,7 +337,8 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
           <Search size={13} />
           <input value={query} onChange={e => { setQuery(e.target.value); if (searchResults) setSearchResults(null) }}
             onKeyDown={e => { if (e.key === 'Enter') void runSearch(); e.stopPropagation() }}
-            placeholder={source === 'youtube'
+            placeholder={source === 'aifinds' ? 'Filter the songs the AI DJ found'
+              : source === 'youtube'
               ? 'Search YouTube — artist, song or mix, then Enter'
               : current ? `Filter ${current.name} — Enter searches all sub-folders` : 'Search'} spellCheck={false} />
           {query && <button type="button" className="dj-icon-btn" onClick={() => { setQuery(''); if (searchResults && current) void open(current) }}><X size={12} /></button>}
@@ -329,7 +354,8 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
           )}
           <span className="dj-count">
             {loading ? <Loader2 size={12} className="dj-spin" /> : null}
-            {source === 'youtube'
+            {source === 'aifinds' ? `${rows.length} AI DJ finds`
+              : source === 'youtube'
               ? (ytQuery ? `${rows.length} on YouTube` : 'YouTube')
               : searchResults ? `${rows.length}${searchResults.truncated ? '+' : ''} found` : `${rows.length} files`}
           </span>
@@ -355,6 +381,9 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
                 Search YouTube above and drag any result onto a deck. YouTube songs play in YouTube&apos;s own player, so the
                 crossfader, volume, tempo steps, cues and Automix work on them; EQ, effects, stems and waveforms are for local files.
               </div>
+            )}
+            {source === 'aifinds' && rows.length === 0 && (
+              <div className="dj-empty">Songs you search on the AI DJ stage (an artist, a song or a style) appear here, with their thumbnails — drag any of them onto a deck.</div>
             )}
             {source === 'local' && !error && !loading && rows.length === 0 && (
               <div className="dj-empty">

@@ -32,6 +32,7 @@ import { parseBrief } from './ai/setBrief'
 import { AnalysisQueue } from './engine/analysisQueue'
 import { liveSide, loadTarget } from './ai/deckChoice'
 import { searchQueryFor } from './ai/instructions'
+import { aiFinds } from './aiFinds'
 import type { PickHow, StageResults } from './stage/SearchResults'
 import { createFactSource } from './engine/factScan'
 import { factsCache } from './ai/trackFacts'
@@ -328,7 +329,9 @@ function Console({ engine }: { engine: DjEngine }) {
     setStageResults({ query, tracks: [], loading: true })
     const found = await searchYouTube(searchQueryFor(query), 24).catch(() => [] as DjTrack[])
     if (seq !== searchSeq.current) return   // a newer search won
-    setStageResults({ query, tracks: found.filter(isSong).slice(0, 15), loading: false })
+    const songs = found.filter(isSong).slice(0, 15)
+    aiFinds.add(songs, query)   // also in the library: Online → AI DJ finds
+    setStageResults({ query, tracks: songs, loading: false })
   }, [])
   const pickResult = useCallback((t: DjTrack, how: PickHow) => {
     if (how === 'now') { say(`Mixing in ${t.title}`); void mixer.mixNow(t); return }
