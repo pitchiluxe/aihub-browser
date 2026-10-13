@@ -1,4 +1,4 @@
-import { net } from 'electron'
+import { app, net } from 'electron'
 import { createNetRequest } from '../netGet'
 
 // Minimal request helper shared by the OAuth token calls and every Google API
@@ -6,7 +6,7 @@ import { createNetRequest } from '../netGet'
 // Through Chromium's network process (Electron net.fetch), not Node sockets: a
 // timed-out Node request can block the main thread while its socket closes
 // (see netGet.ts — measured 4.4 s "Not Responding" on 2026-10-12).
-const request = createNetRequest((url, init) => net.fetch(url, { ...init, bypassCustomProtocolHandlers: true }))
+const request = createNetRequest(async (url, init) => { await app.whenReady(); return net.fetch(url, { ...init, bypassCustomProtocolHandlers: true }) })
 
 export async function httpJson(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',

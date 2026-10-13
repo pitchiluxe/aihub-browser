@@ -43,6 +43,7 @@ import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
 import { createSessionManager, type SessionTab } from './sessions'
 import { createSemanticIndex, type SearchDoc } from './semantic'
 import { createNetGet, createNetPostJson, isWebUrl } from './netGet'
+import { createOllamaProbe, type OllamaProbe, type OllamaModelInfo } from './ollamaProbe'
 import { net as electronNet } from 'electron'
 import { splitPanes } from '../shared/splitLayout'
 import { writeNote, describeVault, parseTagSuggestions, type NoteKind } from './obsidian'
@@ -418,8 +419,12 @@ function fallbackLookup(
 // Chromium's network process first (see netGet.ts: a timed-out Node socket
 // froze the main thread for 4.4 s). Node sockets with the public-DNS fallback
 // only when Chromium cannot resolve the name at all.
-const chromiumFetch = (url: string, init: { signal: AbortSignal; method?: string; headers?: Record<string, string>; body?: string }) =>
-  electronNet.fetch(url, { ...init, bypassCustomProtocolHandlers: true })
+// net.fetch throws before the app is ready; the first Ollama probe runs at
+// startup, failed at once, and the AI panel showed "Cloud · OpenRouter".
+const chromiumFetch = async (url: string, init: { signal: AbortSignal; method?: string; headers?: Record<string, string>; body?: string }) => {
+  await app.whenReady()
+  return electronNet.fetch(url, { ...init, bypassCustomProtocolHandlers: true })
+}
 const chromiumGet = createNetGet(chromiumFetch)
 const chromiumPostJson = createNetPostJson(chromiumFetch)
 async function httpGet(url: string, timeoutMs = 5000): Promise<{ status: number; body: string }> {
@@ -601,77 +606,13 @@ function ollamaChatStream(
   })
 }
 
-// ── Ollama detection using native http ────────────────────────────────────
-// Short-lived cache: ai:chat, ai:summarize and the status poller all call this,
-// so without it every AI action re-probes the network before doing any work.
-// A "not running" result probes up to 4 endpoints — cache it briefly so a user
-// without Ollama isn't stalled on repeated timeouts before the cloud fallback.
-interface OllamaModelInfo { name: string; tools: boolean; params: number; cloud: boolean }
-interface OllamaProbe { running: boolean; models: string[]; info?: OllamaModelInfo[]; base?: string }
-let ollamaProbeCache: { at: number; value: OllamaProbe } | null = null
-// Positive results expire quickly (a model list can change as the user pulls
-// models). A NEGATIVE result is cached far longer: when Ollama isn't installed
-// every probe round costs up to 4 × 1.5s of dead time, and with a 5s TTL that
-// was re-paid on essentially every chat message before falling back to the
-// cloud. Settings' explicit "check again" passes force=true.
-const OLLAMA_PROBE_TTL = 5000
-const OLLAMA_MISS_TTL  = 5000
+// ── Ollama detection ───────────────────────────────────────────────────────
+// See ollamaProbe.ts: a CPU-busy Ollama answers slowly, and the old 4 s / 1.5 s
+// probe reported it "not running" — every AI feature then went to OpenRouter.
+const ollamaProbe = createOllamaProbe({ get: (url, ms) => httpGet(url, ms), bases: () => ollamaBaseCandidates(getAIConfig().olBase) })
 
 async function checkOllamaRunning(force = false): Promise<OllamaProbe> {
-  if (!force && ollamaProbeCache) {
-    const ttl = ollamaProbeCache.value.running ? OLLAMA_PROBE_TTL : OLLAMA_MISS_TTL
-    if (Date.now() - ollamaProbeCache.at < ttl) return ollamaProbeCache.value
-  }
-  const { olBase } = getAIConfig()
-  // Try both the configured base AND a 127.0.0.1 fallback to handle systems
-  // where 'localhost' resolves differently in packaged Electron.
-  const uniqueBases = ollamaBaseCandidates(olBase)
-
-  const cache = (value: OllamaProbe) => {
-    ollamaProbeCache = { at: Date.now(), value }
-    return value
-  }
-
-  for (const base of uniqueBases) {
-    // /api/tags is the only endpoint that lists installed models. It gets a
-    // longer budget than the liveness probe because a busy Ollama (loading a
-    // model into VRAM) can take a second or two to answer, and a timeout here
-    // used to leave us with no model list at all.
-    try {
-      const { status, body } = await httpGet(`${base}/api/tags`, 4000)
-      if (status >= 200 && status < 400) {
-        const json = JSON.parse(body)
-        const entries: OllamaModelInfo[] = (json.models || [])
-          .map((m: any) => {
-            const name = typeof m === 'string' ? m : m.name || ''
-            const caps: string[] = Array.isArray(m?.capabilities) ? m.capabilities : []
-            const sizeStr = String(m?.details?.parameter_size || '')
-            const params = parseFloat(sizeStr) || 0   // "7.6B" → 7.6, "134.52M" → 134.52
-            return {
-              name,
-              tools: caps.includes('tools'),
-              // Parameter counts arrive as "7.6B" or "134.52M" — normalise to B.
-              params: /M$/i.test(sizeStr) ? params / 1000 : params,
-              cloud: !!m?.remote_host,
-            }
-          })
-          .filter((e: OllamaModelInfo) => e.name && !/embed/i.test(e.name) && !e.cloud)
-        const models = entries.map(e => e.name)
-        if (models.length) return cache({ running: true, models, info: entries, base })
-      }
-    } catch { /* fall through to the liveness probe */ }
-
-    // Ollama answered but we couldn't read its model list (timeout, or a
-    // version endpoint that doesn't carry one). Report it as running with an
-    // UNKNOWN model list — never invent a model name here: a fabricated
-    // 'llama3' is what produced "model 'llama3' not found" 404s on machines
-    // whose actual models were fine.
-    try {
-      const { status } = await httpGet(`${base}/api/version`, 1500)
-      if (status >= 200 && status < 400) return cache({ running: true, models: [], base })
-    } catch { /* try next base */ }
-  }
-  return cache({ running: false, models: [] })
+  return ollamaProbe.check(force)
 }
 
 async function resolveInstalledOllamaModel(preferred = ''): Promise<string> {
@@ -4224,12 +4165,14 @@ ipcMain.handle('brain:refreshRecommendations', async () => {
 // Explicit, user-driven status checks (Settings "Check", AI panel open) force a
 // fresh probe so a just-started Ollama is detected immediately; the internal
 // ai:chat / summarize probes use the short cache.
-ipcMain.handle('ollama:status', async () => checkOllamaRunning(true))
+// The last answer at once (refreshed in the background): a CPU-busy Ollama can take
+// seconds to answer, and the panel must not sit on "Connecting" — or flip to "cloud".
+ipcMain.handle('ollama:status', async (_e, force?: boolean) => checkOllamaRunning(force === true))
 ipcMain.handle('ollama:pull', async (_e, model: string) => {
   const { olBase } = getAIConfig()
   try {
     const { status, body } = await httpPost(`${olBase}/api/pull`, { name: model, stream: false }, {}, 180000)
-    if (status >= 200 && status < 400) { ollamaProbeCache = null; return { success: true } }
+    if (status >= 200 && status < 400) { void ollamaProbe.check(true); return { success: true } }
     return { success: false, error: body }
   } catch (e: any) { return { success: false, error: e.message } }
 })

@@ -5,13 +5,13 @@
  */
 import os from 'os'
 import { join } from 'path'
-import { net } from 'electron'
+import { app, net } from 'electron'
 import { createManagedJsonStore } from './jsonStore'
 import { createNetPostJson } from './netGet'
 
 // Chromium's network process, not Node sockets: a timed-out Node request
 // can block the main thread while its socket closes (see netGet.ts).
-const postJson = createNetPostJson((url, init) => net.fetch(url, { ...init, bypassCustomProtocolHandlers: true }))
+const postJson = createNetPostJson(async (url, init) => { await app.whenReady(); return net.fetch(url, { ...init, bypassCustomProtocolHandlers: true }) })
 
 const APP_DIR = join(os.homedir(), '.aihub-browser')
 
