@@ -25,6 +25,7 @@ import { DjEnvContext, describeDeck, onAir, runIntent, type PanelControls } from
 import { setVoiceEnabled, subscribeVoice, voiceEnabled } from './djVoice'
 import { parseInstruction } from './ai/instructions'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
+import { aiFinds } from './aiFinds'
 
 const VIBES = ['Afrobeats party', 'Chill R&B evening', 'Deep house sunset', '90s hip-hop classics', 'Gospel praise', 'Amapiano groove']
 const BATCH = 8
@@ -102,6 +103,8 @@ export default function AiDjPanel({ sidelistCount, addTracks, automix, setAutomi
     } else note('Picking what comes next…')
     const add = (t: DjTrack) => {
       if (t.youtubeId) taken.current.add(t.youtubeId)
+      // Also in the library, with its thumbnail: Online → AI DJ finds.
+      aiFinds.add([t], vibeRef.current || 'AI DJ')
       if (front && env) env.playNext([t]); else addTracks([t])
     }
     try {

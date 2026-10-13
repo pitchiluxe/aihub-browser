@@ -202,7 +202,12 @@ function Console({ engine }: { engine: DjEngine }) {
       // first, then the YouTube queue when a list is playing.
       next: () => {
         const c = conductorRef.current
-        if (c?.state.active && !c.state.paused) return c.next()
+        if (c?.state.active && !c.state.paused) {
+          const t = c.next()
+          // Songs the AI set plays are in the library too (Online → AI DJ finds).
+          if (t?.youtubeId) aiFinds.add([t], c.state.brief?.vibe || 'AI DJ set')
+          return t
+        }
         const [t, ...rest] = sideRef.current
         if (t) { setSidelist(() => rest); return t }
         return takeNext()
