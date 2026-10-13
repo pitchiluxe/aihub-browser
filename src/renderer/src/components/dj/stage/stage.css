@@ -145,3 +145,9 @@ body.light-mode .dj-badge, body.light-mode .dj-mix.is-beatmatch, body.light-mode
 .dj-mx-slider input[type=range] { width: 100%; accent-color: var(--st-accent); cursor: pointer; }
 .dj-mixer-panel > footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 22px 0; }
 .dj-mixer-panel > footer .dj-mx-slider { grid-template-columns: 92px 1fr 46px; }
+
+/* Start screen: search any artist, song or style before (or instead of) a set. */
+.dj-stage-find { display: flex; gap: 6px; width: min(640px, 100%); margin: 0 auto 18px; padding: 6px; background: var(--st-card); border: 1px solid var(--st-line); border-radius: 14px; }
+.dj-stage-find input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--st-line); background: var(--st-field); color: inherit; font-size: 13.5px; }
+.dj-stage-find input:focus { outline: none; border-color: color-mix(in srgb, var(--st-accent) 70%, transparent); }
+.dj-stage-find button { height: 38px; padding: 0 16px; border-radius: 9px; border: 0; background: var(--st-accent); color: #fff; font-weight: 600; font-size: 13px; cursor: pointer; }

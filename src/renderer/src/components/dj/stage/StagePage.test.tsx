@@ -88,6 +88,23 @@ describe('StagePage', () => {
     expect(onStop).toHaveBeenCalledTimes(1)
   })
 
+  it('first visit: search an artist, song or style, then pick from the list — no set needed', async () => {
+    const onSearch = vi.fn(), onPick = vi.fn()
+    const tracks = [{ title: 'Halo', artist: 'Beyoncé', youtubeId: 'hhhhhhhhhhh', durationHint: 261 }] as any
+    act(() => root.render(<StagePage engine={engine} conductor={fakeConductor()} onTakeDecks={() => {}} onAsk={() => {}} onSearch={onSearch} onPick={onPick} />))
+    const box = host.querySelector('input[aria-label="Search artist, song or style"]') as HTMLInputElement
+    expect(box).not.toBeNull()
+    await act(async () => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!; set.call(box, 'Beyonce'); box.dispatchEvent(new Event('input', { bubbles: true })) })
+    await act(async () => { box.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
+    expect(onSearch).toHaveBeenCalledWith('Beyonce')
+    // The list shows on the start screen, and picking plays the song.
+    act(() => root.render(<StagePage engine={engine} conductor={fakeConductor()} onTakeDecks={() => {}} onAsk={() => {}} onSearch={onSearch} onPick={onPick} results={{ query: 'Beyonce', tracks, loading: false }} />))
+    const panel = host.querySelector('[aria-label="Songs for Beyonce"]') as HTMLElement
+    expect(panel.textContent).toContain('Halo')
+    act(() => (Array.from(panel.querySelectorAll('button')).find(b => b.textContent?.includes('Play')) as HTMLButtonElement).click())
+    expect(onPick).toHaveBeenCalledWith(tracks[0], 'now')
+  })
+
   it('when a set ends, the start screen says why', () => {
     act(() => root.render(<StagePage engine={engine} conductor={fakeConductor({ message: 'I ran out of songs that fit your rules — tell me a new vibe to keep going.' })} onTakeDecks={() => {}} onAsk={() => {}} />))
     expect(host.querySelector('.dj-stage-message')?.textContent).toMatch(/ran out of songs/)

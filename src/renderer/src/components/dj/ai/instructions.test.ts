@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseInstruction, parseModelInstructions, ruleLabel, type SetRule } from './instructions'
+import { parseInstruction, parseModelInstructions, ruleLabel, searchQueryFor, type SetRule } from './instructions'
 
 const NOW = 1_000_000
 const rule = (t: string) => parseInstruction(t, NOW).items.map(i => ('rule' in i ? i.rule : null)).filter(Boolean)[0] as SetRule | undefined
@@ -108,6 +108,16 @@ describe('a style on its own means "play that, and stick to it"', () => {
   it('"R&B" is the r&b genre, not a search', () => {
     expect(parseInstruction('R&B', NOW).items).toEqual([{ rule: { kind: 'onlyGenres', genres: ['r&b'] } }])
   })
+})
+
+describe('searchQueryFor — a style finds songs, not hour-long mixes', () => {
+  it.each([
+    ['R&B', 'r&b official music video'],
+    ['amapiano', 'amapiano official music video'],
+    ['Afrobeats', 'afrobeats official music video'],
+    ['Beyonce', 'Beyonce'],
+    ['Halo Beyonce', 'Halo Beyonce'],
+  ])('%s → %s', (q, want) => { expect(searchQueryFor(q)).toBe(want) })
 })
 
 describe('searching the library', () => {

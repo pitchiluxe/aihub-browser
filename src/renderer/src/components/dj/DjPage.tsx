@@ -31,6 +31,7 @@ import { SetConductor } from './ai/setConductor'
 import { parseBrief } from './ai/setBrief'
 import { AnalysisQueue } from './engine/analysisQueue'
 import { liveSide, loadTarget } from './ai/deckChoice'
+import { searchQueryFor } from './ai/instructions'
 import type { PickHow, StageResults } from './stage/SearchResults'
 import { createFactSource } from './engine/factScan'
 import { factsCache } from './ai/trackFacts'
@@ -325,7 +326,7 @@ function Console({ engine }: { engine: DjEngine }) {
   const searchSongs = useCallback(async (query: string) => {
     const seq = ++searchSeq.current
     setStageResults({ query, tracks: [], loading: true })
-    const found = await searchYouTube(query, 24).catch(() => [] as DjTrack[])
+    const found = await searchYouTube(searchQueryFor(query), 24).catch(() => [] as DjTrack[])
     if (seq !== searchSeq.current) return   // a newer search won
     setStageResults({ query, tracks: found.filter(isSong).slice(0, 15), loading: false })
   }, [])
@@ -372,7 +373,8 @@ function Console({ engine }: { engine: DjEngine }) {
         CSS-zoomed to fit the tab and the stage must not be scaled with it. */}
     <div className="dj-host">
     {stageView === 'stage' && <StagePage engine={engine} conductor={conductor} onTakeDecks={() => showView('console')} onStop={stopMusic} onAsk={ask}
-      results={stageResults} onPick={pickResult} onCloseResults={() => setStageResults(null)} onToggleSongs={toggleSongs} />}
+      results={stageResults} onPick={pickResult} onCloseResults={() => setStageResults(null)} onToggleSongs={toggleSongs}
+      onSearch={q => { void searchSongs(q) }} />}
     {stageView === 'console' && <button className="dj-back-to-stage" onClick={() => showView('stage')}>{conductor.state.active ? 'Back to stage' : '✨ AI DJ stage'}</button>}
     <div className="aihub-dj" data-dj-theme={theme} data-dj-look={look} data-dj-layout={layout} data-dj-dark={themeInfo?.dark ? '1' : '0'}
       data-dj-light-bg={themeInfo?.lightBg ? '1' : '0'} ref={fit.ref} style={fit.style}>

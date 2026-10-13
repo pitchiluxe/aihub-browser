@@ -1,13 +1,22 @@
 import React, { useState } from 'react'
 import { PRESETS, parseBrief, type SetBrief, type PresetId } from '../ai/setBrief'
 
-export default function StartScreen({ onStart, onTakeDecks, notice }: { onStart: (b: SetBrief) => void; onTakeDecks?: () => void; notice?: string }) {
+export default function StartScreen({ onStart, onTakeDecks, notice, onSearch }: {
+  onStart: (b: SetBrief) => void; onTakeDecks?: () => void; notice?: string
+  /** "Beyonce", "Halo", "R&B": a list to pick from — no set needed. */
+  onSearch?: (q: string) => void
+}) {
   const [text, setText] = useState('')
+  const [find, setFind] = useState('')
   const [minutes, setMinutes] = useState(60)
   const go = (t: string) => { const b = parseBrief(t); onStart(/\d/.test(t) ? b : { ...b, durationMin: minutes }) }
   return <div className="dj-stage-start">
     {/* Why the last set ended ("Set finished.", "I ran out of songs…"). */}
     {notice && <div className="dj-stage-message" role="status">{notice}</div>}
+    {onSearch && <form className="dj-stage-find" onSubmit={e => { e.preventDefault(); if (find.trim()) onSearch(find.trim()) }}>
+      <input aria-label="Search artist, song or style" value={find} onChange={e => setFind(e.target.value)} placeholder="🔍  Search any artist, song or style — “Beyoncé”, “Calm Down”, “R&B”" />
+      <button type="submit">Search</button>
+    </form>}
     <h1>What's the vibe?</h1>
     <p className="dj-stage-sub">Describe a set — AIHub picks the songs, mixes them, and follows what you tell it.</p>
     <form onSubmit={e => { e.preventDefault(); if (text.trim()) go(text) }}>

@@ -139,6 +139,16 @@ function rules(t: string, now: number): SetRule | { remove: SetRule['kind']; val
   return null
 }
 
+/**
+ * What to ask YouTube for a typed search. A style on its own ("R&B") returns
+ * mostly hour-long mixes; "<style> official music video" returns songs
+ * (measured 2026-10-12: 15/15 for R&B). Artists and titles are searched as typed.
+ */
+export function searchQueryFor(q: string): string {
+  const t = clean(q)
+  return GENRES.includes(t) ? `${genreIn(t).sort((a, b) => b.length - a.length)[0] ?? t} official music video` : q.trim()
+}
+
 export function ruleLabel(r: SetRule): string {
   switch (r.kind) {
     case 'banArtist': return `No ${titleCase(r.artist)}`
