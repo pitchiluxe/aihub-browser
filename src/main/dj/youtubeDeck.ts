@@ -127,6 +127,26 @@ async function ensurePlayer(owner: WebContents, deck: YtDeckId): Promise<Player>
   return player
 }
 
+/**
+ * Smooth video needs a window Chromium believes is on screen. A hidden window
+ * is barely painted: measured 2026-10-12, a YouTube video played at 0.9 fps in
+ * a hidden window and 25 fps in a shown one; the DJ monitor got 5–7 fps — the
+ * stutter. While someone watches the picture, the player window is shown —
+ * inactive, off every screen, fully transparent, click-through, not in the
+ * taskbar — which measured 25 fps; it is hidden again when nobody watches.
+ */
+function paintFully(win: BrowserWindow, watched: boolean): void {
+  if (win.isDestroyed()) return
+  if (watched) {
+    win.setIgnoreMouseEvents(true)
+    win.setPosition(-32000, -32000)
+    win.setOpacity(0)
+    if (!win.isVisible()) win.showInactive()
+  } else if (win.isVisible()) {
+    win.hide()
+  }
+}
+
 function closeOwner(ownerId: number): void {
   for (const [k, p] of players) {
     if (!k.startsWith(`${ownerId}:`)) continue
@@ -299,6 +319,7 @@ export function registerYouTubeDeckIpc(): void {
       // Scan players feed only the waveform reader: their picture stays hidden.
       p.showVideo = value === true && !isScan(deck)
       await inFrame(p, videoJs(p.showVideo))
+      paintFully(p.win, p.showVideo)
       return true
     }
     if (cmd === 'audible') {
