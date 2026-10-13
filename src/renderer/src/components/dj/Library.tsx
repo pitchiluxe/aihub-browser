@@ -410,7 +410,7 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
           <button type="button" className={`dj-side-tab ${sideTab === 'queue' ? 'on' : ''}`} onClick={() => setSideTab('queue')} title="YouTube queue and playlists">
             <Youtube size={12} /> QUEUE
           </button>
-          <button type="button" className={`dj-side-tab ${sideTab === 'ai' ? 'on' : ''}`} onClick={() => setSideTab('ai')}>
+          <button type="button" className={`dj-side-tab dj-side-tab-ai ${sideTab === 'ai' ? 'on' : ''}`} onClick={() => setSideTab('ai')} title="AI DJ">
             <Sparkles size={12} /> AI DJ
           </button>
           {sidelist.length > 0 && sideTab === 'list' && (

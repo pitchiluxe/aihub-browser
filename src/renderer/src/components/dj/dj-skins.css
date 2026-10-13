@@ -161,3 +161,21 @@
 .aihub-dj[data-dj-look='daylight'] :is(.dj-ic-folder, .dj-empty, .dj-side-empty, .dj-tree-hint) { color: #4b5563; }
 .aihub-dj[data-dj-look='daylight'] .dj-coverflow { background: linear-gradient(180deg, #e9ecf1, #f8f9fb); }
 .aihub-dj[data-dj-look='daylight'] .dj-count { color: #374151; }
+
+/* "AI DJ" tab beside QUEUE: lit like an exit sign — red letters with a neon
+   glow and a slow breath. After the skins so every look keeps it. */
+.aihub-dj .dj-side-tab.dj-side-tab-ai {
+  color: #ff3b3b; font-weight: 700; letter-spacing: .04em;
+  text-shadow: 0 0 4px rgba(255, 40, 40, .9), 0 0 10px rgba(255, 30, 30, .65), 0 0 18px rgba(255, 20, 20, .35);
+  border: 1px solid rgba(255, 50, 50, .55); border-radius: 6px;
+  box-shadow: 0 0 6px rgba(255, 30, 30, .45), inset 0 0 6px rgba(255, 30, 30, .18);
+  background: #160000;   /* solid: a dark box with lit letters reads on light skins too */
+  animation: dj-exit-glow 2.4s ease-in-out infinite;
+}
+.aihub-dj .dj-side-tab.dj-side-tab-ai svg { filter: drop-shadow(0 0 3px rgba(255, 40, 40, .9)); }
+.aihub-dj .dj-side-tab.dj-side-tab-ai.on { background: #3a0000; color: #ff5a5a; }
+@keyframes dj-exit-glow {
+  0%, 100% { box-shadow: 0 0 6px rgba(255, 30, 30, .45), inset 0 0 6px rgba(255, 30, 30, .18); }
+  50%      { box-shadow: 0 0 12px rgba(255, 30, 30, .75), inset 0 0 8px rgba(255, 30, 30, .3); }
+}
+@media (prefers-reduced-motion: reduce) { .aihub-dj .dj-side-tab.dj-side-tab-ai { animation: none; } }
