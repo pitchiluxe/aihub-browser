@@ -11,6 +11,7 @@ import {
 import QueuePanel from './QueuePanel'
 import { addToList, isFavorite, queueStore, toggleFavorite, trackFrom } from './ytQueue'
 import { aiFinds } from './aiFinds'
+import TrackThumb from './TrackThumb'
 import { recordTaste } from './taste'
 import AiDjPanel from './AiDjPanel'
 import type { DeckId, DjTrack } from './engine/DjEngine'
@@ -466,6 +467,7 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
               onDragStart={e => e.dataTransfer.setData(TRACK_MIME, t.token)}
               onDoubleClick={() => onLoad(t)}>
               <span className="dj-side-i">{i + 1}</span>
+              <TrackThumb track={t} />
               <div className="dj-side-t"><b>{t.title}</b><small>{t.artist}</small></div>
               <button type="button" className="dj-icon-btn" onClick={() => setSidelist(s => s.filter((_, j) => j !== i))} title="Remove"><X size={11} /></button>
             </div>

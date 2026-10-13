@@ -15,6 +15,9 @@ export const SCAN_RATE = 4
 const POLL_MS = 200
 /** No progress for this long: give up rather than hold a player open. */
 const STALL_MS = 20000
+/** Resumes after a stall before the scan gives up, and the pause before each. */
+const MAX_RESUMES = 3
+const RESUME_DELAY_MS = 1500
 
 export class YouTubeScan {
   private gen = 0
@@ -38,11 +41,17 @@ export class YouTubeScan {
     private onEnd: (complete: boolean) => void,
   ) {}
 
-  async start(videoId: string, duration: number): Promise<void> {
+  private videoId = ''
+  private resumes = 0
+
+  /** Scan a song from the start (or, `resume`: after a stall, from `from` seconds). */
+  async start(videoId: string, duration: number, from = 0, resume = false): Promise<void> {
     const gen = ++this.gen
     this.stop(false)
     this.duration = duration
-    this.reach = 0
+    // A resume keeps its count — even one from 0 s — or a dead player would be retried forever.
+    if (!resume) { this.reach = 0; this.resumes = 0; this.lastT = 0 }
+    this.videoId = videoId
     this.anchor = null
     // Every way out reports back (onEnd): the scan holds the one shared scan
     // slot, and an unreported failure left the other deck at "0%" forever.
@@ -56,6 +65,7 @@ export class YouTubeScan {
       await ytBridge().cmd(this.key, 'volume', 1)
       await ytBridge().cmd(this.key, 'rate', SCAN_RATE)
       await ytBridge().cmd(this.key, 'play')
+      if (from > 0) await ytBridge().cmd(this.key, 'seek', from)
     } catch {
       if (gen === this.gen) { this.stop(true); this.onEnd(false) }
       return
@@ -118,6 +128,16 @@ export class YouTubeScan {
 
   private finish(complete: boolean): void {
     this.stop(true)
+    // Stalled partway (an ad, a busy machine): pick up just before where it
+    // stopped instead of leaving the rest of the waveform blank — the end of
+    // songs went missing over a long session. A few tries, then give up.
+    const at = Math.max(this.reach, this.lastT)
+    if (!complete && this.videoId && this.duration && at < this.duration - 3 && this.resumes < MAX_RESUMES) {
+      this.resumes++
+      const gen = this.gen
+      window.setTimeout(() => { if (gen === this.gen) void this.start(this.videoId, this.duration, Math.max(0, at - 2), true) }, RESUME_DELAY_MS)
+      return
+    }
     this.onEnd(complete)
   }
 

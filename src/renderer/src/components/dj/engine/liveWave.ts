@@ -12,6 +12,9 @@
  */
 import { bestLag, detectBpm, ENV_RATE, onsetCurve } from './analysis'
 
+/** Longest gap between scan readings that is joined up (0.6 s of song); longer is an interruption. */
+const MAX_SCAN_GAP = Math.round(0.6 * ENV_RATE)
+
 /** Played frames needed before trusting an alignment. */
 const ALIGN_MIN_FRAMES = 800
 const ALIGN_WINDOW = 1500
@@ -57,12 +60,33 @@ export class LiveWave {
     if (low > this.low[i]) this.low[i] = low
   }
 
-  /** A scanned peak at song time t (seconds). */
+  /** The previous scanned reading, so sparse readings can be joined up. */
+  private lastScan: { i: number; peak: number; share: number } | null = null
+
+  /**
+   * A scanned peak at song time t (seconds). Under load the 4× scan's readings
+   * arrive several frames apart; each used to fill one frame, which drew the
+   * waveform as a comb of thin bars. A short gap since the previous reading is
+   * filled between the two; a long one (an ad, a stall) is left for the
+   * resumed scan.
+   */
   addScanned(t: number, peak: number, low: number): void {
     const i = Math.floor(t * ENV_RATE)
     if (i < 0 || i >= this.frames) return
     this.hasScan = true
     const share = peak > 0 ? Math.min(1, low / peak) : 0
+    const prev = this.lastScan
+    if (prev && i - prev.i > 1 && i - prev.i <= MAX_SCAN_GAP) {
+      for (let k = prev.i + 1; k < i; k++) {
+        const f = (k - prev.i) / (i - prev.i)
+        this.putScanned(k, prev.peak + (peak - prev.peak) * f, prev.share + (share - prev.share) * f)
+      }
+    }
+    this.putScanned(i, peak, share)
+    this.lastScan = { i, peak, share }
+  }
+
+  private putScanned(i: number, peak: number, share: number): void {
     if (peak > this.scanEnv[i]) this.scanEnv[i] = Math.min(1, peak)
     if (share > this.scanLow[i]) this.scanLow[i] = share
     const j = i + this.shift

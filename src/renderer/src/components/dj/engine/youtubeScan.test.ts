@@ -32,8 +32,35 @@ describe('YouTubeScan always releases the scan slot', () => {
     const scan = new YouTubeScan('A-scan', ctx, () => {}, onEnd)
     await scan.start('vid00000001', 180)
     bridge.state.mockImplementation(async () => { throw new Error("reply was never sent") })
-    await vi.advanceTimersByTimeAsync(25_000)
+    // It first tries resuming (3×), then gives up and frees the slot.
+    await vi.advanceTimersByTimeAsync(4 * 25_000)
     expect(onEnd).toHaveBeenCalledWith(false)
+  })
+
+  it('a scan that stalls partway resumes from where it stopped, instead of leaving the rest blank', async () => {
+    const onEnd = vi.fn()
+    let t = 0
+    bridge.state.mockImplementation(async () => ({ t, d: 180, paused: false, ended: false, ad: false, state: 1 }))
+    const scan = new YouTubeScan('A-scan', ctx, () => {}, onEnd)
+    await scan.start('vid00000001', 180)
+    for (let i = 0; i < 20; i++) { t += 4; await vi.advanceTimersByTimeAsync(200) }   // reads up to 80 s…
+    bridge.cmd.mockClear()
+    await vi.advanceTimersByTimeAsync(25_000)                                          // …then stalls
+    expect(onEnd).not.toHaveBeenCalled()                                               // not given up
+    const seek = (bridge.cmd.mock.calls as unknown as unknown[][]).find(c => c[1] === 'seek') as [string, string, number] | undefined
+    expect(seek).toBeDefined()
+    expect(seek![2]).toBeGreaterThanOrEqual(70)                                        // resumed near 80 s, not from 0
+    expect(seek![2]).toBeLessThanOrEqual(80)
+  })
+
+  it('gives up (and frees the slot) after a few failed resumes', async () => {
+    const onEnd = vi.fn()
+    bridge.state.mockImplementation(async () => ({ t: 30, d: 180, paused: false, ended: false, ad: false, state: 1 }))   // never moves
+    const scan = new YouTubeScan('A-scan', ctx, () => {}, onEnd)
+    await scan.start('vid00000001', 180)
+    await vi.advanceTimersByTimeAsync(5 * 25_000)
+    expect(onEnd).toHaveBeenCalledWith(false)
+    expect(onEnd).toHaveBeenCalledTimes(1)
   })
 
   it('when a player command fails while starting', async () => {
