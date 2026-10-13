@@ -206,6 +206,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       state:    (deck: string) => ipcRenderer.invoke('dj:yt:state', deck),
       cmd:      (deck: string, cmd: string, value?: unknown) => ipcRenderer.invoke('dj:yt:cmd', deck, cmd, value),
       unload:   (deck: string) => ipcRenderer.invoke('dj:yt:unload', deck),
+      // Show the deck's player itself over a video area on the page (CSS px), or hide it (null).
+      show:     (deck: string, rect: { x: number; y: number; width: number; height: number } | null) => ipcRenderer.invoke('dj:yt:show', deck, rect),
     },
   },
   obsidian: {

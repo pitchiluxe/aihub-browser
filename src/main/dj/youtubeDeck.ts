@@ -17,8 +17,9 @@
  * Every player belongs to the webContents that asked for it and is closed
  * with it. Only an 11-character YouTube video id ever reaches the window.
  */
-import { BrowserWindow, ipcMain, type WebContents, type WebFrameMain } from 'electron'
+import { BrowserWindow, WebContentsView, ipcMain, type WebContents, type WebFrameMain } from 'electron'
 import { DECK_CLEAN_CSS } from './deckCss'
+import { nativeBounds, type Bounds } from './nativeVideo'
 
 /**
  * A deck's player, or its scan player: a second, silent copy of the same
@@ -47,8 +48,23 @@ const WRAPPER = '<!doctype html><html><head><meta charset="utf-8"><title>AIHub D
   '<iframe id="f" allow="autoplay; encrypted-media" style="border:0;width:100vw;height:100vh"></iframe>' +
   '</body></html>'
 
+/**
+ * Where a player lives. Deck players are views inside the DJ's own window,
+ * hidden until a video area on the page asks for them (see `show`): shown
+ * directly, YouTube draws at its own rate — 25 fps measured, where capturing a
+ * hidden player into the page managed 4–14. Scan players only feed the waveform
+ * reader, so they stay hidden windows.
+ */
+interface Host {
+  wc: WebContents
+  dead(): boolean
+  destroy(): void
+  /** Put the picture exactly here in the window (window units), or hide it. */
+  show(b: Bounds | null): void
+}
+
 interface Player {
-  win: BrowserWindow
+  host: Host
   videoId: string | null
   /** Bumped per load so a slow ready-wait for an old video gives up. */
   gen: number
@@ -74,8 +90,8 @@ function validDeck(d: unknown): d is YtDeckId {
 const isScan = (d: YtDeckId) => d.endsWith('-scan')
 
 function frameOf(p: Player): WebFrameMain | null {
-  if (p.win.isDestroyed()) return null
-  return p.win.webContents.mainFrame.frames[0] ?? null
+  if (p.host.dead()) return null
+  return p.host.wc.mainFrame.frames[0] ?? null
 }
 
 async function inFrame<T>(p: Player, code: string): Promise<T | null> {
@@ -87,28 +103,20 @@ async function inFrame<T>(p: Player, code: string): Promise<T | null> {
 async function ensurePlayer(owner: WebContents, deck: YtDeckId): Promise<Player> {
   const key = keyOf(owner, deck)
   const existing = players.get(key)
-  if (existing && !existing.win.isDestroyed()) return existing
+  if (existing && !existing.host.dead()) return existing
 
-  const win = new BrowserWindow({
-    show: false,
-    width: isScan(deck) ? 256 : DECK.w,
-    height: isScan(deck) ? 144 : DECK.h,
-    // Exact 16:9 content: a frame-sized window letterboxed the picture.
-    useContentSize: true,
-    skipTaskbar: true,
-    focusable: false,
-    title: `AIHub DJ deck ${deck}`,
-    webPreferences: {
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-      // The deck starts on the DJ's command, not on a click inside the window.
-      autoplayPolicy: 'no-user-gesture-required',
-      // A hidden window must keep full-rate timers and media while it plays.
-      backgroundThrottling: false,
-    },
-  })
-  const wc = win.webContents
+  const webPreferences = {
+    sandbox: true,
+    contextIsolation: true,
+    nodeIntegration: false,
+    // The deck starts on the DJ's command, not on a click inside the window.
+    autoplayPolicy: 'no-user-gesture-required' as const,
+    // A hidden player must keep full-rate timers and media while it plays.
+    backgroundThrottling: false,
+  }
+  const ownerWin = BrowserWindow.fromWebContents(owner)
+  const host: Host = !isScan(deck) && ownerWin ? viewHost(ownerWin, webPreferences) : windowHost(deck, webPreferences)
+  const wc = host.wc
   wc.setWindowOpenHandler(() => ({ action: 'deny' }))
   wc.on('will-navigate', e => e.preventDefault())
   wc.on('will-frame-navigate', e => {
@@ -119,31 +127,66 @@ async function ensurePlayer(owner: WebContents, deck: YtDeckId): Promise<Player>
   })
   // Silent until the DJ page reports a working capture (or asks for sound as a fallback).
   wc.setAudioMuted(true)
-  await win.loadURL(`data:text/html;base64,${Buffer.from(WRAPPER).toString('base64')}`)
+  await wc.loadURL(`data:text/html;base64,${Buffer.from(WRAPPER).toString('base64')}`)
 
-  const player: Player = { win, videoId: null, gen: 0, showVideo: false }
+  const player: Player = { host, videoId: null, gen: 0, showVideo: false }
   players.set(key, player)
-  win.on('closed', () => { if (players.get(key) === player) players.delete(key) })
+  wc.once('destroyed', () => { if (players.get(key) === player) players.delete(key) })
   return player
 }
 
-/**
- * Smooth video needs a window Chromium believes is on screen. A hidden window
- * is barely painted: measured 2026-10-12, a YouTube video played at 0.9 fps in
- * a hidden window and 25 fps in a shown one; the DJ monitor got 5–7 fps — the
- * stutter. While someone watches the picture, the player window is shown —
- * inactive, off every screen, fully transparent, click-through, not in the
- * taskbar — which measured 25 fps; it is hidden again when nobody watches.
- */
-function paintFully(win: BrowserWindow, watched: boolean): void {
-  if (win.isDestroyed()) return
-  if (watched) {
-    win.setIgnoreMouseEvents(true)
-    win.setPosition(-32000, -32000)
-    win.setOpacity(0)
-    if (!win.isVisible()) win.showInactive()
-  } else if (win.isVisible()) {
-    win.hide()
+/** A deck player: a view in the DJ's window, hidden until shown over a video area. */
+function viewHost(win: BrowserWindow, webPreferences: Electron.WebPreferences): Host {
+  const view = new WebContentsView({ webPreferences })
+  view.setBackgroundColor('#000000')
+  // Hidden at HD size: the capture (the fallback picture while it is hidden)
+  // keeps a full frame instead of a corner of a resized one.
+  view.setBounds({ x: 0, y: 0, width: DECK.w, height: DECK.h })
+  view.setVisible(false)
+  win.contentView.addChildView(view)
+  let shown = false
+  return {
+    wc: view.webContents,
+    dead: () => view.webContents.isDestroyed() || win.isDestroyed(),
+    destroy: () => {
+      if (!win.isDestroyed()) try { win.contentView.removeChildView(view) } catch { /* already gone */ }
+      if (!view.webContents.isDestroyed()) view.webContents.close()
+    },
+    show: b => {
+      if (win.isDestroyed() || view.webContents.isDestroyed()) return
+      if (b) {
+        // Re-adding raises it above any tab view added since.
+        if (!shown) win.contentView.addChildView(view)
+        view.setBounds(b)
+        view.setVisible(true)
+        shown = true
+      } else if (shown) {
+        view.setVisible(false)
+        view.setBounds({ x: 0, y: 0, width: DECK.w, height: DECK.h })
+        shown = false
+      }
+    },
+  }
+}
+
+/** A scan player (or a deck with no window to live in): a hidden window, never shown. */
+function windowHost(deck: YtDeckId, webPreferences: Electron.WebPreferences): Host {
+  const win = new BrowserWindow({
+    show: false,
+    width: isScan(deck) ? 256 : DECK.w,
+    height: isScan(deck) ? 144 : DECK.h,
+    // Exact 16:9 content: a frame-sized window letterboxed the picture.
+    useContentSize: true,
+    skipTaskbar: true,
+    focusable: false,
+    title: `AIHub DJ deck ${deck}`,
+    webPreferences,
+  })
+  return {
+    wc: win.webContents,
+    dead: () => win.isDestroyed(),
+    destroy: () => { if (!win.isDestroyed()) win.destroy() },
+    show: () => { /* never shown */ },
   }
 }
 
@@ -151,7 +194,7 @@ function closeOwner(ownerId: number): void {
   for (const [k, p] of players) {
     if (!k.startsWith(`${ownerId}:`)) continue
     players.delete(k)
-    if (!p.win.isDestroyed()) p.win.destroy()
+    p.host.destroy()
   }
 }
 
@@ -225,7 +268,7 @@ const videoJs = (show: boolean) => `(() => {
 
 async function waitReady(p: Player, gen: number): Promise<YtDeckState | null> {
   const until = Date.now() + READY_TIMEOUT_MS
-  while (Date.now() < until && p.gen === gen && !p.win.isDestroyed()) {
+  while (Date.now() < until && p.gen === gen && !p.host.dead()) {
     const s = await inFrame<YtDeckState>(p, STATE_JS)
     if (s?.error) return s
     if (s?.ready) {
@@ -283,7 +326,7 @@ export function registerYouTubeDeckIpc(): void {
     p.videoId = videoId
     const url = `https://www.youtube.com/embed/${videoId}?enablejsapi=1&controls=0&disablekb=1&rel=0&playsinline=1&iv_load_policy=3&fs=0`
     try {
-      await p.win.webContents.executeJavaScript(`document.getElementById('f').src = ${JSON.stringify(url)}`)
+      await p.host.wc.executeJavaScript(`document.getElementById('f').src = ${JSON.stringify(url)}`)
     } catch {
       return { ok: false, error: 'The YouTube player could not start' }
     }
@@ -300,8 +343,8 @@ export function registerYouTubeDeckIpc(): void {
   ipcMain.handle('dj:yt:streamId', async (e, deck: unknown) => {
     if (!validDeck(deck)) return null
     const p = players.get(keyOf(e.sender, deck))
-    if (!p || p.win.isDestroyed()) return null
-    try { return p.win.webContents.getMediaSourceId(e.sender) } catch { return null }
+    if (!p || p.host.dead()) return null
+    try { return p.host.wc.getMediaSourceId(e.sender) } catch { return null }
   })
 
   ipcMain.handle('dj:yt:state', async (e, deck: unknown) => {
@@ -314,17 +357,16 @@ export function registerYouTubeDeckIpc(): void {
   ipcMain.handle('dj:yt:cmd', async (e, deck: unknown, cmd: unknown, value: unknown) => {
     if (!validDeck(deck) || typeof cmd !== 'string') return false
     const p = players.get(keyOf(e.sender, deck))
-    if (!p || p.win.isDestroyed()) return false
+    if (!p || p.host.dead()) return false
     if (cmd === 'video') {
       // Scan players feed only the waveform reader: their picture stays hidden.
       p.showVideo = value === true && !isScan(deck)
       await inFrame(p, videoJs(p.showVideo))
-      paintFully(p.win, p.showVideo)
       return true
     }
     if (cmd === 'audible') {
       // Fallback when the page could not capture the deck: let it play out directly.
-      p.win.webContents.setAudioMuted(value !== true)
+      p.host.wc.setAudioMuted(value !== true)
       return true
     }
     const js = commandJs(cmd as Command, value)
@@ -336,11 +378,21 @@ export function registerYouTubeDeckIpc(): void {
   ipcMain.handle('dj:yt:unload', async (e, deck: unknown) => {
     if (!validDeck(deck)) return false
     const p = players.get(keyOf(e.sender, deck))
-    if (!p || p.win.isDestroyed()) return false
+    if (!p || p.host.dead()) return false
     p.gen++
     p.videoId = null
-    try { await p.win.webContents.executeJavaScript(`document.getElementById('f').src = 'about:blank'`) } catch { /* closing */ }
+    try { await p.host.wc.executeJavaScript(`document.getElementById('f').src = 'about:blank'`) } catch { /* closing */ }
     return true
+  })
+
+  /** Show a deck's player over the page's video area (CSS px), or hide it (null). */
+  ipcMain.handle('dj:yt:show', (e, deck: unknown, rect: unknown) => {
+    if (!validDeck(deck) || isScan(deck)) return false
+    const p = players.get(keyOf(e.sender, deck))
+    if (!p || p.host.dead()) return false
+    const b = rect === null ? null : nativeBounds(rect, e.sender.getZoomFactor())
+    p.host.show(b)
+    return !!b
   })
 
   ipcMain.handle('dj:yt:close', (e) => { closeOwner(e.sender.id); return true })

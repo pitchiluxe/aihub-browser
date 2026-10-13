@@ -6,7 +6,8 @@ import type { DjEngine } from '../engine/DjEngine'
 import VideoMonitor from '../VideoMonitor'
 import { stageLevel } from './stageLevel'
 
-export default function Backdrop({ engine }: { engine: DjEngine }) {
+/** `video` false: the glow only (the stage shows the picture in its own framed screen). */
+export default function Backdrop({ engine, video = true }: { engine: DjEngine; video?: boolean }) {
   useSyncExternalStore(engine.subscribe, engine.getVersion)
   const hasVideo = !!(engine.decks.A.track?.youtubeId || engine.decks.B.track?.youtubeId)
   const glow = useRef<HTMLDivElement>(null)
@@ -22,7 +23,7 @@ export default function Backdrop({ engine }: { engine: DjEngine }) {
     return () => cancelAnimationFrame(raf)
   }, [engine])
   return <div className="dj-backdrop">
-    {hasVideo ? <div className="dj-backdrop-video"><VideoMonitor engine={engine} big bare /></div> : null}
+    {video && hasVideo ? <div className="dj-backdrop-video"><VideoMonitor engine={engine} big bare native={false} /></div> : null}
     <div ref={glow} className="dj-backdrop-glow" />
     <div className="dj-backdrop-shade" />
   </div>

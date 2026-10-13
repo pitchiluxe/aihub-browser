@@ -168,3 +168,6 @@
 .aihub-dj[data-dj-look='arctic'] :is(.dj-ic-folder, .dj-empty, .dj-side-empty, .dj-tree-hint) { color: #4a6580; }
 .aihub-dj[data-dj-look='arctic'] .dj-coverflow { background: linear-gradient(180deg, #e3ecf5, #f7fbff); }
 .aihub-dj[data-dj-look='arctic'] .dj-count { color: #33506b; }
+
+/* The console is not rendered while the AI DJ stage covers it (see DjPage). */
+.aihub-dj[data-dj-covered='1'] { display: none !important; }

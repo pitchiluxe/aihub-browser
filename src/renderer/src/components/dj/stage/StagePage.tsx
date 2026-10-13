@@ -10,6 +10,7 @@ import RulesChips from './RulesChips'
 import Backdrop from './Backdrop'
 import SearchResults, { type PickHow, type StageResults } from './SearchResults'
 import StageMixer from './StageMixer'
+import VideoMonitor from '../VideoMonitor'
 import type { DjTrack } from '../engine/DjEngine'
 import './stage.css'
 
@@ -29,12 +30,15 @@ export default function StagePage({ engine, conductor, onTakeDecks, onStop, onAs
     {results && onPick && <SearchResults results={results} onPick={onPick} onClose={() => onCloseResults?.()} />}
   </div>
   return <div className="dj-stage theme-cinema">
-    <Backdrop engine={engine} />
+    {/* While a set runs the picture is the framed screen below (YouTube's own
+        player, full frame rate); behind the controls only the glow. */}
+    <Backdrop engine={engine} video={false} />
     <div className="dj-stage-top">
       <NowCard engine={engine} conductor={conductor} />
       <NextStrip upNext={s.upNext} tentative={s.tentative} />
     </div>
-    <div className="dj-stage-centre">
+    <div className="dj-stage-centre with-screen">
+      <div className="dj-stage-screen"><VideoMonitor engine={engine} bare /></div>
       {(engine as any).fading && s.handoff && <div className="dj-caption" role="status">{handoffCaption(s.handoff)}</div>}
       {s.message && <div className="dj-stage-message" role="status">{s.message}</div>}
       <RulesChips rules={s.rules} onRemove={i => conductor.removeRule(i)} />

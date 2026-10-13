@@ -9,6 +9,7 @@ import { Maximize2, Minimize2 } from 'lucide-react'
 import { crossfadeGains, deckSide, DECK_IDS, faderGain, type Deck, type DeckId, type DjEngine } from './engine/DjEngine'
 import { useCanvasBox, useRafThrottled } from './controls'
 import { canvasFrame } from './canvasFrame'
+import { useNativeVideo } from './nativeVideo'
 
 const images = new Map<string, HTMLImageElement>()
 function imageFor(src: string): HTMLImageElement | null {
@@ -30,9 +31,16 @@ function cover(g: CanvasRenderingContext2D, src: CanvasImageSource, sw: number, 
   g.drawImage(src, (w - dw) / 2 + dx, (h - dh) / 2, dw, dh)
 }
 
-/** `bare`: picture only — no beat outline or caption strip (the AI DJ stage shows those itself). */
-export default function VideoMonitor({ engine, big, onToggleBig, bare }: { engine: DjEngine; big?: boolean; onToggleBig?: () => void; bare?: boolean }) {
+/**
+ * `bare`: picture only — no beat outline or caption strip (the AI DJ stage shows those itself).
+ * `native` (default on): a YouTube deck's own player is shown over this area —
+ * YouTube's full frame rate (see nativeVideo.ts). Off where page content must
+ * sit on top of the picture (the stage backdrop): a native view cannot be drawn over.
+ */
+export default function VideoMonitor({ engine, big, onToggleBig, bare, native = true }: { engine: DjEngine; big?: boolean; onToggleBig?: () => void; bare?: boolean; native?: boolean }) {
   const cvRef = useRef<HTMLCanvasElement>(null)
+  const areaRef = useRef<HTMLDivElement>(null)
+  useNativeVideo(engine, areaRef, native)
   const lastLive = useRef<DeckId>('A')
   const all = DECK_IDS.map(id => engine.decks[id])
 
@@ -125,7 +133,7 @@ export default function VideoMonitor({ engine, big, onToggleBig, bare }: { engin
   }, 33)
 
   return (
-    <div className={`dj-video ${big ? 'dj-video-big' : ''}`}>
+    <div ref={areaRef} className={`dj-video ${big ? 'dj-video-big' : ''}`}>
       <canvas ref={cvRef} />
       {onToggleBig && (
         <button type="button" className="dj-video-size" onClick={onToggleBig} title={big ? 'Back to the mixer' : 'Big screen'}>

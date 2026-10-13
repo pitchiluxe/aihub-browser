@@ -31,6 +31,7 @@ interface YtBridge {
   state(deck: string): Promise<YtState | null>
   cmd(deck: string, cmd: string, value?: unknown): Promise<boolean>
   unload(deck: string): Promise<boolean>
+  show(deck: string, rect: { x: number; y: number; width: number; height: number } | null): Promise<boolean>
 }
 
 export const ytBridge = (): YtBridge => (window as any).electronAPI.dj.yt
