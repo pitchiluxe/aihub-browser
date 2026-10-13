@@ -54,8 +54,8 @@ export function createNetRequest(fetchImpl: Fetch) {
 
 /** POST a JSON body, parse a JSON reply; a non-2xx status rejects (like axios did). */
 export function createNetPostJson(fetchImpl: Fetch) {
-  return async (url: string, payload: unknown, timeoutMs = 20000): Promise<{ status: number; data: any }> => {
-    const { status, body } = await send(fetchImpl, url, timeoutMs, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+  return async (url: string, payload: unknown, timeoutMs = 20000, headers: Record<string, string> = {}): Promise<{ status: number; data: any }> => {
+    const { status, body } = await send(fetchImpl, url, timeoutMs, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(payload) })
     let data: any = null
     try { data = body ? JSON.parse(body) : null } catch { data = body }
     if (status < 200 || status >= 300) throw Object.assign(new Error(`HTTP ${status}`), { status, data })

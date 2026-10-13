@@ -1026,7 +1026,7 @@ export default function SettingsPage() {
               style={{ userSelect: 'text' }}
             />
           </div>
-          {/* ── Direct provider keys (used as last-tier fallback) ── */}
+          {/* ── Your own keys: when set, they answer FIRST (main/providerOrder.ts) ── */}
           <div>
             <div className={LBL}>Claude API Key</div>
             <input
@@ -1038,7 +1038,7 @@ export default function SettingsPage() {
               style={{ userSelect: 'text' }}
             />
             <div className="text-[11px] text-aihub-muted mt-1">
-              Used as a last-resort fallback when both Ollama and OpenRouter can't answer. Get a key at console.anthropic.com.
+              When set, your Claude key answers first — before Ollama and OpenRouter. If it fails (bad key, no credit), the next one answers. Get a key at console.anthropic.com.
             </div>
           </div>
           <div>
@@ -1052,7 +1052,7 @@ export default function SettingsPage() {
               style={{ userSelect: 'text' }}
             />
             <div className="text-[11px] text-aihub-muted mt-1">
-              Used as a final-tier fallback. Get a key at platform.openai.com/api-keys.
+              When set, your ChatGPT key answers first (after a Claude key, if both are set). Get a key at platform.openai.com/api-keys.
             </div>
           </div>
           <button

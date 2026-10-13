@@ -16,6 +16,7 @@ import { IS_INCOGNITO } from '../../services/incognitoMode'
 import ChatMessage from './ChatMessage'
 import StreamingMarkdown from './StreamingMarkdown'
 import { AttachImageButton, AttachmentStrip, useImageAttachments } from './ImageComposer'
+import { providerBadge } from './providerBadge'
 
 interface Props {
   currentUrl?: string
@@ -251,7 +252,14 @@ export default function AIAssistant({ currentUrl, currentTitle, getPageContent }
       const status = await window.electronAPI.ollama.status()
       setOllamaStatus(status)
     } catch {}
+    // Which own keys are set (never the keys themselves): they answer before Ollama.
+    try {
+      const cfg = await window.electronAPI.settings.getAIConfig()
+      setOwnKeys({ hasClaudeKey: !!cfg?.hasClaudeKey, hasChatGptKey: !!cfg?.hasChatGptKey })
+    } catch {}
   }
+  const [ownKeys, setOwnKeys] = useState<{ hasClaudeKey: boolean; hasChatGptKey: boolean }>({ hasClaudeKey: false, hasChatGptKey: false })
+  const badge = providerBadge({ ollama: ollamaStatus, ...ownKeys })
 
   // ── Navigation intent — detect "open X" before sending to AI ─────────────
   // Resolution (scoring, built-in app names, known sites) lives in navIntent so
@@ -706,13 +714,11 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'rgb(var(--ds-text-2))', lineHeight: 1 }}>AIHub Assistant</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
-                    {ollamaStatus === null ? (
-                      <><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgb(var(--ds-text-4))', display: 'inline-block' }} /><span style={{ fontSize: 11, color: 'rgb(var(--ds-text-4))' }}>Connecting…</span></>
-                    ) : ollamaStatus.running ? (
-                      <><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399', display: 'inline-block', boxShadow: '0 0 6px #34d399' }} /><span style={{ fontSize: 11, color: '#34d399' }}>Local · Ollama</span></>
-                    ) : (
-                      <><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgb(var(--ds-accent-soft))', display: 'inline-block', boxShadow: '0 0 6px rgb(var(--ds-accent-soft))' }} /><span style={{ fontSize: 11, color: 'rgb(var(--ds-accent-soft))' }}>Cloud · OpenRouter</span></>
-                    )}
+                    {(() => {
+                      // Who answers next: your key, then Ollama, then OpenRouter (providerBadge.ts).
+                      const c = badge.tone === 'key' ? '#a78bfa' : badge.tone === 'local' ? '#34d399' : badge.tone === 'cloud' ? 'rgb(var(--ds-accent-soft))' : 'rgb(var(--ds-text-4))'
+                      return <><span style={{ width: 6, height: 6, borderRadius: '50%', background: c, display: 'inline-block', boxShadow: badge.tone === 'checking' ? 'none' : `0 0 6px ${c}` }} /><span style={{ fontSize: 11, color: c }}>{badge.label}</span></>
+                    })()}
                   </div>
                 </div>
               </div>
@@ -862,7 +868,7 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
             )}
 
             {/* Offline notice */}
-            {ollamaStatus && !ollamaStatus.running && (
+            {badge.banner && (
               <div style={{
                 margin: '8px 12px 0', padding: '8px 12px', borderRadius: 10, flexShrink: 0,
                 background: 'rgb(var(--ds-accent) / 0.07)', border: '1px solid rgb(var(--ds-accent) / 0.13)',
@@ -870,7 +876,7 @@ Be concise, warm, and genuinely helpful.${needsTools ? AGENT_TOOLS_DOC : `${CHAT
               }}>
                 <AlertCircle size={13} style={{ color: 'rgb(var(--ds-accent-soft))', flexShrink: 0, marginTop: 1 }} />
                 <span style={{ fontSize: 11, color: 'rgb(var(--ds-text-4))', lineHeight: 1.5 }}>
-                  Using <b style={{ color: 'rgb(var(--ds-accent-soft))' }}>OpenRouter</b> (cloud). Install Ollama for private local AI.
+                  {badge.banner}
                 </span>
               </div>
             )}

@@ -48,6 +48,12 @@ describe('netPostJson — JSON POSTs (Ollama chat/embeddings) the same way', () 
     expect(JSON.parse(seen.body)).toEqual({ model: 'm', prompt: 'p' })
     expect(seen.headers['Content-Type']).toBe('application/json')
   })
+  it('sends extra headers (API keys) alongside the JSON content type', async () => {
+    let seen: any = null
+    const post = createNetPostJson(async (_url, init: any) => { seen = init; return { status: 200, text: async () => '{}' } as any })
+    await post('https://api.anthropic.com/v1/messages', {}, 1000, { 'x-api-key': 'k', 'anthropic-version': '2023-06-01' })
+    expect(seen.headers).toEqual({ 'Content-Type': 'application/json', 'x-api-key': 'k', 'anthropic-version': '2023-06-01' })
+  })
   it('a non-2xx reply rejects (callers fall through to the next model)', async () => {
     const post = createNetPostJson(async () => ({ status: 404, text: async () => '{"error":"model not found"}' }) as any)
     await expect(post('http://x', {})).rejects.toMatchObject({ status: 404 })

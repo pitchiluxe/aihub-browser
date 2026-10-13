@@ -44,6 +44,7 @@ import { createSessionManager, type SessionTab } from './sessions'
 import { createSemanticIndex, type SearchDoc } from './semantic'
 import { createNetGet, createNetPostJson, isWebUrl } from './netGet'
 import { createOllamaProbe, type OllamaProbe, type OllamaModelInfo } from './ollamaProbe'
+import { directKeysFirst, type DirectProvider } from './providerOrder'
 import { net as electronNet } from 'electron'
 import { splitPanes } from '../shared/splitLayout'
 import { writeNote, describeVault, parseTagSuggestions, type NoteKind } from './obsidian'
@@ -5460,79 +5461,61 @@ function buildChatGptMessages(msgs: any[]): any[] {
   })
 }
 
-/**
- * Call Claude directly via the Anthropic /v1/messages endpoint.
- *
- * Returns null on a skip-able failure (401 bad key, 429 rate-limit) so the
- * fallback chain can continue. Throws on a hard failure.
- */
-async function claudeChat(
-  apiKey: string,
-  messages: any[],
-  maxTokens = 4096,
-): Promise<string | null> {
+// ── The user's own API keys (Claude, ChatGPT) ─────────────────────────────
+// A key typed into Settings takes priority over everything (providerOrder.ts).
+// Any failure — bad key, no credit, rate limit, offline — returns null so the
+// next provider answers; it is logged, never shown as a broken chat.
+// Through Chromium's network process: these now run on every chat turn, and a
+// timed-out Node socket once froze the main thread for 4.4 s (netGet.ts).
+const CLAUDE_MODEL = 'claude-sonnet-5-5'
+const CHATGPT_MODEL = 'gpt-4o-mini'
+
+async function claudeChat(apiKey: string, messages: any[], maxTokens = 4096): Promise<string | null> {
   try {
     const { system, messages: claudeMessages } = buildClaudeMessages(messages)
-    const res = await withNetRetry(() => httpPost(
-      'https://api.anthropic.com/v1/messages',
-      {
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: maxTokens,
-        ...(system ? { system } : {}),
-        messages: claudeMessages,
-      },
-      {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      30000,
-    ))
-    if (res.status === 200) {
-      const body = JSON.parse(res.body)
-      return body.content?.[0]?.text || null
-    }
-    // 401 = bad key, 429 = rate limit → skip to next provider
-    if (/^HTTP (401|429)/.test(String(res.status))) return null
-    throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`)
+    const { data } = await chromiumPostJson('https://api.anthropic.com/v1/messages', {
+      model: CLAUDE_MODEL,
+      max_tokens: maxTokens,
+      ...(system ? { system } : {}),
+      messages: claudeMessages,
+    }, 60000, { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' })
+    const text = (data?.content || []).filter((c: any) => c?.type === 'text').map((c: any) => c.text).join('')
+    return text || null
   } catch (e: any) {
-    if (/^HTTP (401|429)/.test(e.message || '')) return null
-    throw e
+    console.log(`[aihub] Claude key skipped: ${e?.status ? `HTTP ${e.status}` : e?.message || e}`)
+    return null
   }
 }
 
-/**
- * Call ChatGPT directly via the OpenAI /v1/chat/completions endpoint.
- *
- * Returns null on a skip-able failure (401 bad key, 429 rate-limit) so the
- * fallback chain can continue. Throws on a hard failure.
- */
-async function chatGptChat(
-  apiKey: string,
-  messages: any[],
-  maxTokens = 2048,
-): Promise<string | null> {
+async function chatGptChat(apiKey: string, messages: any[], maxTokens = 2048): Promise<string | null> {
   try {
-    const { status, body } = await withNetRetry(() => httpPost(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        model: 'gpt-4o-mini',
-        messages: buildChatGptMessages(messages),
-        max_tokens: maxTokens,
-      },
-      { Authorization: `Bearer ${apiKey}` },
-      30000,
-    ))
-    const parsed = JSON.parse(body)
-    if (status === 200) {
-      return parsed.choices?.[0]?.message?.content || null
-    }
-    // 401 = bad key, 429 = rate limit → skip to next provider
-    if (/^HTTP (401|429)/.test(String(status))) return null
-    throw new Error(`HTTP ${status}: ${body.slice(0, 200)}`)
+    const { data } = await chromiumPostJson('https://api.openai.com/v1/chat/completions', {
+      model: CHATGPT_MODEL,
+      messages: buildChatGptMessages(messages),
+      max_tokens: maxTokens,
+    }, 60000, { Authorization: `Bearer ${apiKey}` })
+    return data?.choices?.[0]?.message?.content || null
   } catch (e: any) {
-    if (/^HTTP (401|429)/.test(e.message || '')) return null
-    throw e
+    console.log(`[aihub] ChatGPT key skipped: ${e?.status ? `HTTP ${e.status}` : e?.message || e}`)
+    return null
+  }
+}
+
+/** One direct-key answer in the router's result shape; null when that key could not answer. */
+async function tryDirectKey(p: DirectProvider, messages: any[], opts: AiRequestOpts | undefined, fallbackReason?: string) {
+  const { claudeKey, chatGptKey } = getAIConfig()
+  opts?.onDelta?.('', true)   // a partial reply from an earlier provider must not stay on screen
+  const reply = p === 'claude' ? await claudeChat(claudeKey, messages, opts?.maxTokens ?? 4096) : await chatGptChat(chatGptKey, messages, opts?.maxTokens ?? 2048)
+  if (!reply) return null
+  const content = stripThinkTags(reply) || reply
+  try { opts?.onDelta?.(content) } catch {}
+  const name = p === 'claude' ? 'Claude' : 'ChatGPT'
+  return {
+    content,
+    model: p === 'claude' ? CLAUDE_MODEL : CHATGPT_MODEL,
+    provider: p,
+    fallbackUsed: !!fallbackReason,
+    ...(fallbackReason ? { fallbackReason, notice: `Answered by ${name} (${fallbackReason}).` } : {}),
   }
 }
 
@@ -5578,6 +5561,14 @@ async function runAiRequestRouted(
   messages = sanitizeChatMessages(messages || [])
   const { olBase, orKey, orBase } = getAIConfig()
   const settings = getRoutingSettings(preferredModel)
+
+  // The user's own API key (Claude, ChatGPT) answers first — over Ollama and
+  // OpenRouter. If it cannot, the configured route below answers as usual.
+  const triedDirect = directKeysFirst(getAIConfig(), { needsTools: opts?.needsTools, carriesImages: hasImages(messages) })
+  for (const p of triedDirect) {
+    const direct = await tryDirectKey(p, messages, opts)
+    if (direct) return direct
+  }
 
   // preferCloud can shape the OpenRouter candidate list if cloud fallback is
   // needed, but does not bypass the app-wide Ollama-first route.
@@ -5775,59 +5766,15 @@ async function runAiRequestRouted(
     saveData()
   }
 
-  // ── Direct-provider fallback (Claude → ChatGPT) ──────────────────────
-  // routeGenerate already tried Ollama + OpenRouter. If both failed, walk
-  // through the user's direct provider keys — Claude first, then ChatGPT.
-  // Both return null on 401/429 so a bad key can't break the chain.
+  // ── Direct keys as the last resort ───────────────────────────────────
+  // Only reached when a key could not go first (pictures, agent tools) — or
+  // was already tried above and failed, in which case it is not tried twice.
   if (!result.ok) {
-    const direct = getAIConfig()
-
-    if (direct.claudeKey) {
-      try {
-        // Reset stream so Claude's tokens don't land spliced after a partial
-        // OpenRouter reply.
-        opts?.onDelta?.('', true)
-        const claudeReply = await claudeChat(direct.claudeKey, messages, opts?.maxTokens ?? 4096)
-        if (claudeReply) {
-          const content = stripThinkTags(claudeReply) || claudeReply
-          if (opts?.onDelta) {
-            try { opts.onDelta(content) } catch {}
-          }
-          return {
-            content,
-            model: 'claude-sonnet-4-20250514',
-            provider: 'claude',
-            fallbackUsed: true,
-            fallbackReason: result.fallbackReason,
-            notice: `Answered by Claude (${result.fallbackReason || 'primary failed'}).`,
-          }
-        }
-      } catch (e: any) {
-        console.log(`[aihub] Claude fallback failed: ${e?.message || e}`)
-      }
-    }
-
-    if (direct.chatGptKey) {
-      try {
-        opts?.onDelta?.('', true)
-        const gptReply = await chatGptChat(direct.chatGptKey, messages, opts?.maxTokens ?? 2048)
-        if (gptReply) {
-          const content = stripThinkTags(gptReply) || gptReply
-          if (opts?.onDelta) {
-            try { opts.onDelta(content) } catch {}
-          }
-          return {
-            content,
-            model: 'gpt-4o-mini',
-            provider: 'chatgpt',
-            fallbackUsed: true,
-            fallbackReason: result.fallbackReason,
-            notice: `Answered by ChatGPT (${result.fallbackReason || 'primary failed'}).`,
-          }
-        }
-      } catch (e: any) {
-        console.log(`[aihub] ChatGPT fallback failed: ${e?.message || e}`)
-      }
+    for (const p of (['claude', 'chatgpt'] as const)) {
+      if (triedDirect.includes(p)) continue
+      if (!(p === 'claude' ? getAIConfig().claudeKey : getAIConfig().chatGptKey)) continue
+      const direct = await tryDirectKey(p, messages, opts, result.fallbackReason || 'primary failed')
+      if (direct) return direct
     }
   }
 
