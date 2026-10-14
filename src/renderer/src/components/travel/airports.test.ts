@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AIRPORTS, searchAirports, resolveAirport, airportLabel } from './airports'
+import { AIRPORTS, searchAirports, resolveAirport, airportLabel, mainAirport } from "./airports"
 describe('airport directory', () => {
   it('maps ICAO to the ticketing IATA code worldwide', () => {
     for (const [icao, iata] of [['KJFK', 'JFK'], ['EGLL', 'LHR'], ['LFPG', 'CDG'], ['HKJK', 'NBO'], ['OMDB', 'DXB'], ['RJTT', 'HND']]) {
@@ -18,5 +18,12 @@ describe('airport directory', () => {
     expect(searchAirports('')).toEqual([])
     expect(resolveAirport('Paris')).toBeNull()
     expect(resolveAirport('XXXX')).toBeNull()
+  })
+  it('picks a country’s main airport by its capital and ISO code', () => {
+    expect(mainAirport('Kinshasa', 'CD')?.iata).toBe('FIH')
+    expect(mainAirport('Paris', 'FR')?.iata).toMatch(/^(CDG|ORY)$/)
+    // Same-named city elsewhere is not the country's airport.
+    expect(mainAirport('Paris', 'CD')).toBeNull()
+    expect(mainAirport('', 'CD')).toBeNull()
   })
 })

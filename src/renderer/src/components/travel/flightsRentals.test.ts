@@ -75,6 +75,19 @@ describe('trip planning', () => {
     for (const [q] of webSearch.mock.calls) { expect(q.length).toBeLessThan(90); expect(q).not.toContain('adults') }
     expect(researchQueries({ ...trip, kind: 'stays', destination: 'Lisbon' })[0]).toMatch(/^cheap hotels Lisbon \w+ \d{4} deals$/)
   })
+  it('streams the brief as it is written and keeps the prompt short', async () => {
+    const long = 'x'.repeat(2000)
+    const webSearch = vi.fn().mockResolvedValue({ success: true, results: [{ title: 'A', url: 'https://a.com/', snippet: long }] })
+    const stream = vi.fn(async (_m: any[], onPartial: (t: string) => void) => { onPartial('## Best'); onPartial('## Best options'); return { provider: 'ollama', content: '## Best options\n\nDone.' } })
+    const drafts: string[] = []
+    const result = await researchTrip(trip, { webSearch, chat: vi.fn(), stream }, d => drafts.push(d.text))
+    expect(drafts).toEqual(['## Best', '## Best options'])
+    expect(result.text).toBe('## Best options\n\nDone.')
+    const prompt = stream.mock.calls[0][0][1].content
+    expect(prompt).toContain('x'.repeat(400))
+    expect(prompt).not.toContain('x'.repeat(401))
+    expect(stream.mock.calls[0][0][0].content).toContain('under 300 words')
+  })
   it('still researches when one of the two searches fails', async () => {
     const webSearch = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ success: true, results: [{ title: 'B', url: 'https://b.com/', snippet: '' }] })
     const result = await researchTrip(trip, { webSearch, chat: vi.fn().mockResolvedValue({ provider: 'ollama', content: 'ok' }) })

@@ -174,8 +174,12 @@ Current leaders: ${who}.` : ''}`)) }
             // airport directory (~0.6 MB) loads here, on the way to the page that needs
             // it, not with every country view.
             try {
-              const [{ searchAirports }, { FLIGHTS_PREFILL_KEY }] = await Promise.all([import('./airports'), import('./flightsRentals')])
-              const airport = searchAirports(capital || name, 5).find(a => a.scheduled && a.country === name) ?? searchAirports(capital || name, 1)[0]
+              const [{ mainAirport }, { FLIGHTS_PREFILL_KEY }, city] = await Promise.all([
+                import('./airports'), import('./flightsRentals'),
+                // Clicked before the facts arrived: the capital is one (cached) lookup away.
+                capital ? Promise.resolve(capital) : fetchFacts(country).then(f => f?.capital[0] ?? ''),
+              ])
+              const airport = mainAirport(city, country.code)
               if (airport) localStorage.setItem(FLIGHTS_PREFILL_KEY, airport.iata)
             } catch { /* open Flights without a prefill */ }
             open('aihub://flights-rentals')

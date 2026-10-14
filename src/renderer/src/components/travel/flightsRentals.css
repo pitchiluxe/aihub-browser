@@ -53,3 +53,22 @@ body.light-mode .fare-page{--fare-good:#1f7a52;--fare-warn:#9a6212}
 .fare-soon{font-size:10px;color:var(--fare-muted);margin-left:4px}
 @media(max-width:720px){.fare-row-main{grid-template-columns:1fr 1fr}.fare-price{justify-items:start}.fare-flex-strip{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){.fare-row{transition:none}.fare-row:hover{transform:none}}
+
+/* ── Price alerts ── */
+.fare-alert-form{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:14px 16px;border-radius:12px;background:var(--fare-panel);border:1px dashed var(--fare-accent);color:var(--fare-accent)}
+.fare-alert-form label{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--fare-ink)}
+.fare-alert-price{display:inline-flex;align-items:center;gap:4px;font-weight:600}
+.fare-alert-price input{width:96px;padding:8px 10px;border:1px solid var(--fare-line);border-radius:7px;background:var(--fare-bg);color:var(--fare-ink);font:inherit;font-variant-numeric:tabular-nums}
+.fare-alert-form button{display:flex;align-items:center;gap:7px;padding:9px 13px;border-radius:8px;border:1px solid var(--fare-accent);background:var(--fare-accent);color:#17392d;font-size:12px;font-weight:600}
+.fare-alert-form small{flex-basis:100%;margin:0}
+.fare-alert-form small[role=alert]{color:var(--fare-warn)}
+.fare-aside .fare-alert-form{margin:0 0 10px;padding:12px}
+.fare-alert{display:flex;align-items:center;gap:6px;border-top:1px solid var(--fare-line);padding:11px 0}
+.fare-alert>button{border:0;background:none;padding:4px;color:var(--fare-muted)}
+.fare-alert>button:not(.fare-alert-main){flex:0 0 auto;padding:7px;border:1px solid var(--fare-line);border-radius:7px}
+.fare-alert-main{flex:1;min-width:0;text-align:left}
+.fare-alert-main strong{display:block;font-size:12px;color:var(--fare-ink);overflow-wrap:anywhere}
+.fare-alert-main span{display:block;font-size:11px;margin-top:5px;font-variant-numeric:tabular-nums}
+.fare-alert-main small{display:block;font-size:10px}
+.fare-alert.dropped .fare-alert-main span{color:var(--fare-good);font-weight:600}
+.fare-alert.ended{opacity:.6}

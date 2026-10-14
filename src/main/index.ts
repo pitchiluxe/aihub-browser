@@ -4632,15 +4632,31 @@ handlePersistent('fares:flex', async (e, q: FareQuery, searchId?: string) => {
 
 ipcMain.handle('fares:cancel', (_e, searchId: string) => { _fareEngine?.cancel(String(searchId)) })
 ipcMain.handle('fares:handoff', (_e, q: FareQuery) => validFareQuery(q) ? handoffLinks(q) : [])
-handlePersistent('fares:watch', (_e, q: FareQuery, target: number, title: string) => {
+// `currentPrice` is the lowest fare the user is looking at right now: it becomes
+// the baseline, so the first scheduled check does not re-search the same route.
+// The same trip watched again updates its target instead of adding a duplicate.
+handlePersistent('fares:watch', (_e, q: FareQuery, target: number, title: string, currentPrice?: number) => {
   if (!validFareQuery(q) || !Number.isFinite(target) || target <= 20) return { ok: false }
+  const sameTrip = (a: FareQuery) => a.from === q.from && a.to === q.to && a.depart === q.depart && a.ret === q.ret && a.adults === q.adults
+  const baseline = Number.isFinite(currentPrice) && currentPrice! > 0 ? Math.round(currentPrice!) : undefined
+  const existing = getWatches().find(w => w.mode === 'fare' && w.fare && sameTrip(w.fare.query))
+  if (existing?.fare) {
+    existing.fare.target = Math.round(target)
+    if (baseline !== undefined) { existing.fare.lastPrice = baseline; existing.lastChecked = Date.now() }
+    existing.active = true; existing.triggered = false
+    saveWatches()
+    return { ok: true, id: existing.id, updated: true }
+  }
   const w: Watch = {
     id: `w-${Date.now()}`, url: googleAdapter.url(q), title: String(title || `${q.from} → ${q.to}`).slice(0, 120),
-    mode: 'fare', fare: { query: q, target: Math.round(target) }, intervalMin: 360, active: true,
+    mode: 'fare', fare: { query: q, target: Math.round(target), lastPrice: baseline }, intervalMin: 360, active: true,
+    lastChecked: baseline !== undefined ? Date.now() : undefined,
   }
   getWatches().unshift(w)
   saveWatches()
-  return { ok: true }
+  // No price to start from (set from a saved trip): look it up now, in the background.
+  if (baseline === undefined) checkWatch(w).catch(() => {})
+  return { ok: true, id: w.id }
 }, () => ({ ok: false }))
 
 // Guarded like the searches: the verify window writes cookies into the same

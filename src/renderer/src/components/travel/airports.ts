@@ -20,3 +20,10 @@ export function searchAirports(query: string, limit = 8): Airport[] {
   const words = q.split(/\s+/)
   return index.filter(x => words.every(w => x.text.includes(w))).map(({ airport: a }) => ({ a, score: a.iata.toLowerCase() === q || a.icao.toLowerCase() === q ? 100 : a.iata.toLowerCase().startsWith(q) || (a.icao && a.icao.toLowerCase().startsWith(q)) ? 70 : normalize(a.city) === q ? 50 : 20 })).sort((a, b) => b.score - a.score || Number(b.a.scheduled) - Number(a.a.scheduled) || a.a.name.localeCompare(b.a.name)).slice(0, limit).map(x => x.a)
 }
+
+/** The airport to fly into for a country: a scheduled one serving its capital. */
+export function mainAirport(capital: string, countryCode: string): Airport | null {
+  if (!capital.trim()) return null
+  const near = searchAirports(capital, 8)
+  return near.find(a => a.scheduled && a.country === countryCode) ?? near.find(a => a.country === countryCode) ?? null
+}

@@ -14,6 +14,8 @@ import SourceChips from './fares/SourceChips'
 import FlexDateStrip from './fares/FlexDateStrip'
 import AiPickCard from './fares/AiPickCard'
 import FareTable from './fares/FareTable'
+import { AlertForm, AlertList } from './fares/PriceAlerts'
+import { streamChat } from '../../services/streamingChat'
 import type { FareRow } from '../../../../shared/fares/rank'
 import type { FareQuery } from '../../../../shared/fares/types'
 import './flightsRentals.css'
@@ -25,6 +27,12 @@ export function tripToQuery(t: Trip): FareQuery | null {
   // Live fares are USD-first (spec assumption): the table prints "$" and the
   // bag-fee estimates are USD, so asking sites for euros would mix currencies.
   return { from, to, depart: t.start, ret: t.end, adults: t.travelers, currency: 'USD' }
+}
+
+/** "EWR → FIH · Nov 1–15" — how an alert is named in the list and the notification. */
+export function alertTitle(q: FareQuery): string {
+  const d = (s: string) => new Date(`${s}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  return `${q.from} → ${q.to} · ${d(q.depart)}${q.ret ? `–${d(q.ret)}` : ''}`
 }
 
 const MODES = [{ kind: 'flights', label: 'Flights', Icon: Plane }, { kind: 'cars', label: 'Car rentals', Icon: Car }, { kind: 'stays', label: 'Vacation stays', Icon: House }] as const
@@ -57,6 +65,7 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
   const [saved, setSaved] = useState<SavedTrip[]>(loadSaved)
   const [costTripId, setCostTripId] = useState('')
   const [research, setResearch] = useState<Research | null>(null)
+  const [draft, setDraft] = useState<Research | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -100,6 +109,10 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
   const onRowsRanked = useCallback((r: FareRow[]) => setRows(r), [])
   const openVisible = (url: string) => { void (window as any).electronAPI?.fares?.openSite(url) }
   const allFailed = fares.state.phase === 'done' && fares.state.offers.length === 0
+  // The same number the alert checks compare against: the lowest round-trip offer.
+  const lowestFare = fares.state.offers.length ? Math.round(Math.min(...fares.state.offers.map(o => o.price))) : null
+  const [alertFor, setAlertFor] = useState('')
+  const openAlert = (q: FareQuery) => change({ kind: 'flights', origin: q.from, destination: q.to, start: q.depart, end: q.ret ?? q.depart, travelers: q.adults })
 
   const change = (patch: Partial<Trip>) => {
     fares.cancel(); setPick(null); setPicking(false); setRows([]); setHandoff([])
@@ -123,10 +136,12 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
     const ai = (window as any).electronAPI?.ai
     if (!ai?.webSearch || !ai?.chat) { setError('AI research is unavailable. Open this page in AIHub and configure an AI provider in Settings.'); return }
     const id = ++generation.current
-    setBusy(true); setError(''); setResearch(null); setSearched({ ...trip })
-    try { const result = await researchTrip(trip, ai); if (generation.current === id) setResearch(result) }
+    setBusy(true); setError(''); setResearch(null); setDraft(null); setSearched({ ...trip })
+    // Streamed: the brief fills in as the model writes it, instead of a minute of spinner.
+    const streaming = { ...ai, stream: (m: any[], onPartial: (text: string) => void) => streamChat(m, undefined, onPartial) }
+    try { const result = await researchTrip(trip, streaming, draft => { if (generation.current === id) setDraft(draft) }); if (generation.current === id) setResearch(result) }
     catch (e) { if (generation.current === id) setError(e instanceof Error ? e.message : 'Research failed. Please retry.') }
-    finally { if (generation.current === id) setBusy(false) }
+    finally { if (generation.current === id) { setBusy(false); setDraft(null) } }
   }
   const save = () => {
     const err = validateTrip(trip); if (err) { setError(err); return }
@@ -179,25 +194,22 @@ export default function FlightsRentalsPage({ onNavigate, onOpenBooking = onNavig
               onPick={(depart, ret) => change({ start: depart, end: ret })} />}
             <AiPickCard row={rows.find(r => r.key === pick?.key) ?? null} reason={pick?.reason ?? ''} loading={picking} />
             {fares.state.offers.length > 0 && <FareTable offers={fares.state.offers} adults={trip.travelers} onBook={onOpenBooking} onRowsRanked={onRowsRanked} />}
+            {query && fares.state.phase === 'done' && lowestFare !== null && <AlertForm key={fares.state.searchId ?? ''} query={query} title={alertTitle(query)} lowest={lowestFare} budget={trip.budget} onDone={setNotice} />}
             {(allFailed || fares.state.phase === 'error') && <p className="fare-notice">No site could be read just now. These open with your trip filled in:</p>}
             {fares.state.phase !== 'searching' && handoff.length > 0 && <div className="fare-handoff">{handoff.map(h => <button key={h.name} onClick={() => onOpenBooking(h.url)}>{h.name} <ExternalLink size={12} /></button>)}</div>}
             <p className="fare-form-note">Prices found on each site moments ago. Final price and availability are confirmed on the booking site.</p>
           </section>}
           {searched && <DestinationGallery trip={searched} onNavigate={onOpenBooking} />}
           {searched && trip.kind !== 'flights' && <section className="fare-results" aria-label="Provider comparisons"><div className="fare-section-heading"><h2>Compare your options</h2><span>Searches, not live quotes</span></div><p>{tripDescription(searched)}</p><div className="fare-provider-list">{bookingSearches(searched).map(p => <button key={p.name} onClick={() => onOpenBooking(p.url)}><div><strong>{p.name}</strong><span>{p.detail}</span></div><ExternalLink size={17} /></button>)}</div><small>Confirm dates, travelers, currency and the final total on the provider’s page. Availability and prices can change. Car pickup times and driver age are selected with the rental provider.</small></section>}
-          {busy && <div className="fare-research" role="status"><Loader2 size={18} className="fare-spin" /> Searching travel sources and preparing your comparison…</div>}
+          {busy && <div className="fare-research" role="status"><Loader2 size={18} className="fare-spin" /> {draft ? `Writing your comparison from ${draft.sources.length} sources…` : 'Searching travel sources and preparing your comparison…'}{draft && <ResearchBrief research={draft} onNavigate={onNavigate} />}</div>}
           {research && <section className="fare-research" aria-label="AI travel research"><div className="fare-section-heading"><h2><Sparkles size={18} /> Your comparison brief</h2><span>{new Date(research.at).toLocaleString()}</span></div><ResearchBrief research={research} onNavigate={onNavigate} /><h3>Research sources</h3><div className="fare-sources">{research.sources.map((s, i) => <button key={`${s.url}-${i}`} onClick={() => onNavigate(s.url)}><span>[{i + 1}] {s.title}</span><small>{new URL(s.url).hostname}</small></button>)}</div><small>Prepared with {research.provider}. Search excerpts are research, not confirmed fares. Check the final price before booking.</small></section>}
           {!searched && <section className="fare-empty"><h2>Find the value behind the price.</h2><p>Compare providers for your dates, then ask AI what to check: nearby airports, flexible dates, baggage, insurance and cancellation terms.</p><div><span>01 · Plan the trip</span><span>02 · Compare the full cost</span><span>03 · Book with the provider</span></div></section>}
         </main>
         <aside className="fare-aside">
           <section><h2>Before you book</h2><ul>{(trip.kind === 'flights' ? ['Include checked bags and seat fees.', 'Compare nearby airports and extra transfer costs.', 'Check layover length and separate-ticket connections.', 'Compare the airline’s direct price.'] : trip.kind === 'cars' ? ['Check the deposit and credit-card requirements.', 'Compare full insurance and excess charges.', 'Confirm mileage and fuel policy.', 'Check driver age, pickup hours and cancellation.'] : ['Include cleaning fees, taxes and deposits.', 'Compare cancellation deadlines.', 'Check the location and transport costs.', 'Read recent reviews and confirm check-in rules.']).map(t => <li key={t}>{t}</li>)}</ul></section>
-          <section><h2>Saved trips <span>{saved.length}/20</span></h2>{!saved.length && <p>Your saved plans stay on this device.</p>}{saved.map(s => <div className="fare-saved" key={s.id}><button onClick={() => restore(s.trip)}><strong>{s.trip.destination}</strong><span>{s.trip.kind} · {s.trip.start} → {s.trip.end}</span></button>{tripToQuery(s.trip) && <button aria-label={`Watch price for ${s.trip.destination}`} title="Alert me when the price drops" onClick={() => {
-                const q = tripToQuery(s.trip); if (!q) return
-                const target = Number(window.prompt('Alert me when the round-trip price is at or below ($):', s.trip.budget || ''))
-                if (!Number.isFinite(target) || target <= 20) return
-                void (window as any).electronAPI?.fares?.watch(q, target, `${q.from} → ${q.to} ${q.depart}`)
-                  .then((r: any) => setNotice(r?.ok ? 'Price watch on — checked every 6 hours.' : 'Could not start a price watch here.'))
-              }}><Bell size={15} /></button>}<button aria-label={`Open cost board for ${s.trip.destination}`} title="Open trip cost board" onClick={() => setCostTripId(s.id)}><Wallet size={15} /></button><button aria-label={`Remove saved trip to ${s.trip.destination}`} onClick={() => { if (costTripId === s.id) setCostTripId(''); persist(saved.filter(x => x.id !== s.id)) }}><Trash2 size={15} /></button></div>)}</section>
+          <section><h2>Saved trips <span>{saved.length}/20</span></h2>{!saved.length && <p>Your saved plans stay on this device.</p>}{saved.map(s => { const sq = tripToQuery(s.trip); return <React.Fragment key={s.id}><div className="fare-saved"><button onClick={() => restore(s.trip)}><strong>{s.trip.destination}</strong><span>{s.trip.kind} · {s.trip.start} → {s.trip.end}</span></button>{sq && <button aria-label={`Watch price for ${s.trip.destination}`} aria-expanded={alertFor === s.id} title="Alert me when the price drops" onClick={() => setAlertFor(alertFor === s.id ? '' : s.id)}><Bell size={15} /></button>}<button aria-label={`Open cost board for ${s.trip.destination}`} title="Open trip cost board" onClick={() => setCostTripId(s.id)}><Wallet size={15} /></button><button aria-label={`Remove saved trip to ${s.trip.destination}`} onClick={() => { if (costTripId === s.id) setCostTripId(''); persist(saved.filter(x => x.id !== s.id)) }}><Trash2 size={15} /></button></div>
+                {sq && alertFor === s.id && <AlertForm query={sq} title={alertTitle(sq)} lowest={null} budget={s.trip.budget} onDone={m => { setAlertFor(''); setNotice(m) }} />}</React.Fragment> })}</section>
+          {trip.kind === 'flights' && <AlertList onOpen={openAlert} />}
         </aside>
       </div>
     </div>
