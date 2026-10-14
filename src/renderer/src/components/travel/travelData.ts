@@ -33,18 +33,27 @@ export interface CountryFacts {
 type Row = Record<string, { value: string } | undefined>
 
 /** Run a Wikidata SPARQL query (free, keyless, community-maintained) and return its rows. */
-async function sparql(query: string): Promise<Row[]> {
+async function sparql(query: string, timeoutMs = 15000): Promise<Row[]> {
   const res = await fetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(query)}`, {
     headers: { Accept: 'application/sparql-results+json' },
+    signal: AbortSignal.timeout(timeoutMs),
   })
   if (!res.ok) throw new Error(`Wikidata ${res.status}`)
   const j = await res.json()
   return Array.isArray(j?.results?.bindings) ? j.results.bindings : []
 }
 
-/** Find the country by its English Wikipedia article — the same page the summary comes from. */
-const byArticle = (title: string) =>
-  `?ca schema:about ?country ; schema:isPartOf <https://en.wikipedia.org/> ; schema:name ${JSON.stringify(title)}@en .`
+/** An English Wikipedia article's URL, spelled the way Wikidata stores sitelinks. */
+export function wikiArticleIri(title: string): string {
+  return `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_')).replace(/%2C/g, ',')}`
+}
+
+/**
+ * Find the country by its English Wikipedia article — the same page the summary
+ * comes from. Binding the article's IRI is an index lookup (~70 ms); matching
+ * on schema:name scanned every sitelink (2–3 s, and timed out under load).
+ */
+const byArticle = (title: string) => `BIND(<${wikiArticleIri(title)}> AS ?ca) ?ca schema:about ?country .`
 
 export function factsQuery(title: string): string {
   return `SELECT ?country (SAMPLE(?officialName) AS ?official) (GROUP_CONCAT(DISTINCT ?capitalLabel; separator="|") AS ?capitals)
@@ -92,11 +101,26 @@ export function normalizeFacts(row: Row | null | undefined): CountryFacts {
   }
 }
 
-export async function fetchFacts(c: Country): Promise<CountryFacts | null> {
+/** Keep a found (non-null) answer on this device for `ttlMs`; a miss is asked again next time. */
+async function remembered<T>(key: string, ttlMs: number, load: () => Promise<T | null>): Promise<T | null> {
   try {
-    const rows = await sparql(factsQuery(wikiTitle(c)))
-    return rows.length ? normalizeFacts(rows[0]) : null
-  } catch { return null }
+    const hit = JSON.parse(localStorage.getItem(key) || 'null')
+    if (hit && Date.now() - hit.at < ttlMs) return hit.value as T
+  } catch { /* unreadable entry: load again */ }
+  const value = await load()
+  if (value != null) try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), value })) } catch { /* storage full */ }
+  return value
+}
+
+const DAY = 24 * 3600_000
+
+export function fetchFacts(c: Country): Promise<CountryFacts | null> {
+  return remembered(`aihub-travel-facts-v1:${c.code}`, DAY, async () => {
+    try {
+      const rows = await sparql(factsQuery(wikiTitle(c)))
+      return rows.length ? normalizeFacts(rows[0]) : null
+    } catch { return null }
+  })
 }
 
 // ── Leaders ─────────────────────────────────────────────────────────────────
@@ -158,10 +182,177 @@ export function parseLeaders(rows: Row[]): Omit<Leader, 'photo' | 'bio'>[] {
   return [...out.values()].sort((a, b) => Number(b.roles.includes('state')) - Number(a.roles.includes('state')))
 }
 
-export async function fetchLeaders(c: Country): Promise<Leader[]> {
+// The country article's infobox is the primary source. Audited 2026-10-13 across
+// all 201 countries: Wikidata's head-of-government statements were stale for
+// dozens (DR Congo still named Ilunkamba, PM 2019–21, not Judith Suminwa;
+// Burundi, Kuwait, Iraq, Laos, Zambia and others likewise), while the
+// infobox is edited within hours of a change.
+
+/** Office links that are not the head of state or government (checked first). */
+const NOT_LEADER = /\b(vice|deputy|speakers?|justice|court|senate|assembly|parliament|congress|chamber|house of|legislat\w*|judicial|council of the nation|national council|people's council|governor[- ]general|commissioner|representatives?|secretary|crown prince|regent of|heir|succession|syndic|standing committee|national committee|storting|riksdag|seimas|majlis|saeima|althing|mother|tánaiste|assistance|chancellor of switzerland|federal chancellor)\b/i
+const GOVERNMENT = /\b(prime ministers?|premier|chancellor|taoiseach|heads? of government|chief executive|chief minister|minister of state|(chairman|chairwoman|chair) of the (cabinet|council) of ministers|president of the government|governor of)\b/i
+const STATE = /\b(presidents?|presidency|co-presidents|monarch|monarchy|kings?|queen|emperor|emir|sultans?|rulers|co-princes|supreme leader|captains regent|grand duke|pope|heads? of state|o le ao o le malo|ngwenyama|federal council)\b/i
+const MONARCH = /\b(monarch|monarchy|kings?|queen|emperor|emir|sultans?|rulers|co-princes|captains regent|grand duke|pope|ngwenyama)\b/i
+/** Links in a leader's cell that are not a person: offices, parties, notes. */
+const NOT_PERSON = /\b(list of|party|president|prime minister|monarchy|presidency|chairman|chairwoman|council|government|bishop|congress|movement|front|union|alliance|coalition|independent politician|military|junta)\b/i
+
+export type InfoboxLeader = Omit<Leader, 'photo' | 'bio' | 'since'>
+
+const squash = (s: string | null | undefined) => (s ?? '').replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim()
+const articleFromHref = (href: string) => {
+  const m = /^\/wiki\/([^?#]+)/.exec(href)
+  if (!m) return ''
+  const t = decodeURIComponent(m[1]).replace(/_/g, ' ')
+  return t.includes(':') ? '' : t
+}
+/** The fuller of the link text and the article title (minus "(politician)"-style disambiguation). */
+const fullName = (text: string, article: string) => {
+  const title = article.replace(/\s*\([^)]*\)$/, '')
+  return title.length > text.length ? title : text
+}
+
+/**
+ * Head of state and head of government from a country article's rendered
+ * infobox (Wikipedia's action=parse HTML for section 0). Leader rows follow the
+ * "Government" row; each office link is classified, and the people are the
+ * person links in the row's value cell.
+ */
+export function parseInfoboxLeaders(html: string): InfoboxLeader[] {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const box = doc.querySelector('table.infobox')
+  if (!box) return []
+  const rows = [...box.querySelectorAll('tr')]
+  const start = rows.findIndex(r => /^government$/i.test(squash(r.querySelector('th')?.textContent)))
+  if (start < 0) return []
+
+  // Names that appear linked anywhere in the infobox, for cells that give a plain-text name.
+  const linked = new Map<string, string>()
+  for (const a of box.querySelectorAll('a[href^="/wiki/"]')) {
+    const art = articleFromHref(a.getAttribute('href') ?? '')
+    if (art) linked.set(squash(a.textContent), art)
+  }
+
+  type Row = { office: string; roles: Set<'state' | 'government'>; monarch: boolean; people: { name: string; article: string; office?: string }[]; note: string }
+  const found: Row[] = []
+  for (const r of rows.slice(start + 1)) {
+    if (!/\bmerged(row|bottomrow)\b/.test(r.className)) break
+    const th = r.querySelector('th'), td = r.querySelector('td')
+    if (!th || !td) continue
+    const links = [...th.querySelectorAll('a')].map(a => a.getAttribute('title') || squash(a.textContent))
+    const roles = new Set<'state' | 'government'>()
+    let monarch = false
+    for (const c of links.length ? links : [squash(th.textContent)]) {
+      if (NOT_LEADER.test(c)) continue
+      if (GOVERNMENT.test(c)) roles.add('government')
+      else if (STATE.test(c)) { roles.add('state'); monarch ||= MONARCH.test(c) }
+    }
+    if (!roles.size) continue
+
+    const note = /\b(acting|interim|disputed)\b/i.exec(td.textContent ?? '')?.[1]?.toLowerCase() ?? ''
+    const cell = td.cloneNode(true) as HTMLElement
+    cell.querySelectorAll('sup, style, .reference, .noprint').forEach(e => e.remove())
+    // A listed person's own qualifier: "(Vice president)" drops them; "(President)"
+    // linking "President of the Swiss Confederation" becomes their office.
+    const ownOffice = new Map<Element, string>()
+    for (const li of cell.querySelectorAll('li')) {
+      const q = li.querySelector('small')
+      if (!q) continue
+      if (/\b(vice|deputy)\b/i.test(q.textContent ?? '')) { li.remove(); continue }
+      const office = q.querySelector('a')?.getAttribute('title')
+      const who = li.querySelector('a')
+      if (office && who && who !== q.querySelector('a')) ownOffice.set(who, STATE.test(office) || GOVERNMENT.test(office) ? office : `${squash(th.textContent).replace(/^•\s*/, '')} (${office})`)
+    }
+    const people: Row['people'] = []
+    for (const a of cell.querySelectorAll('a')) {
+      if (a.closest('small')) continue
+      const href = a.getAttribute('href') ?? ''
+      const title = a.getAttribute('title') ?? ''
+      const text = squash(a.textContent)
+      if (!text || NOT_PERSON.test(title || text) || /^\[?\w{2}\]?$/.test(text)) continue
+      // A red link (no article yet) is still a name.
+      const article = articleFromHref(href)
+      if (!article && !/redlink=1/.test(href)) continue
+      if (!people.some(p => p.name === text)) people.push({ name: fullName(text, article), article, office: ownOffice.get(a) })
+    }
+    cell.querySelectorAll('small').forEach(e => e.remove())
+    if (!people.length) {
+      const name = squash(cell.textContent).replace(/\((acting|interim|disputed)\)/gi, '').trim()
+      if (name && name.length <= 80 && !/^(vacant|none|n\/a|[-–—])$/i.test(name)) people.push({ name, article: linked.get(name) ?? '' })
+    }
+    if (people.length) found.push({ office: squash(th.textContent).replace(/^•\s*/, ''), roles, monarch, people: people.slice(0, 3), note })
+  }
+
+  // The first state row and the first government row are the leaders. With no
+  // government row, a second head-of-state-like row heads the government (Iran's
+  // President under the Supreme Leader); otherwise a non-monarch head of state
+  // also heads the government, as in a presidential system.
+  const state = found.find(f => f.roles.has('state'))
+  let gov = found.find(f => f.roles.has('government'))
+  if (!gov && state) {
+    const second = found.find(f => f !== state && f.roles.has('state') && /^president\b/i.test(f.office))
+    if (second) gov = { ...second, roles: new Set(['government']) }
+    else if (!state.monarch) state.roles.add('government')
+  }
+
+  const out = new Map<string, InfoboxLeader>()
+  for (const [row, role] of [[state, 'state'], [gov, 'government']] as const) {
+    if (!row) continue
+    for (const p of row.people) {
+      const key = p.article || p.name
+      const prev = out.get(key)
+      const roles = row === state && row.roles.has('government') ? ['state', 'government'] as const : [role]
+      if (prev) { for (const x of roles) if (!prev.roles.includes(x)) prev.roles.push(x); continue }
+      out.set(key, {
+        roles: [...roles], name: p.name, article: p.article,
+        office: row.note ? `${p.office ?? row.office} (${row.note})` : p.office ?? row.office,
+        url: p.article ? `https://en.wikipedia.org/wiki/${encodeURIComponent(p.article.replace(/ /g, '_'))}` : '',
+      })
+    }
+  }
+  return [...out.values()].slice(0, 5)
+}
+
+export function infoboxUrl(title: string): string {
+  return `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&prop=text&section=0&redirects=1&disableeditsection=1&disablelimitreport=1&format=json&formatversion=2&origin=*`
+}
+
+async function fetchInfoboxLeaders(c: Country): Promise<InfoboxLeader[]> {
+  const res = await fetch(infoboxUrl(wikiTitle(c)), { signal: AbortSignal.timeout(12000) })
+  if (!res.ok) throw new Error(`Wikipedia ${res.status}`)
+  const j = await res.json()
+  return parseInfoboxLeaders(String(j?.parse?.text ?? ''))
+}
+
+const normTitle = (t: string) => t.replace(/_/g, ' ').normalize('NFC').toLowerCase()
+
+/** Leaders change rarely: a looked-up answer is kept for six hours on this device. */
+const LEADERS_TTL = 6 * 3600_000
+const leadersKey = (c: Country) => `aihub-travel-leaders-v2:${c.code}`
+
+export function cachedLeaders(c: Country, now = Date.now()): Leader[] | null {
   try {
-    const base = parseLeaders(await sparql(leadersQuery(wikiTitle(c)))).slice(0, 3)
-    return await Promise.all(base.map(async l => {
+    const hit = JSON.parse(localStorage.getItem(leadersKey(c)) || 'null')
+    return hit && now - hit.at < LEADERS_TTL && Array.isArray(hit.leaders) ? hit.leaders : null
+  } catch { return null }
+}
+
+export async function fetchLeaders(c: Country): Promise<Leader[]> {
+  const cached = cachedLeaders(c)
+  if (cached) return cached
+  // Wikipedia names the people; Wikidata, when it agrees on the person, adds the start date.
+  const [fromInfobox, fromWikidata] = await Promise.all([
+    fetchInfoboxLeaders(c).catch(() => [] as InfoboxLeader[]),
+    sparql(leadersQuery(wikiTitle(c)), 6000).then(parseLeaders).catch(() => [] as ReturnType<typeof parseLeaders>),
+  ])
+  const sinceFor = (l: InfoboxLeader) => {
+    const same = fromWikidata.filter(w => w.article && normTitle(w.article) === normTitle(l.article))
+    return (same.find(w => w.roles.some(r => l.roles.includes(r))) ?? same[0])?.since ?? ''
+  }
+  const base: Omit<Leader, 'photo' | 'bio'>[] = fromInfobox.length
+    ? fromInfobox.map(l => ({ ...l, since: sinceFor(l) }))
+    : fromWikidata.slice(0, 3)
+  try {
+    const leaders = await Promise.all(base.map(async l => {
       if (!l.article) return { ...l, photo: null, bio: '' }
       try {
         const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(l.article.replace(/ /g, '_'))}`)
@@ -169,6 +360,9 @@ export async function fetchLeaders(c: Country): Promise<Leader[]> {
         return { ...l, photo: j?.thumbnail?.source ?? null, bio: String(j?.extract ?? ''), url: j?.content_urls?.desktop?.page ?? l.url }
       } catch { return { ...l, photo: null, bio: '' } }
     }))
+    // Only the infobox answer is kept; a Wikidata-only fallback is retried next time.
+    if (fromInfobox.length) try { localStorage.setItem(leadersKey(c), JSON.stringify({ at: Date.now(), leaders })) } catch { /* storage full */ }
+    return leaders
   } catch { return [] }
 }
 
@@ -183,7 +377,11 @@ export function wikiTitle(c: Country): string { return WIKI_TITLES[c.code] ?? c.
 
 export interface WikiSummary { extract: string; image: string | null; url: string }
 
-export async function fetchSummary(c: Country): Promise<WikiSummary | null> {
+export function fetchSummary(c: Country): Promise<WikiSummary | null> {
+  return remembered(`aihub-travel-summary-v1:${c.code}`, DAY, () => loadSummary(c))
+}
+
+async function loadSummary(c: Country): Promise<WikiSummary | null> {
   try {
     const t = wikiTitle(c).replace(/ /g, '_')
     const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(t)}`)

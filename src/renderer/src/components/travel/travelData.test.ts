@@ -66,9 +66,12 @@ describe('facts', () => {
     expect(f.population).toBeNull()
     expect(normalizeFacts(row({ currencies: 'Gold coin ()', drive: 'Q123' })).currencies[0]).toEqual({ code: '', name: 'Gold coin', symbol: '' })
   })
-  it('finds the country by its Wikipedia article and quotes the title safely', () => {
-    expect(factsQuery('Democratic Republic of the Congo')).toContain('schema:name "Democratic Republic of the Congo"@en')
-    expect(leadersQuery('Côte "x"')).toContain('schema:name "Côte \\"x\\""@en')
+  it('finds the country by its Wikipedia article IRI and encodes the title safely', () => {
+    expect(factsQuery('Democratic Republic of the Congo')).toContain('BIND(<https://en.wikipedia.org/wiki/Democratic_Republic_of_the_Congo> AS ?ca)')
+    expect(leadersQuery('São Tomé and Príncipe')).toContain('<https://en.wikipedia.org/wiki/S%C3%A3o_Tom%C3%A9_and_Pr%C3%ADncipe>')
+    expect(leadersQuery('Georgia (country)')).toContain('<https://en.wikipedia.org/wiki/Georgia_(country)>')
+    // Nothing that could close the IRI or the query.
+    expect(leadersQuery('a> } "x" <b')).not.toMatch(/a> }|"x"/)
   })
 })
 

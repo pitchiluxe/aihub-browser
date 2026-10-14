@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { validateTrip, bookingSearches, chooseBookingSearch, researchTrip, readSavedTrips, type Trip } from './flightsRentals'
+import { validateTrip, bookingSearches, chooseBookingSearch, researchTrip, researchQueries, readSavedTrips, type Trip } from './flightsRentals'
 const trip: Trip = { kind: 'flights', origin: 'JFK', destination: 'CDG', start: '2099-06-10', end: '2099-06-17', travelers: 2, budget: '1500', currency: 'USD', flexible: true }
 describe('trip planning', () => {
   it('randomly chooses a direct booking site for every category without repeating the previous site', () => {
@@ -65,6 +65,20 @@ describe('trip planning', () => {
     expect(result.sources).toHaveLength(1)
     expect(chat.mock.calls[0][0][0].content).toContain('Never invent prices')
     expect(chat.mock.calls[0][0][1].content).toContain('Baggage costs extra.')
+  })
+  it('searches with short keyword queries and merges both result lists', async () => {
+    const webSearch = vi.fn()
+      .mockResolvedValueOnce({ success: true, results: [{ title: 'A1', url: 'https://a.com/1', snippet: '' }, { title: 'A2', url: 'https://a.com/2', snippet: '' }] })
+      .mockResolvedValueOnce({ success: true, results: [{ title: 'dup', url: 'https://a.com/1', snippet: '' }, { title: 'B2', url: 'https://b.com/2', snippet: '' }] })
+    const result = await researchTrip(trip, { webSearch, chat: vi.fn().mockResolvedValue({ provider: 'ollama', content: 'ok' }) })
+    expect(result.sources.map(s => s.title)).toEqual(['A1', 'A2', 'B2'])
+    for (const [q] of webSearch.mock.calls) { expect(q.length).toBeLessThan(90); expect(q).not.toContain('adults') }
+    expect(researchQueries({ ...trip, kind: 'stays', destination: 'Lisbon' })[0]).toMatch(/^cheap hotels Lisbon \w+ \d{4} deals$/)
+  })
+  it('still researches when one of the two searches fails', async () => {
+    const webSearch = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ success: true, results: [{ title: 'B', url: 'https://b.com/', snippet: '' }] })
+    const result = await researchTrip(trip, { webSearch, chat: vi.fn().mockResolvedValue({ provider: 'ollama', content: 'ok' }) })
+    expect(result.sources).toHaveLength(1)
   })
   it('does not request AI advice without evidence and reports model failures', async () => {
     const chat = vi.fn()

@@ -43,6 +43,7 @@ import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
 import { createSessionManager, type SessionTab } from './sessions'
 import { createSemanticIndex, type SearchDoc } from './semantic'
 import { createNetGet, createNetPostJson, isWebUrl } from './netGet'
+import { searchWeb } from './webSearch'
 import { createOllamaProbe, type OllamaProbe, type OllamaModelInfo } from './ollamaProbe'
 import { directKeysFirst, type DirectProvider } from './providerOrder'
 import { net as electronNet } from 'electron'
@@ -6879,31 +6880,22 @@ const AI_NEWS_KEYWORDS = [
 ]
 
 // ── IPC: AI research tools (web search + page fetch) ───────────────────────
-// HTTP GET with a real browser UA, following up to `hops` redirects — many
-// sites 301 to www/https variants and DDG needs a UA to answer at all.
-function fetchHtml(url: string, timeoutMs = 12000, hops = 4): Promise<{ status: number; body: string; finalUrl: string }> {
-  return new Promise((resolve, reject) => {
-    if (hops < 0) { reject(new Error('too many redirects')); return }
-    const lib = url.startsWith('https') ? https : http
-    const req = lib.get(url, {
-      timeout: timeoutMs,
-      headers: { 'User-Agent': CHROME_UA, 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8', 'Accept-Language': 'en' },
-      lookup: fallbackLookup,
-    }, (res) => {
-      const loc = res.headers.location
-      if (loc && res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
-        res.resume()
-        try { resolve(fetchHtml(new URL(loc, url).href, timeoutMs, hops - 1)) }
-        catch (e) { reject(e) }
-        return
-      }
-      let body = ''
-      res.on('data', c => { body += c })
-      res.on('end', () => resolve({ status: res.statusCode ?? 0, body, finalUrl: url }))
-    })
-    req.on('error', reject)
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
-  })
+// HTTP GET with a real browser UA through Chromium's network stack (redirects
+// followed, Chrome's TLS fingerprint, no main-thread stall on a timed-out socket
+// — see netGet.ts). Search engines challenge Node's TLS handshake far sooner.
+const HTML_HEADERS = { 'User-Agent': CHROME_UA, 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9' }
+async function fetchHtml(url: string, timeoutMs = 12000): Promise<{ status: number; body: string; finalUrl: string }> {
+  if (!isWebUrl(url)) throw new Error('a full http(s) url is required')
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const res = await chromiumFetch(url, { headers: HTML_HEADERS, signal: ctrl.signal })
+    return { status: res.status, body: await res.text(), finalUrl: res.url || url }
+  } catch (e: any) {
+    throw ctrl.signal.aborted ? new Error('timeout') : e
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 function decodeEntities(s: string): string {
@@ -6925,35 +6917,7 @@ function htmlToText(html: string): string {
 
 ipcMain.handle('ai:webSearch', async (_e, query: string) => {
   try {
-    const q = String(query || '').trim()
-    if (!q) return { success: false, error: 'query is required' }
-    const { body } = await fetchHtml(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, 12000)
-    const results: { title: string; url: string; snippet: string }[] = []
-    // DDG's html endpoint groups each hit in a result block; links are
-    // redirect-wrapped (uddg= param carries the real destination).
-    const linkRe = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g
-    const snips: string[] = []
-    const snipRe = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g
-    let sm: RegExpExecArray | null
-    while ((sm = snipRe.exec(body)) !== null) snips.push(htmlToText(sm[1]))
-    let m: RegExpExecArray | null
-    let snipIdx = 0
-    while ((m = linkRe.exec(body)) !== null && results.length < 8) {
-      let url = m[1]
-      try {
-        const parsed = new URL(url.startsWith('//') ? 'https:' + url : url)
-        const real = parsed.searchParams.get('uddg')
-        if (real) url = real
-      } catch {}
-      // Skip sponsored/ad rows — DDG wraps those through y.js / bing aclick
-      // redirects, which aren't real organic results.
-      if (/duckduckgo\.com\/y\.js|bing\.com\/aclick|ad_provider=|ad_domain=/i.test(url)) { snipIdx++; continue }
-      if (!/^https?:\/\//i.test(url)) { snipIdx++; continue }
-      results.push({ title: htmlToText(m[2]), url, snippet: snips[snipIdx] || '' })
-      snipIdx++
-    }
-    if (!results.length) return { success: false, error: 'no results — try different keywords' }
-    return { success: true, query: q, results }
+    return await searchWeb(String(query || ''), (url, timeoutMs) => fetchHtml(url, timeoutMs))
   } catch (e: any) { return { success: false, error: e.message } }
 })
 

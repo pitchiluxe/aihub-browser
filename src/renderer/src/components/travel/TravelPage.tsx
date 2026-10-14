@@ -15,8 +15,6 @@ import {
   VIDEO_TOPICS, cachedGuide, fetchFacts, fetchLeaders, fetchSummary, generateGuide, links, searchTravelVideos,
   type CountryFacts, type Leader, type TravelGuide, type TravelVideo, type WikiSummary,
 } from './travelData'
-import { searchAirports } from './airports'
-import { FLIGHTS_PREFILL_KEY } from './flightsRentals'
 import './travel.css'
 
 const LAST_KEY = 'aihub-travel-last'
@@ -171,10 +169,15 @@ Current leaders: ${who}.` : ''}`)) }
           <Fact icon={<Phone size={13} />} label="Calling code" value={facts?.callingCode || undefined} />
         </div>
         <div className="travel-actions">
-          <button onClick={() => {
-            // Live fares in-app: hand the destination's main airport to Flights.
-            const airport = searchAirports(capital || name, 5).find(a => a.scheduled && a.country === name) ?? searchAirports(capital || name, 1)[0]
-            try { if (airport) localStorage.setItem(FLIGHTS_PREFILL_KEY, airport.iata) } catch {}
+          <button onClick={async () => {
+            // Live fares in-app: hand the destination's main airport to Flights. The
+            // airport directory (~0.6 MB) loads here, on the way to the page that needs
+            // it, not with every country view.
+            try {
+              const [{ searchAirports }, { FLIGHTS_PREFILL_KEY }] = await Promise.all([import('./airports'), import('./flightsRentals')])
+              const airport = searchAirports(capital || name, 5).find(a => a.scheduled && a.country === name) ?? searchAirports(capital || name, 1)[0]
+              if (airport) localStorage.setItem(FLIGHTS_PREFILL_KEY, airport.iata)
+            } catch { /* open Flights without a prefill */ }
             open('aihub://flights-rentals')
           }}><Plane size={13} /> Fly here</button>
           <button onClick={() => open(links.booking(capital ? `${capital}, ${name}` : name))}><BedDouble size={13} /> Hotels</button>
@@ -352,7 +355,7 @@ function GuideTab({ wiki, leaders, guide, busy, err, retry, country, open }: {
   )
 }
 
-/** Who runs the country now — from Wikidata, with the Wikipedia photo and biography. */
+/** Who runs the country now — from the Wikipedia infobox, with the photo and biography. */
 function LeadersCard({ leaders, country, open }: { leaders: Leader[] | null; country: Country; open: (u: string) => void }) {
   if (leaders === null) return <div className="travel-loading"><Loader2 size={16} className="travel-spin" /> Looking up who leads {country.name}…</div>
   if (!leaders.length) return null
@@ -374,7 +377,7 @@ function LeadersCard({ leaders, country, open }: { leaders: Leader[] | null; cou
           </div>
         ))}
       </div>
-      <p className="travel-source">Live from Wikidata and Wikipedia — community-maintained, so a very recent change of leader may take a few days to appear.</p>
+      <p className="travel-source">Live from Wikipedia, usually updated within hours of a change; start dates from Wikidata. Rechecked every 6 hours.</p>
     </div>
   )
 }
