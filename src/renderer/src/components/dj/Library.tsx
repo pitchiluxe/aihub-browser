@@ -379,8 +379,8 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
             {error && <div className="dj-empty">{error}</div>}
             {source === 'youtube' && !error && !loading && rows.length === 0 && (
               <div className="dj-empty">
-                Search YouTube above and drag any result onto a deck. YouTube songs play in YouTube&apos;s own player, so the
-                crossfader, volume, tempo steps, cues and Automix work on them; EQ, effects, stems and waveforms are for local files.
+                Search YouTube above, then drag a result onto a deck or use its A / B buttons. YouTube songs go through the full
+                mixer — EQ, effects, stems, loops, cues, sync, waveforms and Automix all work on them.
               </div>
             )}
             {source === 'aifinds' && rows.length === 0 && (

@@ -170,13 +170,32 @@ export function cleanVideoTitle(title: string, channel: string): { artist: strin
   return { artist: channel.replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim(), title: stripped }
 }
 
+/**
+ * What kind of upload a result is, and whose: "Official video · WizkidVEVO".
+ * Search returns the same song several times (official, lyrics, audio, live)
+ * and cleaned titles alone made those rows identical.
+ */
+export function uploadLabel(rawTitle: string, channel: string): string {
+  const t = rawTitle.toLowerCase()
+  const kind = /\blive\b|apple music live|\bconcert\b/.test(t) ? 'Live'
+    : /\blyrics?\b|lyric video/.test(t) ? 'Lyrics'
+    : /visuali[sz]er/.test(t) ? 'Visualizer'
+    : /official (music )?video|\(video\)|\[video\]/.test(t) ? 'Official video'
+    : /\baudio\b/.test(t) || /- topic$/i.test(channel) ? 'Audio'
+    : /\bremix\b/.test(t) ? 'Remix'
+    : /\b(sped up|slowed)\b/.test(t) ? 'Edit'
+    : 'Video'
+  const ch = channel.replace(/\s*-\s*Topic$/i, '').trim()
+  return ch ? `${kind} · ${ch}` : kind
+}
+
 export function ytTrack(v: YouTubeVideo): DjTrack {
   const { artist, title } = cleanVideoTitle(v.title, v.channel)
-  return ytTrackFrom({ id: v.id, title, artist, cover: v.thumbnail, duration: parseDuration(v.duration), name: v.title })
+  return ytTrackFrom({ id: v.id, title, artist, cover: v.thumbnail, duration: parseDuration(v.duration), name: v.title, album: uploadLabel(v.title, v.channel ?? '') })
 }
 
 /** A playable deck track for a YouTube video, registered so it can be dragged. */
-export function ytTrackFrom(v: { id: string; title: string; artist: string; cover?: string; duration?: number; name?: string }): DjTrack {
+export function ytTrackFrom(v: { id: string; title: string; artist: string; cover?: string; duration?: number; name?: string; album?: string }): DjTrack {
   const t: DjTrack = {
     token: `yt-${v.id}`,
     path: `https://www.youtube.com/watch?v=${v.id}`,
@@ -184,7 +203,7 @@ export function ytTrackFrom(v: { id: string; title: string; artist: string; cove
     size: 0,
     title: v.title,
     artist: v.artist,
-    album: 'YouTube',
+    album: v.album ?? 'YouTube',
     cover: v.cover,
     youtubeId: v.id,
     durationHint: v.duration,

@@ -406,12 +406,15 @@
 .aihub-dj .dj-side-t small { font-size: 12.5px; color: #9ca3af; }
 
 /* ── Toast ── */
-.aihub-dj .dj-toast {
+.dj-host > .dj-toast {
   position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60;
+  max-width: min(640px, 90%); text-align: center;
   padding: 8px 14px; border-radius: 6px; background: rgba(17,18,21,0.95); color: #f3f4f6; font-size: 13.5px;
   border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 8px 24px rgba(0,0,0,0.6);
   animation: dj-pop 0.18s ease-out;
 }
+/* On the stage the dock and energy graph own the bottom; the top centre is free. */
+.dj-host > .dj-toast.on-stage { top: 28px; bottom: auto; font-size: 14.5px; }
 
 /* ── New: YouTube + AI DJ ── */
 .aihub-dj .dj-ic-yt { color: #ff3b3b; }

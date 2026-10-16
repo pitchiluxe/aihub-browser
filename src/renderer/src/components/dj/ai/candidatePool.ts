@@ -14,9 +14,15 @@ const norm = (s: string) => s.trim().toLowerCase()
 const MAX_SONG_SEC = 10 * 60
 const NOT_A_SONG = /\b(mix(tape)?|megamix|non-?stop|playlist|compilation|full album|best of|\d+\s*(hours?|hrs?)\b|hour of|dj set|live set|boiler room|continuous)\b/i
 
+/** Keyword-stuffed filler uploads, not records: "Nakupenda — New Video, Iconic
+ *  Models, Deep House Music 2026", "Afro Lofi Background Music" (both played
+ *  live in a "Late night" set, 2026-10-15). */
+const FILLER = /\b(new video|iconic models|fashion (show|models)|background music|bgm|(study|work|gaming|sleep|relaxing|focus) (music|beats)|(music|beats|songs) 20\d\d)\b/i
+
 export function isSong(t: DjTrack): boolean {
   if (t.durationHint && t.durationHint > MAX_SONG_SEC) return false
-  return !NOT_A_SONG.test(`${t.title} ${t.name}`)
+  const text = `${t.title} ${t.name}`
+  return !NOT_A_SONG.test(text) && !FILLER.test(text)
 }
 
 export async function gatherCandidates(seeds: string[], deps: PoolDeps, opts: { perSeed?: number; favoritesOnly?: boolean; /** Tag every result with this genre (seeds are phrasings of it). */ genre?: string } = {}): Promise<Omit<Candidate, 'facts'>[]> {

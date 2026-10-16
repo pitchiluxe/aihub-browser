@@ -229,14 +229,25 @@ export function registerDjIpc(): void {
     if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return { success: false, error: 'Empty recording' }
     const safeExt = /^(webm|ogg|wav)$/.test(ext) ? ext : 'webm'
     const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
+    const name = `AIHub-DJ-mix-${stamp}.${safeExt}`
+    // A copy is kept before asking where to save: closing the dialog used to
+    // throw the whole recorded mix away without a word.
+    // getPath('music') throws when Windows has no Music folder registered.
+    let music: string
+    try { music = app.getPath('music') } catch { music = app.getPath('userData') }
+    const keptDir = path.join(music, 'AIHub DJ recordings')
+    const kept = path.join(keptDir, name)
+    await fs.promises.mkdir(keptDir, { recursive: true })
+    await fs.promises.writeFile(kept, Buffer.from(data))
     const win = BrowserWindow.fromWebContents(e.sender) ?? undefined
     const r = await dialog.showSaveDialog(win!, {
       title: 'Save mix recording',
-      defaultPath: path.join(app.getPath('music'), `AIHub-DJ-mix-${stamp}.${safeExt}`),
+      defaultPath: path.join(music, name),
       filters: [{ name: 'Audio', extensions: [safeExt] }],
     })
-    if (r.canceled || !r.filePath) return { success: false }
-    await fs.promises.writeFile(r.filePath, Buffer.from(data))
+    if (r.canceled || !r.filePath) return { success: true, path: kept }
+    if (path.resolve(r.filePath) === path.resolve(kept)) return { success: true, path: kept }
+    await fs.promises.rename(kept, r.filePath).catch(() => fs.promises.copyFile(kept, r.filePath!).then(() => fs.promises.unlink(kept)))
     return { success: true, path: r.filePath }
   })
 }

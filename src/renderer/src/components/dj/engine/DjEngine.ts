@@ -205,6 +205,10 @@ export class Deck extends Emitter {
   private holdResume = false
 
   private gen = 0
+  /** What SYNC matched this deck to, and the tempos it matched: a revised
+   *  reading on either side (a first scan's 176 BPM became 117.4 once the song
+   *  had played) re-matches instead of leaving the decks drifting apart. */
+  private syncLink: { master: Deck; masterGen: number; mine: number; target: number } | null = null
   private videoWanted = 0
   private ytVideoHeld = false
   private yt: YouTubeDeck | null = null
@@ -465,6 +469,7 @@ export class Deck extends Emitter {
     this.scanBpm = null
     this.scanTempoAsked = false
     this.liveBpm = null
+    this.syncLink = null
     this.liveFirstBeat = 0
     this.lastEnvIndex = -1
     this.steadySince = 0
@@ -605,6 +610,7 @@ export class Deck extends Emitter {
     this.localScan?.stop()
     this.scanBpm = null
     this.liveBpm = null
+    this.syncLink = null
     this.duration = 0
     this.error = null
     this.emit()
@@ -751,6 +757,8 @@ export class Deck extends Emitter {
 
   // ── tempo ──
   setPitch(p: number): void {
+    // A hand on the pitch fader takes the deck off SYNC.
+    this.syncLink = null
     this.pitch = Math.max(-this.pitchRange, Math.min(this.pitchRange, p))
     this.applyRate()
     this.emit()
@@ -770,7 +778,7 @@ export class Deck extends Emitter {
   setBend(b: number): void { this.bend = Math.max(-0.5, Math.min(0.5, b)); this.applyRate() }
 
   /** Match this deck's tempo — and beat phase, when both grids are known — to `master`. */
-  sync(master: Deck): boolean {
+  sync(master: Deck, align = true): boolean {
     const mine = this.bpm
     const target = master.effectiveBpm
     if (!mine || !target) return false
@@ -782,7 +790,9 @@ export class Deck extends Emitter {
       this.pitchRange = PITCH_RANGES[PITCH_RANGES.indexOf(this.pitchRange) + 1]
     }
     this.setPitch(p)
-    if (this.gridKnown && master.gridKnown && master.playing) {
+    if (master.syncLink?.master === this) master.syncLink = null
+    this.syncLink = { master, masterGen: master.gen, mine, target }
+    if (align && this.gridKnown && master.gridKnown && master.playing) {
       const phase = (d: Deck) => { const x = (d.time - d.firstBeat) / d.beatLen; return x - Math.floor(x) }
       let delta = phase(master) - phase(this)
       if (delta > 0.5) delta -= 1
@@ -907,6 +917,15 @@ export class Deck extends Emitter {
   /** Per-frame work: loop wrap, the scratch recorder's clock and the live waveform. */
   tick(): void {
     if (!this.track || this.held) return
+    const link = this.syncLink
+    if (link) {
+      if (link.master.gen !== link.masterGen || !link.master.track) this.syncLink = null
+      else {
+        const mine = this.bpm, target = link.master.effectiveBpm
+        // Tempo only: re-aligning the beat would jump a playing song.
+        if (mine && target && (Math.abs(mine - link.mine) > 0.05 || Math.abs(target - link.target) > 0.05)) this.sync(link.master, false)
+      }
+    }
     const t = this.time
     if (this.loopActive && this.loopIn != null && this.loopOut != null && t >= this.loopOut) {
       const back = this.loopIn + ((t - this.loopOut) % (this.loopOut - this.loopIn))

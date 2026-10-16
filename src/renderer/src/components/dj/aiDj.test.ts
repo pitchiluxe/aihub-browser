@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parsePicks, buildPrompt } from './aiDj'
-import { parseDuration, cleanVideoTitle } from './libraryData'
+import { parseDuration, cleanVideoTitle, uploadLabel } from './libraryData'
 
 describe('AI DJ reply parsing', () => {
   it('reads a JSON array wrapped in chatter', () => {
@@ -40,5 +40,11 @@ describe('YouTube helpers', () => {
   it('cleans upload titles', () => {
     expect(cleanVideoTitle('Future - WAIT FOR U (Official Audio) ft. Drake, Tems', 'FutureVEVO')).toEqual({ artist: 'Future', title: 'WAIT FOR U ft. Drake, Tems' })
     expect(cleanVideoTitle('Essence', 'Wizkid - Topic')).toEqual({ artist: 'Wizkid', title: 'Essence' })
+  })
+  it('labels each upload so duplicate results can be told apart', () => {
+    expect(uploadLabel('WizKid - Essence ft. Tems (Official Video)', 'WizkidVEVO')).toBe('Official video · WizkidVEVO')
+    expect(uploadLabel('WizKid - Essence ft. Tems (Lyrics)', 'UK Lyrics')).toBe('Lyrics · UK Lyrics')
+    expect(uploadLabel('Essence (Apple Music Live 2022)', 'Wizkid')).toBe('Live · Wizkid')
+    expect(uploadLabel('Essence', 'Wizkid - Topic')).toBe('Audio · Wizkid')
   })
 })

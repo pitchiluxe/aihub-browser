@@ -356,7 +356,18 @@ function Console({ engine }: { engine: DjEngine }) {
     setStageResults({ query, tracks: songs, loading: false })
   }, [])
   const pickResult = useCallback((t: DjTrack, how: PickHow) => {
-    if (how === 'now') { say(`Mixing in ${t.title}`); void mixer.mixNow(t); return }
+    if (how === 'now') {
+      say(`Mixing in ${t.title}`); void mixer.mixNow(t)
+      // Played from the start screen: the song opens a set in its vein. Without
+      // one the stage stayed on "What's the vibe?" with music playing and no
+      // controls, and the music stopped when the song ended.
+      if (!conductor.state.active && t.artist) {
+        void conductor.start(parseBrief(t.artist))
+        conductor.noteStarted(t)
+        setStageResults(null)
+      }
+      return
+    }
     if (how === 'next') {
       if (conductor.state.active && !conductor.state.paused) conductor.queueTrack(t)
       else { setSidelist(s => [t, ...s]); say(`${t.title} plays next`) }
@@ -466,8 +477,10 @@ function Console({ engine }: { engine: DjEngine }) {
       <Library onLoad={load} sidelist={sidelist} setSidelist={setSidelist} automix={automix} setAutomix={setAutomix} mixNow={mixNow} say={say}
         deckIds={layout === '4deck' ? ['A', 'B', 'C', 'D'] : ['A', 'B']} />
 
-      {toast && <div className="dj-toast">{toast}</div>}
     </div>
+    {/* Beside the console, not inside it: the console is display:none under the
+        stage, which hid every answer ("what's playing?") while the stage was up. */}
+    {toast && <div className={`dj-toast${stageView === 'stage' ? ' on-stage' : ''}`} role="status">{toast}</div>}
     </div>
     </DjEnvContext.Provider>
   )
@@ -631,6 +644,8 @@ function TopBar({ engine, mixer, setLog, say, theme, setTheme, look, setLook, la
       const r = await djApi().saveRecording(await blob.arrayBuffer(), 'webm')
       if (r.success) say(`Mix saved to ${r.path}`)
       else if (r.error) say(r.error)
+    } catch {
+      say('The recording could not be saved')
     } finally {
       setSaving(false)
     }
