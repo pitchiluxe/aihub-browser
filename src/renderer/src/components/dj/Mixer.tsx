@@ -5,7 +5,8 @@
 import React, { useSyncExternalStore } from 'react'
 import { Headphones, ArrowLeftRight } from 'lucide-react'
 import type { DjEngine, Deck, EqBand } from './engine/DjEngine'
-import { HFader, Knob, VFader, VuMeter, useDeck } from './controls'
+import { HFader, Knob, NeedleMeter, VFader, VuMeter, useDeck } from './controls'
+import { useDesign } from './designs'
 import VideoMonitor from './VideoMonitor'
 
 function Channel({ deck, letter }: { deck: Deck; letter?: boolean }) {
@@ -50,6 +51,7 @@ export default function Mixer({ engine, view, setView, onBigVideo, fadeSeconds, 
   const left = four ? [C, A] : [A]
   const right = four ? [B, D] : [B]
   useSyncExternalStore(engine.subscribe, engine.getVersion)
+  const needles = useDesign().meter === 'needle' && !four
   // Fade across to whichever side the fader is further from.
   const fadeAcross = () => engine.fading ? engine.setCrossfader(engine.crossfader) : engine.fadeTo(engine.crossfader < 0.5 ? 1 : 0, fadeSeconds)
   return (
@@ -68,6 +70,13 @@ export default function Mixer({ engine, view, setView, onBigVideo, fadeSeconds, 
       <div className="dj-mixer-body">
         {left.map(d => <Channel key={d.id} deck={d} letter={four} />)}
         <div className="dj-mixer-center">
+          {needles ? (
+            // Meter bridge: a stacked pair of analog VU meters for the master.
+            <div className="dj-meters dj-needles">
+              <NeedleMeter read={() => engine.masterDb()[0]} label="L" />
+              <NeedleMeter read={() => engine.masterDb()[1]} label="R" />
+            </div>
+          ) : (
           <div className="dj-meters">
             {left.map(d => <VuMeter key={d.id} read={() => d.meterDb()} height={96} />)}
             <div className="dj-master-meters">
@@ -76,6 +85,7 @@ export default function Mixer({ engine, view, setView, onBigVideo, fadeSeconds, 
             </div>
             {right.map(d => <VuMeter key={d.id} read={() => d.meterDb()} height={96} />)}
           </div>
+          )}
           <Knob value={engine.masterVolume} onChange={v => engine.setMasterVolume(v)} label="MASTER" size={30} center={0} defaultValue={0.85} color="#22c55e" />
           <div className="dj-section-title dj-tight">HEADPHONES</div>
           <div className="dj-row">

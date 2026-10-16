@@ -13,17 +13,10 @@
  * on a steady clock that is only eased towards the track position — the
  * position itself arrives in small uneven steps, which made the spin stutter.
  */
-import React, { useEffect, useRef } from 'react'
+import React, { useRef } from 'react'
 import type { Deck } from './engine/DjEngine'
-import { useDeck, useRafThrottled } from './controls'
-
-const DEG_PER_SEC = 200 // 33⅓ rpm
-/** Further off than this the record jumps instead of easing (seek, cue, hot cue). */
-const SNAP_DEG = 40
-/** One turn of the record, in milliseconds. */
-const REV_MS = (360 / DEG_PER_SEC) * 1000
-/** Track position (degrees of turn) → time within one turn of the spin animation. */
-const angleMs = (deg: number) => ((((deg % 360) + 360) % 360) / 360) * REV_MS
+import { useDeck } from './controls'
+import { useDeckSpin, useScratch } from './jogHooks'
 
 /**
  * The light reflections on the vinyl, painted once per platter size into a
@@ -82,47 +75,16 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
   const rootRef = useRef<HTMLDivElement>(null)
   const discRef = useRef<HTMLDivElement>(null)
   const armRef = useRef<HTMLDivElement>(null)
-  const drag = useRef<{ mode: 'scratch' | 'bend'; last: number; lastT: number; pos: number } | null>(null)
   const armAngle = useRef(-20)
-  const spin = useRef<Animation | null>(null)
 
   const loaded = !!deck.track
   const cover = deck.track?.cover
   const c = size / 2
+  const hand = useScratch(deck, rootRef)
 
-  // The record turns as a compositor animation: the GPU spins it at exactly
-  // the deck's speed without the page producing a frame for it. The page only
-  // lines it up again on play, pause, seek or a tempo change.
-  useEffect(() => {
-    const el = discRef.current
-    if (!el) return
-    const a = el.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }], { duration: REV_MS, iterations: Infinity })
-    a.pause()
-    spin.current = a
-    return () => { a.cancel(); spin.current = null }
-  }, [])
-
-  // Ten checks a second keep the spin true; every frame only while a hand is on the record.
-  useRafThrottled(() => {
-    const a = spin.current
-    if (a) {
-      const target = angleMs(loaded ? deck.time * DEG_PER_SEC : 0)
-      if (loaded && deck.playing && !deck.held) {
-        if (Math.abs(a.playbackRate - deck.rate) > 1e-4) a.updatePlaybackRate(deck.rate)
-        if (a.playState !== 'running') { a.currentTime = target; a.play() }
-        else {
-          let diff = target - (Number(a.currentTime) % REV_MS)
-          if (diff > REV_MS / 2) diff -= REV_MS
-          if (diff < -REV_MS / 2) diff += REV_MS
-          // A seek, cue or hot cue moves the record; small clock wobble does not.
-          if (Math.abs(diff) > REV_MS * (SNAP_DEG / 360) / 4) a.currentTime = target
-        }
-      } else {
-        if (a.playState === 'running') a.pause()
-        a.currentTime = target
-      }
-    }
-    const progress = deck.duration ? Math.min(1, deck.time / deck.duration) : 0
+  // The record turns as a compositor animation (see jogHooks): the GPU spins
+  // it at exactly the deck's speed; the page only lines it up again.
+  useDeckSpin(deck, discRef, progress => {
     // Rest off the record at -20°, lower onto the lead-in at 0°, and track
     // inwards to 16° by the end of the song. Eased so loading swings the arm.
     const armTarget = loaded ? progress * 16 : -20
@@ -133,52 +95,7 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
       const el = armRef.current
       if (el) el.style.transform = `rotate(${armTarget.toFixed(2)}deg)`
     }
-  }, deck.held ? 0 : 100)
-
-  const centre = () => {
-    const r = rootRef.current!.getBoundingClientRect()
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, half: r.width / 2 }
-  }
-  const angleAt = (e: React.PointerEvent) => {
-    const k = centre()
-    return Math.atan2(e.clientY - k.y, e.clientX - k.x) * 180 / Math.PI
-  }
-  const radiusAt = (e: React.PointerEvent) => {
-    const k = centre()
-    return Math.hypot(e.clientX - k.x, e.clientY - k.y) / k.half
-  }
-
-  const onDown = (e: React.PointerEvent) => {
-    if (!loaded || e.button !== 0) return
-    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-    const mode = deck.playing && radiusAt(e) > 0.8 ? 'bend' : 'scratch'
-    drag.current = { mode, last: angleAt(e), lastT: performance.now(), pos: deck.time }
-    if (mode === 'scratch') deck.grab()
-  }
-  const onMove = (e: React.PointerEvent) => {
-    const d = drag.current
-    if (!d) return
-    const a = angleAt(e)
-    let delta = a - d.last
-    if (delta > 180) delta -= 360
-    if (delta < -180) delta += 360
-    const now = performance.now()
-    const dt = Math.max(1, now - d.lastT)
-    d.last = a
-    d.lastT = now
-    if (d.mode === 'scratch') {
-      d.pos += delta / DEG_PER_SEC
-      deck.scratchTo(d.pos)
-    } else deck.setBend((delta / dt) * 0.35) // deg/ms → ±bend
-  }
-  /** Hand off the record — also when the pointer is lost (window blur, capture stolen). */
-  const onUp = () => {
-    const d = drag.current
-    drag.current = null
-    if (!d) return
-    if (d.mode === 'bend') deck.setBend(0)
-    else deck.release()
-  }
+  })
 
   const grooves: React.ReactElement[] = []
   for (let r = c * 0.42; r < c * 0.9; r += 2.2) grooves.push(<circle key={r} cx={c} cy={c} r={r} fill="none" stroke="rgba(255,255,255,0.045)" strokeWidth={0.6} />)
@@ -191,7 +108,7 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
 
   return (
     <div ref={rootRef} className="dj-platter" style={{ width: size, height: size, cursor: loaded ? (deck.held ? 'grabbing' : 'grab') : 'default', touchAction: 'none' }}
-      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onUp}>
+      {...hand}>
       {/* Platter rim */}
       <svg width={size} height={size} style={layer}>
         <defs>

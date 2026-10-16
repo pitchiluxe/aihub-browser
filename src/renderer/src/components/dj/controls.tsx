@@ -4,6 +4,7 @@
  */
 import React, { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import type { Deck } from './engine/DjEngine'
+import { useDesign, type KnobKind } from './designs'
 
 /** Re-render when the deck reports a change. */
 export function useDeck(deck: Deck): number {
@@ -138,6 +139,10 @@ export function Knob({ value, onChange, label, size = 34, center = 0.5, defaultV
   title?: string
 }) {
   const drag = useDragValue(value, onChange, 160)
+  const kind = useDesign().knob
+  if (kind !== 'classic') {
+    return <DesignKnob kind={kind} value={value} onChange={onChange} label={label} size={size} center={center} defaultValue={defaultValue} color={color} title={title} drag={drag} />
+  }
   const angle = -135 + value * 270
   const r = size / 2 - 3
   const arc = (from: number, to: number) => {
@@ -171,30 +176,137 @@ export function Knob({ value, onChange, label, size = 34, center = 0.5, defaultV
             <stop offset="100%" stopColor="#fff" stopOpacity={0} />
           </radialGradient>
         </defs>
-        <circle cx={c} cy={c} r={r + 2.5} fill="#1d1f23" />
+        <circle className="dj-knob-base" cx={c} cy={c} r={r + 2.5} fill="#1d1f23" />
         {Math.abs(value - center) > 0.004 && (
           <path d={arc(Math.min(center, value), Math.max(center, value))} stroke={color} strokeWidth={2.4} fill="none" strokeLinecap="round" />
         )}
         {/* Shadow the knob casts down-right onto the panel. */}
         <circle cx={c + 0.6} cy={c + 1.2} r={r - 0.6} fill="rgba(0,0,0,0.45)" />
         <g transform={`rotate(${angle} ${c} ${c})`}>
-          <circle cx={c} cy={c} r={r - 1} fill="url(#dj-knob-skirt)" stroke="#0e0f11" strokeWidth={0.8} />
+          <circle className="dj-knob-skirt" cx={c} cy={c} r={r - 1} fill="url(#dj-knob-skirt)" stroke="#0e0f11" strokeWidth={0.8} />
           {Array.from({ length: ridges }, (_, i) => {
             const a = (i / ridges) * Math.PI * 2
             return <line key={i} x1={c + Math.cos(a) * (r - 1.2)} y1={c + Math.sin(a) * (r - 1.2)}
               x2={c + Math.cos(a) * (r - 2.6)} y2={c + Math.sin(a) * (r - 2.6)} stroke="rgba(0,0,0,0.4)" strokeWidth={0.7} />
           })}
         </g>
-        <circle cx={c} cy={c} r={r - 2.6} fill="url(#dj-knob-g)" stroke="#6b7078" strokeWidth={0.6} />
+        <circle className="dj-knob-cap" cx={c} cy={c} r={r - 2.6} fill="url(#dj-knob-g)" stroke="#6b7078" strokeWidth={0.6} />
         <ellipse cx={c - r * 0.18} cy={c - r * 0.3} rx={r * 0.5} ry={r * 0.32} fill="url(#dj-knob-spec)" />
         <g transform={`rotate(${angle} ${c} ${c})`}>
           {/* The pointer line is engraved: a dark groove with a lit lower lip. */}
-          <rect x={c - 1.1 + 0.5} y={4.6} width={2.2} height={r * 0.55} rx={1} fill="rgba(255,255,255,0.7)" />
-          <rect x={c - 1.1} y={4} width={2.2} height={r * 0.55} rx={1} fill="#16181b" />
+          <rect className="dj-knob-lip" x={c - 1.1 + 0.5} y={4.6} width={2.2} height={r * 0.55} rx={1} fill="rgba(255,255,255,0.7)" />
+          <rect className="dj-knob-ptr" x={c - 1.1} y={4} width={2.2} height={r * 0.55} rx={1} fill="#16181b" />
         </g>
       </svg>
       {label && <span className="dj-knob-label">{label}</span>}
     </div>
+  )
+}
+
+/**
+ * The design looks' knobs (designs.ts):
+ *   chicken — a bakelite chicken-head pointer on a round skirt, as on valve
+ *             amps and vintage mixers: the whole pointer turns.
+ *   ledring — a flat rubber knob inside a ring of LEDs that light from the
+ *             centre (bipolar) or from zero to the value, like a controller.
+ */
+function DesignKnob({ kind, value, onChange, label, size, center, defaultValue, color, title, drag }: {
+  kind: KnobKind; value: number; onChange: (v: number) => void; label?: string; size: number; center: number
+  defaultValue: number; color: string; title?: string; drag: ReturnType<typeof useDragValue>
+}) {
+  const c = size / 2
+  const angle = -135 + value * 270
+  const r = size / 2 - 3
+  const body = kind === 'chicken' ? (
+    <>
+      <circle className="dj-knob-base" cx={c} cy={c} r={r + 2} fill="#141414" />
+      {/* Scale dots around the skirt. */}
+      {Array.from({ length: 11 }, (_, i) => {
+        const a = ((-135 + i * 27) - 90) * Math.PI / 180
+        return <circle key={i} cx={c + Math.cos(a) * (r + 0.5)} cy={c + Math.sin(a) * (r + 0.5)} r={0.7} fill="rgba(255,255,255,0.55)" />
+      })}
+      <circle cx={c + 0.6} cy={c + 1.4} r={r * 0.62} fill="rgba(0,0,0,0.45)" />
+      <g transform={`rotate(${angle} ${c} ${c})`}>
+        {/* The chicken head: round boss with a long tapered pointer. */}
+        <path className="dj-knob-cap" d={`M${c - r * 0.42} ${c + r * 0.25} Q${c - r * 0.5} ${c - r * 0.35} ${c - r * 0.12} ${c - r * 0.92} L${c + r * 0.12} ${c - r * 0.92} Q${c + r * 0.5} ${c - r * 0.35} ${c + r * 0.42} ${c + r * 0.25} A${r * 0.45} ${r * 0.45} 0 0 1 ${c - r * 0.42} ${c + r * 0.25} Z`}
+          fill="#f3e7cf" stroke="#3a2e12" strokeWidth={0.6} />
+        <rect className="dj-knob-ptr" x={c - 0.8} y={c - r * 0.88} width={1.6} height={r * 0.6} rx={0.8} fill="#1d1c1a" />
+        <ellipse cx={c - r * 0.12} cy={c - r * 0.1} rx={r * 0.18} ry={r * 0.32} fill="rgba(255,255,255,0.35)" />
+      </g>
+    </>
+  ) : (
+    <>
+      <circle className="dj-knob-base" cx={c} cy={c} r={r + 2.5} fill="#0b0c0e" />
+      {Array.from({ length: 15 }, (_, i) => {
+        const v = i / 14
+        const lo = Math.min(center, value) - 0.001, hi = Math.max(center, value) + 0.001
+        const lit = v >= lo && v <= hi && Math.abs(value - center) > 0.02 || Math.abs(v - center) < 0.035
+        const a = ((-135 + v * 270) - 90) * Math.PI / 180
+        return <circle key={i} className={lit ? 'dj-ledk-on' : 'dj-ledk-off'} cx={c + Math.cos(a) * (r + 0.2)} cy={c + Math.sin(a) * (r + 0.2)} r={Math.max(1, size * 0.045)}
+          fill={lit ? color : 'rgba(255,255,255,0.08)'} />
+      })}
+      <circle className="dj-knob-cap" cx={c} cy={c} r={r * 0.68} fill="#1c1d21" stroke="#000" strokeWidth={0.8} />
+      <circle cx={c} cy={c} r={r * 0.68} fill="url(#dj-knob-spec)" opacity={0.35} />
+      <g transform={`rotate(${angle} ${c} ${c})`}>
+        <rect className="dj-knob-ptr" x={c - 1} y={c - r * 0.64} width={2} height={r * 0.34} rx={1} fill="#f4f4f6" />
+      </g>
+    </>
+  )
+  return (
+    <div className={`dj-knob dj-knob-${kind}`} title={title ?? label}>
+      <svg width={size} height={size} {...drag} onDoubleClick={() => onChange(defaultValue)} role="slider"
+        aria-label={title ?? label} aria-valuenow={Math.round(value * 100)} aria-valuemin={0} aria-valuemax={100}>
+        <defs>
+          <radialGradient id="dj-knob-spec" cx="35%" cy="28%" r="45%">
+            <stop offset="0%" stopColor="#fff" stopOpacity={0.9} />
+            <stop offset="100%" stopColor="#fff" stopOpacity={0} />
+          </radialGradient>
+        </defs>
+        {body}
+      </svg>
+      {label && <span className="dj-knob-label">{label}</span>}
+    </div>
+  )
+}
+
+/**
+ * An analog VU meter: a needle over a printed scale, with VU ballistics (it
+ * rises and falls over ~300 ms instead of jumping). The needle is the only
+ * thing that moves, by a transform on its own element — no React render.
+ * 0 VU sits at -18 dBFS, the usual line-up level.
+ */
+export function NeedleMeter({ read, label }: { read: () => number; label?: string }) {
+  const needleRef = useRef<SVGGElement>(null)
+  const vu = useRef(-20)
+  const last = useRef(performance.now())
+  useRafThrottled(now => {
+    const db = read()
+    const target = Math.max(-20, Math.min(3, (Number.isFinite(db) ? db : -100) + 18))
+    const dt = Math.min(0.2, (now - last.current) / 1000)
+    last.current = now
+    vu.current += (target - vu.current) * (1 - Math.exp(-dt / 0.3))
+    const el = needleRef.current
+    if (el) el.setAttribute('transform', `rotate(${(-48 + ((vu.current + 20) / 23) * 96).toFixed(2)} 50 62)`)
+  }, 33)
+  const marks = [-20, -10, -7, -5, -3, -1, 0, 1, 2, 3]
+  const ang = (v: number) => ((-48 + ((v + 20) / 23) * 96) - 90) * Math.PI / 180
+  const p = (v: number, r: number) => `${50 + Math.cos(ang(v)) * r} ${62 + Math.sin(ang(v)) * r}`
+  return (
+    <svg className="dj-needle" viewBox="0 0 100 52" preserveAspectRatio="xMidYMid meet" role="img" aria-label={`${label ?? ''} level`}>
+      <rect className="dj-needle-face" x={1} y={1} width={98} height={50} rx={4} />
+      <path d={`M${p(-20, 44)} A44 44 0 0 1 ${p(0, 44)}`} className="dj-needle-scale" fill="none" strokeWidth={1.2} />
+      <path d={`M${p(0, 44)} A44 44 0 0 1 ${p(3, 44)}`} className="dj-needle-red" fill="none" strokeWidth={3} />
+      {marks.map(m => <line key={m} x1={p(m, 44).split(' ')[0]} y1={p(m, 44).split(' ')[1]} x2={p(m, m === 0 ? 37 : 40).split(' ')[0]} y2={p(m, m === 0 ? 37 : 40).split(' ')[1]}
+        className={m > 0 ? 'dj-needle-red' : 'dj-needle-scale'} strokeWidth={m === 0 ? 1.4 : 0.9} />)}
+      {[-20, -10, -5, 0, 3].map(m => <text key={m} x={p(m, 31).split(' ')[0]} y={p(m, 31).split(' ')[1]} className={m > 0 ? 'dj-needle-num dj-needle-redtxt' : 'dj-needle-num'} textAnchor="middle" dominantBaseline="middle">{m > 0 ? `+${m}` : m}</text>)}
+      <text x={50} y={44} textAnchor="middle" className="dj-needle-vu">VU{label ? ` ${label}` : ''}</text>
+      <g ref={needleRef} transform="rotate(-48 50 62)">
+        <line x1={50} y1={62} x2={50} y2={17} className="dj-needle-hand" strokeWidth={1.1} strokeLinecap="round" />
+      </g>
+      {/* Pivot cover and a glass glare across the window. */}
+      <rect x={1} y={46} width={98} height={5} rx={2} className="dj-needle-cover" />
+      <path d="M2 2 H98 V14 Q50 22 2 12 Z" fill="rgba(255,255,255,0.14)" />
+    </svg>
   )
 }
 

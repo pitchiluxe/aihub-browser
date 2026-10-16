@@ -1,0 +1,361 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Ten material skins (2026-10-16): each one is a real finish you could touch,
+   not a colour swap. Built like dj-skins-pro.css — data-dj-look restyles the
+   hardware, deck A panels are `:not(.dj-mirror)`, deck B are `.dj-mirror`.
+   Static gradients only: no filters, blend modes or animation (they starve
+   the YouTube players). Platters keep their own vinyl — only the rim and the
+   shadow around them change.
+     Walnut Hi-Fi      — walnut cheeks, brushed aluminium, amber meters
+     Rose Gold         — rose-gold anodised aluminium, champagne trim
+     Porcelain         — glossy white ceramic with chrome (light library)
+     Field Olive       — olive-drab field gear, stencil labels
+     Tube Amp          — black tolex, gold piping, valve glow
+     Concrete Loft     — raw cast concrete, safety yellow
+     Titanium          — bead-blasted titanium, cyan / lime
+     Mahogany Console  — dark mahogany with leather and brass
+     Ocean Anodized    — deep teal anodised aluminium, aqua / coral
+     Obsidian Glass    — black glass with real reflections
+   Loaded after dj-skins-pro.css.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Shared: deck colours along the top edge of each deck's panels and on the letters. */
+.aihub-dj:is([data-dj-look='walnut-hifi'], [data-dj-look='rose-gold'], [data-dj-look='porcelain'], [data-dj-look='field-olive'], [data-dj-look='tube-amp'], [data-dj-look='concrete'], [data-dj-look='titanium'], [data-dj-look='mahogany'], [data-dj-look='ocean'], [data-dj-look='obsidian']) :is(.dj-clock, .dj-info, .dj-pads, .dj-tt):not(.dj-mirror) { border-top: 2px solid var(--skin-a); }
+.aihub-dj:is([data-dj-look='walnut-hifi'], [data-dj-look='rose-gold'], [data-dj-look='porcelain'], [data-dj-look='field-olive'], [data-dj-look='tube-amp'], [data-dj-look='concrete'], [data-dj-look='titanium'], [data-dj-look='mahogany'], [data-dj-look='ocean'], [data-dj-look='obsidian']) :is(.dj-clock, .dj-info, .dj-pads, .dj-tt).dj-mirror { border-top: 2px solid var(--skin-b); }
+.aihub-dj:is([data-dj-look='walnut-hifi'], [data-dj-look='rose-gold'], [data-dj-look='porcelain'], [data-dj-look='field-olive'], [data-dj-look='tube-amp'], [data-dj-look='concrete'], [data-dj-look='titanium'], [data-dj-look='mahogany'], [data-dj-look='ocean'], [data-dj-look='obsidian']) .dj-deck-letter { color: var(--skin-a); }
+.aihub-dj:is([data-dj-look='walnut-hifi'], [data-dj-look='rose-gold'], [data-dj-look='porcelain'], [data-dj-look='field-olive'], [data-dj-look='tube-amp'], [data-dj-look='concrete'], [data-dj-look='titanium'], [data-dj-look='mahogany'], [data-dj-look='ocean'], [data-dj-look='obsidian']) .dj-mirror .dj-deck-letter { color: var(--skin-b); }
+/* Shared: every skin here has real screws, slotted, with a cast shadow. */
+.aihub-dj:is([data-dj-look='walnut-hifi'], [data-dj-look='rose-gold'], [data-dj-look='porcelain'], [data-dj-look='field-olive'], [data-dj-look='tube-amp'], [data-dj-look='concrete'], [data-dj-look='titanium'], [data-dj-look='mahogany'], [data-dj-look='ocean'], [data-dj-look='obsidian']) .dj-panel::before,
+.aihub-dj:is([data-dj-look='walnut-hifi'], [data-dj-look='rose-gold'], [data-dj-look='porcelain'], [data-dj-look='field-olive'], [data-dj-look='tube-amp'], [data-dj-look='concrete'], [data-dj-look='titanium'], [data-dj-look='mahogany'], [data-dj-look='ocean'], [data-dj-look='obsidian']) .dj-panel::after {
+  width: 7px; height: 7px;
+  background: linear-gradient(45deg, transparent 44%, rgba(0,0,0,0.6) 44% 56%, transparent 56%), var(--dj-screw);
+  box-shadow: 0.5px 1px 1px rgba(0,0,0,0.55), inset 0 0 0 0.5px rgba(0,0,0,0.45);
+}
+
+/* ═══ WALNUT HI-FI — 70s receiver: walnut cheeks, brushed aluminium, amber meters ═══ */
+.aihub-dj[data-dj-look='walnut-hifi'] {
+  --dj-metal: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0 1px, rgba(0,0,0,0.035) 1px 2px), linear-gradient(180deg, #e9e6df 0%, #cfcbc2 50%, #b9b4aa 100%);
+  --dj-edge: #6b6357; --dj-lcd: #120b02;
+  --dj-text: #2b241a; --dj-label: #2b241a; --dj-label-soft: #8a5a1f;
+  --dj-light: linear-gradient(#fbf6ea, #d9d1bf); --dj-light-ink: #2b241a; --dj-light-edge: #7a705f;
+  --dj-screw: radial-gradient(circle at 35% 30%, #fffaf0, #a59c8c 62%, #5e5648);
+  --skin-a: #f59e0b; --skin-b: #e7d3a8;
+  background:
+    linear-gradient(90deg, #5a3218 0, #3d200d 6px, #6b3d1d 10px, transparent 10px, transparent calc(100% - 10px), #6b3d1d calc(100% - 10px), #3d200d calc(100% - 6px), #5a3218 100%),
+    repeating-linear-gradient(88deg, rgba(0,0,0,0.12) 0 3px, rgba(255,220,180,0.04) 3px 7px, rgba(0,0,0,0.06) 7px 9px),
+    linear-gradient(180deg, #4a2a14, #2a170a);
+}
+.aihub-dj[data-dj-look='walnut-hifi'] :is(.dj-panel, .dj-top) {
+  background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.08) 32%, transparent 34%, rgba(0,0,0,0.06) 100%), var(--dj-metal);
+  border-color: #6b6357; border-radius: 3px;
+  box-shadow: inset 0 1px rgba(255,255,255,0.95), inset 0 -2px 3px rgba(0,0,0,0.15), 0 3px 8px rgba(0,0,0,0.55);
+  color: var(--dj-text);
+}
+.aihub-dj[data-dj-look='walnut-hifi'] .dj-lcd {
+  background: linear-gradient(168deg, rgba(255,240,200,0.14) 0%, rgba(255,240,200,0.03) 42%, transparent 43%), radial-gradient(ellipse at 50% 30%, #2d1c05, #0d0801 78%);
+  border-color: #000; box-shadow: inset 0 2px 8px rgba(0,0,0,0.9), 0 1px rgba(255,255,255,0.7); text-shadow: 0 0 7px rgba(251,191,36,0.55); color: #fde7b0;
+}
+.aihub-dj[data-dj-look='walnut-hifi'] :is(.dj-section-title, .dj-knob-label) { color: #3d3326; letter-spacing: 1.2px; text-shadow: 0 1px 0 rgba(255,255,255,0.7); font-variant: small-caps; }
+.aihub-dj[data-dj-look='walnut-hifi'] .dj-tbtn { background: linear-gradient(#fbf6ea, #d4cbb6); color: #2b241a; border-color: #7a705f; box-shadow: inset 0 1px #fff, inset 0 -3px 4px rgba(0,0,0,0.12), 0 3px 4px rgba(0,0,0,0.35); }
+.aihub-dj[data-dj-look='walnut-hifi'] .dj-knob svg .dj-knob-base { fill: #2a2118; }
+.aihub-dj[data-dj-look='walnut-hifi'] .dj-knob svg :is(.dj-knob-cap, .dj-knob-skirt) { fill: #e4ddcd; stroke: #8b8170; }
+.aihub-dj[data-dj-look='walnut-hifi'] .dj-knob svg .dj-knob-ptr { fill: #8a3b12; }
+.aihub-dj[data-dj-look='walnut-hifi'] .dj-platter { box-shadow: 0 0 0 4px #b9b4aa, 0 0 0 6px #6b6357, 0 12px 22px rgba(0,0,0,0.6); }
+.aihub-dj[data-dj-look='walnut-hifi'] :is(.dj-vfader-slot, .dj-hfader-slot) { background: linear-gradient(90deg, #120b02, #2a1d0b 50%, #120b02); box-shadow: inset 0 1px 3px #000, 0 1px rgba(255,255,255,0.7); }
+.aihub-dj[data-dj-look='walnut-hifi'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#5a3218, #3d200d 45%, #f5e6c4 47% 53%, #3d200d 55%, #5a3218); border-color: #1d0f05; }
+.aihub-dj[data-dj-look='walnut-hifi'] .dj-vu i.lit { background: #fbbf24; }
+.aihub-dj[data-dj-look='walnut-hifi'] :is(.dj-library, .dj-side) { background: #1e150c; }
+.aihub-dj[data-dj-look='walnut-hifi'] .dj-tree { background: #24190e; }
+
+/* ═══ ROSE GOLD — rose-gold anodised aluminium with champagne trim ═══ */
+.aihub-dj[data-dj-look='rose-gold'] {
+  --dj-metal: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0 1px, rgba(120,60,50,0.03) 1px 2px), linear-gradient(180deg, #f6d6c8 0%, #e3b3a0 48%, #c98e7a 100%);
+  --dj-edge: #8a5546; --dj-lcd: #1a0f0e;
+  --dj-text: #3b1f18; --dj-label: #3b1f18; --dj-label-soft: #9a4f3d;
+  --dj-light: linear-gradient(#fff1ea, #ebc7b8); --dj-light-ink: #3b1f18; --dj-light-edge: #a06a5a;
+  --dj-screw: radial-gradient(circle at 35% 30%, #fff4ee, #c48d7c 60%, #7a4a3d);
+  --skin-a: #e11d74; --skin-b: #d4a373;
+  background: radial-gradient(ellipse at 50% -10%, rgba(255,210,190,0.25), transparent 60%), linear-gradient(180deg, #4a2c26, #2a1814);
+}
+.aihub-dj[data-dj-look='rose-gold'] :is(.dj-panel, .dj-top) {
+  background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.1) 30%, transparent 32%, rgba(255,255,255,0.12) 100%), var(--dj-metal);
+  border-color: #8a5546; border-radius: 8px;
+  box-shadow: inset 0 1px rgba(255,255,255,0.95), inset 0 -2px 4px rgba(120,50,40,0.18), 0 3px 10px rgba(40,10,5,0.55);
+  color: var(--dj-text);
+}
+.aihub-dj[data-dj-look='rose-gold'] .dj-lcd { background: linear-gradient(168deg, rgba(255,220,210,0.14), rgba(255,220,210,0.03) 42%, transparent 43%), linear-gradient(180deg, #231413, #120a09); border-color: #5a3028; box-shadow: inset 0 2px 7px rgba(0,0,0,0.9), 0 1px rgba(255,255,255,0.6); color: #ffe4dc; }
+.aihub-dj[data-dj-look='rose-gold'] :is(.dj-section-title, .dj-knob-label) { color: #5a2d22; letter-spacing: 1.4px; text-shadow: 0 1px 0 rgba(255,255,255,0.6); }
+.aihub-dj[data-dj-look='rose-gold'] .dj-tbtn { background: linear-gradient(#fff1ea, #e8bfae); color: #3b1f18; border-color: #a06a5a; box-shadow: inset 0 1px #fff, 0 3px 4px rgba(60,20,10,0.35); border-radius: 7px; }
+.aihub-dj[data-dj-look='rose-gold'] :is(.dj-btn, .dj-pad, .dj-stem) { border-radius: 6px; }
+.aihub-dj[data-dj-look='rose-gold'] .dj-knob svg .dj-knob-base { fill: #6e3e32; }
+.aihub-dj[data-dj-look='rose-gold'] .dj-knob svg :is(.dj-knob-cap, .dj-knob-skirt) { fill: #f2c9b8; stroke: #a06a5a; }
+.aihub-dj[data-dj-look='rose-gold'] .dj-knob svg .dj-knob-ptr { fill: #5a2d22; }
+.aihub-dj[data-dj-look='rose-gold'] .dj-platter { box-shadow: 0 0 0 4px #e3b3a0, 0 0 0 6px #8a5546, 0 12px 22px rgba(40,10,5,0.6); }
+.aihub-dj[data-dj-look='rose-gold'] :is(.dj-vfader-slot, .dj-hfader-slot) { background: #2a1512; box-shadow: inset 0 1px 3px #000, 0 1px rgba(255,255,255,0.6); }
+.aihub-dj[data-dj-look='rose-gold'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#fbe2d7, #c98e7a); border-color: #6e3e32; }
+.aihub-dj[data-dj-look='rose-gold'] :is(.dj-library, .dj-side) { background: #241512; }
+.aihub-dj[data-dj-look='rose-gold'] .dj-tree { background: #2c1a16; }
+
+/* ═══ PORCELAIN — glossy white ceramic with chrome trim (light library) ═══ */
+.aihub-dj[data-dj-look='porcelain'] {
+  --dj-metal: linear-gradient(180deg, #ffffff 0%, #f4f5f7 55%, #e6e8ec 100%);
+  --dj-edge: #b8bec7; --dj-lcd: #0f1216;
+  --dj-text: #1b2230; --dj-label: #1b2230; --dj-label-soft: #4d5a6e;
+  --dj-light: linear-gradient(#ffffff, #eceef2); --dj-light-ink: #1b2230; --dj-light-edge: #b8bec7;
+  --dj-screw: radial-gradient(circle at 35% 30%, #ffffff, #c7ccd4 55%, #7d848f);
+  --skin-a: #0ea5e9; --skin-b: #fb7185;
+  background: linear-gradient(180deg, #d9dde3, #c3c8d0);
+}
+.aihub-dj[data-dj-look='porcelain'] :is(.dj-panel, .dj-top) {
+  /* Glaze: a sharp window reflection high up, a soft one low down. */
+  background: linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0.65) 18%, rgba(255,255,255,0) 22%, rgba(255,255,255,0) 82%, rgba(255,255,255,0.5) 100%), var(--dj-metal);
+  border: 1px solid #c9ced6; border-radius: 14px;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.9), inset 0 -3px 6px rgba(27,34,48,0.08), 0 0 0 1px #9aa2ae, 0 6px 14px rgba(27,34,48,0.25);
+  color: var(--dj-text);
+}
+.aihub-dj[data-dj-look='porcelain'] .dj-lcd { border-radius: 8px; border-color: #7d848f; box-shadow: inset 0 2px 6px rgba(0,0,0,0.85), 0 0 0 2px #e6e8ec, 0 0 0 3px #9aa2ae; }
+.aihub-dj[data-dj-look='porcelain'] :is(.dj-section-title, .dj-knob-label) { color: #33405a; letter-spacing: 1.4px; text-shadow: none; }
+.aihub-dj[data-dj-look='porcelain'] .dj-tbtn { background: linear-gradient(#ffffff, #e9ecf0); color: #1b2230; border-color: #b8bec7; border-radius: 10px; box-shadow: inset 0 1px #fff, 0 2px 5px rgba(27,34,48,0.2); }
+.aihub-dj[data-dj-look='porcelain'] :is(.dj-btn, .dj-pad, .dj-stem, .dj-mini) { border-radius: 8px; }
+.aihub-dj[data-dj-look='porcelain'] .dj-knob svg .dj-knob-base { fill: #cfd4db; }
+.aihub-dj[data-dj-look='porcelain'] .dj-knob svg :is(.dj-knob-cap, .dj-knob-skirt) { fill: #ffffff; stroke: #9aa2ae; }
+.aihub-dj[data-dj-look='porcelain'] .dj-knob svg .dj-knob-ptr { fill: #0284c7; }
+.aihub-dj[data-dj-look='porcelain'] .dj-platter { box-shadow: 0 0 0 4px #ffffff, 0 0 0 5px #9aa2ae, 0 10px 20px rgba(27,34,48,0.3); }
+.aihub-dj[data-dj-look='porcelain'] :is(.dj-vfader-slot, .dj-hfader-slot) { background: #c3c8d0; box-shadow: inset 0 1px 2px rgba(27,34,48,0.35); }
+.aihub-dj[data-dj-look='porcelain'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#ffffff, #d7dbe1); border-color: #8a929e; }
+.aihub-dj[data-dj-look='porcelain'] :is(.dj-library, .dj-side, .dj-tree, .dj-browser) { background: #f7f8fa; color: #1b2230; border-color: #d4d8de; }
+.aihub-dj[data-dj-look='porcelain'] :is(.dj-search, .dj-side-head, .dj-tree-title, .dj-count) { color: #4d5a6e; border-color: #d4d8de; }
+.aihub-dj[data-dj-look='porcelain'] .dj-search input { background: #ffffff; color: #1b2230; border-color: #c9ced6; }
+.aihub-dj[data-dj-look='porcelain'] .dj-table { color: #1b2230; }
+.aihub-dj[data-dj-look='porcelain'] .dj-thead { background: #eceef2; border-color: #d4d8de; }
+.aihub-dj[data-dj-look='porcelain'] .dj-th { border-color: #d4d8de; color: #4d5a6e; }
+.aihub-dj[data-dj-look='porcelain'] .dj-node-on { background: #e0f2fe !important; }
+.aihub-dj[data-dj-look='porcelain'] :is(.dj-ic-folder, .dj-empty, .dj-side-empty, .dj-tree-hint) { color: #5b6880; }
+
+/* ═══ FIELD OLIVE — olive-drab field equipment, stencilled labels ═══ */
+.aihub-dj[data-dj-look='field-olive'] {
+  --dj-metal: radial-gradient(circle at 20% 30%, rgba(255,255,255,0.035) 0 1px, transparent 1px) 0 0 / 5px 5px, linear-gradient(180deg, #5f6a3e 0%, #4d5732 55%, #3e4628 100%);
+  --dj-edge: #23281a; --dj-lcd: #0a0d06;
+  --dj-text: #e8e6d2; --dj-label: #ece9cf; --dj-label-soft: #c9c290;
+  --dj-light: linear-gradient(#6d774a, #545d38); --dj-light-ink: #f1efd9; --dj-light-edge: #23281a;
+  --dj-screw: radial-gradient(circle at 35% 30%, #d9d6b8, #6b6a4d 60%, #2d2c1e);
+  --skin-a: #f97316; --skin-b: #e4d29b;
+  background: linear-gradient(180deg, #2b3020, #1a1d13);
+}
+.aihub-dj[data-dj-look='field-olive'] :is(.dj-panel, .dj-top) {
+  background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 30%, rgba(0,0,0,0.08) 100%), var(--dj-metal);
+  border: 1px solid #23281a; border-radius: 4px;
+  box-shadow: inset 0 1px rgba(255,255,255,0.12), inset 0 0 0 2px rgba(0,0,0,0.12), 0 3px 8px rgba(0,0,0,0.6);
+  color: var(--dj-text);
+}
+.aihub-dj[data-dj-look='field-olive'] .dj-lcd { background: linear-gradient(168deg, rgba(200,255,150,0.08), transparent 42%), radial-gradient(ellipse at 50% 30%, #18210c, #070903 78%); border-color: #000; box-shadow: inset 0 2px 8px rgba(0,0,0,0.9); color: #c7f59a; text-shadow: 0 0 6px rgba(163,230,53,0.45); }
+.aihub-dj[data-dj-look='field-olive'] :is(.dj-section-title, .dj-knob-label) { color: #f1efd9; letter-spacing: 2px; text-transform: uppercase; font-family: 'Courier New', ui-monospace, monospace; font-weight: 900; text-shadow: 0 1px 0 rgba(0,0,0,0.5); }
+.aihub-dj[data-dj-look='field-olive'] .dj-tbtn { background: linear-gradient(#2a2e1f, #1b1e14); color: #f1efd9; border-color: #0d0f09; border-radius: 3px; box-shadow: inset 0 1px rgba(255,255,255,0.08), 0 3px 4px rgba(0,0,0,0.6); }
+.aihub-dj[data-dj-look='field-olive'] .dj-knob svg .dj-knob-base { fill: #14170e; }
+.aihub-dj[data-dj-look='field-olive'] .dj-knob svg :is(.dj-knob-cap, .dj-knob-skirt) { fill: #2a2e1f; stroke: #0d0f09; }
+.aihub-dj[data-dj-look='field-olive'] .dj-knob svg .dj-knob-ptr { fill: #f97316; }
+.aihub-dj[data-dj-look='field-olive'] .dj-platter { box-shadow: 0 0 0 4px #23281a, 0 0 0 6px #6d774a, 0 12px 22px rgba(0,0,0,0.65); }
+.aihub-dj[data-dj-look='field-olive'] :is(.dj-vfader-slot, .dj-hfader-slot) { background: #0d0f09; box-shadow: inset 0 1px 3px #000; }
+.aihub-dj[data-dj-look='field-olive'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#2a2e1f, #14170e 45%, #f97316 47% 53%, #14170e 55%, #2a2e1f); border-color: #000; }
+.aihub-dj[data-dj-look='field-olive'] :is(.dj-library, .dj-side) { background: #1d2015; }
+.aihub-dj[data-dj-look='field-olive'] .dj-tree { background: #23271a; }
+
+/* ═══ TUBE AMP — black tolex, gold piping, valve glow ═══ */
+.aihub-dj[data-dj-look='tube-amp'] {
+  /* Tolex: a fine pebbled vinyl grain. */
+  --dj-metal: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.045) 0 0.8px, transparent 1.2px) 0 0 / 3px 3px, radial-gradient(circle at 50% 50%, rgba(0,0,0,0.25) 0 0.8px, transparent 1.2px) 1.5px 1.5px / 3px 3px, linear-gradient(180deg, #1d1c1a, #121110);
+  --dj-edge: #000; --dj-lcd: #120601;
+  --dj-text: #efe2c4; --dj-label: #e7c873; --dj-label-soft: #b48a3c;
+  --dj-light: linear-gradient(#2b2925, #1a1917); --dj-light-ink: #f5e6c4; --dj-light-edge: #000;
+  --dj-screw: radial-gradient(circle at 35% 30%, #fff1c2, #b8913f 58%, #5a4318);
+  --skin-a: #fb923c; --skin-b: #e7c873;
+  background: linear-gradient(180deg, #0e0d0c, #050505);
+}
+.aihub-dj[data-dj-look='tube-amp'] :is(.dj-panel, .dj-top) {
+  background: var(--dj-metal);
+  border: 1px solid #000; border-radius: 6px;
+  /* Gold piping just inside the edge. */
+  box-shadow: inset 0 0 0 2px #0a0908, inset 0 0 0 3px #b8913f, inset 0 0 0 4px #0a0908, 0 4px 12px rgba(0,0,0,0.75);
+  color: var(--dj-text);
+}
+.aihub-dj[data-dj-look='tube-amp'] .dj-lcd {
+  /* A warm valve glow behind smoked glass. */
+  background: linear-gradient(168deg, rgba(255,220,170,0.1), transparent 42%), radial-gradient(ellipse at 50% 120%, rgba(251,146,60,0.45), rgba(120,40,0,0.15) 45%, #0c0401 75%);
+  border-color: #000; box-shadow: inset 0 2px 8px rgba(0,0,0,0.9), 0 0 0 1px #5a4318; color: #ffd8a8; text-shadow: 0 0 8px rgba(251,146,60,0.7);
+}
+.aihub-dj[data-dj-look='tube-amp'] :is(.dj-section-title, .dj-knob-label) { color: #e7c873; letter-spacing: 2px; font-family: Georgia, 'Times New Roman', serif; font-style: italic; text-shadow: 0 1px 0 #000; }
+.aihub-dj[data-dj-look='tube-amp'] .dj-tbtn { background: linear-gradient(#f3e7cf, #cbb98f); color: #1d1c1a; border-color: #5a4318; border-radius: 4px; box-shadow: inset 0 1px #fff8e6, 0 3px 4px rgba(0,0,0,0.6); }
+.aihub-dj[data-dj-look='tube-amp'] :is(.dj-btn, .dj-stem) { border-color: #000; }
+/* Chicken-head knobs: cream cap, dark pointer. */
+.aihub-dj[data-dj-look='tube-amp'] .dj-knob svg .dj-knob-base { fill: #050505; }
+.aihub-dj[data-dj-look='tube-amp'] .dj-knob svg :is(.dj-knob-cap, .dj-knob-skirt) { fill: #f3e7cf; stroke: #5a4318; }
+.aihub-dj[data-dj-look='tube-amp'] .dj-knob svg .dj-knob-ptr { fill: #1d1c1a; }
+.aihub-dj[data-dj-look='tube-amp'] .dj-platter { box-shadow: 0 0 0 3px #000, 0 0 0 5px #b8913f, 0 0 26px rgba(251,146,60,0.25), 0 12px 22px rgba(0,0,0,0.75); }
+.aihub-dj[data-dj-look='tube-amp'] :is(.dj-vfader-slot, .dj-hfader-slot) { background: #000; box-shadow: inset 0 0 0 1px #5a4318; }
+.aihub-dj[data-dj-look='tube-amp'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#f3e7cf, #b8a67c); border-color: #000; }
+.aihub-dj[data-dj-look='tube-amp'] .dj-vu i.lit { background: #fb923c; }
+.aihub-dj[data-dj-look='tube-amp'] :is(.dj-library, .dj-side) { background: #0d0c0b; }
+.aihub-dj[data-dj-look='tube-amp'] .dj-tree { background: #12110f; }
+
+/* ═══ CONCRETE LOFT — raw cast concrete, safety yellow ═══ */
+.aihub-dj[data-dj-look='concrete'] {
+  /* Cast concrete: speckle, air holes and a cloudy pour. */
+  --dj-metal:
+    radial-gradient(circle at 30% 40%, rgba(0,0,0,0.18) 0 1px, transparent 1.5px) 0 0 / 23px 19px,
+    radial-gradient(circle at 70% 60%, rgba(255,255,255,0.12) 0 1px, transparent 1.5px) 0 0 / 11px 13px,
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.06) 0 0.6px, transparent 0.9px) 0 0 / 4px 4px,
+    radial-gradient(ellipse at 20% 10%, rgba(255,255,255,0.18), transparent 50%),
+    radial-gradient(ellipse at 80% 90%, rgba(0,0,0,0.12), transparent 55%),
+    linear-gradient(180deg, #a6a6a1, #8d8d88);
+  --dj-edge: #4a4a46; --dj-lcd: #0c0c0b;
+  --dj-text: #1c1c1a; --dj-label: #141412; --dj-label-soft: #3d3d39;
+  --dj-light: linear-gradient(#bdbdb8, #9d9d98); --dj-light-ink: #141412; --dj-light-edge: #4a4a46;
+  --dj-screw: radial-gradient(circle at 35% 30%, #e7e7e4, #7c7c78 60%, #2e2e2c);
+  --skin-a: #facc15; --skin-b: #f5f5f4;
+  background: linear-gradient(180deg, #5d5d59, #3f3f3c);
+}
+.aihub-dj[data-dj-look='concrete'] :is(.dj-panel, .dj-top) {
+  background: var(--dj-metal);
+  border: 1px solid #4a4a46; border-radius: 2px;
+  box-shadow: inset 0 1px rgba(255,255,255,0.25), inset 0 -2px 4px rgba(0,0,0,0.18), 0 4px 10px rgba(0,0,0,0.5);
+  color: var(--dj-text);
+}
+.aihub-dj[data-dj-look='concrete'] .dj-lcd { border-radius: 2px; border-color: #000; box-shadow: inset 0 2px 8px rgba(0,0,0,0.9), 0 1px rgba(255,255,255,0.35); }
+.aihub-dj[data-dj-look='concrete'] :is(.dj-section-title, .dj-knob-label) { color: #141412; letter-spacing: 1.8px; text-transform: uppercase; text-shadow: 0 1px 0 rgba(255,255,255,0.35); }
+.aihub-dj[data-dj-look='concrete'] .dj-tbtn { background: linear-gradient(#facc15, #d4a90c); color: #141412; border-color: #4a3c05; border-radius: 2px; box-shadow: inset 0 1px rgba(255,255,255,0.5), 0 3px 4px rgba(0,0,0,0.45); }
+.aihub-dj[data-dj-look='concrete'] :is(.dj-btn, .dj-pad, .dj-stem, .dj-mini) { border-radius: 2px; }
+.aihub-dj[data-dj-look='concrete'] .dj-knob svg .dj-knob-base { fill: #2e2e2c; }
+.aihub-dj[data-dj-look='concrete'] .dj-knob svg :is(.dj-knob-cap, .dj-knob-skirt) { fill: #3a3a37; stroke: #141412; }
+.aihub-dj[data-dj-look='concrete'] .dj-knob svg .dj-knob-ptr { fill: #facc15; }
+.aihub-dj[data-dj-look='concrete'] .dj-platter { box-shadow: 0 0 0 4px #3a3a37, 0 0 0 6px #facc15, 0 12px 22px rgba(0,0,0,0.55); }
+.aihub-dj[data-dj-look='concrete'] .dj-tt.dj-mirror .dj-platter { box-shadow: 0 0 0 4px #3a3a37, 0 0 0 6px #f5f5f4, 0 12px 22px rgba(0,0,0,0.55); }
+.aihub-dj[data-dj-look='concrete'] :is(.dj-vfader-slot, .dj-hfader-slot) { background: #1c1c1a; box-shadow: inset 0 1px 3px #000, 0 1px rgba(255,255,255,0.3); }
+.aihub-dj[data-dj-look='concrete'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#2e2e2c, #141412 45%, #facc15 47% 53%, #141412 55%, #2e2e2c); border-color: #000; }
+.aihub-dj[data-dj-look='concrete'] :is(.dj-library, .dj-side) { background: #262624; }
+.aihub-dj[data-dj-look='concrete'] .dj-tree { background: #2d2d2b; }
+
+/* ═══ TITANIUM — bead-blasted titanium, cyan A / lime B ═══ */
+.aihub-dj[data-dj-look='titanium'] {
+  /* Bead-blast: a dense satin grain, no brushing direction. */
+  --dj-metal: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0 0.6px, transparent 0.9px) 0 0 / 2px 2px, linear-gradient(180deg, #8e939a 0%, #767b82 50%, #63676d 100%);
+  --dj-edge: #2d3034; --dj-lcd: #05080a;
+  --dj-text: #f1f3f5; --dj-label: #f1f3f5; --dj-label-soft: #c4c9cf;
+  --dj-light: linear-gradient(#9da2a9, #7c8188); --dj-light-ink: #0e1013; --dj-light-edge: #2d3034;
+  --dj-screw: radial-gradient(circle at 35% 30%, #f1f3f5, #7c8188 58%, #2d3034);
+  --skin-a: #22d3ee; --skin-b: #a3e635;
+  background: linear-gradient(180deg, #3a3d42, #22252a);
+}
+.aihub-dj[data-dj-look='titanium'] :is(.dj-panel, .dj-top) {
+  background: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 35%, rgba(0,0,0,0.1) 100%), var(--dj-metal);
+  border: 1px solid #2d3034; border-radius: 10px;
+  box-shadow: inset 0 1px rgba(255,255,255,0.4), inset 0 -2px 4px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.55);
+  color: var(--dj-text);
+}
+.aihub-dj[data-dj-look='titanium'] .dj-lcd { border-radius: 6px; border-color: #000; background: linear-gradient(168deg, rgba(180,240,255,0.1), transparent 42%), linear-gradient(180deg, #0c1216, #05080a); box-shadow: inset 0 2px 7px rgba(0,0,0,0.9), 0 1px rgba(255,255,255,0.3); color: #d9f8ff; text-shadow: 0 0 6px rgba(34,211,238,0.4); }
+.aihub-dj[data-dj-look='titanium'] :is(.dj-section-title, .dj-knob-label) { color: #f1f3f5; letter-spacing: 1.6px; text-shadow: 0 1px 0 rgba(0,0,0,0.45); }
+.aihub-dj[data-dj-look='titanium'] .dj-tbtn { background: linear-gradient(#a9aeb5, #80858c); color: #0e1013; border-color: #2d3034; border-radius: 8px; box-shadow: inset 0 1px rgba(255,255,255,0.5), 0 3px 5px rgba(0,0,0,0.5); }
+.aihub-dj[data-dj-look='titanium'] :is(.dj-btn, .dj-pad, .dj-stem, .dj-mini) { border-radius: 6px; }
+.aihub-dj[data-dj-look='titanium'] .dj-knob svg .dj-knob-base { fill: #1b1e22; }
+.aihub-dj[data-dj-look='titanium'] .dj-knob svg :is(.dj-knob-cap, .dj-knob-skirt) { fill: #9da2a9; stroke: #2d3034; }
+.aihub-dj[data-dj-look='titanium'] .dj-knob svg .dj-knob-ptr { fill: #22d3ee; }
+.aihub-dj[data-dj-look='titanium'] .dj-platter { box-shadow: 0 0 0 3px #2d3034, 0 0 0 5px var(--skin-a), 0 12px 22px rgba(0,0,0,0.6); }
+.aihub-dj[data-dj-look='titanium'] .dj-tt.dj-mirror .dj-platter { box-shadow: 0 0 0 3px #2d3034, 0 0 0 5px var(--skin-b), 0 12px 22px rgba(0,0,0,0.6); }
+.aihub-dj[data-dj-look='titanium'] :is(.dj-vfader-slot, .dj-hfader-slot) { background: #121417; box-shadow: inset 0 1px 3px #000, 0 1px rgba(255,255,255,0.25); }
+.aihub-dj[data-dj-look='titanium'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#c4c9cf, #7c8188); border-color: #1b1e22; }
+.aihub-dj[data-dj-look='titanium'] :is(.dj-library, .dj-side) { background: #1d2024; }
+.aihub-dj[data-dj-look='titanium'] .dj-tree { background: #23262b; }
+
+/* ═══ MAHOGANY CONSOLE — studio desk: dark mahogany, leather armrest, brass ═══ */
+.aihub-dj[data-dj-look='mahogany'] {
+  /* Mahogany: long ribbon grain with a deep red-brown lacquer. */
+  --dj-metal: repeating-linear-gradient(91deg, rgba(0,0,0,0.12) 0 2px, rgba(255,170,120,0.035) 2px 6px, rgba(0,0,0,0.05) 6px 11px), linear-gradient(180deg, #5a2219 0%, #431810 55%, #33120c 100%);
+  --dj-edge: #1a0705; --dj-lcd: #0b0503;
+  --dj-text: #f3e2cf; --dj-label: #e9c98f; --dj-label-soft: #c2955a;
+  --dj-light: linear-gradient(#6a2d22, #4a1c14); --dj-light-ink: #f8ead8; --dj-light-edge: #1a0705;
+  --dj-screw: radial-gradient(circle at 35% 30%, #fff1c2, #c19a4b 58%, #5e4419);
+  --skin-a: #d4a24c; --skin-b: #f1e6d0;
+  /* Leather armrest along the bottom edge, stitched. */
+  background:
+    linear-gradient(0deg, #2a1610 0, #3b2017 22px, transparent 22px),
+    repeating-linear-gradient(90deg, transparent 0 6px, rgba(233,201,143,0.5) 6px 10px) 0 calc(100% - 18px) / 100% 1px no-repeat,
+    linear-gradient(180deg, #2a0f0a, #160704);
+}
+.aihub-dj[data-dj-look='mahogany'] :is(.dj-panel, .dj-top) {
+  background: linear-gradient(180deg, rgba(255,230,210,0.22) 0%, rgba(255,230,210,0.05) 30%, transparent 32%, rgba(0,0,0,0.12) 100%), var(--dj-metal);
+  border: 1px solid #1a0705; border-radius: 5px;
+  box-shadow: inset 0 1px rgba(255,220,190,0.25), inset 0 0 0 1px rgba(212,162,76,0.25), 0 4px 12px rgba(0,0,0,0.65);
+  color: var(--dj-text);
+}
+.aihub-dj[data-dj-look='mahogany'] .dj-lcd { border-color: #000; box-shadow: inset 0 2px 8px rgba(0,0,0,0.9), 0 0 0 1px #8a6a2b; background: linear-gradient(168deg, rgba(255,230,190,0.1), transparent 42%), radial-gradient(ellipse at 50% 30%, #1d120a, #070302 78%); color: #ffe7c2; }
+.aihub-dj[data-dj-look='mahogany'] :is(.dj-section-title, .dj-knob-label) { color: #e9c98f; letter-spacing: 1.6px; font-family: Georgia, 'Times New Roman', serif; text-shadow: 0 1px 0 rgba(0,0,0,0.6); }
+.aihub-dj[data-dj-look='mahogany'] .dj-tbtn { background: linear-gradient(#e9d3a4, #c19a4b); color: #2a0f0a; border-color: #5e4419; border-radius: 5px; box-shadow: inset 0 1px #fff3d6, 0 3px 5px rgba(0,0,0,0.6); }
+.aihub-dj[data-dj-look='mahogany'] .dj-knob svg .dj-knob-base { fill: #140604; }
+.aihub-dj[data-dj-look='mahogany'] .dj-knob svg :is(.dj-knob-cap, .dj-knob-skirt) { fill: #d4a24c; stroke: #5e4419; }
+.aihub-dj[data-dj-look='mahogany'] .dj-knob svg .dj-knob-ptr { fill: #2a0f0a; }
+.aihub-dj[data-dj-look='mahogany'] .dj-platter { box-shadow: 0 0 0 3px #1a0705, 0 0 0 5px #c19a4b, 0 12px 22px rgba(0,0,0,0.7); }
+.aihub-dj[data-dj-look='mahogany'] :is(.dj-vfader-slot, .dj-hfader-slot) { background: #070302; box-shadow: inset 0 0 0 1px #5e4419; }
+.aihub-dj[data-dj-look='mahogany'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#e9d3a4, #a8873f); border-color: #3a2a0e; }
+.aihub-dj[data-dj-look='mahogany'] :is(.dj-library, .dj-side) { background: #1a0a07; }
+.aihub-dj[data-dj-look='mahogany'] .dj-tree { background: #200d09; }
+
+/* ═══ OCEAN ANODIZED — deep teal anodised aluminium, aqua A / coral B ═══ */
+.aihub-dj[data-dj-look='ocean'] {
+  --dj-metal: repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0 1px, rgba(0,0,0,0.04) 1px 2px), linear-gradient(180deg, #13606a 0%, #0e4c55 50%, #0a3a42 100%);
+  --dj-edge: #04191d; --dj-lcd: #021013;
+  --dj-text: #dff7f9; --dj-label: #c8f1f5; --dj-label-soft: #6fc6cf;
+  --dj-light: linear-gradient(#1a7480, #115560); --dj-light-ink: #effcfd; --dj-light-edge: #04191d;
+  --dj-screw: radial-gradient(circle at 35% 30%, #e6fbfd, #4a9aa3 58%, #0a3a42);
+  --skin-a: #2dd4bf; --skin-b: #fb7185;
+  background: linear-gradient(180deg, #082c33, #03171b);
+}
+.aihub-dj[data-dj-look='ocean'] :is(.dj-panel, .dj-top) {
+  background: linear-gradient(180deg, rgba(200,255,255,0.22) 0%, rgba(200,255,255,0.04) 32%, transparent 34%, rgba(0,0,0,0.12) 100%), var(--dj-metal);
+  border: 1px solid #04191d; border-radius: 7px;
+  box-shadow: inset 0 1px rgba(200,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.6);
+  color: var(--dj-text);
+}
+.aihub-dj[data-dj-look='ocean'] .dj-lcd { border-color: #000; box-shadow: inset 0 2px 8px rgba(0,0,0,0.9), 0 1px rgba(200,255,255,0.25); color: #ccfbf1; text-shadow: 0 0 6px rgba(45,212,191,0.4); }
+.aihub-dj[data-dj-look='ocean'] :is(.dj-section-title, .dj-knob-label) { color: #c8f1f5; letter-spacing: 1.4px; text-shadow: 0 1px 0 rgba(0,0,0,0.5); }
+.aihub-dj[data-dj-look='ocean'] .dj-tbtn { background: linear-gradient(#1a7480, #0e4c55); color: #effcfd; border-color: #04191d; border-radius: 6px; box-shadow: inset 0 1px rgba(200,255,255,0.3), 0 3px 5px rgba(0,0,0,0.55); }
+.aihub-dj[data-dj-look='ocean'] .dj-knob svg .dj-knob-base { fill: #031216; }
+.aihub-dj[data-dj-look='ocean'] .dj-knob svg :is(.dj-knob-cap, .dj-knob-skirt) { fill: #c9d3d6; stroke: #04191d; }
+.aihub-dj[data-dj-look='ocean'] .dj-knob svg .dj-knob-ptr { fill: #0a3a42; }
+.aihub-dj[data-dj-look='ocean'] .dj-platter { box-shadow: 0 0 0 3px #04191d, 0 0 0 5px var(--skin-a), 0 12px 22px rgba(0,0,0,0.65); }
+.aihub-dj[data-dj-look='ocean'] .dj-tt.dj-mirror .dj-platter { box-shadow: 0 0 0 3px #04191d, 0 0 0 5px var(--skin-b), 0 12px 22px rgba(0,0,0,0.65); }
+.aihub-dj[data-dj-look='ocean'] :is(.dj-vfader-slot, .dj-hfader-slot) { background: #021013; box-shadow: inset 0 1px 3px #000; }
+.aihub-dj[data-dj-look='ocean'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#e6eef0, #9fb0b4); border-color: #04191d; }
+.aihub-dj[data-dj-look='ocean'] :is(.dj-library, .dj-side) { background: #061e23; }
+.aihub-dj[data-dj-look='ocean'] .dj-tree { background: #08252b; }
+
+/* ═══ OBSIDIAN GLASS — black glass with real reflections ═══ */
+.aihub-dj[data-dj-look='obsidian'] {
+  --dj-metal: linear-gradient(180deg, #121316 0%, #0a0b0d 60%, #050506 100%);
+  --dj-edge: #000; --dj-lcd: #000;
+  --dj-text: #f4f4f6; --dj-label: #e4e4e8; --dj-label-soft: #8e8e98;
+  --dj-light: linear-gradient(#202227, #111215); --dj-light-ink: #f4f4f6; --dj-light-edge: #000;
+  --dj-screw: radial-gradient(circle at 35% 30%, #ffffff, #6b6f78 55%, #111215);
+  --skin-a: #f4f4f6; --skin-b: #e879f9;
+  background: radial-gradient(ellipse at 50% -20%, rgba(255,255,255,0.08), transparent 55%), #030304;
+}
+.aihub-dj[data-dj-look='obsidian'] :is(.dj-panel, .dj-top) {
+  /* Glass: a diagonal studio-light streak and a hard edge highlight. */
+  background:
+    linear-gradient(115deg, transparent 0 30%, rgba(255,255,255,0.07) 30% 34%, transparent 34% 38%, rgba(255,255,255,0.035) 38% 40%, transparent 40%),
+    linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 25%),
+    var(--dj-metal);
+  border: 1px solid #000; border-radius: 9px;
+  box-shadow: inset 0 1px rgba(255,255,255,0.28), inset 0 0 0 1px rgba(255,255,255,0.05), 0 6px 16px rgba(0,0,0,0.8);
+  color: var(--dj-text);
+}
+.aihub-dj[data-dj-look='obsidian'] .dj-lcd { border-color: #1e1f24; border-radius: 6px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.95), 0 1px rgba(255,255,255,0.08); }
+.aihub-dj[data-dj-look='obsidian'] :is(.dj-section-title, .dj-knob-label) { color: #c9c9d1; letter-spacing: 1.8px; text-shadow: none; }
+.aihub-dj[data-dj-look='obsidian'] .dj-tbtn { background: linear-gradient(#24262c, #101114); color: #f4f4f6; border-color: #000; border-radius: 8px; box-shadow: inset 0 1px rgba(255,255,255,0.22), 0 4px 8px rgba(0,0,0,0.7); }
+.aihub-dj[data-dj-look='obsidian'] :is(.dj-btn, .dj-pad, .dj-stem, .dj-mini) { border-radius: 6px; border-color: #000; }
+.aihub-dj[data-dj-look='obsidian'] .dj-knob svg .dj-knob-base { fill: #000; }
+.aihub-dj[data-dj-look='obsidian'] .dj-knob svg :is(.dj-knob-cap, .dj-knob-skirt) { fill: #1a1b1f; stroke: #000; }
+.aihub-dj[data-dj-look='obsidian'] .dj-knob svg .dj-knob-ptr { fill: #f4f4f6; }
+.aihub-dj[data-dj-look='obsidian'] .dj-platter { box-shadow: 0 0 0 3px #000, 0 0 0 4px rgba(255,255,255,0.35), 0 14px 26px rgba(0,0,0,0.85); }
+.aihub-dj[data-dj-look='obsidian'] .dj-tt.dj-mirror .dj-platter { box-shadow: 0 0 0 3px #000, 0 0 0 4px var(--skin-b), 0 14px 26px rgba(0,0,0,0.85); }
+.aihub-dj[data-dj-look='obsidian'] :is(.dj-vfader-slot, .dj-hfader-slot) { background: #000; box-shadow: inset 0 0 0 1px #24262c; }
+.aihub-dj[data-dj-look='obsidian'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#2c2e34, #0e0f12 45%, #f4f4f6 47% 53%, #0e0f12 55%, #24262c); border-color: #000; }
+.aihub-dj[data-dj-look='obsidian'] :is(.dj-library, .dj-side) { background: #060607; }
+.aihub-dj[data-dj-look='obsidian'] .dj-tree { background: #0b0b0d; }

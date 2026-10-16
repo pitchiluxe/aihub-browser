@@ -9,6 +9,8 @@ import { FX_LABELS, type FxType } from './engine/effects'
 import { Knob, LedButton, VFader, fmtTime, useDeck, useRafThrottled } from './controls'
 import { OverviewWave, ZoomWave } from './Waveforms'
 import Platter from './Platter'
+import { CdjJog, LedJog, ScreenDeck } from './Decks'
+import { useDesign } from './designs'
 import { recordTaste } from './taste'
 
 export const TRACK_MIME = 'application/x-aihub-dj-track'
@@ -269,11 +271,15 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+  const kind = useDesign().deck
   return (
-    <div className={`dj-tt dj-panel ${deck.id === 'B' ? 'dj-mirror' : ''}`} {...dropProps(onDropTrack)}
+    <div className={`dj-tt dj-panel dj-deck-${kind} ${deck.id === 'B' ? 'dj-mirror' : ''}`} {...dropProps(onDropTrack)}
       title={deck.track ? undefined : 'Drop a song here, then press play'}>
       <div className="dj-tt-main" ref={mainRef}>
-        <Platter deck={deck} size={platter} />
+        {kind === 'cdj' ? <CdjJog deck={deck} size={platter} />
+          : kind === 'ledjog' ? <LedJog deck={deck} size={platter} />
+          : kind === 'screen' ? <ScreenDeck deck={deck} size={platter} />
+          : <Platter deck={deck} size={platter} />}
         <div className="dj-tt-side">
           <button type="button" className="dj-mini" onClick={() => deck.eject()} disabled={!deck.track || deck.playing} title="Eject">
             <ArrowUpFromLine size={11} />

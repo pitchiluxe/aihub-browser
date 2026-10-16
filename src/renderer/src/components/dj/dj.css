@@ -311,7 +311,11 @@
   content: ''; position: absolute; inset: 0; border-radius: 3px; pointer-events: none;
   background: linear-gradient(180deg, rgba(255,255,255,0.22), transparent 40%);
 }
-.aihub-dj .dj-vfader-cap, .aihub-dj .dj-hfader-cap { filter: drop-shadow(1px 3px 2px rgba(0,0,0,0.45)); }
+/* Box-shadow, not filter: filters on the console starve the YouTube players. */
+.aihub-dj .dj-vfader-cap, .aihub-dj .dj-hfader-cap { box-shadow: 1px 3px 4px rgba(0,0,0,0.5); }
+/* The knob pointer's lit lower lip stays a highlight whatever colour a skin
+   paints the pointer (skins colour every `rect` in a knob). */
+.aihub-dj .dj-knob svg rect.dj-knob-lip.dj-knob-lip { fill: rgba(255,255,255,0.55); } /* doubled class: outranks the skins' `[data-dj-look] .dj-knob svg rect` */
 
 /* Pressed keys sink into the panel instead of just moving half a pixel. */
 .aihub-dj .dj-btn:active, .aihub-dj .dj-pad:active, .aihub-dj .dj-mini:active {

@@ -49,6 +49,9 @@ import './dj-layouts.css'
 import './dj-real.css'
 import './dj-skins.css'
 import './dj-skins-pro.css'
+import './dj-skins-real.css'
+import './dj-designs.css'
+import { DesignContext, partsFor } from './designs'
 
 export interface DjTheme { id: string; name: string; swatch: string; dark?: boolean; lightBg?: boolean }
 export const DJ_THEMES: DjTheme[] = [
@@ -110,6 +113,17 @@ export const DJ_LOOKS: { id: string; name: string; preview: string }[] = [
   { id: 'crimson-rack', name: 'Crimson Rack', preview: 'linear-gradient(#110809, #110809) padding-box, linear-gradient(90deg, #ef4444, #fb923c) border-box' },
   { id: 'emerald', name: 'Emerald', preview: 'linear-gradient(#0a1d15, #0a1d15) padding-box, linear-gradient(135deg, #34d399, #e6c66e) border-box' },
   { id: 'arctic', name: 'Arctic', preview: 'linear-gradient(90deg, #0ea5e9 0 10%, #f7fbff 10% 90%, #6366f1 90%)' },
+  // Material skins — real finishes (dj-skins-real.css).
+  { id: 'walnut-hifi', name: 'Walnut Hi-Fi', preview: 'linear-gradient(90deg, #5a3218 0 16%, #d9d5cc 16% 84%, #5a3218 84%)' },
+  { id: 'rose-gold', name: 'Rose Gold', preview: 'linear-gradient(135deg, #f6d6c8, #c98e7a)' },
+  { id: 'porcelain', name: 'Porcelain', preview: 'linear-gradient(180deg, #ffffff 0 45%, #e6e8ec)' },
+  { id: 'field-olive', name: 'Field Olive', preview: 'linear-gradient(90deg, #f97316 0 8%, #55603a 8%)' },
+  { id: 'tube-amp', name: 'Tube Amp', preview: 'radial-gradient(circle at 50% 120%, #fb923c, #1d1c1a 60%)' },
+  { id: 'concrete', name: 'Concrete Loft', preview: 'linear-gradient(90deg, #facc15 0 8%, #9a9a95 8%)' },
+  { id: 'titanium', name: 'Titanium', preview: 'linear-gradient(90deg, #22d3ee 0 8%, #80858c 8% 92%, #a3e635 92%)' },
+  { id: 'mahogany', name: 'Mahogany Console', preview: 'repeating-linear-gradient(91deg, #4a1b12 0 3px, #5a2219 3px 7px)' },
+  { id: 'ocean', name: 'Ocean Anodized', preview: 'linear-gradient(90deg, #2dd4bf 0 8%, #0e4c55 8% 92%, #fb7185 92%)' },
+  { id: 'obsidian', name: 'Obsidian Glass', preview: 'linear-gradient(115deg, #0a0b0d 0 40%, #2a2b30 44%, #0a0b0d 48%)' },
 ]
 const LOOK_KEY = 'aihub-dj-look'
 
@@ -405,6 +419,7 @@ function Console({ engine }: { engine: DjEngine }) {
 
   return (
     <DjEnvContext.Provider value={env}>
+    <DesignContext.Provider value={partsFor(look)}>
     {/* The stage sits beside the console, not inside it: the console is
         CSS-zoomed to fit the tab and the stage must not be scaled with it. */}
     <div className="dj-host">
@@ -482,6 +497,7 @@ function Console({ engine }: { engine: DjEngine }) {
         stage, which hid every answer ("what's playing?") while the stage was up. */}
     {toast && <div className={`dj-toast${stageView === 'stage' ? ' on-stage' : ''}`} role="status">{toast}</div>}
     </div>
+    </DesignContext.Provider>
     </DjEnvContext.Provider>
   )
 }
