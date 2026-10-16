@@ -93,8 +93,11 @@ function interp(a: Float32Array, x: number): number {
  * Tempo by comb-filtered autocorrelation of the onset curve over 70–180 BPM,
  * with a gentle preference for the 90–140 range dance music lives in so a
  * 64 BPM half-time reading does not win over the real 128.
+ *
+ * `ceiling`: the fastest tempo the track's genre plausibly has (see
+ * tempoCeiling) — a double-time reading above it is folded back down.
  */
-export function detectBpm(onset: Float32Array, rate = ENV_RATE): number | null {
+export function detectBpm(onset: Float32Array, rate = ENV_RATE, opts: TempoHint = {}): number | null {
   if (onset.length < rate * 8) return null // under 8 s: not enough to judge
   // Analyse at most ~4 minutes from the middle — intros and outros lie.
   const span = Math.min(onset.length, rate * 240)
@@ -135,14 +138,18 @@ export function detectBpm(onset: Float32Array, rate = ENV_RATE): number | null {
   const raw = (bpm: number) => score(bpm) / (0.75 + 0.25 * Math.exp(-Math.pow(Math.log2(bpm / 120), 2) / (2 * 0.5 * 0.5)))
   if (takeThreeHalves(bestBpm, raw(bestBpm), raw(bestBpm * 1.5))) bestBpm *= 1.5
 
+  // The middle 90 s: enough for the checks below, and cheap — this also runs
+  // on the console's UI thread when a deck loads.
+  const mid = Math.min(o.length, rate * 90)
+  const om = o.subarray(Math.floor((o.length - mid) / 2), Math.floor((o.length - mid) / 2) + mid)
+  const bar = (bpm: number) => barCorrelation(om, bpm, rate)
+  bestBpm = barAlias(bestBpm, bar)
+  bestBpm = foldToCeiling(bestBpm, opts.ceiling, bar)
+
   // Precise value. The two-tap comb above finds the right tempo FAMILY but
   // its peaks are broad — Blinding Lights scores flat from 167 to 174 BPM.
   // A long comb, weighing sixteen beats ahead, has one sharp peak: on the
   // real-song fixtures it reads 116/96/103/160/171 exactly.
-  // Middle 90 s and coarse-to-fine steps keep it cheap: this also runs on the
-  // console's UI thread when a deck loads.
-  const mid = Math.min(o.length, rate * 90)
-  const om = o.subarray(Math.floor((o.length - mid) / 2), Math.floor((o.length - mid) / 2) + mid)
   const long = (bpm: number) => {
     const lag = (60 * rate) / bpm
     let s = 0
@@ -183,6 +190,91 @@ export function takeThreeHalves(best: number, rawBest: number, rawUp: number): b
 const TWO_THIRDS_RATIO = 0.9
 /** Beats ahead the precision comb weighs (1/k each). 16 reads every fixture exactly. */
 const LONG_TAPS = 16
+
+/** What is known about a track's tempo before its audio is read. */
+export interface TempoHint {
+  /** Fastest tempo the track plausibly has; readings above it are folded down. */
+  ceiling?: number
+}
+
+/**
+ * Genres whose songs rarely run past ~125 BPM. A reading of 176 for an
+ * afrobeats song is its double time (Last Last is 88), and the beat-matcher
+ * would sync another song to twice its real speed.
+ */
+const SLOW_GENRES = /\b(afro ?beats?|afro ?pop|afro ?swing|amapiano|r&b|rnb|neo ?soul|bongo|highlife)\b/
+const SLOW_GENRE_CEILING = 125
+
+/** The tempo ceiling for a track tagged with these genres, if any of them sets one. */
+export function tempoCeiling(genres: readonly string[] | undefined): number | undefined {
+  return genres?.some(g => SLOW_GENRES.test(g.toLowerCase())) ? SLOW_GENRE_CEILING : undefined
+}
+
+/**
+ * How strongly the onsets repeat one bar (four beats) apart at `bpm`:
+ * the normalised autocorrelation, best within ±2% of the bar.
+ *
+ * The beat combs cannot tell a tempo from its ¾ / 4⁄3 alias when the
+ * rhythm is syncopated: a 3+3+2 kick (Last Last, 88 BPM) repeats every ¾
+ * beat, which the comb reads as 117. The bar is what really repeats — at 88
+ * the four-beat lag correlates 0.43, at 117 (three real beats) 0.06.
+ */
+export function barCorrelation(o: Float32Array, bpm: number, rate = ENV_RATE): number {
+  const n = o.length
+  let mean = 0
+  for (let i = 0; i < n; i++) mean += o[i]
+  mean /= n
+  let v0 = 0
+  for (let i = 0; i < n; i++) v0 += (o[i] - mean) * (o[i] - mean)
+  v0 /= n
+  if (v0 <= 0) return 0
+  const barLag = (4 * 60 * rate) / bpm
+  let best = -1
+  for (let lag = barLag * 0.98; lag <= barLag * 1.02 + 1e-9; lag += 0.25) {
+    let s = 0, k = 0
+    for (let i = 0; i + lag + 1 < n; i++) { s += (o[i] - mean) * (interp(o, i + lag) - mean); k++ }
+    if (k > 0 && s / k / v0 > best) best = s / k / v0
+  }
+  return best
+}
+
+/** Lowest tempo a correction may land on (half-time ballads sit near 60–70). */
+const MIN_CORRECTED_BPM = 60
+/** A ¾ / 4⁄3 alternative must repeat its bar this many times better… */
+const BAR_RATIO = 2
+/** …and by at least this much. Tuned on the real-song fixtures: no true tempo
+ *  there is ever displaced, every Last Last window and Shape of You's 128 are. */
+const BAR_MARGIN = 0.12
+
+/** The ¾ / 4⁄3 check: the reading, or the alias whose bar repeats far more clearly. */
+export function barAlias(bpm: number, bar: (bpm: number) => number): number {
+  const here = bar(bpm)
+  let pick = bpm, pickBar = here
+  for (const f of [3 / 4, 4 / 3]) {
+    const c = bpm * f
+    if (c < MIN_CORRECTED_BPM || c > MAX_CORRECTED_BPM) continue
+    const b = bar(c)
+    if (b >= BAR_RATIO * here && b - here >= BAR_MARGIN && b > pickBar) { pick = c; pickBar = b }
+  }
+  return pick
+}
+
+/**
+ * A reading above the genre's ceiling is an alias of a slower tempo: ½ (176
+ * → 88), ¾ (139 → 104, Essence's first scan) or ⅔. The one whose bar repeats
+ * best wins. At or under the ceiling (+4% grace) the reading stands.
+ */
+export function foldToCeiling(bpm: number, ceiling: number | undefined, bar: (bpm: number) => number): number {
+  if (!ceiling || bpm <= ceiling * 1.04) return bpm
+  let pick = bpm, pickBar = -Infinity
+  for (const f of [1 / 2, 3 / 4, 2 / 3]) {
+    const c = bpm * f
+    if (c < MIN_CORRECTED_BPM || c > ceiling * 1.04) continue
+    const b = bar(c)
+    if (b > pickBar) { pick = c; pickBar = b }
+  }
+  return pick
+}
 
 /** Offset (seconds) of the beat grid that best lines up with the onsets. */
 export function detectFirstBeat(onset: Float32Array, bpm: number, rate = ENV_RATE): number {
@@ -226,11 +318,11 @@ export function bestLag(play: Float32Array, scan: Float32Array, from: number, to
   return best >= 0.3 ? bestLagV : null
 }
 
-export function analyze(channels: Float32Array[], sampleRate: number): Analysis {
+export function analyze(channels: Float32Array[], sampleRate: number, tempo: TempoHint = {}): Analysis {
   const mono = toMono(channels)
   const env = buildEnvelope(mono, sampleRate)
   const onset = onsetCurve(env)
-  const bpm = detectBpm(onset)
+  const bpm = detectBpm(onset, ENV_RATE, tempo)
   let key: MusicalKey | null = null
   try { key = detectKey(mono, sampleRate) } catch { /* the key is a nicety — never lose the tempo over it */ }
   return { bpm, firstBeat: bpm ? detectFirstBeat(onset, bpm) : 0, env, key }

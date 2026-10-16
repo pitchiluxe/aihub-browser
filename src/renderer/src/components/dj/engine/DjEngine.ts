@@ -12,7 +12,7 @@
  *                └→ scratch voice ┘                              └→ PFL → cue bus            │
  *  master:                                                            master gain → limiter ←┘ → speakers / recorder
  */
-import { ENV_RATE, type Analysis } from './analysis'
+import { ENV_RATE, tempoCeiling, type Analysis, type TempoHint } from './analysis'
 import { analyzeOffThread, prepareDeckOffThread } from './analysisClient'
 import { createEffect, type Effect, type FxType } from './effects'
 import { rememberTrack } from './trackCache'
@@ -41,6 +41,8 @@ export interface DjTrack {
   durationHint?: number
   /** A local video file (mp4, mkv…): its picture can be shown on the monitor. */
   video?: boolean
+  /** Genres the AI DJ found it under; a slow genre caps the tempo reading (tempoCeiling). */
+  genres?: string[]
 }
 
 export type DeckId = 'A' | 'B' | 'C' | 'D'
@@ -405,6 +407,8 @@ export class Deck extends Emitter {
     return this.isYouTube ? this.yt?.currentTime ?? 0 : this.media.currentTime || 0
   }
   get bpm(): number | null { return this.analysis?.bpm ?? this.liveBpm ?? this.scanBpm ?? this.track?.tagBpm ?? null }
+  /** What the track's genres say about its tempo, for every reading of it. */
+  private tempoHint(): TempoHint { return { ceiling: tempoCeiling(this.track?.genres) } }
   get rate(): number { return 1 + this.pitch }
   /** Key read from the audio, or failing that from the file's tag. */
   get musicalKey(): MusicalKey | null { return this.analysis?.key ?? parseKey(this.track?.key) }
@@ -521,7 +525,7 @@ export class Deck extends Emitter {
       await new Promise(r => setTimeout(r, 16))
       const chans: Float32Array[] = []
       for (let c = 0; c < Math.min(2, decoded.numberOfChannels); c++) chans.push(decoded.getChannelData(c))
-      const { analysis: a, scratch: sc } = await prepareDeckOffThread(chans, decoded.sampleRate)
+      const { analysis: a, scratch: sc } = await prepareDeckOffThread(chans, decoded.sampleRate, undefined, this.tempoHint())
       if (gen !== this.gen) return
       this.autoGain = autoGainFor(rmsOf(sc.data))
       this.applyTrim()
@@ -557,7 +561,7 @@ export class Deck extends Emitter {
           const g = this.gen
           idle(() => {
             if (g !== this.gen || this.liveBpm) return
-            this.scanBpm = this.wave?.scannedBpm() ?? this.scanBpm
+            this.scanBpm = this.wave?.scannedBpm(undefined, this.tempoHint()) ?? this.scanBpm
             this.applyRate()
             this.emit()
           })
@@ -579,7 +583,7 @@ export class Deck extends Emitter {
           const gen = this.gen
           idle(() => {
             if (gen !== this.gen || this.liveBpm) return
-            this.scanBpm = this.wave?.scannedBpm() ?? this.scanBpm
+            this.scanBpm = this.wave?.scannedBpm(undefined, this.tempoHint()) ?? this.scanBpm
             this.applyRate()
             this.emit()
           })
@@ -958,7 +962,7 @@ export class Deck extends Emitter {
       const upTo = ytReady ? Math.floor(this.scan!.reach * ENV_RATE) : wave.frames
       idle(() => {
         if (gen !== this.gen || this.scanBpm || this.liveBpm) return
-        const b = wave.scannedBpm(upTo)
+        const b = wave.scannedBpm(upTo, this.tempoHint())
         if (b) { this.scanBpm = b; this.applyRate(); this.emit() }
       })
     }
@@ -995,7 +999,9 @@ export class Deck extends Emitter {
     try {
       const d = await this.scratch.dump()
       if (!d || gen !== this.gen || d.data.length < d.sampleRate * 12) { this.steadySince = 0; return }
-      const a = await analyzeOffThread([d.data], d.sampleRate)
+      // The recording runs at the deck's rate, so the genre's ceiling does too.
+      const ceiling = this.tempoHint().ceiling
+      const a = await analyzeOffThread([d.data], d.sampleRate, undefined, { ceiling: ceiling ? ceiling * d.rate : undefined })
       if (gen !== this.gen) return
       // The recording ran in real time at the deck's rate; convert to track time.
       if (a.bpm) {

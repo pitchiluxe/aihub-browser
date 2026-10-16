@@ -3,7 +3,7 @@
 // ~0.3 s building the scratch buffer — enough, with other load, to tip Windows
 // into "Not Responding"). Falls back to the UI thread only when no worker can
 // run, or the worker fails — never hangs.
-import { analyze, type Analysis } from './analysis'
+import { analyze, type Analysis, type TempoHint } from './analysis'
 import { scratchCopy } from './scratchCopy'
 
 export interface WorkerLike {
@@ -27,8 +27,8 @@ let seq = 0
 const pending = new Map<number, { resolve: (r: Reply) => void; fallback: () => void }>()
 const wired = new WeakSet<WorkerLike>()
 
-function run(channels: Float32Array[], sampleRate: number, withScratch: boolean, getWorker: () => WorkerLike | null): Promise<Reply> {
-  const here = (): Reply => ({ analysis: analyze(channels, sampleRate), ...(withScratch ? { scratch: scratchCopy(channels, sampleRate) } : {}) })
+function run(channels: Float32Array[], sampleRate: number, withScratch: boolean, getWorker: () => WorkerLike | null, tempo: TempoHint): Promise<Reply> {
+  const here = (): Reply => ({ analysis: analyze(channels, sampleRate, tempo), ...(withScratch ? { scratch: scratchCopy(channels, sampleRate) } : {}) })
   const w = getWorker()
   if (!w) return Promise.resolve(here())
   if (!wired.has(w)) {
@@ -47,18 +47,18 @@ function run(channels: Float32Array[], sampleRate: number, withScratch: boolean,
   const id = ++seq
   return new Promise<Reply>(resolve => {
     pending.set(id, { resolve, fallback: () => resolve(here()) })
-    try { w.postMessage({ id, channels: copies, sampleRate, withScratch }, copies.map(c => c.buffer)) }
+    try { w.postMessage({ id, channels: copies, sampleRate, withScratch, tempo }, copies.map(c => c.buffer)) }
     catch { pending.delete(id); resolve(here()) }
   })
 }
 
 /** Tempo, key and waveform envelope, measured in the worker. */
-export async function analyzeOffThread(channels: Float32Array[], sampleRate: number, getWorker: () => WorkerLike | null = defaultWorker): Promise<Analysis> {
-  return (await run(channels, sampleRate, false, getWorker)).analysis
+export async function analyzeOffThread(channels: Float32Array[], sampleRate: number, getWorker: () => WorkerLike | null = defaultWorker, tempo: TempoHint = {}): Promise<Analysis> {
+  return (await run(channels, sampleRate, false, getWorker, tempo)).analysis
 }
 
 /** Everything a freshly decoded deck needs: the analysis and its scratch buffer. */
-export async function prepareDeckOffThread(channels: Float32Array[], sampleRate: number, getWorker: () => WorkerLike | null = defaultWorker): Promise<{ analysis: Analysis; scratch: Scratch }> {
-  const r = await run(channels, sampleRate, true, getWorker)
+export async function prepareDeckOffThread(channels: Float32Array[], sampleRate: number, getWorker: () => WorkerLike | null = defaultWorker, tempo: TempoHint = {}): Promise<{ analysis: Analysis; scratch: Scratch }> {
+  const r = await run(channels, sampleRate, true, getWorker, tempo)
   return { analysis: r.analysis, scratch: r.scratch ?? scratchCopy(channels, sampleRate) }
 }

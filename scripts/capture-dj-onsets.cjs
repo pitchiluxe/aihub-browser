@@ -2,7 +2,9 @@
 // played on a hidden YouTube scan player at 2× (keyLock off, so the capture is
 // an exact time compression), converted to the song's own timeline and stored
 // as a 100 fps onset curve (90 s from the middle, 3 decimals).
-// Usage: npx electron-vite build && node scripts/capture-dj-onsets.cjs
+// Usage: npx electron-vite build && node scripts/capture-dj-onsets.cjs [name ...]
+// Names pick songs to (re)capture; the rest of the fixture file is kept.
+// `head` is the song's first 32 s — what a deck measures live after ~24 s of play.
 const path = require('path'), os = require('os'), fs = require('fs'), cp = require('child_process')
 const { _electron } = require(path.join(os.homedir(), 'node_modules', 'playwright-core'))
 const REPO = path.resolve(__dirname, '..')
@@ -13,9 +15,16 @@ const SONGS = [
   { name: 'levitating', q: 'Dua Lipa Levitating official music video', bpm: 103 },
   { name: 'happy', q: 'Pharrell Williams Happy official music video', bpm: 160 },
   { name: 'blinding-lights', q: 'The Weeknd Blinding Lights official audio', bpm: 171 },
+  // Afrobeats / R&B: dense half-beat percussion makes 2×, ⁴⁄₃ and ³⁄₂ aliases tempting.
+  { name: 'last-last', q: 'Burna Boy Last Last official music video', bpm: 88 },
+  { name: 'essence', q: 'Wizkid Essence official video', bpm: 104 },
+  { name: 'calm-down', q: 'Rema Calm Down official music video', bpm: 107 },
+  { name: 'kill-bill', q: 'SZA Kill Bill official audio', bpm: 89 },
+  { name: 'water', q: 'Tyla Water official music video', bpm: 117 },
 ]
+const MODS = path.dirname(path.dirname(require.resolve('esbuild/package.json'))) // a worktree shares the main checkout's
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'dj-onsets-'))
-cp.execFileSync(process.execPath, [path.join(REPO, 'node_modules/esbuild/bin/esbuild'),
+cp.execFileSync(process.execPath, [path.join(MODS, 'esbuild/bin/esbuild'),
   path.join(REPO, 'src/renderer/src/components/dj/engine/analysis.ts'), '--bundle', '--platform=node', '--format=cjs',
   `--outfile=${path.join(TMP, 'analysis.cjs')}`, '--log-level=error'])
 const A = require(path.join(TMP, 'analysis.cjs'))
@@ -23,13 +32,14 @@ const A = require(path.join(TMP, 'analysis.cjs'))
 ;(async () => {
   const home = path.join(TMP, 'home'); fs.mkdirSync(home)
   const env = { ...process.env, USERPROFILE: home, HOME: home }; delete env.ELECTRON_RUN_AS_NODE
-  const app = await _electron.launch({ executablePath: path.join(REPO, 'node_modules/electron/dist/electron.exe'), args: [REPO], cwd: REPO, env })
+  const app = await _electron.launch({ executablePath: path.join(MODS, 'electron/dist/electron.exe'), args: [REPO], cwd: REPO, env })
   const page = await app.firstWindow()
   await page.waitForTimeout(8000)
   await page.locator('text=AIHub DJ').first().click()
   await page.waitForTimeout(4000)
-  const out = {}
-  for (const s of SONGS) {
+  const pick = process.argv.slice(2)
+  const out = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')) : {}
+  for (const s of SONGS.filter(x => !pick.length || pick.includes(x.name))) {
     const res = await page.evaluate(async ({ q }) => {
       const dj = window.electronAPI.dj
       const hit = ((await dj.youtubeSearch(q, 1))?.videos || [])[0]
@@ -65,8 +75,9 @@ const A = require(path.join(TMP, 'analysis.cjs'))
     const pcm = new Float32Array(buf.buffer, buf.byteOffset, buf.length / 4)
     const onset = A.onsetCurve(A.buildEnvelope(pcm, res.captureRate / 2))
     const span = Math.min(onset.length, 9000), from = Math.floor((onset.length - span) / 2)
-    out[s.name] = { bpm: s.bpm, onset: Array.from(onset.subarray(from, from + span), v => Math.round(v * 1000) / 1000) }
-    console.log(s.name, 'frames', span, 'detectBpm now:', A.detectBpm(onset))
+    const q3 = a => Array.from(a, v => Math.round(v * 1000) / 1000)
+    out[s.name] = { bpm: s.bpm, onset: q3(onset.subarray(from, from + span)), head: q3(onset.subarray(0, 3200)) }
+    console.log(s.name, 'frames', span, 'detectBpm now:', A.detectBpm(onset), 'head:', A.detectBpm(onset.subarray(0, 3200)))
   }
   await app.close()
   fs.mkdirSync(path.dirname(OUT), { recursive: true })

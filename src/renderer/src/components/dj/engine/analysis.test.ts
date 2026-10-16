@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyze, bestLag, buildEnvelope, detectBpm, ENV_RATE, takeThreeHalves } from './analysis'
+import { analyze, barCorrelation, bestLag, buildEnvelope, detectBpm, ENV_RATE, foldToCeiling, takeThreeHalves, tempoCeiling } from './analysis'
 import onsets from './__fixtures__/onsets.json'
 
 /** Decaying 60 Hz kicks at `bpm`, starting `offset` seconds in, over quiet noise. */
@@ -123,5 +123,53 @@ describe('detectBpm does not over-correct', () => {
     }
     const got = analyze([out], sr).bpm as number
     expect(Math.abs(got - bpm)).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('detectBpm tempo aliases (afrobeats / R&B)', () => {
+  const songs = onsets as Record<string, { bpm: number; onset: number[]; head?: number[] }>
+  const near = (got: number | null, want: number) => got !== null && Math.abs(got - want) <= 2
+
+  // Last Last's kick is a 3+3+2 tresillo: the onsets repeat every ¾ beat, so
+  // the comb read 117.4 (4⁄3 × 88). Only the real tempo's bar repeats.
+  it('Last Last reads 88, not its 4⁄3 alias 117', () => {
+    expect(near(detectBpm(Float32Array.from(songs['last-last'].onset)), 88)).toBe(true)
+  })
+
+  // What a deck measures live: the song's first 32 s.
+  it.each(['last-last', 'essence', 'calm-down', 'kill-bill'])('%s reads its tempo from the first 32 s', name => {
+    expect(near(detectBpm(Float32Array.from(songs[name].head!)), songs[name].bpm)).toBe(true)
+  })
+
+  // Short windows (a 24 s live reading) of the mid-song capture.
+  it('Shape of You: the 24 s window that read 128 (4⁄3 × 96) reads 96', () => {
+    expect(near(detectBpm(Float32Array.from(songs['shape-of-you'].onset).subarray(2000, 4400)), 96)).toBe(true)
+    // Known miss: its window at 40 s reads 122.7 — not an alias; nothing there
+    // repeats bar-to-bar at any tempo (bar correlation ≤ 0.17), so no rule can tell.
+  })
+  it.each(['last-last', 'essence', 'calm-down', 'get-lucky', 'levitating', 'blinding-lights'])('%s: every 24 s window reads its tempo', name => {
+    const o = Float32Array.from(songs[name].onset)
+    const readings = [0, 2000, 4000, 5800].map(at => detectBpm(o.subarray(at, at + 2400)))
+    expect(readings.filter(b => !near(b, songs[name].bpm))).toEqual([])
+  })
+
+  // A genre that rarely runs past ~125 folds a double-time reading down.
+  it('a genre ceiling folds double-time readings down, and leaves fast genres alone', () => {
+    const kb = Float32Array.from(songs['kill-bill'].onset).subarray(4000, 6400)
+    expect(detectBpm(kb)).toBeCloseTo(178, 0) // the octave above: the audio alone cannot tell
+    expect(detectBpm(kb, ENV_RATE, { ceiling: tempoCeiling(['r&b']) })).toBeCloseTo(89, 0)
+    expect(detectBpm(Float32Array.from(songs['blinding-lights'].onset), ENV_RATE, { ceiling: tempoCeiling(['pop']) })).toBeCloseTo(171, 0)
+    expect(tempoCeiling(['afrobeats'])).toBe(125)
+    expect(tempoCeiling(['amapiano', 'house'])).toBe(125)
+    expect(tempoCeiling(['drum and bass'])).toBeUndefined()
+    expect(tempoCeiling(undefined)).toBeUndefined()
+  })
+
+  it('folds a reading above the ceiling to the alias whose bar repeats (176 → 88, 139 → 104)', () => {
+    const ll = Float32Array.from(songs['last-last'].onset)
+    expect(foldToCeiling(176, 125, b => barCorrelation(ll, b))).toBeCloseTo(88, 0)
+    const es = Float32Array.from(songs['essence'].onset)
+    expect(foldToCeiling(139, 125, b => barCorrelation(es, b))).toBeCloseTo(104, 0)
+    expect(foldToCeiling(110, 125, () => 1)).toBe(110)
   })
 })

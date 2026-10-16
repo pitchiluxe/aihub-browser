@@ -39,7 +39,10 @@ export async function gatherCandidates(seeds: string[], deps: PoolDeps, opts: { 
     if (prev) { if (genre && !prev.genres.includes(genre)) prev.genres.push(genre); return }
     const a = norm(t.artist)
     const known = loved.has(`${a}|${norm(t.title)}`) || artistScore.has(a)
-    out.set(key, { track: t, known, taste: Math.max(-1, Math.min(1, (artistScore.get(a) ?? 0) / maxScore)), disliked: avoid.has(a), genres: genre ? [genre] : [] })
+    // The track carries the same genres array, so tempo readings on the deck
+    // (and the facts scan) know a genre found later too.
+    const genres = genre ? [genre] : []
+    out.set(key, { track: { ...t, genres }, known, taste: Math.max(-1, Math.min(1, (artistScore.get(a) ?? 0) / maxScore)), disliked: avoid.has(a), genres })
   }
   for (const t of deps.favorites()) add(t)
   if (!opts.favoritesOnly) {

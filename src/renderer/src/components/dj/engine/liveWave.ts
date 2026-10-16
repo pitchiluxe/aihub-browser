@@ -10,7 +10,7 @@
  * `env` / `low` are what the waveform views draw (same layout as a decoded
  * envelope: one frame per 1/ENV_RATE s; low is a share of the full peak).
  */
-import { bestLag, detectBpm, ENV_RATE, onsetCurve } from './analysis'
+import { bestLag, detectBpm, ENV_RATE, onsetCurve, type TempoHint } from './analysis'
 
 /** Longest gap between scan readings that is joined up (0.6 s of song); longer is an interruption. */
 const MAX_SCAN_GAP = Math.round(0.6 * ENV_RATE)
@@ -112,10 +112,10 @@ export class LiveWave {
   }
 
   /** Tempo of the scanned song, from its first `upTo` frames (all of it by default). */
-  scannedBpm(upTo = this.frames): number | null {
+  scannedBpm(upTo = this.frames, tempo: TempoHint = {}): number | null {
     if (!this.hasScan) return null
     const n = Math.min(this.frames, upTo)
-    return detectBpm(onsetCurve({ amp: this.scanEnv.subarray(0, n), low: this.scanLow.subarray(0, n), rate: ENV_RATE }))
+    return detectBpm(onsetCurve({ amp: this.scanEnv.subarray(0, n), low: this.scanLow.subarray(0, n), rate: ENV_RATE }), ENV_RATE, tempo)
   }
 
   private rebuild(): void {

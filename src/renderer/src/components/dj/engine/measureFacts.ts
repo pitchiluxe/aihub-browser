@@ -2,7 +2,7 @@
 // audio: tempo (with a confidence), key, energy and where to mix in and out.
 // Pure — the same function runs in a worker for live scans and in tests.
 import type { MeasuredFacts } from '../ai/types'
-import { buildEnvelope, detectBpm, onsetCurve, ENV_RATE } from './analysis'
+import { buildEnvelope, detectBpm, onsetCurve, ENV_RATE, type TempoHint } from './analysis'
 import { detectKey } from './key'
 
 /** Below this the key detector is guessing (see the 2026-10-12 probe). */
@@ -22,18 +22,18 @@ function perSecondRms(pcm: Float32Array, rate: number): Float32Array {
 
 const median = (a: Float32Array) => { const s = Array.from(a).sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0 }
 
-export function measureFacts(pcm: Float32Array, rate: number): MeasuredFacts {
+export function measureFacts(pcm: Float32Array, rate: number, tempo: TempoHint = {}): MeasuredFacts {
   const durationSec = pcm.length / rate
   const onset = onsetCurve(buildEnvelope(pcm, rate))
-  const bpm = detectBpm(onset)
+  const bpm = detectBpm(onset, ENV_RATE, tempo)
 
   // Tempo confidence: does each half of the song agree with the whole?
   let bpmConfidence = 0
   if (bpm !== null) {
     const half = Math.floor(onset.length / 2)
     const agrees = (x: number | null) => x !== null && Math.abs(x - bpm) / bpm < 0.02
-    const a = half >= ENV_RATE * 10 ? detectBpm(onset.subarray(0, half)) : null
-    const b = half >= ENV_RATE * 10 ? detectBpm(onset.subarray(half)) : null
+    const a = half >= ENV_RATE * 10 ? detectBpm(onset.subarray(0, half), ENV_RATE, tempo) : null
+    const b = half >= ENV_RATE * 10 ? detectBpm(onset.subarray(half), ENV_RATE, tempo) : null
     bpmConfidence = agrees(a) && agrees(b) ? 1 : agrees(a) || agrees(b) ? 0.7 : 0.4
   }
 

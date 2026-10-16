@@ -28,6 +28,13 @@ describe('measureFacts', () => {
     expect(f.durationSec).toBeCloseTo(60, 0)
   })
 
+  it('a slow genre folds a double-time reading down (afrobeats at 176 is 88)', () => {
+    expect(measureFacts(kicks(176, 60), SR).bpm).toBeCloseTo(176, 0)
+    const f = measureFacts(kicks(176, 60), SR, { ceiling: 125 })
+    expect(Math.abs((f.bpm as number) - 88)).toBeLessThanOrEqual(0.5)
+    expect(f.bpmConfidence).toBe(1)
+  })
+
   it('rates a loud, fast track higher energy than a quiet, slow one', () => {
     const loud = measureFacts(kicks(128, 40, 1), SR)
     const quiet = measureFacts(kicks(85, 40, 0.15), SR)

@@ -6,6 +6,7 @@
 import type { DjTrack } from './DjEngine'
 import type { MeasuredFacts } from '../ai/types'
 import { captureTab, ytBridge } from './youtubeDeck'
+import { tempoCeiling, type TempoHint } from './analysis'
 
 export const FACT_SCAN_RATE = 2
 const SCAN_DECK = 'F-scan'
@@ -48,7 +49,7 @@ export function scanStep(wasAd: boolean, s: ScanPoll): { record: boolean; comple
 let worker: Worker | null = null
 let seq = 0
 const pending = new Map<number, (r: MeasuredFacts | null) => void>()
-function measureInWorker(pcm: Float32Array, rate: number): Promise<MeasuredFacts | null> {
+function measureInWorker(pcm: Float32Array, rate: number, tempo: TempoHint): Promise<MeasuredFacts | null> {
   if (!worker) {
     worker = new Worker(new URL('./facts.worker.ts', import.meta.url), { type: 'module' })
     worker.onmessage = (e: MessageEvent<{ id: number; facts?: MeasuredFacts }>) => {
@@ -56,7 +57,7 @@ function measureInWorker(pcm: Float32Array, rate: number): Promise<MeasuredFacts
     }
   }
   const id = ++seq
-  return new Promise(resolve => { pending.set(id, resolve); worker!.postMessage({ id, pcm, rate }, [pcm.buffer]) })
+  return new Promise(resolve => { pending.set(id, resolve); worker!.postMessage({ id, pcm, rate, tempo }, [pcm.buffer]) })
 }
 
 async function captureYouTube(ctx: AudioContext, videoId: string, signal: { cancelled: boolean }): Promise<{ pcm: Float32Array; rate: number } | null> {
@@ -124,7 +125,7 @@ export function createFactSource(ctx: AudioContext): FactSource {
         ? await captureYouTube(ctx, track.youtubeId, signal)
         : await decodeLocal(ctx, track.token)
       if (!audio || audio.pcm.length < audio.rate * 20) return null
-      return measureInWorker(audio.pcm, audio.rate)
+      return measureInWorker(audio.pcm, audio.rate, { ceiling: tempoCeiling(track.genres) })
     },
   }
 }

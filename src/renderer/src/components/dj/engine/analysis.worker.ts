@@ -1,13 +1,13 @@
-import { analyze } from './analysis'
+import { analyze, type TempoHint } from './analysis'
 import { scratchCopy } from './scratchCopy'
 
 // Deck analysis (envelope, tempo, key) and the scratch buffer off the UI thread:
 // on a 4-minute song they are ~1 s of CPU, and the DJ console shares its thread
 // with the whole browser UI.
-self.onmessage = (e: MessageEvent<{ id: number; channels: Float32Array[]; sampleRate: number; withScratch?: boolean }>) => {
-  const { id, channels, sampleRate, withScratch } = e.data
+self.onmessage = (e: MessageEvent<{ id: number; channels: Float32Array[]; sampleRate: number; withScratch?: boolean; tempo?: TempoHint }>) => {
+  const { id, channels, sampleRate, withScratch, tempo } = e.data
   try {
-    const analysis = analyze(channels, sampleRate)
+    const analysis = analyze(channels, sampleRate, tempo)
     const scratch = withScratch ? scratchCopy(channels, sampleRate) : undefined
     const transfer: Transferable[] = [analysis.env.amp.buffer, analysis.env.low.buffer]
     if (scratch) transfer.push(scratch.data.buffer)
