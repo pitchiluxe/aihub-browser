@@ -527,7 +527,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ai: {
     checkDuplicate:     (url:string, e:string[]) => ipcRenderer.invoke('ai:checkDuplicate', url, e),
     categorizeBookmark: (url:string, t:string)   => ipcRenderer.invoke('ai:categorizeBookmark', url, t),
-    chat:               (msgs:any[], m?:string, opts?:{preferCloud?:boolean; needsTools?:boolean; streamId?:string}) => ipcRenderer.invoke('ai:chat', msgs, m, opts),
+    chat:               (msgs:any[], m?:string, opts?:{preferCloud?:boolean; needsTools?:boolean; localSystem?:string; streamId?:string}) => ipcRenderer.invoke('ai:chat', msgs, m, opts),
     // Partial tokens for the request that passed a matching streamId. The
     // promise from chat() still resolves with the complete text — this is
     // purely so the answer can be shown while it is still being written.

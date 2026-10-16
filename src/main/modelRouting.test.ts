@@ -126,11 +126,12 @@ describe('firstTokenTimeoutForPrompt', () => {
   })
 
   it('allows CPU-bound large prompts more prefill time', () => {
-    expect(firstTokenTimeoutForPrompt(31_500)).toBe(198_000)
+    // ~4.5k tokens: a compact agent prompt with a resume, at the measured CPU rate.
+    expect(firstTokenTimeoutForPrompt(15_750)).toBe(225_000)
   })
 
   it('caps the wait and handles invalid sizes', () => {
-    expect(firstTokenTimeoutForPrompt(100_000)).toBe(240_000)
+    expect(firstTokenTimeoutForPrompt(100_000)).toBe(360_000)
     expect(firstTokenTimeoutForPrompt(-1)).toBe(180_000)
   })
 })

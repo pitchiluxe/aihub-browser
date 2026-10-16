@@ -18,7 +18,7 @@ import { viewRect } from './viewBounds'
 import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt, lighterModelToPull } from './modelRouting'
-import { sanitizeChatMessages, fitMessagesToBudget } from './chatMessages'
+import { sanitizeChatMessages, fitMessagesToBudget, withLocalSystem } from './chatMessages'
 import { createFareEngine } from './fares/engine'
 import { putFacts, type TrackFacts as DjTrackFacts } from './dj/facts'
 import { createElectronDriver, FARES_PARTITION } from './fares/hiddenPage'
@@ -5547,7 +5547,12 @@ async function tryDirectKey(p: DirectProvider, messages: any[], opts: AiRequestO
 // must never be auto-selected again this session.
 const slowModels = new Set<string>()
 
-type AiRequestOpts = { preferCloud?: boolean; needsTools?: boolean; maxTokens?: number; onDelta?: (text: string, reset?: boolean) => void }
+type AiRequestOpts = {
+  preferCloud?: boolean; needsTools?: boolean; maxTokens?: number
+  /** A shorter system prompt to use when a local Ollama model answers. */
+  localSystem?: string
+  onDelta?: (text: string, reset?: boolean) => void
+}
 
 // Every AI feature funnels through here, which makes it the one place to
 // record what the toolbar shows: "generating" while a request is open, and
@@ -5676,7 +5681,7 @@ async function runAiRequestRouted(
             // depends on which model this attempt is using.
             // Fitted before sending: past num_ctx Ollama cuts from the front
             // and the system prompt is the first thing lost.
-            const fitted = fitMessagesToBudget(messages, OLLAMA_PROMPT_BUDGET_CHARS)
+            const fitted = fitMessagesToBudget(withLocalSystem(messages, opts?.localSystem), OLLAMA_PROMPT_BUDGET_CHARS)
             const payload = !carriesImages ? fitted
               : looksVisionCapable(attempt) ? forOllama(fitted)
               : withoutImages(fitted)
@@ -5825,7 +5830,7 @@ const STREAM_FLUSH_MS = 60
 
 ipcMain.handle('ai:chat', async (
   e, messages: any[], preferredModel?: string,
-  opts?: { preferCloud?: boolean; needsTools?: boolean; streamId?: string },
+  opts?: { preferCloud?: boolean; needsTools?: boolean; localSystem?: string; streamId?: string },
 ) => {
   const streamId = opts?.streamId
   if (!streamId) return runAiRequest(messages, preferredModel, opts)

@@ -43,6 +43,17 @@ export function sanitizeChatMessages<T extends Msg>(messages: T[]): T[] {
   return out
 }
 
+/**
+ * Swap in the caller's compact system prompt for a local model. CPU prefill is
+ * ~20 tokens/s, so a cloud-sized tool manual alone is minutes before the first
+ * word. Anything that isn't a non-empty string is ignored — it arrives over IPC.
+ */
+export function withLocalSystem<T extends Msg>(messages: T[], localSystem: unknown): T[] {
+  if (typeof localSystem !== 'string' || !localSystem.trim()) return messages
+  if (messages[0]?.role !== 'system') return messages
+  return [{ ...messages[0], content: localSystem }, ...messages.slice(1)]
+}
+
 const size = (msgs: Msg[]) => msgs.reduce((n, m) => n + textOf(m).length, 0)
 
 /** Fit text content under `maxChars`; returns the input itself when it fits. */

@@ -183,10 +183,22 @@ export function suggestFasterModel(models: ModelInfo[], timedOut: string): strin
   })[0].name
 }
 
-/** Scale prompt prefill time while bounding how long a local request can hang. */
+/**
+ * Scale prompt prefill time while bounding how long a local request can hang.
+ *
+ * 50 ms per token is measured, not guessed: llama3.2:3b on a CPU-only machine
+ * prefills at ~21.6 tokens/s (46 ms/token). The old 22 ms/token slope gave an
+ * 4-5k-token agent prompt too little time, so the first turn timed out, the
+ * model was unloaded — throwing away the prompt cache that would have made the
+ * next turn fast — and the answer came from the cloud instead.
+ *
+ * Capped at six minutes: past that a prompt is simply too big for the machine
+ * (an 8k-token one ran 20 minutes without a word), and a timeout is followed
+ * by a retry on a smaller model, so the cap is paid twice.
+ */
 export function firstTokenTimeoutForPrompt(promptChars: number): number {
   const estimatedTokens = Math.ceil(Math.max(0, promptChars) / 3.5)
-  return Math.min(240_000, Math.max(180_000, estimatedTokens * 22))
+  return Math.min(360_000, Math.max(180_000, estimatedTokens * 50))
 }
 
 /**

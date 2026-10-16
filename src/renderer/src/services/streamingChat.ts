@@ -12,7 +12,12 @@
 
 import { cleanNarration } from './agentTools'
 
-export type ChatOpts = { preferCloud?: boolean; needsTools?: boolean }
+export type ChatOpts = {
+  preferCloud?: boolean
+  needsTools?: boolean
+  /** Replaces the system message when a local Ollama model answers. */
+  localSystem?: string
+}
 
 /**
  * What is safe to show from a half-received reply.

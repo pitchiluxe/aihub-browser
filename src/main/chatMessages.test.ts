@@ -1,5 +1,22 @@
 import { describe, it, expect } from 'vitest'
-import { sanitizeChatMessages, fitMessagesToBudget } from './chatMessages'
+import { sanitizeChatMessages, fitMessagesToBudget, withLocalSystem } from './chatMessages'
+
+describe('withLocalSystem', () => {
+  const msgs = [{ role: 'system', content: 'FULL MANUAL' }, { role: 'user', content: 'q' }]
+
+  it('replaces only the system message', () => {
+    expect(withLocalSystem(msgs, 'compact')).toEqual([{ role: 'system', content: 'compact' }, { role: 'user', content: 'q' }])
+    expect(msgs[0].content).toBe('FULL MANUAL')
+  })
+
+  it('leaves messages alone without a usable compact prompt or system message', () => {
+    expect(withLocalSystem(msgs, undefined)).toBe(msgs)
+    expect(withLocalSystem(msgs, '  ')).toBe(msgs)
+    expect(withLocalSystem(msgs, { evil: true })).toBe(msgs)
+    const noSys = [{ role: 'user', content: 'q' }]
+    expect(withLocalSystem(noSys, 'compact')).toBe(noSys)
+  })
+})
 
 describe('sanitizeChatMessages', () => {
   it('drops messages with no content — OpenRouter rejects the whole request for one', () => {

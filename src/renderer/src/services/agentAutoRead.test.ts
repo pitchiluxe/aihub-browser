@@ -1,5 +1,25 @@
 import { describe, it, expect } from 'vitest'
-import { extractDocumentPaths, MAX_AUTO_READ } from './agentAutoRead'
+import { extractDocumentPaths, documentBriefing, hasReadDocument, MAX_AUTO_READ } from './agentAutoRead'
+
+describe('hasReadDocument', () => {
+  it('spots a read_file digest and ignores other tools', () => {
+    expect(hasReadDocument([{ toolLog: '- web_search jobs → …' }, { toolLog: '- read_file C:\\r.pdf → ERICK' }])).toBe(true)
+    expect(hasReadDocument([{ toolLog: '- web_search jobs → …' }, {}])).toBe(false)
+  })
+})
+
+describe('documentBriefing', () => {
+  it('puts the user request after the document data', () => {
+    const text = documentBriefing([{ tool: 'read_file', path: 'C:\\r.pdf', text: 'IAM Engineer, Entra ID' }], 'Find me a job')
+    expect(text.indexOf('IAM Engineer')).toBeLessThan(text.indexOf('Find me a job'))
+    expect(text).not.toMatch(/failed/)
+  })
+
+  it('names a failed read so the model cannot pretend', () => {
+    const text = documentBriefing([{ tool: 'read_file', path: 'C:\\r.pdf', error: 'not found' }], 'x')
+    expect(text).toContain('Reading C:\\r.pdf failed')
+  })
+})
 
 describe('extractDocumentPaths', () => {
   it('finds a Windows path at the end of a sentence', () => {
