@@ -74,6 +74,9 @@ export function parseBrief(text: string, opts: { nowHour?: number; nowMinute?: n
       .replace(/\b\d+(?:\.\d+)? ?(h|hr|hrs|hours?|m|mins?|minutes?)\b/g, '')
       .replace(/\bpeak (?:at|around) \d{1,2}(?::\d{2})? ?(am|pm)?\b/g, '')
       .replace(/\b(warm[- ]?up|opening|peak hour|peak|party hits|late night|after ?hours|wind down|focus|workout|high energy|set|mix|music|for|a|an|the|of|some)\b/g, '')
+      // Shape words between styles ("… then build into amapiano") are not
+      // searches: "build" alone filled the pool with songs titled "Build".
+      .replace(/\b(build(?:s|ing)?(?: it)?(?: up)?|start(?:s|ing)?(?: off| with)?|end(?:s|ing)?(?: with| on)?|finish(?:es|ing)?(?: with| on)?|move|moving|go|going|switch(?:ing)?|ease|easing|slowly|gradually)\b/g, '')
       .replace(/\s+/g, ' ').trim()
     if (seed && !/^\d+$/.test(seed)) seeds.push(...seed.split(/ and | & /).map(s => s.trim()).filter(Boolean))
   }

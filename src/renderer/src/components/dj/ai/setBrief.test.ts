@@ -17,6 +17,11 @@ describe('parseBrief', () => {
     expect(parseBrief('amapiano for 90 minutes').seeds).toEqual(['amapiano'])
   })
 
+  it('shape words between styles are not searches ("build" filled the pool with songs titled "Build")', () => {
+    expect(parseBrief('chill afrobeats then build into amapiano, no Drake').seeds).toEqual(['chill afrobeats', 'amapiano'])
+    expect(parseBrief('start with r&b then build up into dancehall').seeds).toEqual(['r&b', 'dancehall'])
+  })
+
   it('reads durations in several forms', () => {
     expect(parseBrief('house, 90 min').durationMin).toBe(90)
     expect(parseBrief('jazz for 2 hours').durationMin).toBe(120)

@@ -112,6 +112,20 @@ describe('SetConductor', () => {
     expect(c.next()?.artist).toBe('Rema')
   })
 
+  it('a request lands at once, even while a refill is busy measuring songs (it waited 6+ min live)', async () => {
+    const lib = [yt('a'), yt('b'), yt('c'), yt('Rema', 107)]
+    const facts = new Map<string, any>()
+    // Measuring never finishes — like a queue of 2-minute YouTube scans.
+    const d = deps(lib, { analysis: { ensure: () => new Promise(() => {}), known: (t: any) => facts.get(t.youtubeId) ?? null } })
+    const c = new SetConductor(d)
+    void c.start(parseBrief('afrobeats, 1h'))
+    await new Promise(r => setTimeout(r, 10))
+    c.instruct(parseInstruction('play Calm Down by Rema next'))
+    await new Promise(r => setTimeout(r, 10))
+    expect(c.state.upNext[0]?.candidate.track.artist).toBe('Rema')
+    expect(c.next()?.artist).toBe('Rema')
+  })
+
   it('records each handoff for the transition caption', async () => {
     const lib = Array.from({ length: 5 }, (_, i) => yt(`artist${i}`, 104))
     const c = new SetConductor(deps(lib, { nowPlaying: () => ({ track: lib[0].track, facts: { bpm: 104, bpmConfidence: 1, camelot: '8A', keyConfidence: 1, energy: 0.6, introEndSec: 0, outroStartSec: 200, durationSec: 210, playable: true, at: 1 } }) }))

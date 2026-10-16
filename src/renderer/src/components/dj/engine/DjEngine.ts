@@ -392,8 +392,10 @@ export class Deck extends Emitter {
     if (!this.track || this.held) return false
     return this.isYouTube ? !!this.yt?.finished : this.media.ended
   }
-  /** Playing, or about to be — what the transport button shows. */
-  get active(): boolean { return this.held ? this.holdResume : this.playing || this.want }
+  /** Playing, or about to be — what the transport button shows. A song that
+   *  played to its end is not (a YouTube end never clears `want`, which left
+   *  the deck "active" forever and Automix waiting on it in silence). */
+  get active(): boolean { return this.held ? this.holdResume : this.playing || (this.want && !this.finished) }
   get time(): number {
     if (this.held) return this.heldTime
     return this.isYouTube ? this.yt?.currentTime ?? 0 : this.media.currentTime || 0

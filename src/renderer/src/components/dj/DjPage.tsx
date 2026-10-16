@@ -210,7 +210,16 @@ function Console({ engine }: { engine: DjEngine }) {
         }
         const [t, ...rest] = sideRef.current
         if (t) { setSidelist(() => rest); return t }
-        return takeNext()
+        const queued = takeNext()
+        if (queued) return queued
+        // A set paused only because the DJ is looking at the decks keeps the
+        // music going when they have not lined anything up themselves.
+        if (c?.state.active) {
+          const s = c.next()
+          if (s?.youtubeId) aiFinds.add([s], c.state.brief?.vibe || 'AI DJ set')
+          return s
+        }
+        return undefined
       },
       loaded: (deck, auto) => tracker.noteLoad(deck, auto),
       say,

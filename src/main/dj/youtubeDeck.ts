@@ -94,10 +94,25 @@ function frameOf(p: Player): WebFrameMain | null {
   return p.host.wc.mainFrame.frames[0] ?? null
 }
 
+/** Every script run in the embed is a synchronous one-liner; anything slower is a hung frame. */
+const IN_FRAME_TIMEOUT_MS = 3000
+
 async function inFrame<T>(p: Player, code: string): Promise<T | null> {
   const f = frameOf(p)
   if (!f) return null
-  try { return (await f.executeJavaScript(code)) as T } catch { return null }
+  // executeJavaScript on a frame that YouTube swapped or detached can stay
+  // pending forever. The renderer polls one request at a time, so a single
+  // hung call froze that deck's state for good: it showed "playing" long past
+  // the song's end and Automix waited on it in silence.
+  let timer: NodeJS.Timeout | undefined
+  const timeout = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), IN_FRAME_TIMEOUT_MS) })
+  try {
+    return await Promise.race([f.executeJavaScript(code) as Promise<T>, timeout])
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function ensurePlayer(owner: WebContents, deck: YtDeckId): Promise<Player> {

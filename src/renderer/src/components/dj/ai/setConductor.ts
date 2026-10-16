@@ -54,6 +54,7 @@ export class SetConductor extends Emitter {
   private energyOffset = 0
   private discovery = 0.25
   private refilling: Promise<void> | null = null
+  private serving: Promise<void> | null = null
   private stopAfter = false
   private bursts = { discovery: 0, favorites: 0 }
   private seq: { query: string; count: number }[] = []
@@ -137,21 +138,44 @@ export class SetConductor extends Emitter {
     return this.refilling
   }
 
+  /**
+   * The listener's own requests, on a path of their own. They used to be read
+   * only when a refill began, and a refill measures its shortlist first (a
+   * 2-minute YouTube scan per song), so "play Calm Down next" sat unanswered
+   * for six minutes live. A requested song goes to the front of Up next at
+   * once; its facts are measured in the background and the hand-over does not
+   * wait for them.
+   */
+  private serveRequests(): Promise<void> {
+    if (this.serving) return this.serving
+    this.serving = (async () => {
+      while (this.state.active && this.playNextQueries.length) {
+        const q = this.playNextQueries.shift()!
+        const found = (await this.fetching(() => this.deps.pool.search(q, 1)).catch(() => []))[0]
+        if (found) this.playNextQueue.push(found)
+        else this.set({ message: `Couldn't find "${q}".` })
+      }
+      const asked: Scored[] = []
+      while (this.state.active && this.playNextQueue.length) {
+        const t = this.playNextQueue.shift()!
+        const facts = this.deps.analysis.known(t)
+        if (facts && !facts.playable) continue
+        if (!facts) void this.deps.analysis.ensure(t).catch(() => null)
+        asked.push({ candidate: { track: t, facts, known: true, taste: 0, disliked: false, genres: [] }, total: 99, parts: { tempo: 0.5, key: 0.5, energy: 0.5, taste: 0.5, discovery: 0.5 }, why: 'you asked for it', transition: facts?.bpm ? 'beatmatch' : 'echo' })
+      }
+      if (!asked.length) return
+      // In the order asked, after requests already waiting, ahead of the plan.
+      const earlier = this.state.upNext.filter(s => s.why === 'you asked for it')
+      const plan = this.state.upNext.filter(s => s.why !== 'you asked for it')
+      this.set({ upNext: [...earlier, ...asked, ...plan], tentative: null })
+    })().finally(() => { this.serving = null })
+    return this.serving
+  }
+
   private async doRefill(): Promise<void> {
     if (!this.state.active || this.state.paused) return
     // Requested songs and sequences first: they are instructions, not suggestions.
-    while (this.playNextQueries.length) {
-      const q = this.playNextQueries.shift()!
-      const found = (await this.deps.pool.search(q, 1).catch(() => []))[0]
-      if (found) this.playNextQueue.push(found)
-      else this.set({ message: `Couldn't find "${q}".` })
-    }
-    while (this.playNextQueue.length && this.state.upNext.length < LOOKAHEAD + 1) {
-      const t = this.playNextQueue.shift()!
-      const facts = await this.deps.analysis.ensure(t).catch(() => null)
-      if (facts && !facts.playable) continue
-      this.set({ upNext: [{ candidate: { track: t, facts, known: true, taste: 0, disliked: false, genres: [] }, total: 99, parts: { tempo: 0.5, key: 0.5, energy: 0.5, taste: 0.5, discovery: 0.5 }, why: 'you asked for it', transition: facts?.bpm ? 'beatmatch' : 'echo' }, ...this.state.upNext] })
-    }
+    if (this.playNextQueries.length || this.playNextQueue.length || this.serving) await this.serveRequests()
     let relaxed = ''
     let widened = false
     const deadSeq = new Set<string>()
@@ -323,6 +347,7 @@ export class SetConductor extends Emitter {
     const ctxRules = rules
     const keep = this.state.upNext.filter(s => rankCandidates([s.candidate], { ...this.context(), rules: ctxRules, played: [] }).length > 0 || s.why === 'you asked for it')
     this.set({ rules, upNext: keep, message: p.confirm || this.state.message })
+    void this.serveRequests()
     void this.refill()
   }
 
@@ -347,6 +372,7 @@ export class SetConductor extends Emitter {
   queueTrack(t: DjTrack): void {
     this.playNextQueue.unshift(t)
     this.set({ message: `Up next: ${t.title}` })
+    void this.serveRequests()
     void this.refill()
   }
 

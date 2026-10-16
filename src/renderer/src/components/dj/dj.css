@@ -369,7 +369,9 @@
 .aihub-dj .dj-cf-center img, .aihub-dj .dj-cf-center .dj-cf-ph { outline: 2px solid rgba(255,255,255,0.9); }
 
 .aihub-dj .dj-table { flex: 1; min-height: 0; display: flex; flex-direction: column; color: #f3f4f6; }
-.aihub-dj .dj-thead, .aihub-dj .dj-tr { display: grid; grid-template-columns: minmax(160px, 2.2fr) minmax(110px, 1.4fr) minmax(90px, 1.2fr) 64px 58px 46px 76px; align-items: center; }
+.aihub-dj .dj-thead, .aihub-dj .dj-tr { display: grid; grid-template-columns: minmax(160px, 2.2fr) minmax(110px, 1.4fr) minmax(90px, 1.2fr) 64px 58px 46px 124px; align-items: center; }
+/* The action column holds a YouTube row's five buttons (A, B, mix, queue, favourite):
+   at 76px "Load on deck A/B" overflowed off the left and could not be clicked. */
 .aihub-dj .dj-thead { height: 20px; background: #232428; border-bottom: 1px solid #000; }
 .aihub-dj .dj-th { height: 100%; padding: 0 8px; border: 0; border-right: 1px solid #000; background: transparent; color: #d1d5db; font-size: 12px; font-weight: 700; text-align: left; }
 .aihub-dj .dj-th:hover { background: rgba(255,255,255,0.05); }
