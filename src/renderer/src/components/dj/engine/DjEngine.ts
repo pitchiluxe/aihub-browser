@@ -22,6 +22,7 @@ import { YouTubeScan } from './youtubeScan'
 import { LiveWave } from './liveWave'
 import { LocalScan } from './localScan'
 import { Sampler } from './sampler'
+import { AudioWatchdog } from './audioWatchdog'
 import { keyMatch, parseKey, type KeyMatch, type MusicalKey } from './key'
 
 export interface DjTrack {
@@ -1100,6 +1101,9 @@ export class DjEngine extends Emitter {
   private fade: { from: number; to: number; start: number; ms: number } | null = null
 
   private raf = 0
+  /** Restarts the audio output when the device under it went away (no sound, no waveforms). */
+  private watchdog: AudioWatchdog
+  private onOutputChange = (): void => this.watchdog.nudge()
   /** Off-screen home for the decks' media elements and YouTube picture feeds. */
   readonly mediaHost: HTMLDivElement
 
@@ -1150,6 +1154,10 @@ export class DjEngine extends Emitter {
     this.decks = { A: new Deck('A', this), B: new Deck('B', this), C: new Deck('C', this), D: new Deck('D', this) }
     this.setCrossfader(0.5)
 
+    this.watchdog = new AudioWatchdog(this.ctx, () => DECK_IDS.some(id => this.decks[id].playing))
+    navigator.mediaDevices?.addEventListener?.('devicechange', this.onOutputChange)
+    this.ctx.addEventListener('error', this.onOutputChange)
+
     // A steady clock rather than animation frames: asking for a frame every
     // vsync made the page render 60 times a second just to keep this running,
     // which is what starved the YouTube players. It also keeps loops and
@@ -1159,6 +1167,7 @@ export class DjEngine extends Emitter {
       this.tickFade()
       // A second deck may have started playing since a scan was queued.
       if (this.scanQueue.length) this.nextScan()
+      this.watchdog.check()
     }, TICK_MS)
   }
 
@@ -1316,6 +1325,8 @@ export class DjEngine extends Emitter {
 
   dispose(): void {
     window.clearInterval(this.raf)
+    navigator.mediaDevices?.removeEventListener?.('devicechange', this.onOutputChange)
+    this.ctx.removeEventListener('error', this.onOutputChange)
     if (this.recorder && this.recorder.state !== 'inactive') this.recorder.stop()
     for (const id of DECK_IDS) this.decks[id].dispose()
     this.mediaHost.remove()
