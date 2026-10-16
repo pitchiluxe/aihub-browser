@@ -145,6 +145,18 @@ export async function resolveCover(t: CoverTrack): Promise<string | null> {
 }
 
 /**
+ * The track as it should go onto a deck: with the same cover the library
+ * shows for it, so the platter, jog screen and monitor carry the picture
+ * that was dragged. Waits at most `waitMs` for a cover not found yet — a
+ * load never hangs on a slow search.
+ */
+export async function withDeckCover<T extends CoverTrack>(t: T, waitMs = 1500): Promise<T> {
+  if (t.cover) return { ...t, cover: displayCover(t.cover) }
+  const found = await Promise.race([resolveCover(t), new Promise<null>(r => setTimeout(() => r(null), waitMs))]).catch(() => null)
+  return found ? { ...t, cover: displayCover(found) } : t
+}
+
+/**
  * The picture to show for a song. `pending` while it is still being decided —
  * draw a quiet neutral tile then, not the placeholder — and `src` null with
  * `pending` false only when nothing exists anywhere. Pass `onError` to the <img>.

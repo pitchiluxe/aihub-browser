@@ -583,7 +583,13 @@ function CoverFlow({ size, rows, index, onSelect, onLoad, onStep }: {
         return (
           <div key={t.token} className={`dj-cf-item ${off === 0 ? 'dj-cf-center' : ''}`} style={style}
             onClick={() => onSelect(t)} onDoubleClick={() => onLoad(t)}
-            draggable onDragStart={e => e.dataTransfer.setData(TRACK_MIME, t.token)}>
+            draggable onDragStart={e => {
+              e.dataTransfer.setData(TRACK_MIME, t.token)
+              // Drag the cover itself — without it the ghost is the whole
+              // item, reflection included, upside-down copy and all.
+              const face = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(':scope > .dj-cf-img, :scope > .dj-cf-ph, :scope > .dj-cf-wait')
+              if (face) e.dataTransfer.setDragImage(face, face.offsetWidth / 2, face.offsetHeight / 2)
+            }}>
             <CoverArt t={t} />
           </div>
         )

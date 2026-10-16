@@ -398,6 +398,9 @@
   position: absolute; left: 50%; top: 10px; width: 96px; height: 96px;
   transition: transform 0.35s cubic-bezier(.2,.8,.2,1), opacity 0.35s;
   cursor: pointer;
+  /* The waiting tile sits under every cover, so the frame or two before a
+     picture decodes shows dark, not an empty hole. */
+  background: linear-gradient(160deg, #26282d, #141518); border-radius: 2px;
   /* Each cover is one composited layer for the whole flip: no repaint, no flicker. */
   will-change: transform, opacity; backface-visibility: hidden;
 }
@@ -405,6 +408,7 @@
 .aihub-dj .dj-cf-mirror {
   position: absolute; left: 0; right: 0; top: calc(100% + 1px); height: 100%;
   transform: scaleY(-1); pointer-events: none;
+  background: linear-gradient(20deg, #26282d, #141518); border-radius: 2px;
   -webkit-mask: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.2) 36%, transparent 62%);
           mask: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.2) 36%, transparent 62%);
 }

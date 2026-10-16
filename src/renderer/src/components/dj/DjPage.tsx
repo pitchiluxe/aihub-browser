@@ -52,6 +52,7 @@ import './dj-skins-pro.css'
 import './dj-skins-real.css'
 import './dj-designs.css'
 import { DesignContext, partsFor } from './designs'
+import { withDeckCover } from './coverLookup'
 
 export interface DjTheme { id: string; name: string; swatch: string; dark?: boolean; lightBg?: boolean }
 export const DJ_THEMES: DjTheme[] = [
@@ -261,7 +262,9 @@ function Console({ engine }: { engine: DjEngine }) {
     if (!deck) { say('Both decks are playing — stop one first'); return }
     if (deck.active || deck.held) { say(`Deck ${deck.id} is playing — stop it before loading`); return }
     tracker.noteLoad(deck.id, false)
-    void deck.load(track)
+    // With the cover the library shows for it (looked up or folder art), so
+    // what was dragged is what appears on the deck.
+    void withDeckCover(track).then(t => deck.load(t))
   }, [engine, A, B, C, D, say, tracker, layout])
 
   const mixNow = useCallback((track: DjTrack) => { void mixer.mixNow(track) }, [mixer])

@@ -13,6 +13,7 @@ import StageMixer from './StageMixer'
 import VideoMonitor from '../VideoMonitor'
 import type { DjTrack } from '../engine/DjEngine'
 import './stage.css'
+import './club.css'
 
 export default function StagePage({ engine, conductor, onTakeDecks, onStop, onAsk, results, onPick, onCloseResults, onToggleSongs, onSearch }: {
   engine: DjEngine; conductor: SetConductor; onTakeDecks: () => void; onStop?: () => void; onAsk: (text: string) => void

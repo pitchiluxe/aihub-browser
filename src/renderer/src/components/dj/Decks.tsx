@@ -147,9 +147,12 @@ export function ScreenDeck({ deck, size }: { deck: Deck; size: number }) {
           <b>{t ? t.title : 'No song loaded'}</b>
           <small>{t ? t.artist : 'Drop a song on this deck'}</small>
         </div>
-        {/* A small spinning ring: the deck's pulse, turned by the GPU with the song. */}
-        <div className="dj-sd-pulse" ref={ringRef} />
       </div>
+      {/* A small spinning ring: the deck's pulse, turned by the GPU with the
+          song. Outside the screen on purpose — a turning layer inside a
+          rounded, clipped box makes Chromium repaint the whole screen every
+          frame (15+ dropped frames measured). */}
+      <div className="dj-sd-pulse" ref={ringRef} />
       <div className="dj-sd-progress"><div ref={barRef} className="dj-sd-bar" /></div>
       <div ref={stripRef} className="dj-sd-strip" style={{ touchAction: 'none', cursor: t ? 'ew-resize' : 'default' }} {...hand}
         title="Touch strip — drag to nudge the tempo while playing; Shift-drag (or a paused deck) to scratch">

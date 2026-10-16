@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useSyncExternalStore } from 'react'
 import type { DjEngine } from '../engine/DjEngine'
 import VideoMonitor from '../VideoMonitor'
 import { stageLevel } from './stageLevel'
+import ClubScene from './ClubScene'
 
 /** `video` false: the glow only (the stage shows the picture in its own framed screen). */
 export default function Backdrop({ engine, video = true }: { engine: DjEngine; video?: boolean }) {
@@ -22,7 +23,10 @@ export default function Backdrop({ engine, video = true }: { engine: DjEngine; v
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [engine])
+  const playing = Object.values(engine.decks).some(d => d.playing)
   return <div className="dj-backdrop">
+    {/* The club is the room; a full-bleed video (start screen) plays in front of it. */}
+    <ClubScene engine={engine} playing={playing} />
     {video && hasVideo ? <div className="dj-backdrop-video"><VideoMonitor engine={engine} big bare native={false} /></div> : null}
     <div ref={glow} className="dj-backdrop-glow" />
     <div className="dj-backdrop-shade" />

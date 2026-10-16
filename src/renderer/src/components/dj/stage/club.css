@@ -1,0 +1,95 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   AI DJ stage as a club (ClubScene.tsx). Rules for this file:
+   - Moving layers move only by transform or opacity: the GPU composites
+     them, nothing is repainted per frame. No filter, backdrop-filter or
+     mix-blend-mode — they starved the YouTube players before (see stage.css).
+   - Every timing is a multiple of --beat (seconds per beat of the song that
+     is playing), so the room moves with the music.
+   ───────────────────────────────────────────────────────────────────────── */
+.dj-club { position: absolute; inset: 0; overflow: hidden; pointer-events: none; --beat: 0.5s; background: #020208; }
+
+/* The room: a dark back wall with an LED panel grid, a ceiling falling into shadow. */
+.dj-club-room { position: absolute; inset: 0;
+  background:
+    radial-gradient(70% 45% at 50% 58%, rgba(120, 40, 200, 0.28), transparent 70%),
+    linear-gradient(180deg, #05040c 0%, #0c0718 40%, #12081c 62%, #06030b 100%); }
+.dj-club-wall { position: absolute; left: 8%; right: 8%; top: 18%; height: 38%; border-radius: 4px; opacity: 0.55;
+  /* LED panels behind the booth: small lit cells between dark mullions. */
+  background:
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.85) 0 2px, transparent 2px 22px),
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.85) 0 2px, transparent 2px 22px),
+    linear-gradient(90deg, #3b0764, #1e3a8a 30%, #701a75 55%, #0e7490 80%, #3b0764);
+  box-shadow: 0 0 60px rgba(168, 85, 247, 0.25);
+  animation: dj-club-wall calc(var(--beat) * 2) ease-in-out infinite alternate; }
+/* Dim enough that the stage's text stays easy to read in front of it. */
+@keyframes dj-club-wall { from { opacity: 0.16; } to { opacity: 0.34; } }
+
+/* Haze: two soft banks drifting across the room — the beams show up in it. */
+.dj-club-haze { position: absolute; width: 140%; height: 70%; left: -20%; top: 10%; opacity: 0.5;
+  background: radial-gradient(40% 50% at 30% 50%, rgba(200, 180, 255, 0.10), transparent 70%), radial-gradient(35% 45% at 75% 40%, rgba(150, 220, 255, 0.08), transparent 70%); }
+.dj-club-haze-1 { animation: dj-club-drift 38s ease-in-out infinite alternate; }
+.dj-club-haze-2 { top: 30%; opacity: 0.4; animation: dj-club-drift 52s ease-in-out -20s infinite alternate-reverse; }
+@keyframes dj-club-drift { from { transform: translateX(-8%); } to { transform: translateX(8%); } }
+
+/* Mirror-ball spots wheeling across the room. */
+.dj-club-spots { position: absolute; left: 50%; top: 8%; width: 180vmax; height: 180vmax; margin: -90vmax 0 0 -90vmax; opacity: 0.35;
+  background:
+    radial-gradient(circle, rgba(255,255,255,0.9) 0 1.5px, transparent 2.5px) 0 0 / 61px 53px,
+    radial-gradient(circle, rgba(190,220,255,0.7) 0 1px, transparent 2px) 23px 31px / 47px 59px;
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 46%); mask: radial-gradient(circle, #000 18%, transparent 46%);
+  animation: dj-club-spin calc(var(--beat) * 64) linear infinite; }
+@keyframes dj-club-spin { to { transform: rotate(360deg); } }
+
+/* Lighting truss across the top, with a moving head above each beam and the ball. */
+.dj-club-truss { position: absolute; left: 4%; right: 4%; top: 3.5%; height: 14px; border-radius: 2px;
+  background:
+    repeating-linear-gradient(45deg, transparent 0 7px, #3a3d44 7px 9px, transparent 9px 14px),
+    repeating-linear-gradient(-45deg, transparent 0 7px, #3a3d44 7px 9px, transparent 9px 14px),
+    linear-gradient(#5b6068, #5b6068) top / 100% 2px no-repeat,
+    linear-gradient(#5b6068, #5b6068) bottom / 100% 2px no-repeat;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.6); }
+.dj-club-head { position: absolute; top: 10px; width: 22px; height: 18px; margin-left: -11px; border-radius: 4px 4px 9px 9px;
+  background: linear-gradient(#2a2c31, #0b0c0e); box-shadow: inset 0 1px rgba(255,255,255,0.18), 0 3px 6px rgba(0,0,0,0.7); }
+.dj-club-head::after { content: ''; position: absolute; left: 5px; right: 5px; bottom: 2px; height: 5px; border-radius: 50%; background: radial-gradient(#fff, rgba(255,255,255,0.2) 70%); }
+.dj-club-ball { position: absolute; left: 50%; top: 14px; width: 30px; height: 30px; margin-left: -15px; border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, #f8fafc 0 10deg, #64748b 10deg 20deg), radial-gradient(circle at 35% 30%, #fff, #475569);
+  box-shadow: inset -4px -6px 10px rgba(0,0,0,0.6), 0 0 18px rgba(255,255,255,0.35); }
+.dj-club-ball::before { content: ''; position: absolute; left: 50%; top: -12px; width: 1px; height: 12px; background: #5b6068; }
+
+/* Moving-head beams: the head sweeps across eight beats, the light pulses on every beat. */
+.dj-club-beam { position: absolute; top: calc(3.5% + 22px); width: 16vw; height: 105%; margin-left: -8vw; transform-origin: 50% 0;
+  animation: dj-club-sweep calc(var(--beat) * 8) ease-in-out infinite alternate; }
+.dj-club-beam-cone { width: 100%; height: 100%;
+  background: linear-gradient(180deg, var(--beam) 0%, color-mix(in srgb, var(--beam) 35%, transparent) 30%, transparent 85%);
+  clip-path: polygon(47% 0, 53% 0, 100% 100%, 0 100%);
+  opacity: 0.18; animation: dj-club-pulse var(--beat) ease-out infinite; }
+@keyframes dj-club-sweep { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
+@keyframes dj-club-pulse { 0% { opacity: 0.8; } 55% { opacity: 0.34; } 100% { opacity: 0.28; } }
+
+/* LED dance floor in perspective, flashing on the beat. */
+.dj-club-floor { position: absolute; left: -25%; right: -25%; bottom: 0; height: 36%; transform: perspective(520px) rotateX(58deg); transform-origin: 50% 100%; }
+.dj-club-floor-tiles { position: absolute; inset: 0;
+  background:
+    repeating-linear-gradient(90deg, #020208 0 3px, transparent 3px 60px),
+    repeating-linear-gradient(0deg, #020208 0 3px, transparent 3px 60px),
+    conic-gradient(from 90deg at 50% 50%, #4c1d95, #1d4ed8, #be185d, #0e7490, #4c1d95);
+  opacity: 0.75; }
+.dj-club-floor-pulse { position: absolute; inset: 0;
+  background: radial-gradient(60% 80% at 50% 100%, rgba(255, 255, 255, 0.35), transparent 70%);
+  opacity: 0; animation: dj-club-flash var(--beat) ease-out infinite; }
+@keyframes dj-club-flash { 0% { opacity: 0.6; } 40% { opacity: 0.12; } 100% { opacity: 0; } }
+
+/* The crowd: two rows of silhouettes bobbing on the beat. */
+.dj-club-crowd { position: absolute; left: -2%; width: 104%; fill: #010103; }
+.dj-club-crowd-back { bottom: 13%; height: 10%; fill: #07050d; animation: dj-club-bob var(--beat) ease-in-out infinite alternate; }
+.dj-club-crowd-front { bottom: -1%; height: 16%; animation: dj-club-bob var(--beat) ease-in-out calc(var(--beat) * -0.5) infinite alternate; }
+@keyframes dj-club-bob { from { transform: translateY(0); } to { transform: translateY(5px); } }
+
+/* Quiet room when nothing plays: the lights idle slowly and dim, the floor and crowd rest. */
+.dj-club:not(.is-playing) .dj-club-beam-cone { animation: none; opacity: 0.12; }
+.dj-club:not(.is-playing) :is(.dj-club-floor-pulse, .dj-club-crowd) { animation: none; }
+.dj-club:not(.is-playing) .dj-club-beam { animation-duration: 16s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dj-club * { animation: none !important; }
+}
