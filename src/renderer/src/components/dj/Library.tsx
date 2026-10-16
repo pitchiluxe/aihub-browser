@@ -12,6 +12,7 @@ import QueuePanel from './QueuePanel'
 import { addToList, isFavorite, queueStore, toggleFavorite, trackFrom } from './ytQueue'
 import { aiFinds } from './aiFinds'
 import TrackThumb from './TrackThumb'
+import { useCover, resolveCover } from './coverLookup'
 import { recordTaste } from './taste'
 import AiDjPanel from './AiDjPanel'
 import type { DeckId, DjTrack } from './engine/DjEngine'
@@ -548,6 +549,14 @@ function CoverFlow({ size, rows, index, onSelect, onLoad, onStep }: {
     const n = Math.trunc(acc.current / 100)
     if (n) { acc.current -= n * 100; onStep(n) }
   }
+  // Covers for songs just past either edge are fetched ahead, so a song
+  // flipping into view arrives with its picture instead of a placeholder.
+  useEffect(() => {
+    for (let o = -8; o <= 8; o++) {
+      const t = rows[index + o]
+      if (t && !t.cover) void resolveCover(t)
+    }
+  }, [rows, index])
   const k = size / 96
   const box = { '--cf': `${size}px` } as React.CSSProperties
   if (!rows.length) return <div className="dj-coverflow" style={box} />
@@ -561,10 +570,13 @@ function CoverFlow({ size, rows, index, onSelect, onLoad, onStep }: {
     <div className="dj-coverflow" style={box} onWheel={onWheel} title="Scroll to flip through songs">
       {items.map(({ t, off }) => {
         const abs = Math.abs(off)
+        // One transform shape for every position. When the centre cover was
+        // `translateX translateZ` and the sides `translateX rotateY scale`, the
+        // lists didn't match, the browser interpolated raw matrices instead,
+        // and covers skewed and swung on their way between the two.
+        const x = off === 0 ? 0 : Math.sign(off) * (0.82 + 0.6 * (abs - 1)) * size
         const style: React.CSSProperties = {
-          transform: off === 0
-            ? `translateX(-50%) translateZ(${40 * k}px)`
-            : `translateX(calc(-50% + ${Math.sign(off) * (0.82 + 0.6 * (abs - 1)) * size}px)) rotateY(${off < 0 ? 52 : -52}deg) scale(${1 - abs * 0.03})`,
+          transform: `translateX(calc(-50% + ${x}px)) translateZ(${off === 0 ? 40 * k : 0}px) rotateY(${off === 0 ? 0 : off < 0 ? 52 : -52}deg) scale(${1 - abs * 0.03})`,
           zIndex: 10 - abs,
           opacity: abs === span ? 0.5 : 1,
         }
@@ -572,15 +584,34 @@ function CoverFlow({ size, rows, index, onSelect, onLoad, onStep }: {
           <div key={t.token} className={`dj-cf-item ${off === 0 ? 'dj-cf-center' : ''}`} style={style}
             onClick={() => onSelect(t)} onDoubleClick={() => onLoad(t)}
             draggable onDragStart={e => e.dataTransfer.setData(TRACK_MIME, t.token)}>
-            {t.cover
-              ? <img src={t.cover} alt="" draggable={false} />
-              : <div className="dj-cf-ph" style={{ background: placeholderColor(t.title) }}>
-                  <b>{t.title}</b><small>{t.artist}</small><Music size={40} />
-                </div>}
+            <CoverArt t={t} />
           </div>
         )
       })}
     </div>
+  )
+}
+
+// The reflection is a real mirrored copy that rides inside the cover's own
+// transform. -webkit-box-reflect looked the same standing still but flickered
+// on every flip: Chromium re-rasterises it each frame of a 3D transition.
+// While a cover is still being decided the slot is a quiet dark tile, not the
+// coloured placeholder: flashing a bright tile that is replaced a moment later
+// is what made switching folders flicker. Covers fade in once they arrive.
+function CoverArt({ t }: { t: DjTrack }) {
+  const { src, pending, onError } = useCover(t)
+  const tile = (mirror: boolean) => src
+    ? <img className="dj-cf-img" src={src} alt="" draggable={false} onError={mirror ? undefined : onError} />
+    : pending
+      ? <div className="dj-cf-wait" />
+      : <div className="dj-cf-ph" style={{ background: placeholderColor(t.title) }}>
+          {!mirror && <><b>{t.title}</b><small>{t.artist}</small><Music size={40} /></>}
+        </div>
+  return (
+    <>
+      {tile(false)}
+      <div className="dj-cf-mirror" aria-hidden="true">{tile(true)}</div>
+    </>
   )
 }
 

@@ -24,6 +24,14 @@
 .aihub-dj .dj-vu { position: relative; overflow: hidden; }
 .aihub-dj .dj-vu-cover { position: absolute; left: 0; right: 0; top: 0; bottom: 0; background: rgba(11, 12, 14, 0.82); transform-origin: top; transform: scaleY(1); pointer-events: none; }
 .aihub-dj .dj-vu-hold { position: absolute; left: 1px; right: 1px; top: 0; opacity: 0; background: rgba(255, 255, 255, 0.85); pointer-events: none; }
+/* A glass lens over the LEDs: a soft reflection down the left edge, a bevel
+   at the top. */
+.aihub-dj .dj-vu::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(90deg, rgba(255,255,255,0.22), rgba(255,255,255,0.04) 45%, transparent 60%);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.25), inset 0 -1px 1px rgba(0,0,0,0.6);
+}
+.aihub-dj .dj-vu.dj-vu-h::after { background: linear-gradient(180deg, rgba(255,255,255,0.25), transparent 55%); }
 .aihub-dj .dj-vu.dj-vu-h .dj-vu-cover { transform-origin: right; transform: scaleX(1); }
 .aihub-dj .dj-vu.dj-vu-h .dj-vu-hold { top: 0; bottom: 0; left: 0; right: auto; }
 /* Lit segments without the per-segment glow: a glow on every segment is a lot of painting for little effect. */

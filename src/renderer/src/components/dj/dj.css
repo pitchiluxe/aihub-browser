@@ -293,6 +293,32 @@
   border: 1px solid #000; box-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
+/* Fader caps: moulded grip ridges either side of the index line, and a cast
+   shadow on the panel. Overlays only — every skin keeps its own cap colour. */
+.aihub-dj .dj-vfader-cap::before, .aihub-dj .dj-hfader-cap::before {
+  content: ''; position: absolute; inset: 2px; border-radius: 2px; pointer-events: none;
+  background:
+    repeating-linear-gradient(180deg, rgba(255,255,255,0.16) 0 1px, rgba(0,0,0,0.28) 1px 2px, transparent 2px 3px);
+  -webkit-mask: linear-gradient(180deg, #000 0 38%, transparent 38% 62%, #000 62%);
+          mask: linear-gradient(180deg, #000 0 38%, transparent 38% 62%, #000 62%);
+}
+.aihub-dj .dj-hfader-cap::before {
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,0.16) 0 1px, rgba(0,0,0,0.28) 1px 2px, transparent 2px 3px);
+  -webkit-mask: linear-gradient(90deg, #000 0 36%, transparent 36% 64%, #000 64%);
+          mask: linear-gradient(90deg, #000 0 36%, transparent 36% 64%, #000 64%);
+}
+.aihub-dj .dj-vfader-cap::after, .aihub-dj .dj-hfader-cap::after {
+  content: ''; position: absolute; inset: 0; border-radius: 3px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.22), transparent 40%);
+}
+.aihub-dj .dj-vfader-cap, .aihub-dj .dj-hfader-cap { filter: drop-shadow(1px 3px 2px rgba(0,0,0,0.45)); }
+
+/* Pressed keys sink into the panel instead of just moving half a pixel. */
+.aihub-dj .dj-btn:active, .aihub-dj .dj-pad:active, .aihub-dj .dj-mini:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 3px rgba(0,0,0,0.45), 0 0 0 rgba(0,0,0,0) !important;
+}
+
 /* Meters */
 .aihub-dj .dj-vu { display: flex; flex-direction: column; gap: 1.5px; width: 7px; padding: 1px; background: #0b0c0e; border-radius: 2px; }
 .aihub-dj .dj-vu i { flex: 1; border-radius: 1px; background: #1d3320; }
@@ -354,19 +380,45 @@
 .aihub-dj .dj-count { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: 13.5px; color: #d1d5db; }
 .aihub-dj .dj-spin { animation: dj-spin 1s linear infinite; }
 
-.aihub-dj .dj-coverflow { position: relative; height: 118px; flex: none; overflow: hidden; perspective: 700px; background: linear-gradient(#141518, #0c0d0f); border-bottom: 1px solid #000; }
-.aihub-dj .dj-cf-item {
-  position: absolute; left: 50%; top: 8px; width: 96px; height: 96px;
-  transition: transform 0.35s cubic-bezier(.2,.8,.2,1), opacity 0.35s;
-  cursor: pointer; transform-style: preserve-3d;
-  -webkit-box-reflect: below 2px linear-gradient(transparent 70%, rgba(255,255,255,0.18));
+/* Cover-flow on a glossy black floor: each cover stands on it and mirrors
+   into it. The strip is ~45% taller than a cover so the reflection is seen,
+   not clipped — at +22px only a sliver of it ever showed. */
+.aihub-dj .dj-coverflow {
+  position: relative; height: 162px; flex: none; overflow: hidden; perspective: 700px;
+  background:
+    linear-gradient(180deg, transparent 62%, rgba(255,255,255,0.035) 62.4%, transparent 64%),
+    linear-gradient(#18191c, #0b0c0e 62%, #050506);
+  border-bottom: 1px solid #000;
 }
+.aihub-dj .dj-cf-item {
+  position: absolute; left: 50%; top: 10px; width: 96px; height: 96px;
+  transition: transform 0.35s cubic-bezier(.2,.8,.2,1), opacity 0.35s;
+  cursor: pointer;
+  /* Each cover is one composited layer for the whole flip: no repaint, no flicker. */
+  will-change: transform, opacity; backface-visibility: hidden;
+}
+/* Mirror image standing on the floor below the cover, fading out downward. */
+.aihub-dj .dj-cf-mirror {
+  position: absolute; left: 0; right: 0; top: calc(100% + 1px); height: 100%;
+  transform: scaleY(-1); pointer-events: none;
+  -webkit-mask: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.2) 36%, transparent 62%);
+          mask: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0.2) 36%, transparent 62%);
+}
+.aihub-dj .dj-cf-mirror img, .aihub-dj .dj-cf-mirror .dj-cf-ph { box-shadow: none; }
+.aihub-dj .dj-cf-wait { width: 100%; height: 100%; border-radius: 2px; background: linear-gradient(160deg, #26282d, #141518); }
+.aihub-dj .dj-cf-img { animation: dj-cf-in 0.22s ease-out both; }
+@keyframes dj-cf-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .aihub-dj .dj-cf-img { animation: none; } }
 .aihub-dj .dj-cf-item img, .aihub-dj .dj-cf-ph { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 2px; box-shadow: 0 6px 18px rgba(0,0,0,0.7); }
+/* A soft studio-light sheen across the top of each cover (reflected too). */
+.aihub-dj .dj-cf-item::after {
+  content: ''; position: absolute; inset: 0; border-radius: 2px; pointer-events: none;
+  background: linear-gradient(165deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03) 38%, transparent 55%);
+}
 .aihub-dj .dj-cf-ph { position: relative; display: flex; flex-direction: column; padding: 8px; overflow: hidden; color: #fff; }
 .aihub-dj .dj-cf-ph b { font-size: 13.5px; line-height: 1.15; max-height: 56px; overflow: hidden; }
 .aihub-dj .dj-cf-ph small { font-size: 12.5px; opacity: 0.8; margin-top: 2px; }
 .aihub-dj .dj-cf-ph svg { position: absolute; right: 8px; bottom: 8px; opacity: 0.35; }
-.aihub-dj .dj-cf-center img, .aihub-dj .dj-cf-center .dj-cf-ph { outline: 2px solid rgba(255,255,255,0.9); }
 
 .aihub-dj .dj-table { flex: 1; min-height: 0; display: flex; flex-direction: column; color: #f3f4f6; }
 .aihub-dj .dj-thead, .aihub-dj .dj-tr { display: grid; grid-template-columns: minmax(160px, 2.2fr) minmax(110px, 1.4fr) minmax(90px, 1.2fr) 64px 58px 46px 124px; align-items: center; }

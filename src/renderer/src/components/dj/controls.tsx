@@ -148,6 +148,10 @@ export function Knob({ value, onChange, label, size = 34, center = 0.5, defaultV
     const large = Math.abs(to - from) * 270 > 180 ? 1 : 0
     return `M${x0} ${y0} A${r + 1.5} ${r + 1.5} 0 ${large} ${to > from ? 1 : 0} ${x1} ${y1}`
   }
+  const c = size / 2
+  // Knurled skirt: fine ridges around the cap edge that turn with it, so the
+  // knob reads as machined metal and its rotation is visible all the way round.
+  const ridges = Math.max(18, Math.round(size * 0.75))
   return (
     <div className="dj-knob" title={title ?? label}>
       <svg width={size} height={size} {...drag} onDoubleClick={() => onChange(defaultValue)} role="slider"
@@ -158,14 +162,35 @@ export function Knob({ value, onChange, label, size = 34, center = 0.5, defaultV
             <stop offset="55%" stopColor="#c9ccd1" />
             <stop offset="100%" stopColor="#7d828a" />
           </radialGradient>
+          <linearGradient id="dj-knob-skirt" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#eceef0" />
+            <stop offset="100%" stopColor="#80858c" />
+          </linearGradient>
+          <radialGradient id="dj-knob-spec" cx="35%" cy="28%" r="45%">
+            <stop offset="0%" stopColor="#fff" stopOpacity={0.9} />
+            <stop offset="100%" stopColor="#fff" stopOpacity={0} />
+          </radialGradient>
         </defs>
-        <circle cx={size / 2} cy={size / 2} r={r + 2.5} fill="#1d1f23" />
+        <circle cx={c} cy={c} r={r + 2.5} fill="#1d1f23" />
         {Math.abs(value - center) > 0.004 && (
           <path d={arc(Math.min(center, value), Math.max(center, value))} stroke={color} strokeWidth={2.4} fill="none" strokeLinecap="round" />
         )}
-        <circle cx={size / 2} cy={size / 2} r={r - 1} fill="url(#dj-knob-g)" stroke="#55595f" strokeWidth={0.8} />
-        <g transform={`rotate(${angle} ${size / 2} ${size / 2})`}>
-          <rect x={size / 2 - 1.2} y={4} width={2.4} height={r * 0.55} rx={1} fill="#1b1d21" />
+        {/* Shadow the knob casts down-right onto the panel. */}
+        <circle cx={c + 0.6} cy={c + 1.2} r={r - 0.6} fill="rgba(0,0,0,0.45)" />
+        <g transform={`rotate(${angle} ${c} ${c})`}>
+          <circle cx={c} cy={c} r={r - 1} fill="url(#dj-knob-skirt)" stroke="#0e0f11" strokeWidth={0.8} />
+          {Array.from({ length: ridges }, (_, i) => {
+            const a = (i / ridges) * Math.PI * 2
+            return <line key={i} x1={c + Math.cos(a) * (r - 1.2)} y1={c + Math.sin(a) * (r - 1.2)}
+              x2={c + Math.cos(a) * (r - 2.6)} y2={c + Math.sin(a) * (r - 2.6)} stroke="rgba(0,0,0,0.4)" strokeWidth={0.7} />
+          })}
+        </g>
+        <circle cx={c} cy={c} r={r - 2.6} fill="url(#dj-knob-g)" stroke="#6b7078" strokeWidth={0.6} />
+        <ellipse cx={c - r * 0.18} cy={c - r * 0.3} rx={r * 0.5} ry={r * 0.32} fill="url(#dj-knob-spec)" />
+        <g transform={`rotate(${angle} ${c} ${c})`}>
+          {/* The pointer line is engraved: a dark groove with a lit lower lip. */}
+          <rect x={c - 1.1 + 0.5} y={4.6} width={2.2} height={r * 0.55} rx={1} fill="rgba(255,255,255,0.7)" />
+          <rect x={c - 1.1} y={4} width={2.2} height={r * 0.55} rx={1} fill="#16181b" />
         </g>
       </svg>
       {label && <span className="dj-knob-label">{label}</span>}

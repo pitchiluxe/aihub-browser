@@ -179,7 +179,7 @@
 .aihub-dj .dj-readout .dj-key-clash { background: #b91c1c; color: #fff; }
 
 /* ── Title bar: drag down to enlarge the cover thumbnails above (VirtualDJ style) ── */
-.aihub-dj .dj-coverflow { height: calc(var(--cf, 124px) + 22px); }
+.aihub-dj .dj-coverflow { height: calc(var(--cf, 124px) * 1.45 + 14px); }
 .aihub-dj .dj-cf-item { width: var(--cf, 124px); height: var(--cf, 124px); }
 .aihub-dj .dj-thead { position: relative; cursor: row-resize; touch-action: none; }
 .aihub-dj .dj-thead .dj-th { cursor: row-resize; }

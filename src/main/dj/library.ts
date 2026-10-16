@@ -6,7 +6,7 @@
  * serves only tokens this process handed out. A page in a tab therefore cannot
  * read arbitrary files by guessing a URL, and nothing but audio is ever served.
  */
-import { app, dialog, ipcMain, protocol, BrowserWindow } from 'electron'
+import { app, dialog, ipcMain, nativeImage, protocol, BrowserWindow } from 'electron'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -31,6 +31,9 @@ const MAX_SEARCH_DIRS = 6000
 const MAX_SEARCH_DEPTH = 10
 const MAX_TAG_BYTES = 8 * 1024 * 1024
 const MAX_COVER_BYTES = 600 * 1024
+// nativeImage decodes on the main thread; a bigger file is a visible hitch.
+const MAX_ART_FILE_BYTES = 4 * 1024 * 1024
+const COVER_PX = 360
 
 export interface DjFolder { name: string; path: string }
 export interface DjTrack { token: string; name: string; path: string; size: number; ext: string }
@@ -131,28 +134,70 @@ async function searchDir(dir: string, query: string): Promise<{ tracks: DjTrack[
   return { tracks, truncated: false }
 }
 
-async function readMeta(token: string) {
-  const p = tokenToPath.get(token)
-  if (!p) return null
+async function readId3(p: string) {
   const fh = await fs.promises.open(p, 'r')
   try {
     const head = Buffer.alloc(10)
     await fh.read(head, 0, 10, 0)
     const total = id3TagSize(head)
-    if (!total) return {}
+    if (!total) return null
     const len = Math.min(total, MAX_TAG_BYTES)
     const buf = Buffer.alloc(len)
     await fh.read(buf, 0, len, 0)
-    const t = parseId3(buf)
-    return {
-      title: t.title, artist: t.artist, album: t.album, bpm: t.bpm, key: t.key,
-      durationSec: t.lengthMs ? t.lengthMs / 1000 : undefined,
-      cover: t.cover && t.cover.data.length <= MAX_COVER_BYTES
-        ? `data:${t.cover.mime};base64,${t.cover.data.toString('base64')}`
-        : undefined,
-    }
+    return parseId3(buf)
   } finally {
     await fh.close()
+  }
+}
+
+/** Covers go to the renderer as data URLs; a big one is shrunk rather than dropped. */
+function coverDataUrl(data: Buffer, mime: string): string | undefined {
+  if (data.length <= MAX_COVER_BYTES) return `data:${mime};base64,${data.toString('base64')}`
+  const img = nativeImage.createFromBuffer(data)
+  if (img.isEmpty()) return undefined
+  const small = img.getSize().width > COVER_PX ? img.resize({ width: COVER_PX, quality: 'good' }) : img
+  return `data:image/jpeg;base64,${small.toJPEG(85).toString('base64')}`
+}
+
+// The artwork rippers and players leave beside an album's files.
+const FOLDER_ART = /^(cover|folder|front|album|albumart|albumartlarge|albumart_\{[^}]+\}_large|thumb)\.(jpe?g|png|webp)$/i
+const folderArtCache = new Map<string, string | null>()
+
+/** A track's own picture ("Song.jpg" beside "Song.mp3"), else the album folder's cover. */
+async function folderArt(p: string): Promise<string | undefined> {
+  const dir = path.dirname(p)
+  const base = path.basename(p, path.extname(p)).toLowerCase()
+  let names: string[]
+  try { names = await fs.promises.readdir(dir) } catch { return undefined }
+  const images = names.filter(n => /\.(jpe?g|png|webp)$/i.test(n))
+  const own = images.find(n => path.basename(n, path.extname(n)).toLowerCase() === base)
+  if (own) return readImageFile(path.join(dir, own))
+  if (folderArtCache.has(dir)) return folderArtCache.get(dir) ?? undefined
+  const shared = images.find(n => FOLDER_ART.test(n))
+  const url = shared ? await readImageFile(path.join(dir, shared)) : undefined
+  folderArtCache.set(dir, url ?? null)
+  return url
+}
+
+async function readImageFile(file: string): Promise<string | undefined> {
+  try {
+    const st = await fs.promises.stat(file)
+    if (!st.isFile() || st.size > MAX_ART_FILE_BYTES) return undefined
+    const ext = path.extname(file).slice(1).toLowerCase()
+    return coverDataUrl(await fs.promises.readFile(file), ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg')
+  } catch { return undefined }
+}
+
+async function readMeta(token: string) {
+  const p = tokenToPath.get(token)
+  if (!p) return null
+  // Only MP3s carry ID3; every format still gets the folder's artwork.
+  const t = await readId3(p).catch(() => null)
+  const cover = (t?.cover && coverDataUrl(t.cover.data, t.cover.mime)) || await folderArt(p)
+  return {
+    title: t?.title, artist: t?.artist, album: t?.album, bpm: t?.bpm, key: t?.key,
+    durationSec: t?.lengthMs ? t.lengthMs / 1000 : undefined,
+    cover,
   }
 }
 
