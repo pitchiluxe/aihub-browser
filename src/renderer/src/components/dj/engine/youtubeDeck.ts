@@ -223,6 +223,35 @@ export class YouTubeDeck {
     this.videoEl.remove()
   }
 
+  /** Buffering: the song's clock is standing still, so silence is expected. */
+  get stalled(): boolean { return this.buffering || this.loading }
+
+  /** The capture has no live audio track left (its source went away). */
+  get captureDead(): boolean {
+    return this.captured && !this.audioStream?.getAudioTracks().some(t => t.readyState === 'live')
+  }
+
+  /** Drop the capture and take a fresh one of the same player (see CaptureGuard). */
+  async recapture(): Promise<void> {
+    if (!this.videoId || this.loading) return
+    const gen = this.gen
+    this.audioStream?.getTracks().forEach(t => t.stop())
+    this.audioStream = null
+    await this.ensureAudio()
+    if (gen === this.gen) this.onChange()
+  }
+
+  /** The capture carries no sound: play the song straight out of the player instead. */
+  fallbackToPlayer(): void {
+    this.audioStream?.getTracks().forEach(t => t.stop())
+    this.audioStream = null
+    this.captured = false
+    this.captureFailed = true
+    this.lastVol = -1
+    void ytBridge().cmd(this.deck, 'audible', true)
+    this.onChange()
+  }
+
   private async ensureAudio(): Promise<void> {
     if (this.audioStream?.getAudioTracks().some(t => t.readyState === 'live')) return
     const id = await ytBridge().streamId(this.deck)

@@ -23,6 +23,7 @@ import { LiveWave } from './liveWave'
 import { LocalScan } from './localScan'
 import { Sampler } from './sampler'
 import { AudioWatchdog } from './audioWatchdog'
+import { CaptureGuard } from './captureGuard'
 import { keyMatch, parseKey, type KeyMatch, type MusicalKey } from './key'
 
 export interface DjTrack {
@@ -221,6 +222,10 @@ export class Deck extends Emitter {
   private yt: YouTubeDeck | null = null
   private ytSrc: MediaStreamAudioSourceNode | null = null
   private ytStream: MediaStream | null = null
+  /** Notices a YouTube capture that went silent and brings the sound back. */
+  private captureGuard = new CaptureGuard()
+  private guardAt = 0
+  private guardCtxT = -1
   private scratch: ScratchVoice
   private meterBuf = new Float32Array(1024)
   private liveBuf = new Float32Array(1024)
@@ -480,6 +485,7 @@ export class Deck extends Emitter {
     this.liveBpm = null
     this.liveRechecked = false
     this.syncLink = null
+    this.captureGuard.reset()
     this.liveFirstBeat = 0
     this.lastEnvIndex = -1
     this.steadySince = 0
@@ -955,6 +961,7 @@ export class Deck extends Emitter {
       if (this.yt.duration && Math.abs(this.yt.duration - this.duration) > 0.5) { this.duration = this.yt.duration; this.ensureLiveEnv(); this.emit() }
       if (this.yt.error && this.yt.error !== this.error) { this.error = this.yt.error; this.emit() }
       this.syncYouTubeVolume()
+      if (now - this.guardAt > 250) { this.guardAt = now; this.guardCapture(now, playing) }
     }
     const wave = this.wave
     // A first tempo from the scan once enough of the song has been read (the
@@ -1032,6 +1039,26 @@ export class Deck extends Emitter {
     } finally {
       this.measuringTempo = false
       if (!this.liveBpm) this.steadySince = 0
+    }
+  }
+
+  /** See CaptureGuard: a captured song that plays in silence is captured again, then heard from its player. */
+  private guardCapture(now: number, playing: boolean): void {
+    const yt = this.yt!
+    const ctxT = this.engine.ctx.currentTime
+    // A stopped console clock is the AudioWatchdog's to fix; its analysers read stale data meanwhile.
+    const clockMoving = ctxT > this.guardCtxT
+    this.guardCtxT = ctxT
+    const listening = yt.captured && playing && !yt.ad && !yt.stalled && clockMoving
+    const peak = listening ? Math.pow(10, peakDb(this.preAnalyser, this.liveBuf) / 20) : 0
+    const action = this.captureGuard.check(now, listening, peak, yt.captureDead)
+    if (action === 'recapture') {
+      console.warn(`[dj-audio] deck ${this.id}: the YouTube capture went silent; capturing it again`)
+      void yt.recapture()
+    } else if (action === 'fallback') {
+      console.warn(`[dj-audio] deck ${this.id}: the YouTube capture stays silent; playing from the player directly`)
+      yt.fallbackToPlayer()
+      this.emit()
     }
   }
 
