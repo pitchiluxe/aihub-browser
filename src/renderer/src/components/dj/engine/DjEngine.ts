@@ -65,6 +65,8 @@ const SMOOTH = 0.02
 const TICK_MS = 20
 /** Seconds of steady playing before a song without a known tempo is measured live. */
 const LIVE_TEMPO_AFTER = 24
+/** …and once more after this long, from the body of the song rather than its intro. */
+const LIVE_TEMPO_RECHECK = 75
 /** Auto-gain aims a song's loudness here (RMS, linear) and never moves it more than this. */
 const AUTO_GAIN_TARGET = 0.2
 const AUTO_GAIN_MIN = 0.5
@@ -172,6 +174,8 @@ export class Deck extends Emitter {
   liveBpm: number | null = null
   private liveFirstBeat = 0
   private measuringTempo = false
+  /** The live tempo has had its second, later reading (see LIVE_TEMPO_RECHECK). */
+  private liveRechecked = false
 
   cuePoint = 0
   hotCues: (number | null)[] = [null, null, null]
@@ -473,6 +477,7 @@ export class Deck extends Emitter {
     this.scanBpm = null
     this.scanTempoAsked = false
     this.liveBpm = null
+    this.liveRechecked = false
     this.syncLink = null
     this.liveFirstBeat = 0
     this.lastEnvIndex = -1
@@ -614,6 +619,7 @@ export class Deck extends Emitter {
     this.localScan?.stop()
     this.scanBpm = null
     this.liveBpm = null
+    this.liveRechecked = false
     this.syncLink = null
     this.duration = 0
     this.error = null
@@ -987,14 +993,17 @@ export class Deck extends Emitter {
       }
     } else this.lastEnvIndex = -1
     // Songs never decoded up front get their tempo measured from what they played.
-    if (!this.analysis && !this.liveBpm && playing && this.fullControl && !this.measuringTempo && !this.adPlaying) {
+    // Measured once more later on: the first reading hears the intro, and Last
+    // Last's intro read 117.4 where the body of the song reads its real 88.
+    if (!this.analysis && (!this.liveBpm || !this.liveRechecked) && playing && this.fullControl && !this.measuringTempo && !this.adPlaying) {
       if (!this.steadySince) this.steadySince = now
-      else if (now - this.steadySince > LIVE_TEMPO_AFTER * 1000) void this.measureTempo()
+      else if (now - this.steadySince > (this.liveBpm ? LIVE_TEMPO_RECHECK : LIVE_TEMPO_AFTER) * 1000) void this.measureTempo()
     } else if (!playing) this.steadySince = 0
   }
 
   private async measureTempo(): Promise<void> {
     this.measuringTempo = true
+    if (this.liveBpm) this.liveRechecked = true
     const gen = this.gen
     try {
       const d = await this.scratch.dump()

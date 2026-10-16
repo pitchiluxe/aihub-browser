@@ -25,6 +25,8 @@
 
 const RING_SECONDS = 32
 const BLOCK = 128
+/** A jump in recorded track time this large ends the dump's unbroken run (seek / loop). */
+const RUN_BREAK_SEC = 0.05
 const HAND_TAU = 0.012 // seconds for the playhead to catch the hand
 const SPINUP_TAU = 0.06 // seconds for a released record to reach speed
 const FADE_TAU = 0.012
@@ -100,7 +102,11 @@ class ScratchProcessor extends AudioWorkletProcessor {
       const tp = this.blockT[prev]
       if (tp !== tp) break
       const expect = this.blockT[b] - dur * this.blockRate[prev]
-      if (Math.abs(tp - expect) > dur * 2) break // a seek, loop or pause broke the run
+      // A seek or loop jump broke the run. Not a clock correction: a YouTube
+      // deck's position is re-read over IPC and nudged by a few milliseconds,
+      // and the old 2-block (~5 ms) limit cut every run at ~10 s, short of the
+      // 12 s live tempo needs (2026-10-15: never measured on YouTube decks).
+      if (Math.abs(tp - expect) > RUN_BREAK_SEC) break
       b = prev
       count++
     }
