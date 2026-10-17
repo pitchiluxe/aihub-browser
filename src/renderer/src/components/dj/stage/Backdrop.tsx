@@ -26,7 +26,9 @@ export default function Backdrop({ engine, video = true }: { engine: DjEngine; v
   const playing = Object.values(engine.decks).some(d => d.playing)
   return <div className="dj-backdrop">
     {/* The club is the room; a full-bleed video (start screen) plays in front of it. */}
-    <ClubScene engine={engine} playing={playing} />
+    {/* Still lights whenever video is decoding: a set's own screen (video=false)
+        or a full-bleed video, which covers the room anyway. */}
+    <ClubScene engine={engine} playing={playing} still={!video || hasVideo} />
     {video && hasVideo ? <div className="dj-backdrop-video"><VideoMonitor engine={engine} big bare native={false} /></div> : null}
     <div ref={glow} className="dj-backdrop-glow" />
     <div className="dj-backdrop-shade" />

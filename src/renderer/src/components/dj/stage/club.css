@@ -90,6 +90,14 @@
 .dj-club:not(.is-playing) :is(.dj-club-floor-pulse, .dj-club-crowd) { animation: none; }
 .dj-club:not(.is-playing) .dj-club-beam { animation-duration: 16s; }
 
+/* Still lights while a set plays its video: same room, nothing moving (see ClubScene). */
+.dj-club.is-still * { animation: none !important; will-change: auto; }
+.dj-club.is-still .dj-club-beam { transform: rotate(var(--rest, 0deg)); }
+.dj-club.is-still .dj-club-beam-cone { opacity: 0.42; }
+.dj-club.is-still .dj-club-wall { opacity: 0.26; }
+.dj-club.is-still .dj-club-floor-pulse { opacity: 0.2; }
+
 @media (prefers-reduced-motion: reduce) {
   .dj-club * { animation: none !important; }
+  .dj-club .dj-club-beam { transform: rotate(var(--rest, 0deg)); }
 }

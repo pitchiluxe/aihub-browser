@@ -25,29 +25,37 @@ export function beatSeconds(engine: Pick<DjEngine, 'decks'>): number {
   return 60 / (best?.bpm ?? 120)
 }
 
+/** `rest`: where each head points when the lights hold still — a fan crossing the room. */
 const BEAMS = [
-  { x: 12, color: '#ff2bd6', delay: 0 },
-  { x: 26, color: '#22d3ee', delay: -3 },
-  { x: 40, color: '#a855f7', delay: -1.5 },
-  { x: 60, color: '#a855f7', delay: -4.5 },
-  { x: 74, color: '#22d3ee', delay: -6 },
-  { x: 88, color: '#ff2bd6', delay: -2 },
+  { x: 12, color: '#ff2bd6', delay: 0, rest: -24 },
+  { x: 26, color: '#22d3ee', delay: -3, rest: 14 },
+  { x: 40, color: '#a855f7', delay: -1.5, rest: -10 },
+  { x: 60, color: '#a855f7', delay: -4.5, rest: 10 },
+  { x: 74, color: '#22d3ee', delay: -6, rest: -14 },
+  { x: 88, color: '#ff2bd6', delay: -2, rest: 24 },
 ]
 
-export default function ClubScene({ engine, playing }: { engine: DjEngine; playing: boolean }) {
+/**
+ * `still`: the lights hold their positions, nothing animates. Used while a set
+ * runs with the video on screen — measured over 4 alternating rounds there,
+ * moving lights slowed the hidden YouTube players to ~0.89x speed (still
+ * lights: 1.00x). On the start screen nothing decodes video, so the full show
+ * runs at 60 fps.
+ */
+export default function ClubScene({ engine, playing, still = false }: { engine: DjEngine; playing: boolean; still?: boolean }) {
   // Rounded to a few milliseconds so tiny tempo wobble does not restart the animations.
   const beat = Math.round(beatSeconds(engine) * 200) / 200
   const style = { '--beat': `${beat}s` } as React.CSSProperties
   const crowd = useMemo(() => crowdPath(), [])
   return (
-    <div className={`dj-club ${playing ? 'is-playing' : ''}`} style={style} aria-hidden="true">
+    <div className={`dj-club ${playing ? 'is-playing' : ''} ${still ? 'is-still' : ''}`} style={style} aria-hidden="true">
       <div className="dj-club-room" />
       <div className="dj-club-wall" />
       <div className="dj-club-haze dj-club-haze-1" />
       <div className="dj-club-haze dj-club-haze-2" />
       <div className="dj-club-spots" />
       {BEAMS.map((b, i) => (
-        <div key={i} className="dj-club-beam" style={{ left: `${b.x}%`, animationDelay: `calc(var(--beat) * ${b.delay})`, '--beam': b.color } as React.CSSProperties}>
+        <div key={i} className="dj-club-beam" style={{ left: `${b.x}%`, animationDelay: `calc(var(--beat) * ${b.delay})`, '--beam': b.color, '--rest': `${b.rest}deg` } as React.CSSProperties}>
           <div className="dj-club-beam-cone" style={{ animationDelay: `calc(var(--beat) * ${i % 2 ? 0.5 : 0})` }} />
         </div>
       ))}
