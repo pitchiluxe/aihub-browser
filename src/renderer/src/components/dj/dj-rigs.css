@@ -283,3 +283,43 @@
 .aihub-dj[data-dj-reference='1'] .dj-tt-main { gap: 20px; }
 /* A jog has no spindle: it would sit on the hub LCD's clock. */
 .aihub-dj .dj-platter.dj-rig-silver circle[fill='#d9dce0'] { display: none; }
+
+/* ── Classic text sizes ──────────────────────────────────────────────────
+   The rigs use the Classic look's type scale (dj.css): track titles, clocks,
+   readouts, deck letters and the browser read at the same size as Classic.
+   The clock and track-strip rows grow just enough to hold it. */
+.aihub-dj[data-dj-reference='1'] .dj-row-clocks { height: 70px; grid-template-columns: 230px 1fr 230px; }
+.aihub-dj[data-dj-reference='1'] .dj-clock { padding: 6px 8px; gap: 8px; }
+.aihub-dj[data-dj-reference='1'] .dj-deck-letter { width: 40px; height: 44px; font-size: 30px; }
+.aihub-dj[data-dj-reference='1'] .dj-time { height: 52px; padding: 2px 10px; }
+.aihub-dj[data-dj-reference='1'] .dj-lcd-labels { font-size: 11px; }
+.aihub-dj[data-dj-reference='1'] .dj-lcd-big { font-size: 27px; }
+.aihub-dj[data-dj-reference='1'] .dj-row-info { height: 84px; }
+.aihub-dj[data-dj-reference='1'] .dj-info { padding: 6px 8px; }
+.aihub-dj[data-dj-reference='1'] .dj-row-info .dj-cover { width: 56px; }
+.aihub-dj[data-dj-reference='1'] .dj-title-line { font-size: 14px; }
+.aihub-dj[data-dj-reference='1'] .dj-readout { width: 104px; padding: 3px 6px; }
+.aihub-dj[data-dj-reference='1'] .dj-ro-row { font-size: 11px; }
+.aihub-dj[data-dj-reference='1'] .dj-ro-row b { font-size: 13.5px; }
+.aihub-dj[data-dj-reference='1'] .dj-ro-row b.dj-lcd-mid { font-size: 18px; }
+.aihub-dj[data-dj-reference='1'] .dj-reference-deck-header { font-size: 12px; }
+.aihub-dj[data-dj-reference='1'] .dj-reference-deck-header b { font-size: 9px; }
+.aihub-dj[data-dj-reference='1'] .dj-reference-speed { font-size: 10px; }
+.aihub-dj[data-dj-reference='1'] .dj-transport .dj-tbtn { font-size: 12px; }
+.aihub-dj[data-dj-reference='1'] .dj-start-label { font-size: 9px; }
+.aihub-dj[data-dj-reference='1'] .dj-mixer-logo { font-size: 16px; }
+.aihub-dj[data-dj-reference='1'] .dj-mixer-logo small { font-size: 8px; }
+.aihub-dj[data-dj-reference='1'] .dj-mscreen-deck b { font-size: 16px; }
+.aihub-dj[data-dj-reference='1'] .dj-mscreen :is(.dj-mscreen-id, .dj-mscreen-title) { font-size: 10px; }
+.aihub-dj[data-dj-reference='1'] .dj-tr { font-size: 14px; min-height: 22px; }
+.aihub-dj[data-dj-reference='1'] .dj-side { font-size: 12.5px; }
+.aihub-dj[data-dj-reference='1'] .dj-top-automix { font-size: 12px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-section-title { font-size: 11px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads :is(.dj-stem, .dj-btn) { font-size: 11px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-fx-select { font-size: 14px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-decks { grid-template-rows: minmax(0, 1fr) 116px; }
+/* Shallow tray: effects and loop sit side by side so no control falls off the bottom. */
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-grow { flex-direction: row; gap: 8px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-grow > .dj-section { flex: 1; min-width: 0; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-loop { margin-top: 0; padding-top: 0; border-top: 0; padding-left: 8px; border-left: 1px solid rgba(0,0,0,0.25); }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-loop-grid :is(.dj-btn, .dj-loop-len) { height: 22px; }
