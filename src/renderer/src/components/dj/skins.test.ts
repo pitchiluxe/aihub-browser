@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const dir = path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1'))
 const page = fs.readFileSync(path.join(dir, 'DjPage.tsx'), 'utf8')
-const css = ['dj-real.css', 'dj-themes.css', 'dj-skins.css', 'dj-skins-pro.css', 'dj-skins-real.css']
+const css = ['dj-real.css', 'dj-themes.css', 'dj-skins.css', 'dj-skins-pro.css', 'dj-skins-real.css', 'dj-reference-skins.css', 'dj-palettes.css']
   .map(f => { try { return fs.readFileSync(path.join(dir, f), 'utf8') } catch { return '' } }).join('\n')
 const looks = [...page.slice(page.indexOf('export const DJ_LOOKS')).split('\n]')[0].matchAll(/id: '([a-z-]+)'/g)].map(m => m[1])
 

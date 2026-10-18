@@ -1,0 +1,371 @@
+/* Palette owns colour; skins own geometry, texture, records and interaction states.
+   Skin original opts out and restores the skin defaults. */
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #eceef0 0%, #d4d7db 45%, #c2c6cb 100%);
+  --dj-edge: #8c9198;
+  --dj-lcd: #0e0f12;
+  --dj-text: #2b2e33;
+  --dj-ink: #e8eaed;
+  --dj-dim: #8b9099;
+  --dj-label: #2f3237;
+  --dj-label-soft: #555b63;
+  --dj-light: linear-gradient(#ffffff, #cdd0d5);
+  --dj-light-ink: #111317;
+  --dj-light-edge: #7d828a;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(255,255,255,0.08), transparent 60%), linear-gradient(180deg, #2a2c30 0%, #1b1c1f 100%);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #8d929a 70%);
+  --dj-glow: none;
+}
+.aihub-dj[data-dj-look][data-dj-theme='midnight']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #3a3d44 0%, #2a2c32 50%, #202227 100%);
+  --dj-edge: #0c0d10;
+  --dj-label: #d7dbe2; --dj-label-soft: #9aa3b2;
+  --dj-light: linear-gradient(#4a4e57, #2c2f35); --dj-light-ink: #f3f4f6; --dj-light-edge: #0c0d10;
+  --dj-bg: radial-gradient(ellipse at 50% -10%, rgba(99,102,241,0.18), transparent 60%), linear-gradient(180deg, #121318, #08090b);
+  --dj-screw: radial-gradient(circle at 35% 35%, #9aa0aa, #2a2d33 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='neon']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #17121f 0%, #110d18 100%);
+  --dj-edge: #c026d3;
+  --dj-label: #f0abfc; --dj-label-soft: #67e8f9;
+  --dj-light: linear-gradient(#2a1f38, #1a1324); --dj-light-ink: #67e8f9; --dj-light-edge: #22d3ee;
+  --dj-bg: radial-gradient(ellipse at 20% 0%, rgba(217,70,239,0.25), transparent 55%), radial-gradient(ellipse at 80% 100%, rgba(34,211,238,0.2), transparent 55%), #07050b;
+  --dj-screw: radial-gradient(circle at 35% 35%, #f0abfc, #701a75 70%);
+  --dj-glow: 0 0 14px rgba(192,38,211,0.35);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='gold']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #f7e7b4 0%, #dcbf74 50%, #b8964a 100%);
+  --dj-edge: #7a5c1e;
+  --dj-label: #3d2c06; --dj-label-soft: #6b4f14;
+  --dj-light: linear-gradient(#fff8e1, #e3c97f); --dj-light-ink: #2b1f04; --dj-light-edge: #8a6a26;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(250,204,21,0.15), transparent 60%), linear-gradient(180deg, #231c10, #120e07);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fffbea, #a37f2c 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='ocean']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #cfe3f5 0%, #9fc1e0 50%, #7aa3c9 100%);
+  --dj-edge: #3b6390;
+  --dj-label: #0c2a4a; --dj-label-soft: #1f4b78;
+  --dj-light: linear-gradient(#f0f8ff, #b9d6ef); --dj-light-ink: #0b2440; --dj-light-edge: #4a76a3;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(56,189,248,0.2), transparent 60%), linear-gradient(180deg, #0b1a2b, #050c15);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #5b86b0 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='ruby']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #8f1d2c 0%, #6d1220 50%, #4f0c17 100%);
+  --dj-edge: #2a050a;
+  --dj-label: #ffe4e6; --dj-label-soft: #fda4af;
+  --dj-light: linear-gradient(#fff1f2, #f3c4cb); --dj-light-ink: #4c0519; --dj-light-edge: #2a050a;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(244,63,94,0.2), transparent 60%), linear-gradient(180deg, #1c0609, #0b0204);
+  --dj-screw: radial-gradient(circle at 35% 35%, #ffe4e6, #881337 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='forest']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #4b5d48 0%, #3a4a38 50%, #2b382a 100%);
+  --dj-edge: #121a11;
+  --dj-label: #e7f5e1; --dj-label-soft: #a7c4a0;
+  --dj-light: linear-gradient(#e8f3e3, #b9cfb1); --dj-light-ink: #142012; --dj-light-edge: #121a11;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(132,204,22,0.14), transparent 60%), linear-gradient(180deg, #121810, #070a06);
+  --dj-screw: radial-gradient(circle at 35% 35%, #f0fdf4, #3f5a3a 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='arctic']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #ffffff 0%, #f1f4f8 60%, #e3e8ef 100%);
+  --dj-edge: #b6c0cc;
+  --dj-label: #1e293b; --dj-label-soft: #64748b;
+  --dj-light: linear-gradient(#ffffff, #e2e8f0); --dj-light-ink: #0f172a; --dj-light-edge: #94a3b8;
+  --dj-bg: linear-gradient(180deg, #dfe6ee, #c5cfdb);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #b6c0cc 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='carbon']:not([data-dj-theme='original']) {
+  --dj-metal: repeating-linear-gradient(45deg, #1b1c1f 0 3px, #232428 3px 6px);
+  --dj-edge: #000;
+  --dj-label: #e5e7eb; --dj-label-soft: #f87171;
+  --dj-light: linear-gradient(#2e3035, #1b1c20); --dj-light-ink: #f3f4f6; --dj-light-edge: #000;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(239,68,68,0.12), transparent 60%), linear-gradient(180deg, #0e0f11, #050506);
+  --dj-screw: radial-gradient(circle at 35% 35%, #9ca3af, #111 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='sunset']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #4a2147 0%, #331632 55%, #241024 100%);
+  --dj-edge: #1a0a18;
+  --dj-label: #fde68a; --dj-label-soft: #fb923c;
+  --dj-light: linear-gradient(#6a2e58, #3f1a3a); --dj-light-ink: #fde68a; --dj-light-edge: #1a0a18;
+  --dj-bg: radial-gradient(ellipse at 50% -10%, rgba(249,115,22,0.35), transparent 55%), radial-gradient(ellipse at 50% 110%, rgba(168,85,247,0.25), transparent 60%), #12060f;
+  --dj-screw: radial-gradient(circle at 35% 35%, #fed7aa, #7c2d12 70%);
+  --dj-glow: 0 0 12px rgba(249,115,22,0.18);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='rosegold']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #f8e4db 0%, #e9c3b2 50%, #d4a18c 100%);
+  --dj-edge: #9c6b5b;
+  --dj-label: #4a2a22; --dj-label-soft: #7c4a3c;
+  --dj-light: linear-gradient(#fff6f2, #efd2c6); --dj-light-ink: #3b1f18; --dj-light-edge: #a87765;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(251,191,170,0.18), transparent 60%), linear-gradient(180deg, #2a1c19, #140d0b);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #b07c69 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='matrix']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #0b140d 0%, #060b07 100%);
+  --dj-edge: #166534;
+  --dj-label: #4ade80; --dj-label-soft: #22c55e;
+  --dj-light: linear-gradient(#11251a, #08140d); --dj-light-ink: #86efac; --dj-light-edge: #14532d;
+  --dj-bg: radial-gradient(ellipse at 50% 0%, rgba(34,197,94,0.16), transparent 60%), #000;
+  --dj-screw: radial-gradient(circle at 35% 35%, #86efac, #052e16 70%);
+  --dj-glow: 0 0 10px rgba(34,197,94,0.18);
+  --dj-ink: #86efac;
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='vapor']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(135deg, #ffd6f2 0%, #e9d5ff 50%, #c7f0ff 100%);
+  --dj-edge: #c084fc;
+  --dj-label: #6b21a8; --dj-label-soft: #db2777;
+  --dj-light: linear-gradient(#ffffff, #f5d0fe); --dj-light-ink: #581c87; --dj-light-edge: #c084fc;
+  --dj-bg: linear-gradient(135deg, #3b0764 0%, #1e1b4b 50%, #0c4a6e 100%);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #c084fc 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='walnut']:not([data-dj-theme='original']) {
+  --dj-metal: repeating-linear-gradient(92deg, #6e4428 0 7px, #5c381f 7px 10px, #7a4d2e 10px 17px, #643d23 17px 21px);
+  --dj-edge: #2b170b;
+  --dj-label: #fbe7c6; --dj-label-soft: #e0b98a;
+  --dj-light: linear-gradient(#f3e3c8, #d8bf98); --dj-light-ink: #2b1708; --dj-light-edge: #3b220f;
+  --dj-bg: linear-gradient(180deg, #1c120b, #0d0805);
+  --dj-screw: radial-gradient(circle at 35% 35%, #f5e6c8, #8a6a3a 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='pearl']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #ffffff 0%, #f5f2f9 50%, #e8e3f0 100%);
+  --dj-edge: #c9c1d6;
+  --dj-label: #3b3150; --dj-label-soft: #7c6f94;
+  --dj-light: linear-gradient(#ffffff, #ece6f5); --dj-light-ink: #2a2140; --dj-light-edge: #b8acc9;
+  --dj-bg: linear-gradient(135deg, #ece7f4 0%, #dbe3f2 100%);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #c9c1d6 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='royal']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #23306a 0%, #172150 55%, #111a40 100%);
+  --dj-edge: #0a0f26;
+  --dj-label: #fde68a; --dj-label-soft: #93c5fd;
+  --dj-light: linear-gradient(#2f3f86, #1a2557); --dj-light-ink: #fde68a; --dj-light-edge: #c9a227;
+  --dj-bg: radial-gradient(ellipse at 50% -15%, rgba(201,162,39,0.22), transparent 55%), linear-gradient(180deg, #0b1130, #050817);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fef3c7, #a16207 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='lava']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #2a110a 0%, #1a0906 100%);
+  --dj-edge: #7c2d12;
+  --dj-label: #fed7aa; --dj-label-soft: #fb923c;
+  --dj-light: linear-gradient(#45200f, #260e06); --dj-light-ink: #fdba74; --dj-light-edge: #7c2d12;
+  --dj-bg: radial-gradient(ellipse at 50% 115%, rgba(234,88,12,0.4), transparent 60%), #0a0302;
+  --dj-screw: radial-gradient(circle at 35% 35%, #fdba74, #431407 70%);
+  --dj-glow: 0 0 12px rgba(234,88,12,0.22);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='mint']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #ecfcf5 0%, #c9f0e1 50%, #a6dfc9 100%);
+  --dj-edge: #5fa88c;
+  --dj-label: #0f3d2e; --dj-label-soft: #2f7a60;
+  --dj-light: linear-gradient(#ffffff, #d5f5e8); --dj-light-ink: #0b2f23; --dj-light-edge: #6bb79a;
+  --dj-bg: linear-gradient(180deg, #0f2a22, #071612);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #5fa88c 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='clubblack']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #34363b 0%, #26282c 45%, #1b1c1f 100%);
+  --dj-edge: #000; --dj-lcd: #05070a;
+  --dj-text: #d1d5db; --dj-label: #e5e7eb; --dj-label-soft: #fb923c;
+  --dj-light: linear-gradient(#4a4d53, #2b2d31); --dj-light-ink: #f3f4f6; --dj-light-edge: #000;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(249,115,22,0.10), transparent 60%), linear-gradient(180deg, #131416, #08090a);
+  --dj-screw: radial-gradient(circle at 35% 35%, #9ca3af, #1f2024 70%);
+}
+.aihub-dj[data-dj-look][data-dj-theme='graphite']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #8a8f97 0%, #6d727a 45%, #565b63 100%);
+  --dj-edge: #2b2e33;
+  --dj-label: #f3f4f6; --dj-label-soft: #d1d5db;
+  --dj-light: linear-gradient(#a9aeb6, #7b8088); --dj-light-ink: #111317; --dj-light-edge: #2b2e33;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(255,255,255,0.10), transparent 60%), linear-gradient(180deg, #2d2f34, #1a1b1e);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='champagne']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #efe3c8 0%, #d9c79e 45%, #bfa774 100%);
+  --dj-edge: #7a6638;
+  --dj-label: #3a2f17; --dj-label-soft: #6b5a30;
+  --dj-light: linear-gradient(#fffaf0, #d8c8a0); --dj-light-ink: #2a2110; --dj-light-edge: #7a6638;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(255,240,200,0.18), transparent 60%), linear-gradient(180deg, #2a2418, #15110a);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff7dd, #8a7440 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='bakelite']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #e8dcc2 0%, #d3c5a4 50%, #bba97f 100%);
+  --dj-edge: #6b5a38;
+  --dj-label: #3b2f1a; --dj-label-soft: #7a6a48;
+  --dj-light: linear-gradient(#f6edd6, #cdbd97); --dj-light-ink: #2a2110; --dj-light-edge: #6b5a38;
+  --dj-bg: linear-gradient(180deg, #3d2a1a, #22160d);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #8a7a58 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='chrome']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #ffffff 0%, #c9ced6 28%, #f4f6f8 48%, #a9afb8 52%, #dfe3e8 100%);
+  --dj-edge: #6b7078;
+  --dj-label: #1f2933; --dj-label-soft: #3b4754;
+  --dj-light: linear-gradient(#ffffff, #b9bfc8); --dj-light-ink: #0f172a; --dj-light-edge: #6b7078;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(96,165,250,0.25), transparent 60%), linear-gradient(180deg, #1c2330, #0b0f16);
+  --dj-glow: 0 0 10px rgba(96,165,250,0.18);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='gunmetal']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #5b6572 0%, #444c57 50%, #303741 100%);
+  --dj-edge: #14181d;
+  --dj-label: #e2e8f0; --dj-label-soft: #94a3b8;
+  --dj-light: linear-gradient(#6f7a88, #3f4752); --dj-light-ink: #f8fafc; --dj-light-edge: #14181d;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(56,189,248,0.12), transparent 60%), linear-gradient(180deg, #1b2027, #0d1014);
+  --dj-screw: radial-gradient(circle at 35% 35%, #cbd5e1, #1e293b 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='redline']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #3a1114 0%, #2a0a0d 50%, #1a0507 100%);
+  --dj-edge: #000;
+  --dj-label: #fecaca; --dj-label-soft: #f87171;
+  --dj-light: linear-gradient(#5a1a1f, #2f0b0e); --dj-light-ink: #fee2e2; --dj-light-edge: #000;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(239,68,68,0.22), transparent 60%), linear-gradient(180deg, #14090a, #070203);
+  --dj-glow: 0 0 12px rgba(239,68,68,0.18);
+  --dj-screw: radial-gradient(circle at 35% 35%, #fca5a5, #450a0a 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='pianowhite']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #ffffff 0%, #f1f3f6 40%, #dfe3e8 100%);
+  --dj-edge: #a4abb5;
+  --dj-label: #1f2937; --dj-label-soft: #4b5563;
+  --dj-light: linear-gradient(#ffffff, #d8dce2); --dj-light-ink: #0b0f14; --dj-light-edge: #a4abb5;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(255,255,255,0.14), transparent 60%), linear-gradient(180deg, #30343b, #1b1d21);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='rosewood']:not([data-dj-theme='original']) {
+  --dj-metal: repeating-linear-gradient(92deg, #5a2a1c 0 3px, #4a2216 3px 7px, #6a3322 7px 9px);
+  --dj-edge: #1d0c07;
+  --dj-label: #f5dcc8; --dj-label-soft: #d6a98a;
+  --dj-light: linear-gradient(#7a4230, #44201a); --dj-light-ink: #fbe8d6; --dj-light-edge: #1d0c07;
+  --dj-bg: linear-gradient(180deg, #2a140d, #120805);
+  --dj-screw: radial-gradient(circle at 35% 35%, #f3d9b5, #6b4a2c 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='titanium']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #c4c7cc 0%, #a2a6ad 45%, #868a92 100%);
+  --dj-edge: #50545b;
+  --dj-label: #1a1d22; --dj-label-soft: #3b4048;
+  --dj-light: linear-gradient(#dde0e4, #9a9ea6); --dj-light-ink: #0e1116; --dj-light-edge: #50545b;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(255,255,255,0.12), transparent 60%), linear-gradient(180deg, #25272b, #131417);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='midnightblue']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #1f3a63 0%, #172c4d 50%, #0f1f38 100%);
+  --dj-edge: #050b16;
+  --dj-label: #dbeafe; --dj-label-soft: #7fb2f0;
+  --dj-light: linear-gradient(#2f5a96, #173057); --dj-light-ink: #eff6ff; --dj-light-edge: #050b16;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(59,130,246,0.22), transparent 60%), linear-gradient(180deg, #0b1424, #04070d);
+  --dj-glow: 0 0 10px rgba(59,130,246,0.16);
+  --dj-screw: radial-gradient(circle at 35% 35%, #bfdbfe, #1e3a8a 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='emeraldglass']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #14543f 0%, #0e3f2f 50%, #082a20 100%);
+  --dj-edge: #02100b;
+  --dj-label: #d1fae5; --dj-label-soft: #6ee7b7;
+  --dj-light: linear-gradient(#1f7a5b, #0d3b2c); --dj-light-ink: #ecfdf5; --dj-light-edge: #02100b;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(16,185,129,0.2), transparent 60%), linear-gradient(180deg, #07160f, #020805);
+  --dj-glow: 0 0 10px rgba(16,185,129,0.14);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='copper']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #e8b090 0%, #c07a55 48%, #8f4e30 100%);
+  --dj-edge: #4d2412;
+  --dj-label: #2a1208; --dj-label-soft: #5e2f18;
+  --dj-light: linear-gradient(#f5c8a8, #b36a46); --dj-light-ink: #2a1208; --dj-light-edge: #4d2412;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(251,146,60,0.18), transparent 60%), linear-gradient(180deg, #2b1509, #130a04);
+  --dj-screw: radial-gradient(circle at 35% 35%, #ffe2c9, #7a4326 70%);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='stealth']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #17181b 0%, #0f1012 50%, #08090a 100%);
+  --dj-edge: #000; --dj-lcd: #020304;
+  --dj-text: #9ca3af; --dj-label: #9ca3af; --dj-label-soft: #6b7280;
+  --dj-light: linear-gradient(#25272b, #101113); --dj-light-ink: #d1d5db; --dj-light-edge: #000;
+  --dj-bg: linear-gradient(180deg, #060607, #000);
+  --dj-screw: radial-gradient(circle at 35% 35%, #52555c, #0a0a0b 70%);
+}
+.aihub-dj[data-dj-look][data-dj-theme='sand']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #e9dfcf 0%, #d6c8b0 50%, #bfae90 100%);
+  --dj-edge: #8a7a5c;
+  --dj-label: #3a3022; --dj-label-soft: #6f6248;
+  --dj-light: linear-gradient(#f7f0e2, #cdbf9f); --dj-light-ink: #2a2216; --dj-light-edge: #8a7a5c;
+  --dj-bg: linear-gradient(180deg, #4a4030, #261f15);
+
+  --dj-text: var(--dj-label);
+}
+.aihub-dj[data-dj-look][data-dj-theme='violetnight']:not([data-dj-theme='original']) {
+  --dj-metal: linear-gradient(180deg, #3b2a5e 0%, #2b1d47 50%, #1b122f 100%);
+  --dj-edge: #08040f;
+  --dj-label: #ede9fe; --dj-label-soft: #a78bfa;
+  --dj-light: linear-gradient(#54399a, #2a1b52); --dj-light-ink: #f5f3ff; --dj-light-edge: #08040f;
+  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(139,92,246,0.25), transparent 60%), linear-gradient(180deg, #0f0a1e, #05030b);
+  --dj-glow: 0 0 10px rgba(139,92,246,0.16);
+
+  --dj-text: var(--dj-label);
+}
+
+/* These selectors outrank skin-specific paint, without overriding state classes. */
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) { background: var(--dj-bg); }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) :is(.dj-panel,.dj-top) {
+  --dj-label: inherit; --dj-label-soft: inherit; --dj-text: inherit;
+  background: linear-gradient(180deg,#ffffff12,transparent 38%),var(--dj-metal);
+  color: var(--dj-text); border-color: var(--dj-edge);
+}
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) :is(.dj-section-title,.dj-knob-label,.dj-mixer-tabs,.dj-xfader,.dj-reference-deck-header) { color: var(--dj-label); text-shadow: none; }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) :is(.dj-tbtn,.dj-pad,.dj-mini):not(.dj-on):not(.dj-playing):not(.dj-pad-set) { background: var(--dj-light); color: var(--dj-light-ink); border-color: var(--dj-light-edge); }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) :is(.dj-vfader-cap,.dj-hfader-cap) { background: var(--dj-light); border-color: var(--dj-light-edge); }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) .dj-knob svg :is(.dj-knob-cap,.dj-knob-skirt) { fill: var(--dj-label-soft); stroke: var(--dj-edge); }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) .dj-lcd { background: linear-gradient(168deg,#ffffff12,transparent 45%),var(--dj-lcd); color: var(--dj-ink); border-color: var(--dj-edge); }
+/* The library stays a readable dark display for both light and dark hardware palettes. */
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) :is(.dj-library,.dj-browser,.dj-side) { background: var(--dj-lcd); color: var(--dj-ink); }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) :is(.dj-thead,.dj-search) { background: #22252b; color: #e5e7eb; }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) .dj-search input { background: #090b0e; color: #e5e7eb; }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) .dj-tr { color: var(--dj-ink); }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) .dj-tr.dj-sel { background: #334155; color: #fff; }
+
+/* Light skins must not leave dark text or white tree backgrounds in the dark library. */
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) .dj-tree { background: var(--dj-lcd); color: var(--dj-ink); }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) :is(.dj-node,.dj-count,.dj-tree-title,.dj-side-head,.dj-empty,.dj-side-empty,.dj-tree-hint) { color: var(--dj-ink); }
+.aihub-dj[data-dj-look][data-dj-theme]:not([data-dj-theme='original']) .dj-node-on { background: #334155 !important; color: #fff; }

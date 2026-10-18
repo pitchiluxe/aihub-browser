@@ -275,6 +275,7 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
   return (
     <div className={`dj-tt dj-panel dj-deck-${kind} ${deck.id === 'B' ? 'dj-mirror' : ''}`} {...dropProps(onDropTrack)}
       title={deck.track ? undefined : 'Drop a song here, then press play'}>
+      <div className="dj-reference-deck-header" aria-hidden="true"><span>AIHub <b>DIRECT DRIVE</b></span><span className="dj-reference-speed">33 <i /> 45 <i /></span></div>
       <div className="dj-tt-main" ref={mainRef}>
         {kind === 'cdj' ? <CdjJog deck={deck} size={platter} />
           : kind === 'ledjog' ? <LedJog deck={deck} size={platter} />

@@ -8,90 +8,16 @@
  */
 
 /* ── Colour themes ─────────────────────────────────────────────────────── */
-.aihub-dj[data-dj-theme='carbon'] {
-  --dj-metal: repeating-linear-gradient(45deg, #1b1c1f 0 3px, #232428 3px 6px);
-  --dj-edge: #000;
-  --dj-label: #e5e7eb; --dj-label-soft: #f87171;
-  --dj-light: linear-gradient(#2e3035, #1b1c20); --dj-light-ink: #f3f4f6; --dj-light-edge: #000;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(239,68,68,0.12), transparent 60%), linear-gradient(180deg, #0e0f11, #050506);
-  --dj-screw: radial-gradient(circle at 35% 35%, #9ca3af, #111 70%);
-}
-.aihub-dj[data-dj-theme='sunset'] {
-  --dj-metal: linear-gradient(180deg, #4a2147 0%, #331632 55%, #241024 100%);
-  --dj-edge: #1a0a18;
-  --dj-label: #fde68a; --dj-label-soft: #fb923c;
-  --dj-light: linear-gradient(#6a2e58, #3f1a3a); --dj-light-ink: #fde68a; --dj-light-edge: #1a0a18;
-  --dj-bg: radial-gradient(ellipse at 50% -10%, rgba(249,115,22,0.35), transparent 55%), radial-gradient(ellipse at 50% 110%, rgba(168,85,247,0.25), transparent 60%), #12060f;
-  --dj-screw: radial-gradient(circle at 35% 35%, #fed7aa, #7c2d12 70%);
-  --dj-glow: 0 0 12px rgba(249,115,22,0.18);
-}
-.aihub-dj[data-dj-theme='rosegold'] {
-  --dj-metal: linear-gradient(180deg, #f8e4db 0%, #e9c3b2 50%, #d4a18c 100%);
-  --dj-edge: #9c6b5b;
-  --dj-label: #4a2a22; --dj-label-soft: #7c4a3c;
-  --dj-light: linear-gradient(#fff6f2, #efd2c6); --dj-light-ink: #3b1f18; --dj-light-edge: #a87765;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(251,191,170,0.18), transparent 60%), linear-gradient(180deg, #2a1c19, #140d0b);
-  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #b07c69 70%);
-}
-.aihub-dj[data-dj-theme='matrix'] {
-  --dj-metal: linear-gradient(180deg, #0b140d 0%, #060b07 100%);
-  --dj-edge: #166534;
-  --dj-label: #4ade80; --dj-label-soft: #22c55e;
-  --dj-light: linear-gradient(#11251a, #08140d); --dj-light-ink: #86efac; --dj-light-edge: #14532d;
-  --dj-bg: radial-gradient(ellipse at 50% 0%, rgba(34,197,94,0.16), transparent 60%), #000;
-  --dj-screw: radial-gradient(circle at 35% 35%, #86efac, #052e16 70%);
-  --dj-glow: 0 0 10px rgba(34,197,94,0.18);
-  --dj-ink: #86efac;
-}
-.aihub-dj[data-dj-theme='vapor'] {
-  --dj-metal: linear-gradient(135deg, #ffd6f2 0%, #e9d5ff 50%, #c7f0ff 100%);
-  --dj-edge: #c084fc;
-  --dj-label: #6b21a8; --dj-label-soft: #db2777;
-  --dj-light: linear-gradient(#ffffff, #f5d0fe); --dj-light-ink: #581c87; --dj-light-edge: #c084fc;
-  --dj-bg: linear-gradient(135deg, #3b0764 0%, #1e1b4b 50%, #0c4a6e 100%);
-  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #c084fc 70%);
-}
-.aihub-dj[data-dj-theme='walnut'] {
-  --dj-metal: repeating-linear-gradient(92deg, #6e4428 0 7px, #5c381f 7px 10px, #7a4d2e 10px 17px, #643d23 17px 21px);
-  --dj-edge: #2b170b;
-  --dj-label: #fbe7c6; --dj-label-soft: #e0b98a;
-  --dj-light: linear-gradient(#f3e3c8, #d8bf98); --dj-light-ink: #2b1708; --dj-light-edge: #3b220f;
-  --dj-bg: linear-gradient(180deg, #1c120b, #0d0805);
-  --dj-screw: radial-gradient(circle at 35% 35%, #f5e6c8, #8a6a3a 70%);
-}
-.aihub-dj[data-dj-theme='pearl'] {
-  --dj-metal: linear-gradient(180deg, #ffffff 0%, #f5f2f9 50%, #e8e3f0 100%);
-  --dj-edge: #c9c1d6;
-  --dj-label: #3b3150; --dj-label-soft: #7c6f94;
-  --dj-light: linear-gradient(#ffffff, #ece6f5); --dj-light-ink: #2a2140; --dj-light-edge: #b8acc9;
-  --dj-bg: linear-gradient(135deg, #ece7f4 0%, #dbe3f2 100%);
-  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #c9c1d6 70%);
-}
-.aihub-dj[data-dj-theme='royal'] {
-  --dj-metal: linear-gradient(180deg, #23306a 0%, #172150 55%, #111a40 100%);
-  --dj-edge: #0a0f26;
-  --dj-label: #fde68a; --dj-label-soft: #93c5fd;
-  --dj-light: linear-gradient(#2f3f86, #1a2557); --dj-light-ink: #fde68a; --dj-light-edge: #c9a227;
-  --dj-bg: radial-gradient(ellipse at 50% -15%, rgba(201,162,39,0.22), transparent 55%), linear-gradient(180deg, #0b1130, #050817);
-  --dj-screw: radial-gradient(circle at 35% 35%, #fef3c7, #a16207 70%);
-}
-.aihub-dj[data-dj-theme='lava'] {
-  --dj-metal: linear-gradient(180deg, #2a110a 0%, #1a0906 100%);
-  --dj-edge: #7c2d12;
-  --dj-label: #fed7aa; --dj-label-soft: #fb923c;
-  --dj-light: linear-gradient(#45200f, #260e06); --dj-light-ink: #fdba74; --dj-light-edge: #7c2d12;
-  --dj-bg: radial-gradient(ellipse at 50% 115%, rgba(234,88,12,0.4), transparent 60%), #0a0302;
-  --dj-screw: radial-gradient(circle at 35% 35%, #fdba74, #431407 70%);
-  --dj-glow: 0 0 12px rgba(234,88,12,0.22);
-}
-.aihub-dj[data-dj-theme='mint'] {
-  --dj-metal: linear-gradient(180deg, #ecfcf5 0%, #c9f0e1 50%, #a6dfc9 100%);
-  --dj-edge: #5fa88c;
-  --dj-label: #0f3d2e; --dj-label-soft: #2f7a60;
-  --dj-light: linear-gradient(#ffffff, #d5f5e8); --dj-light-ink: #0b2f23; --dj-light-edge: #6bb79a;
-  --dj-bg: linear-gradient(180deg, #0f2a22, #071612);
-  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #5fa88c 70%);
-}
+
+
+
+
+
+
+
+
+
+
 /* Dark-metal themes: the stems panel sits darker so its buttons read. */
 .aihub-dj[data-dj-dark='1'] .dj-stems { background: rgba(0,0,0,0.22); }
 .aihub-dj[data-dj-dark='1'] .dj-logo-dj { text-shadow: 0 0 10px currentColor; }

@@ -79,69 +79,14 @@
 
 /* ── Realistic hardware colourways ──
    Each is a real finish: anodised aluminium, champagne, bakelite, chrome, piano lacquer. */
-.aihub-dj[data-dj-theme='clubblack'] {
-  --dj-metal: linear-gradient(180deg, #34363b 0%, #26282c 45%, #1b1c1f 100%);
-  --dj-edge: #000; --dj-lcd: #05070a;
-  --dj-text: #d1d5db; --dj-label: #e5e7eb; --dj-label-soft: #fb923c;
-  --dj-light: linear-gradient(#4a4d53, #2b2d31); --dj-light-ink: #f3f4f6; --dj-light-edge: #000;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(249,115,22,0.10), transparent 60%), linear-gradient(180deg, #131416, #08090a);
-  --dj-screw: radial-gradient(circle at 35% 35%, #9ca3af, #1f2024 70%);
-}
-.aihub-dj[data-dj-theme='graphite'] {
-  --dj-metal: linear-gradient(180deg, #8a8f97 0%, #6d727a 45%, #565b63 100%);
-  --dj-edge: #2b2e33;
-  --dj-label: #f3f4f6; --dj-label-soft: #d1d5db;
-  --dj-light: linear-gradient(#a9aeb6, #7b8088); --dj-light-ink: #111317; --dj-light-edge: #2b2e33;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(255,255,255,0.10), transparent 60%), linear-gradient(180deg, #2d2f34, #1a1b1e);
-}
-.aihub-dj[data-dj-theme='champagne'] {
-  --dj-metal: linear-gradient(180deg, #efe3c8 0%, #d9c79e 45%, #bfa774 100%);
-  --dj-edge: #7a6638;
-  --dj-label: #3a2f17; --dj-label-soft: #6b5a30;
-  --dj-light: linear-gradient(#fffaf0, #d8c8a0); --dj-light-ink: #2a2110; --dj-light-edge: #7a6638;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(255,240,200,0.18), transparent 60%), linear-gradient(180deg, #2a2418, #15110a);
-  --dj-screw: radial-gradient(circle at 35% 35%, #fff7dd, #8a7440 70%);
-}
-.aihub-dj[data-dj-theme='bakelite'] {
-  --dj-metal: linear-gradient(180deg, #e8dcc2 0%, #d3c5a4 50%, #bba97f 100%);
-  --dj-edge: #6b5a38;
-  --dj-label: #3b2f1a; --dj-label-soft: #7a6a48;
-  --dj-light: linear-gradient(#f6edd6, #cdbd97); --dj-light-ink: #2a2110; --dj-light-edge: #6b5a38;
-  --dj-bg: linear-gradient(180deg, #3d2a1a, #22160d);
-  --dj-screw: radial-gradient(circle at 35% 35%, #fff, #8a7a58 70%);
-}
-.aihub-dj[data-dj-theme='chrome'] {
-  --dj-metal: linear-gradient(180deg, #ffffff 0%, #c9ced6 28%, #f4f6f8 48%, #a9afb8 52%, #dfe3e8 100%);
-  --dj-edge: #6b7078;
-  --dj-label: #1f2933; --dj-label-soft: #3b4754;
-  --dj-light: linear-gradient(#ffffff, #b9bfc8); --dj-light-ink: #0f172a; --dj-light-edge: #6b7078;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(96,165,250,0.25), transparent 60%), linear-gradient(180deg, #1c2330, #0b0f16);
-  --dj-glow: 0 0 10px rgba(96,165,250,0.18);
-}
-.aihub-dj[data-dj-theme='gunmetal'] {
-  --dj-metal: linear-gradient(180deg, #5b6572 0%, #444c57 50%, #303741 100%);
-  --dj-edge: #14181d;
-  --dj-label: #e2e8f0; --dj-label-soft: #94a3b8;
-  --dj-light: linear-gradient(#6f7a88, #3f4752); --dj-light-ink: #f8fafc; --dj-light-edge: #14181d;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(56,189,248,0.12), transparent 60%), linear-gradient(180deg, #1b2027, #0d1014);
-  --dj-screw: radial-gradient(circle at 35% 35%, #cbd5e1, #1e293b 70%);
-}
-.aihub-dj[data-dj-theme='redline'] {
-  --dj-metal: linear-gradient(180deg, #3a1114 0%, #2a0a0d 50%, #1a0507 100%);
-  --dj-edge: #000;
-  --dj-label: #fecaca; --dj-label-soft: #f87171;
-  --dj-light: linear-gradient(#5a1a1f, #2f0b0e); --dj-light-ink: #fee2e2; --dj-light-edge: #000;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(239,68,68,0.22), transparent 60%), linear-gradient(180deg, #14090a, #070203);
-  --dj-glow: 0 0 12px rgba(239,68,68,0.18);
-  --dj-screw: radial-gradient(circle at 35% 35%, #fca5a5, #450a0a 70%);
-}
-.aihub-dj[data-dj-theme='pianowhite'] {
-  --dj-metal: linear-gradient(180deg, #ffffff 0%, #f1f3f6 40%, #dfe3e8 100%);
-  --dj-edge: #a4abb5;
-  --dj-label: #1f2937; --dj-label-soft: #4b5563;
-  --dj-light: linear-gradient(#ffffff, #d8dce2); --dj-light-ink: #0b0f14; --dj-light-edge: #a4abb5;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(255,255,255,0.14), transparent 60%), linear-gradient(180deg, #30343b, #1b1d21);
-}
+
+
+
+
+
+
+
+
 
 /* ── Top bar: CPU, Sandbox, sampler bank (two knobs around 2 × 4 pads) ── */
 .aihub-dj .dj-top { height: 44px; gap: 8px; }
@@ -165,69 +110,14 @@
 .aihub-dj .dj-scope-menu canvas { display: block; width: 100%; border-radius: 4px; }
 
 /* ── More realistic colourways ── */
-.aihub-dj[data-dj-theme='rosewood'] {
-  --dj-metal: repeating-linear-gradient(92deg, #5a2a1c 0 3px, #4a2216 3px 7px, #6a3322 7px 9px);
-  --dj-edge: #1d0c07;
-  --dj-label: #f5dcc8; --dj-label-soft: #d6a98a;
-  --dj-light: linear-gradient(#7a4230, #44201a); --dj-light-ink: #fbe8d6; --dj-light-edge: #1d0c07;
-  --dj-bg: linear-gradient(180deg, #2a140d, #120805);
-  --dj-screw: radial-gradient(circle at 35% 35%, #f3d9b5, #6b4a2c 70%);
-}
-.aihub-dj[data-dj-theme='titanium'] {
-  --dj-metal: linear-gradient(180deg, #c4c7cc 0%, #a2a6ad 45%, #868a92 100%);
-  --dj-edge: #50545b;
-  --dj-label: #1a1d22; --dj-label-soft: #3b4048;
-  --dj-light: linear-gradient(#dde0e4, #9a9ea6); --dj-light-ink: #0e1116; --dj-light-edge: #50545b;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(255,255,255,0.12), transparent 60%), linear-gradient(180deg, #25272b, #131417);
-}
-.aihub-dj[data-dj-theme='midnightblue'] {
-  --dj-metal: linear-gradient(180deg, #1f3a63 0%, #172c4d 50%, #0f1f38 100%);
-  --dj-edge: #050b16;
-  --dj-label: #dbeafe; --dj-label-soft: #7fb2f0;
-  --dj-light: linear-gradient(#2f5a96, #173057); --dj-light-ink: #eff6ff; --dj-light-edge: #050b16;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(59,130,246,0.22), transparent 60%), linear-gradient(180deg, #0b1424, #04070d);
-  --dj-glow: 0 0 10px rgba(59,130,246,0.16);
-  --dj-screw: radial-gradient(circle at 35% 35%, #bfdbfe, #1e3a8a 70%);
-}
-.aihub-dj[data-dj-theme='emeraldglass'] {
-  --dj-metal: linear-gradient(180deg, #14543f 0%, #0e3f2f 50%, #082a20 100%);
-  --dj-edge: #02100b;
-  --dj-label: #d1fae5; --dj-label-soft: #6ee7b7;
-  --dj-light: linear-gradient(#1f7a5b, #0d3b2c); --dj-light-ink: #ecfdf5; --dj-light-edge: #02100b;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(16,185,129,0.2), transparent 60%), linear-gradient(180deg, #07160f, #020805);
-  --dj-glow: 0 0 10px rgba(16,185,129,0.14);
-}
-.aihub-dj[data-dj-theme='copper'] {
-  --dj-metal: linear-gradient(180deg, #e8b090 0%, #c07a55 48%, #8f4e30 100%);
-  --dj-edge: #4d2412;
-  --dj-label: #2a1208; --dj-label-soft: #5e2f18;
-  --dj-light: linear-gradient(#f5c8a8, #b36a46); --dj-light-ink: #2a1208; --dj-light-edge: #4d2412;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(251,146,60,0.18), transparent 60%), linear-gradient(180deg, #2b1509, #130a04);
-  --dj-screw: radial-gradient(circle at 35% 35%, #ffe2c9, #7a4326 70%);
-}
-.aihub-dj[data-dj-theme='stealth'] {
-  --dj-metal: linear-gradient(180deg, #17181b 0%, #0f1012 50%, #08090a 100%);
-  --dj-edge: #000; --dj-lcd: #020304;
-  --dj-text: #9ca3af; --dj-label: #9ca3af; --dj-label-soft: #6b7280;
-  --dj-light: linear-gradient(#25272b, #101113); --dj-light-ink: #d1d5db; --dj-light-edge: #000;
-  --dj-bg: linear-gradient(180deg, #060607, #000);
-  --dj-screw: radial-gradient(circle at 35% 35%, #52555c, #0a0a0b 70%);
-}
-.aihub-dj[data-dj-theme='sand'] {
-  --dj-metal: linear-gradient(180deg, #e9dfcf 0%, #d6c8b0 50%, #bfae90 100%);
-  --dj-edge: #8a7a5c;
-  --dj-label: #3a3022; --dj-label-soft: #6f6248;
-  --dj-light: linear-gradient(#f7f0e2, #cdbf9f); --dj-light-ink: #2a2216; --dj-light-edge: #8a7a5c;
-  --dj-bg: linear-gradient(180deg, #4a4030, #261f15);
-}
-.aihub-dj[data-dj-theme='violetnight'] {
-  --dj-metal: linear-gradient(180deg, #3b2a5e 0%, #2b1d47 50%, #1b122f 100%);
-  --dj-edge: #08040f;
-  --dj-label: #ede9fe; --dj-label-soft: #a78bfa;
-  --dj-light: linear-gradient(#54399a, #2a1b52); --dj-light-ink: #f5f3ff; --dj-light-edge: #08040f;
-  --dj-bg: radial-gradient(ellipse at 50% -20%, rgba(139,92,246,0.25), transparent 60%), linear-gradient(180deg, #0f0a1e, #05030b);
-  --dj-glow: 0 0 10px rgba(139,92,246,0.16);
-}
+
+
+
+
+
+
+
+
 
 /* ── Now playing strip (fills the top bar) ── */
 .aihub-dj .dj-nowplaying { flex: 1; min-width: 0; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 8px; cursor: pointer; overflow: hidden; }

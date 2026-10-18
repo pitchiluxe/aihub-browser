@@ -132,12 +132,12 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
             <clipPath id={`disc-clip-${deck.id}`}><circle cx={c} cy={c} r={c * 0.9} /></clipPath>
           </defs>
           {dots}
-          <circle cx={c} cy={c} r={c * 0.92} fill={`url(#vinyl-${deck.id})`} />
+          <circle cx={c} cy={c} r={c * 0.92} fill={`var(--dj-record-fill, url(#vinyl-${deck.id}))`} />
           {grooves}
           {cover ? (
             <>
               {/* The song's artwork printed across the record, spinning with it */}
-              <image href={cover} x={c - c * 0.9} y={c - c * 0.9} width={c * 1.8} height={c * 1.8}
+              <image className="dj-record-artwork" href={cover} x={c - c * 0.9} y={c - c * 0.9} width={c * 1.8} height={c * 1.8}
                 preserveAspectRatio="xMidYMid slice" clipPath={`url(#disc-clip-${deck.id})`} />
               <circle cx={c} cy={c} r={c * 0.9} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={2} />
               <circle cx={c} cy={c} r={c * 0.12} fill="rgba(0,0,0,0.25)" />
@@ -147,7 +147,7 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
           ) : (
             <>
               {/* Label */}
-              <circle cx={c} cy={c} r={c * 0.36} fill="#d71920" />
+              <circle className="dj-record-label" cx={c} cy={c} r={c * 0.36} fill="var(--dj-record-label, #d71920)" />
               <circle cx={c} cy={c} r={c * 0.36} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth={1.5} />
               <rect x={c - 2.5} y={c - c * 0.35} width={5} height={c * 0.27} rx={2} fill="#fff" />
               <text x={c} y={c + c * 0.1} textAnchor="middle" fontSize={c * 0.12} fontWeight={800} fill="#fff" fontFamily="Inter, Arial, sans-serif" letterSpacing={0.5}>AIHub</text>
@@ -156,6 +156,15 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
           )}
         </svg>
       </div>
+
+      {!cover && <svg className="dj-reference-hub" width={size} height={size} style={layer} aria-hidden="true">
+        <circle cx={c} cy={c} r={c * 0.38} fill="#3c4047" stroke="#747b85" strokeWidth={3} />
+        <circle cx={c} cy={c} r={c * 0.29} fill="#b7bcc3" stroke="#24272e" strokeWidth={2} />
+        <circle cx={c} cy={c} r={c * 0.21} fill="#101e34" stroke="#7e8998" strokeWidth={3} />
+        <text x={c} y={c - 2} textAnchor="middle" fontSize={c * 0.09} fill="#8dceff" fontFamily="monospace">AIHUB</text>
+        <text x={c} y={c + c * 0.1} textAnchor="middle" fontSize={c * 0.07} fill="#d8e9ff" fontFamily="monospace">DIRECT DRIVE</text>
+        {[0, 1, 2, 3, 4, 5].map(i => { const a = i * Math.PI / 3; return <circle key={i} cx={c + Math.cos(a) * c * 0.33} cy={c + Math.sin(a) * c * 0.33} r={c * 0.018} fill={i === 4 ? '#f15b68' : '#25282e'} /> })}
+      </svg>}
 
       {/* Fixed sheen, spindle and tonearm — they stay put while the record turns under them */}
       <svg width={size} height={size} style={layer}>
@@ -177,7 +186,7 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
         <circle cx={c} cy={c} r={c * 0.035} fill="#d9dce0" stroke="#555" strokeWidth={0.5} />
       </svg>
       {/* Tonearm: its own layer, turned by the GPU about its pivot — no repaint as it tracks inwards */}
-      <div ref={armRef} style={{ ...layer, transformOrigin: `${size * 0.86}px ${size * 0.13}px`, transform: `rotate(${armAngle.current}deg)`, willChange: 'transform', transition: 'transform 0.7s cubic-bezier(.2,.7,.2,1)' }}>
+      <div ref={armRef} className="dj-tonearm" style={{ ...layer, transformOrigin: `${size * 0.86}px ${size * 0.13}px`, transform: `rotate(${armAngle.current}deg)`, willChange: 'transform', transition: 'transform 0.7s cubic-bezier(.2,.7,.2,1)' }}>
         <svg width={size} height={size} style={{ display: 'block' }}>
           <circle cx={size * 0.86} cy={size * 0.13} r={size * 0.075} fill="#2b2d31" stroke="#9aa0a8" strokeWidth={2} />
           <circle cx={size * 0.86} cy={size * 0.13} r={size * 0.03} fill="#c9ccd1" />

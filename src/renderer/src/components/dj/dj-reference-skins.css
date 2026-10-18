@@ -1,0 +1,191 @@
+/* Optional reference turntable skins. Scoped paint only: retain layout, hit targets and playback. */
+
+/* Ember Vinyl */
+.aihub-dj[data-dj-look='ember-vinyl'] {
+  --dj-metal: linear-gradient(180deg, #26272a, #090a0c); --dj-edge: #08090b;
+  --dj-label: #e6e7e9; --dj-label-soft: #e6e7e9; --dj-text: #e6e7e9;
+  --dj-light: linear-gradient(#26272a, #090a0c); --dj-light-ink: #e6e7e9; --dj-light-edge: #555b64;
+  --dj-lcd: #07090c; --dj-ink: #d7eef5; --reference-a: #ff641b; --reference-b: #ff641b;
+  --dj-record-label: #13161c; --dj-record-fill: #e94208;
+  background: #090a0c;
+}
+.aihub-dj[data-dj-look='ember-vinyl'] :is(.dj-panel, .dj-top) { background: var(--dj-metal); color: var(--dj-text); border-color: #08090b; border-radius: 4px; box-shadow: inset 0 1px #ffffff40, 0 2px 5px #0008; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-lcd { background: #07090c; color: #d7eef5; border-color: #424850; border-radius: 2px; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-tbtn { background: var(--dj-light); color: var(--dj-light-ink); border-color: #555b64; border-radius: 3px; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-knob svg .dj-knob-cap { fill: #26272a; stroke: #626874; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-knob svg .dj-knob-base { fill: #101216; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-knob svg .dj-knob-ptr { fill: #ff641b; }
+.aihub-dj[data-dj-look='ember-vinyl'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#9da2aa, #363a40 48%, #111318 50%, #6a7078); border-color: #111; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-platter { box-shadow: 0 0 0 2px #111, 0 0 0 4px #a4a8ae, 0 5px 12px #000a; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-tt { border-top: 2px solid var(--reference-a); }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-tt.dj-mirror { border-top-color: var(--reference-b); }
+.aihub-dj[data-dj-look='ember-vinyl'] :is(.dj-library, .dj-browser, .dj-side) { background: #101114; color: #e4e4e7; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-thead { background: #292b30; color: #e4e4e7; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-search input { background: #08090c; color: #e4e4e7; border-color: #454951; }
+
+/* Silver Wave */
+.aihub-dj[data-dj-look='silver-wave'] {
+  --dj-metal: linear-gradient(180deg, #e8ebef, #9ca3ad); --dj-edge: #08090b;
+  --dj-label: #202732; --dj-label-soft: #202732; --dj-text: #202732;
+  --dj-light: linear-gradient(#e8ebef, #9ca3ad); --dj-light-ink: #202732; --dj-light-edge: #555b64;
+  --dj-lcd: #07090c; --dj-ink: #d7eef5; --reference-a: #00cde8; --reference-b: #f44444;
+  --dj-record-label: #123c72; --dj-record-fill: #c9cfd7;
+  background: #090a0c;
+}
+.aihub-dj[data-dj-look='silver-wave'] :is(.dj-panel, .dj-top) { background: var(--dj-metal); color: var(--dj-text); border-color: #08090b; border-radius: 4px; box-shadow: inset 0 1px #ffffff40, 0 2px 5px #0008; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-lcd { background: #07090c; color: #d7eef5; border-color: #424850; border-radius: 2px; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-tbtn { background: var(--dj-light); color: var(--dj-light-ink); border-color: #555b64; border-radius: 3px; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-knob svg .dj-knob-cap { fill: #e8ebef; stroke: #626874; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-knob svg .dj-knob-base { fill: #101216; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-knob svg .dj-knob-ptr { fill: #00cde8; }
+.aihub-dj[data-dj-look='silver-wave'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#9da2aa, #363a40 48%, #111318 50%, #6a7078); border-color: #111; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-platter { box-shadow: 0 0 0 2px #111, 0 0 0 4px #a4a8ae, 0 5px 12px #000a; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-tt { border-top: 2px solid var(--reference-a); }
+.aihub-dj[data-dj-look='silver-wave'] .dj-tt.dj-mirror { border-top-color: var(--reference-b); }
+.aihub-dj[data-dj-look='silver-wave'] :is(.dj-library, .dj-browser, .dj-side) { background: #101114; color: #e4e4e7; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-thead { background: #292b30; color: #e4e4e7; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-search input { background: #08090c; color: #e4e4e7; border-color: #454951; }
+
+/* Silver Classic */
+.aihub-dj[data-dj-look='silver-classic'] {
+  --dj-metal: linear-gradient(180deg, #d4d8de, #8c939e); --dj-edge: #08090b;
+  --dj-label: #19222d; --dj-label-soft: #19222d; --dj-text: #19222d;
+  --dj-light: linear-gradient(#d4d8de, #8c939e); --dj-light-ink: #19222d; --dj-light-edge: #555b64;
+  --dj-lcd: #07090c; --dj-ink: #d7eef5; --reference-a: #38bdf8; --reference-b: #ef4444;
+  --dj-record-label: #123c72; --dj-record-fill: #bfc5cd;
+  background: #090a0c;
+}
+.aihub-dj[data-dj-look='silver-classic'] :is(.dj-panel, .dj-top) { background: var(--dj-metal); color: var(--dj-text); border-color: #08090b; border-radius: 4px; box-shadow: inset 0 1px #ffffff40, 0 2px 5px #0008; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-lcd { background: #07090c; color: #d7eef5; border-color: #424850; border-radius: 2px; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-tbtn { background: var(--dj-light); color: var(--dj-light-ink); border-color: #555b64; border-radius: 3px; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-knob svg .dj-knob-cap { fill: #d4d8de; stroke: #626874; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-knob svg .dj-knob-base { fill: #101216; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-knob svg .dj-knob-ptr { fill: #38bdf8; }
+.aihub-dj[data-dj-look='silver-classic'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#9da2aa, #363a40 48%, #111318 50%, #6a7078); border-color: #111; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-platter { box-shadow: 0 0 0 2px #111, 0 0 0 4px #a4a8ae, 0 5px 12px #000a; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-tt { border-top: 2px solid var(--reference-a); }
+.aihub-dj[data-dj-look='silver-classic'] .dj-tt.dj-mirror { border-top-color: var(--reference-b); }
+.aihub-dj[data-dj-look='silver-classic'] :is(.dj-library, .dj-browser, .dj-side) { background: #101114; color: #e4e4e7; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-thead { background: #292b30; color: #e4e4e7; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-search input { background: #08090c; color: #e4e4e7; border-color: #454951; }
+
+/* Battle Artwork */
+.aihub-dj[data-dj-look='battle-art'] {
+  --dj-metal: linear-gradient(180deg, #383a3b, #1a1b1d); --dj-edge: #08090b;
+  --dj-label: #ececec; --dj-label-soft: #ececec; --dj-text: #ececec;
+  --dj-light: linear-gradient(#383a3b, #1a1b1d); --dj-light-ink: #ececec; --dj-light-edge: #555b64;
+  --dj-lcd: #07090c; --dj-ink: #d7eef5; --reference-a: #24d3e8; --reference-b: #f84da5;
+  --dj-record-label: #e51b23;
+  background: #090a0c;
+}
+.aihub-dj[data-dj-look='battle-art'] :is(.dj-panel, .dj-top) { background: var(--dj-metal); color: var(--dj-text); border-color: #08090b; border-radius: 4px; box-shadow: inset 0 1px #ffffff40, 0 2px 5px #0008; }
+.aihub-dj[data-dj-look='battle-art'] .dj-lcd { background: #07090c; color: #d7eef5; border-color: #424850; border-radius: 2px; }
+.aihub-dj[data-dj-look='battle-art'] .dj-tbtn { background: var(--dj-light); color: var(--dj-light-ink); border-color: #555b64; border-radius: 3px; }
+.aihub-dj[data-dj-look='battle-art'] .dj-knob svg .dj-knob-cap { fill: #383a3b; stroke: #626874; }
+.aihub-dj[data-dj-look='battle-art'] .dj-knob svg .dj-knob-base { fill: #101216; }
+.aihub-dj[data-dj-look='battle-art'] .dj-knob svg .dj-knob-ptr { fill: #24d3e8; }
+.aihub-dj[data-dj-look='battle-art'] :is(.dj-vfader-cap, .dj-hfader-cap) { background: linear-gradient(#9da2aa, #363a40 48%, #111318 50%, #6a7078); border-color: #111; }
+.aihub-dj[data-dj-look='battle-art'] .dj-platter { box-shadow: 0 0 0 2px #111, 0 0 0 4px #a4a8ae, 0 5px 12px #000a; }
+.aihub-dj[data-dj-look='battle-art'] .dj-tt { border-top: 2px solid var(--reference-a); }
+.aihub-dj[data-dj-look='battle-art'] .dj-tt.dj-mirror { border-top-color: var(--reference-b); }
+.aihub-dj[data-dj-look='battle-art'] :is(.dj-library, .dj-browser, .dj-side) { background: #101114; color: #e4e4e7; }
+.aihub-dj[data-dj-look='battle-art'] .dj-thead { background: #292b30; color: #e4e4e7; }
+.aihub-dj[data-dj-look='battle-art'] .dj-search input { background: #08090c; color: #e4e4e7; border-color: #454951; }
+
+
+/* Reference hardware: only the reference skins participate. Other looks retain their original geometry. */
+.aihub-dj .dj-reference-deck-header, .aihub-dj .dj-reference-hub { display: none; }
+.aihub-dj[data-dj-reference='1'] { gap: 3px; padding: 5px; font-family: Arial, Helvetica, sans-serif; --dj-glow: none; }
+.aihub-dj[data-dj-reference='1'] :is(.dj-panel, .dj-top) { border-radius: 1px; box-shadow: inset 0 1px #ffffff20, inset 0 -1px #000a; }
+.aihub-dj[data-dj-reference='1'] .dj-top { height: 38px; min-height: 38px; }
+.aihub-dj[data-dj-reference='1'] .dj-row-clocks { height: 44px; grid-template-columns: 170px 1fr 170px; gap: 3px; }
+.aihub-dj[data-dj-reference='1'] .dj-row-info { height: 60px; gap: 3px; }
+.aihub-dj[data-dj-reference='1'] .dj-row-info .dj-cover { width: 38px; }
+.aihub-dj[data-dj-reference='1'] .dj-lcd { border-radius: 1px; box-shadow: inset 0 1px 5px #000a; }
+/* The Classic arrangement follows the reference: large deck / narrow mixer / large deck.
+   Performance controls remain reachable in shallow trays beneath each deck. */
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-info { grid-template-columns: minmax(0,1fr) 270px minmax(0,1fr); }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-info > .dj-info:first-child { grid-column: 1; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-info > .dj-info:last-child { grid-column: 3; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-decks { grid-template-columns: minmax(0,1fr) 270px minmax(0,1fr); grid-template-rows: minmax(0,1fr) 132px; height: 478px; gap: 3px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-decks > .dj-tt:not(.dj-mirror) { grid-column: 1; grid-row: 1; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-decks > .dj-tt.dj-mirror { grid-column: 3; grid-row: 1; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-decks > .dj-mixer { grid-column: 2; grid-row: 1 / span 2; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-decks > .dj-pads:not(.dj-mirror) { grid-column: 1; grid-row: 2; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-decks > .dj-pads.dj-mirror { grid-column: 3; grid-row: 2; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads { flex-direction: row; padding: 6px; gap: 6px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-stems { flex: 0 0 32%; padding: 3px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-pads-body { min-width: 0; gap: 4px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-section { gap: 2px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-col { gap: 3px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-stem-grid { grid-template-columns: repeat(2,1fr); gap: 2px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads :is(.dj-stem,.dj-btn) { height: 20px; font-size: 9px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-section-title { font-size: 9px; margin-bottom: 1px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-hotcues { width: 34px; padding: 0; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-pad { width: 29px; height: 17px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-loop { margin-top: 2px; padding-top: 2px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-loop-grid { gap: 2px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-fx-select { height: 22px; font-size: 11px; }
+.aihub-dj[data-dj-reference='1'] .dj-reference-deck-header { display: flex; flex: none; justify-content: space-between; align-items: center; height: 20px; font-size: 10px; color: var(--dj-label); letter-spacing: 1px; }
+.aihub-dj[data-dj-reference='1'] .dj-reference-deck-header b { font-size: 7px; font-weight: normal; }
+.aihub-dj[data-dj-reference='1'] .dj-reference-speed { display: flex; align-items: center; gap: 6px; font-size: 8px; }
+.aihub-dj[data-dj-reference='1'] .dj-reference-speed i { width: 4px; height: 4px; border-radius: 50%; background: #e8b4ba; border: 1px solid #7f5159; }
+.aihub-dj[data-dj-reference='1'] .dj-tt { padding: 6px 12px; border-top: 1px solid #555; background: repeating-linear-gradient(90deg,#ffffff04 0 1px,transparent 1px 3px),var(--dj-metal); }
+.aihub-dj[data-dj-reference='1'] .dj-tt.dj-mirror { border-top-color: #555; }
+.aihub-dj[data-dj-reference='1'] .dj-transport { justify-content: space-between; gap: 5px; padding-top: 4px; }
+.aihub-dj[data-dj-reference='1'] .dj-transport .dj-tbtn { height: 28px; font-size: 10px; box-shadow: inset 0 1px #ffffff50,0 1px 2px #000a; }
+.aihub-dj[data-dj-reference='1'] .dj-platter { box-shadow: 0 0 0 2px #0b0c0e,0 0 0 5px #8f949c,0 0 0 6px #25282c,0 7px 10px #0009; }
+.aihub-dj[data-dj-reference='1'] .dj-record-label { r: 15%; }
+/* Loaded artwork fills the record using its SVG circular boundary on every skin. */
+.aihub-dj[data-dj-reference='1'] .dj-mixer { padding: 6px 10px; border-left: 3px solid #0b0c0f; border-right: 3px solid #0b0c0f; background: repeating-linear-gradient(90deg,#ffffff04 0 1px,transparent 1px 3px),var(--dj-metal); }
+.aihub-dj[data-dj-reference='1'] .dj-mixer-body { flex: 1; padding: 12px 6px 4px; border: 0; background: #00000013; }
+.aihub-dj[data-dj-reference='1'] .dj-ch { justify-content: space-around; }
+.aihub-dj[data-dj-reference='1'] .dj-mixer-center { justify-content: space-around; }
+.aihub-dj[data-dj-reference='1'] .dj-mixer-faders { flex: 0 0 110px; padding: 8px 10px; border-top: 1px solid #ffffff20; }
+.aihub-dj[data-dj-reference='1'] .dj-mixer-logo { font-size: 13px; opacity: .8; }
+.aihub-dj[data-dj-reference='1'] .dj-mixer-logo small { font-size: 7px; }
+.aihub-dj[data-dj-reference='1'] .dj-xfader { padding-top: 8px; padding-bottom: 5px; border-top: 1px solid #0008; }
+.aihub-dj[data-dj-reference='1'] .dj-knob svg { filter: none; }
+.aihub-dj[data-dj-reference='1'] .dj-library { padding: 2px; grid-template-columns: 190px minmax(0,1fr) 245px; border: 1px solid #444; }
+.aihub-dj[data-dj-reference='1'] .dj-tr { font-size: 11px; min-height: 20px; }
+.aihub-dj[data-dj-reference='1'] .dj-tr:nth-child(even) { background: #ffffff03; }
+.aihub-dj[data-dj-reference='1'] .dj-tr.dj-sel { background: #6e6413; color: #fff; }
+.aihub-dj[data-dj-reference='1'] .dj-thead { height: 21px; font-size: 10px; background: linear-gradient(#424242,#242424); }
+.aihub-dj[data-dj-reference='1'] .dj-side { font-size: 11px; }
+.aihub-dj[data-dj-reference='1']:not([data-dj-look='silver-wave']):not([data-dj-look='battle-art']) .dj-coverflow { display: none; }
+.aihub-dj[data-dj-reference='1'] .dj-coverflow { height: 140px !important; }
+/* Silver consoles: satin machined decks, stepped concentric jog hubs, blue LCDs. */
+.aihub-dj:is([data-dj-look='silver-wave'],[data-dj-look='silver-classic']) { --dj-metal: linear-gradient(110deg,#f0f1f3 0%,#c0c4ca 22%,#e5e7ea 48%,#b0b5bd 80%,#d9dce1); --dj-light: linear-gradient(#f3f5f7,#a8afb9); --dj-light-ink: #242a32; --dj-edge: #777e88; --dj-label: #28313c; --dj-label-soft: #394655; }
+.aihub-dj:is([data-dj-look='silver-wave'],[data-dj-look='silver-classic']) .dj-reference-hub { display: block; }
+.aihub-dj:is([data-dj-look='silver-wave'],[data-dj-look='silver-classic']) .dj-tonearm { display: none; }
+.aihub-dj:is([data-dj-look='silver-wave'],[data-dj-look='silver-classic']) .dj-knob svg .dj-knob-cap { fill: #e0e4e9; stroke: #606974; }
+.aihub-dj:is([data-dj-look='silver-wave'],[data-dj-look='silver-classic']) .dj-knob svg .dj-knob-ptr { fill: #252b34; }
+.aihub-dj:is([data-dj-look='silver-wave'],[data-dj-look='silver-classic']) .dj-mixer-tabs { color: #202b39; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-row-clocks { height: 64px; }
+/* Remaining reference hardware finishes. */
+.aihub-dj[data-dj-look='ember-vinyl'] { --dj-metal: linear-gradient(100deg,#27282c,#15161a); --dj-record-fill: #e43c04; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-mixer { background: linear-gradient(90deg,#161619,#303035 45%,#18181b); }
+.aihub-dj[data-dj-look='battle-art'] { --dj-metal: linear-gradient(100deg,#404344,#252728); }
+/* Compact readouts fit the shorter reference display strips. */
+.aihub-dj[data-dj-reference='1'] .dj-clock { padding: 3px 5px; gap: 4px; overflow: hidden; }
+.aihub-dj[data-dj-reference='1'] .dj-deck-letter { width: 28px; height: 30px; font-size: 22px; flex: none; }
+.aihub-dj[data-dj-reference='1'] .dj-time { height: 32px; padding: 1px 4px; min-width: 0; }
+.aihub-dj[data-dj-reference='1'] .dj-lcd-labels { font-size: 7px; white-space: nowrap; }
+.aihub-dj[data-dj-reference='1'] .dj-lcd-big { font-size: 20px; }
+.aihub-dj[data-dj-reference='1'] .dj-info { padding: 4px 6px; }
+.aihub-dj[data-dj-reference='1'] .dj-readout { width: 76px; padding: 2px 4px; }
+.aihub-dj[data-dj-reference='1'] .dj-ro-row { font-size: 8px; }
+.aihub-dj[data-dj-reference='1'] .dj-ro-row b { font-size: 10px; }
+.aihub-dj[data-dj-reference='1'] .dj-ro-row b.dj-lcd-mid { font-size: 14px; }
+.aihub-dj[data-dj-reference='1'] .dj-title-line { font-size: 11px; }
+.aihub-dj[data-dj-reference='1'] .dj-mixer.dj-video-up { margin-top: 0; height: 100%; overflow: hidden; }
+.aihub-dj[data-dj-reference='1'] .dj-mixer.dj-video-up .dj-mixer-video { height: auto; flex: 1; min-height: 0; }
+.aihub-dj:is([data-dj-look='silver-wave'],[data-dj-look='silver-classic']) .dj-vinyl-gloss-img { opacity: .3; }
+
+.aihub-dj[data-dj-reference='1'] .dj-top { height: 44px; min-height: 44px; padding: 3px 8px; align-items: center; }
+.aihub-dj[data-dj-reference='1'] .dj-top-automix { white-space: nowrap; flex-shrink: 0; padding: 0 8px; font-size: 10px; }
+.aihub-dj[data-dj-reference='1'] .dj-row-clocks { height: 52px; }
+.aihub-dj[data-dj-look='silver-wave'] .dj-row-clocks { height: 64px; }
+.aihub-dj[data-dj-reference='1'] .dj-time { height: 38px; }
+.aihub-dj[data-dj-reference='1'] .dj-clock { min-height: 0; }
+.aihub-dj[data-dj-reference='1'] .dj-row-info { height: 64px; overflow: hidden; }
