@@ -84,3 +84,32 @@ describe('hardware rigs', () => {
     expect(plain).not.toMatch(/\bfilter\s*:|mix-blend-mode|backdrop-filter|animation\s*:/)
   })
 })
+
+describe('rig browser and furniture', () => {
+  it('no rig hides the cover-flow thumbnails', () => {
+    const ref = fs.readFileSync(path.join(dir, 'dj-reference-skins.css'), 'utf8')
+    expect(ref + css).not.toMatch(/\.dj-coverflow\s*\{[^}]*display:\s*none/)
+  })
+  it('every turntable deck has a live playing lamp; jogs and screens do not', () => {
+    const deckUi = fs.readFileSync(path.join(dir, 'DeckUI.tsx'), 'utf8')
+    expect(deckUi).toContain("const furnished = kind === 'turntable' && rig?.platter !== 'silver'")
+    expect(deckUi).toMatch(/dj-hw-lamp \$\{deck\.active \? 'dj-on'/)
+    expect(css).toContain('.dj-tt-furnished .dj-hw-lamp')
+  })
+
+  it.each(['studio', 'classic-1200', 'battle-black'])('a %s record has the 45 adapter and target light in its corners', look => {
+    const r = render(look, { track: { cover: null } as any })
+    try {
+      expect(r.host.querySelector('.dj-hw-adapter')).not.toBeNull()
+      expect(r.host.querySelector('.dj-hw-target.dj-on')).not.toBeNull()
+    } finally { r.done() }
+  })
+
+  it('a silver jog is not a turntable and has no adapter or target light', () => {
+    const r = render('silver-wave', {})
+    try {
+      expect(r.host.querySelector('.dj-hw-adapter')).toBeNull()
+      expect(r.host.querySelector('.dj-hw-target')).toBeNull()
+    } finally { r.done() }
+  })
+})

@@ -450,7 +450,7 @@ function Console({ engine }: { engine: DjEngine }) {
     {/* Not rendered while the stage covers it: its turntables, waveforms and meters
         redrew 30x a second out of sight and held YouTube video to <10 fps (23 fps
         without them, measured 2026-10-13). The music plays on — audio is not drawn. */}
-    <div className="aihub-dj" data-dj-reference={REFERENCE_LOOKS.has(look) ? '1' : undefined} data-dj-theme={theme} data-dj-look={look} data-dj-layout={layout} data-dj-dark={themeInfo?.dark ? '1' : '0'}
+    <div className="aihub-dj" data-dj-reference={REFERENCE_LOOKS.has(look) ? '1' : undefined} data-dj-rig={rigFor(look)?.platter} data-dj-theme={theme} data-dj-look={look} data-dj-layout={layout} data-dj-dark={themeInfo?.dark ? '1' : '0'}
       data-dj-covered={stageView === 'stage' ? '1' : undefined}
       data-dj-light-bg={themeInfo?.lightBg ? '1' : '0'} ref={fit.ref} style={fit.style}>
       <TopBar engine={engine} mixer={mixer} setLog={setLog} say={say} theme={theme} setTheme={setTheme} look={look} setLook={setLook}

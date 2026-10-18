@@ -276,8 +276,10 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
     return () => ro.disconnect()
   }, [maxPlatter])
   const kind = useDesign().deck
+  // Every turntable deck gets the furniture of a real one; jogs and screens don't.
+  const furnished = kind === 'turntable' && rig?.platter !== 'silver'
   return (
-    <div className={`dj-tt dj-panel dj-deck-${kind} ${deck.id === 'B' ? 'dj-mirror' : ''}`} {...dropProps(onDropTrack)}
+    <div className={`dj-tt dj-panel dj-deck-${kind} ${furnished ? 'dj-tt-furnished' : ''} ${deck.id === 'B' ? 'dj-mirror' : ''}`} {...dropProps(onDropTrack)}
       title={deck.track ? undefined : 'Drop a song here, then press play'}>
       <div className="dj-reference-deck-header" aria-hidden="true"><span>AIHub <b>DIRECT DRIVE</b></span><span className="dj-reference-speed">33 <i /> 45 <i /></span></div>
       <div className="dj-tt-main" ref={mainRef}>
@@ -286,6 +288,8 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
           : kind === 'screen' ? <ScreenDeck deck={deck} size={platter} />
           : <Platter deck={deck} size={platter} />}
         <div className="dj-tt-side">
+          {/* Playing lamp above the pitch section, like the turntable's indicator */}
+          {furnished && <span className={`dj-hw-lamp ${deck.active ? 'dj-on' : ''}`} title={deck.active ? 'Playing' : 'Stopped'} />}
           <button type="button" className="dj-mini" onClick={() => deck.eject()} disabled={!deck.track || deck.playing} title="Eject">
             <ArrowUpFromLine size={11} />
           </button>
@@ -305,7 +309,7 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
         <button type="button" className={`dj-tbtn dj-play ${deck.active ? 'dj-playing' : ''}`} onClick={() => deck.toggle()} disabled={!deck.track}
           title={deck.active ? 'Pause' : 'Play'} aria-label={deck.active ? 'Pause' : 'Play'}>
           {deck.active ? <Pause size={22} fill="currentColor" strokeWidth={0} /> : <Play size={22} fill="currentColor" strokeWidth={0} />}
-          {rig && <span className="dj-start-label">START·STOP</span>}
+          {rig?.platter === 'silver' && <span className="dj-start-label">START·STOP</span>}
         </button>
         <button type="button" className={`dj-mini dj-keylock ${deck.keyLock ? 'dj-on dj-on-blue' : ''}`} onClick={() => deck.setKeyLock(!deck.keyLock)} title="Key lock — keep pitch when changing tempo">
           <Lock size={10} />

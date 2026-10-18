@@ -152,7 +152,6 @@
 .aihub-dj[data-dj-reference='1'] .dj-tr.dj-sel { background: #6e6413; color: #fff; }
 .aihub-dj[data-dj-reference='1'] .dj-thead { height: 21px; font-size: 10px; background: linear-gradient(#424242,#242424); }
 .aihub-dj[data-dj-reference='1'] .dj-side { font-size: 11px; }
-.aihub-dj[data-dj-reference='1']:not([data-dj-look='silver-wave']):not([data-dj-look='battle-art']) .dj-coverflow { display: none; }
 .aihub-dj[data-dj-reference='1'] .dj-coverflow { height: 140px !important; }
 /* Silver consoles: satin machined decks, stepped concentric jog hubs, blue LCDs. */
 .aihub-dj:is([data-dj-look='silver-wave'],[data-dj-look='silver-classic']) { --dj-metal: linear-gradient(110deg,#f0f1f3 0%,#c0c4ca 22%,#e5e7ea 48%,#b0b5bd 80%,#d9dce1); --dj-light: linear-gradient(#f3f5f7,#a8afb9); --dj-light-ink: #242a32; --dj-edge: #777e88; --dj-label: #28313c; --dj-label-soft: #394655; }

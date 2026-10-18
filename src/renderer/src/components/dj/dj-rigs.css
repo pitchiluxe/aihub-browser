@@ -323,3 +323,70 @@
 .aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-grow > .dj-section { flex: 1; min-width: 0; }
 .aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-loop { margin-top: 0; padding-top: 0; border-top: 0; padding-left: 8px; border-left: 1px solid rgba(0,0,0,0.25); }
 .aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads .dj-loop-grid :is(.dj-btn, .dj-loop-len) { height: 22px; }
+
+/* ── Vinyl rigs: turntable furniture and the bottom key row ──────────────
+   Laid out like a classic software turntable: 45 adapter top-left, arm board
+   top-right with the playing lamp, target light by the platter's lower-left
+   edge, green pitch LCD over a long pitch slider, and square keys along the
+   bottom — CUE, stop, play/pause, key lock, SYNC. */
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-tt {
+  display: flex; flex-direction: column; padding: 6px 10px 8px;
+}
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-tt .dj-transport {
+  flex-direction: row; justify-content: center; align-items: center; gap: 10px; padding: 6px 4px 0;
+}
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-transport > * { order: 0 !important; }
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-transport .dj-tbtn {
+  flex: 0 1 92px; height: 32px; flex-direction: row; font-size: 15px; letter-spacing: 0.5px;
+}
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-transport .dj-tbtn.dj-cue { text-decoration: underline; text-underline-offset: 3px; }
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-transport .dj-tbtn.dj-sync { flex: 0 1 62px; font-size: 12px; }
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl'] .dj-transport .dj-keylock {
+  width: 18px; height: 14px; padding: 0; border-radius: 1px; background: #1b1c1f; border: 1px solid #000;
+  box-shadow: inset 0 1px 2px #000, 0 1px rgba(255,255,255,0.25);
+}
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl'] .dj-transport .dj-keylock svg { display: none; }
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl'] .dj-transport .dj-keylock.dj-on { background: #3b82f6 !important; box-shadow: 0 0 6px rgba(59,130,246,0.8) !important; }
+/* Square silver keys (the battle rigs keep their black keys). */
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl'] .dj-transport .dj-tbtn,
+.aihub-dj[data-dj-reference='1'][data-dj-rig='vinyl'] .dj-transport .dj-tbtn:disabled {
+  border: 2px solid #1d1f22; border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.55), inset 0 -3px 4px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.6);
+}
+.aihub-dj:is([data-dj-look='classic-1200'], [data-dj-look='ember-vinyl']) .dj-transport .dj-tbtn,
+.aihub-dj:is([data-dj-look='classic-1200'], [data-dj-look='ember-vinyl']) .dj-transport .dj-tbtn:disabled {
+  background: linear-gradient(#f2f3f5, #c3c7cd) !important; color: #23262b !important;
+}
+.aihub-dj:is([data-dj-look='classic-1200'], [data-dj-look='ember-vinyl']) .dj-transport .dj-tbtn.dj-play.dj-playing {
+  background: linear-gradient(#e7fbe9, #a6e3b2) !important; color: #0f5d2a !important;
+}
+
+/* ── Turntable furniture on every turntable skin ─────────────────────────
+   Platter.tsx draws the 45 adapter and target light in the platter's free
+   corners; DeckUI puts the playing lamp over the pitch section. Jog, CDJ
+   and screen decks are not turntables and never render them. */
+.aihub-dj .dj-tt-furnished .dj-hw-target {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle at 40% 35%, #4a4d52, #141517 70%); border: 2px solid #6b7078;
+  box-shadow: inset 0 1px 2px rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.6);
+}
+.aihub-dj .dj-tt-furnished .dj-hw-target.dj-on {
+  background: radial-gradient(circle at 40% 35%, #b9e6ff, #1e88e5 55%, #0b2a4a 80%);
+  box-shadow: 0 0 10px 3px rgba(56,189,248,0.75), 0 0 22px 6px rgba(56,189,248,0.3);
+}
+.aihub-dj .dj-tt-furnished .dj-hw-lamp {
+  display: block; flex: none; width: 16px; height: 10px; border-radius: 1px;
+  background: #1a1b1d; border: 1px solid #000; box-shadow: inset 0 1px 2px #000, 0 1px rgba(255,255,255,0.3);
+}
+.aihub-dj .dj-tt-furnished .dj-hw-lamp.dj-on { background: #ff3b30; box-shadow: 0 0 6px rgba(255,59,48,0.9); }
+.aihub-dj[data-dj-rig='vinyl'] .dj-start-label { display: none; }
+
+/* Green pitch LCD over the slider. */
+.aihub-dj .dj-tt-furnished .dj-range {
+  width: 42px; height: 26px; background: linear-gradient(#0c1a0c, #050b05); color: #5dff6e; border: 2px solid #3c4046; border-radius: 2px;
+  box-shadow: inset 0 1px 4px #000;
+}
+.aihub-dj .dj-tt-furnished .dj-range b { font-size: 13px; color: #5dff6e; text-shadow: 0 0 6px rgba(93,255,110,0.6); }
+.aihub-dj .dj-tt-furnished .dj-range small { color: #3fbf4c; }
+.aihub-dj[data-dj-rig='vinyl'] .dj-pitch .dj-vfader-slot { width: 6px; }
+.aihub-dj[data-dj-rig='vinyl'] .dj-pitch .dj-vfader-cap { background: linear-gradient(180deg, #2c2e32 0%, #0e0f11 46%, #9aff9e 48%, #9aff9e 52%, #0e0f11 54%, #2a2c30 100%); }

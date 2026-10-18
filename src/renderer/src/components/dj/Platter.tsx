@@ -119,6 +119,10 @@ function SArm({ size: s }: { size: number }) {
       <line x1={px} y1={py} x2={px + s * 0.03} y2={py - s * 0.1} stroke="#9ea3aa" strokeWidth={s * 0.016} strokeLinecap="round" />
       <rect className="dj-sarm-weight" x={px - s * 0.035 + s * 0.03} y={py - s * 0.15} width={s * 0.07} height={s * 0.06} rx={s * 0.01}
         fill="#2b2d31" stroke="#8e939a" strokeWidth={1} transform={`rotate(14 ${px + s * 0.03} ${py - s * 0.12})`} />
+      {/* Arm board: a wide black plinth disc with a machined rim, and the arm rest */}
+      <circle className="dj-sarm-board" cx={px} cy={py} r={s * 0.125} fill="#141517" stroke="#5a5f66" strokeWidth={1.5} />
+      <circle cx={px} cy={py} r={s * 0.112} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={1} />
+      <rect className="dj-sarm-rest" x={px + s * 0.055} y={py + s * 0.17} width={s * 0.022} height={s * 0.05} rx={s * 0.006} fill="#2a2c30" stroke="#8e939a" strokeWidth={0.8} />
       {/* Gimbal base */}
       <circle className="dj-sarm-base" cx={px} cy={py} r={s * 0.07} fill="#232528" stroke="#8e939a" strokeWidth={2} />
       <circle cx={px} cy={py} r={s * 0.04} fill="#c5c9ce" stroke="#55595f" strokeWidth={1} />
@@ -272,13 +276,30 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
       </svg>
       {/* Tonearm: its own layer, turned by the GPU about its pivot — no repaint as it tracks inwards */}
       <div ref={armRef} className="dj-tonearm" style={{ ...layer, transformOrigin: `${size * 0.86}px ${size * 0.13}px`, transform: `rotate(${armAngle.current}deg)`, willChange: 'transform', transition: 'transform 0.7s cubic-bezier(.2,.7,.2,1)' }}>
-        {rig?.platter === 'vinyl' ? <SArm size={size} /> : <svg width={size} height={size} style={{ display: 'block' }}>
+        {rig?.platter === 'vinyl' ? <SArm size={size} /> : <svg width={size} height={size} style={{ display: 'block', overflow: 'visible' }}>
+          {/* Arm board under the pivot */}
+          <circle className="dj-arm-board" cx={size * 0.86} cy={size * 0.13} r={size * 0.115} fill="#141517" stroke="#5a5f66" strokeWidth={1.5} />
           <circle cx={size * 0.86} cy={size * 0.13} r={size * 0.075} fill="#2b2d31" stroke="#9aa0a8" strokeWidth={2} />
           <circle cx={size * 0.86} cy={size * 0.13} r={size * 0.03} fill="#c9ccd1" />
           <path d={`M${size * 0.86} ${size * 0.13} L${size * 0.9} ${size * 0.55} L${size * 0.8} ${size * 0.8}`} stroke="#d4d7db" strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
           <rect x={size * 0.765} y={size * 0.78} width={size * 0.06} height={size * 0.1} rx={2} fill="#3a3c40" transform={`rotate(25 ${size * 0.8} ${size * 0.8})`} />
         </svg>}
       </div>
+      {/* Turntable furniture in the corners the round platter leaves free: the
+          45 adapter top-left and the stylus target light bottom-left (lit while
+          a record is loaded). Silver jogs are not turntables and go without. */}
+      {rig?.platter !== 'silver' && <>
+        <svg className="dj-hw-adapter" viewBox="0 0 40 40" aria-hidden="true"
+          style={{ position: 'absolute', left: -size * 0.02, top: -size * 0.02, width: size * 0.15, height: size * 0.15, pointerEvents: 'none' }}>
+          <defs><radialGradient id={`adapter-${deck.id}`} cx="35%" cy="30%" r="80%"><stop offset="0%" stopColor="#ffffff" /><stop offset="60%" stopColor="#c9cdd2" /><stop offset="100%" stopColor="#8d939b" /></radialGradient></defs>
+          <circle cx="20" cy="20" r="19" fill="#2a2c30" />
+          <circle cx="20" cy="20" r="17" fill={`url(#adapter-${deck.id})`} stroke="#7d838b" strokeWidth="0.8" />
+          <circle cx="20" cy="20" r="11" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="0.6" />
+          <circle cx="20" cy="20" r="3.4" fill="#1b1c1f" stroke="#9aa0a8" strokeWidth="0.8" />
+        </svg>
+        <span className={`dj-hw-target ${loaded ? 'dj-on' : ''}`} aria-hidden="true"
+          style={{ left: size * 0.005, bottom: size * 0.005, width: size * 0.085, height: size * 0.085 }} />
+      </>}
       {/* Light reflections on the vinyl — fixed, so the record spins beneath them */}
       <img className="dj-vinyl-gloss-img" src={glossImage(Math.round(size * 0.92))} alt="" draggable={false}
         style={{ position: 'absolute', left: size * 0.04, top: size * 0.04, width: size * 0.92, height: size * 0.92, pointerEvents: 'none' }} />
