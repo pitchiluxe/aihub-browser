@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import type { Deck } from './engine/DjEngine'
 import Platter from './Platter'
 
-vi.mock('./controls', () => ({ useDeck: () => {} }))
+vi.mock('./controls', () => ({ useDeck: () => {}, useRafThrottled: () => {}, fmtTime: () => '0:00' }))
 vi.mock('./jogHooks', () => ({ useScratch: () => ({}), useDeckSpin: () => {} }))
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
 

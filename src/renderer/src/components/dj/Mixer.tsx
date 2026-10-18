@@ -7,7 +7,39 @@ import { Headphones, ArrowLeftRight } from 'lucide-react'
 import type { DjEngine, Deck, EqBand } from './engine/DjEngine'
 import { HFader, Knob, NeedleMeter, VFader, VuMeter, useDeck } from './controls'
 import { useDesign } from './designs'
+import { useRig, type RigScreen } from './rigs'
 import VideoMonitor from './VideoMonitor'
+
+function ScreenDeck({ deck }: { deck: Deck }) {
+  useDeck(deck)
+  const bpm = deck.effectiveBpm
+  const pct = deck.pitch * 100
+  return (
+    <div className={`dj-mscreen-deck ${deck.active ? 'dj-live' : ''}`}>
+      <span className="dj-mscreen-id">{deck.id}</span>
+      <b>{bpm ? bpm.toFixed(1) : '---.-'}</b>
+      <small>{(pct >= 0 ? '+' : '') + pct.toFixed(1)}%</small>
+    </div>
+  )
+}
+
+/**
+ * The mixer's own display on the hardware rigs — the Technics amber scope, the
+ * Pioneer blue LCD, the battle mixer's red LEDs: both decks' tempo and pitch
+ * with the master level underneath.
+ */
+function MixerScreen({ engine, kind, decks }: { engine: DjEngine; kind: Exclude<RigScreen, 'none'>; decks: [Deck, Deck] }) {
+  return (
+    <div className={`dj-mscreen dj-mscreen-${kind}`} aria-label="Mixer display">
+      <div className="dj-mscreen-row">
+        <ScreenDeck deck={decks[0]} />
+        <span className="dj-mscreen-title">BPM</span>
+        <ScreenDeck deck={decks[1]} />
+      </div>
+      <VuMeter read={() => Math.max(...engine.masterDb())} horizontal segments={24} />
+    </div>
+  )
+}
 
 function Channel({ deck, letter }: { deck: Deck; letter?: boolean }) {
   useDeck(deck)
@@ -52,6 +84,7 @@ export default function Mixer({ engine, view, setView, onBigVideo, fadeSeconds, 
   const right = four ? [B, D] : [B]
   useSyncExternalStore(engine.subscribe, engine.getVersion)
   const needles = useDesign().meter === 'needle' && !four
+  const screen = useRig()?.screen ?? 'none'
   // Fade across to whichever side the fader is further from.
   const fadeAcross = () => engine.fading ? engine.setCrossfader(engine.crossfader) : engine.fadeTo(engine.crossfader < 0.5 ? 1 : 0, fadeSeconds)
   return (
@@ -70,6 +103,7 @@ export default function Mixer({ engine, view, setView, onBigVideo, fadeSeconds, 
       <div className="dj-mixer-body">
         {left.map(d => <Channel key={d.id} deck={d} letter={four} />)}
         <div className="dj-mixer-center">
+          {screen !== 'none' && !four && <MixerScreen engine={engine} kind={screen} decks={[A, B]} />}
           {needles ? (
             // Meter bridge: a stacked pair of analog VU meters for the master.
             <div className="dj-meters dj-needles">

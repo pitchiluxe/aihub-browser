@@ -171,7 +171,12 @@
   text-shadow: 0 0 3px rgba(255, 255, 255, .55);
   box-shadow: 0 0 8px rgba(255, 25, 25, .7), inset 0 0 6px rgba(255, 120, 120, .35);
   animation: dj-exit-glow 2.4s ease-in-out infinite;
+  /* One line, centred in the header: in a narrow side panel "AI DJ" wrapped
+     onto two lines and the box stuck out above and below the other tabs. */
+  flex: none; white-space: nowrap; height: 22px; line-height: 1; padding: 0 7px; gap: 4px; margin-left: 2px;
 }
+.aihub-dj .dj-side-head { overflow: hidden; }
+.aihub-dj .dj-side-head .dj-side-tab { flex: none; white-space: nowrap; }
 .aihub-dj .dj-side-tab.dj-side-tab-ai svg { color: #fff; filter: drop-shadow(0 0 2px rgba(255, 255, 255, .6)); }
 .aihub-dj .dj-side-tab.dj-side-tab-ai:hover { background: #ee1a1a; }
 .aihub-dj .dj-side-tab.dj-side-tab-ai.on { background: #b00000; color: #fff; box-shadow: 0 0 12px rgba(255, 25, 25, .85), inset 0 0 8px rgba(0, 0, 0, .25); }

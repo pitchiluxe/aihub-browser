@@ -52,8 +52,10 @@ import './dj-skins-pro.css'
 import './dj-skins-real.css'
 import './dj-designs.css'
 import './dj-reference-skins.css'
+import './dj-rigs.css'
 import './dj-palettes.css'
 import { DesignContext, partsFor } from './designs'
+import { RIGS, RigContext, rigFor } from './rigs'
 import { withDeckCover } from './coverLookup'
 
 export interface DjTheme { id: string; name: string; swatch: string; dark?: boolean; lightBg?: boolean }
@@ -117,11 +119,13 @@ export const DJ_LOOKS: { id: string; name: string; preview: string }[] = [
   { id: 'crimson-rack', name: 'Crimson Rack', preview: 'linear-gradient(#110809, #110809) padding-box, linear-gradient(90deg, #ef4444, #fb923c) border-box' },
   { id: 'emerald', name: 'Emerald', preview: 'linear-gradient(#0a1d15, #0a1d15) padding-box, linear-gradient(135deg, #34d399, #e6c66e) border-box' },
   { id: 'arctic', name: 'Arctic', preview: 'linear-gradient(90deg, #0ea5e9 0 10%, #f7fbff 10% 90%, #6366f1 90%)' },
-  // Turntable skins inspired by the supplied references.
-  { id: 'ember-vinyl', name: 'Ember Vinyl', preview: 'radial-gradient(circle at 26% 50%, #e94208 0 22%, transparent 23%), linear-gradient(90deg, #26272a 0 42%, #090a0c 42% 58%, #26272a 58%)' },
-  { id: 'silver-wave', name: 'Silver Wave', preview: 'radial-gradient(circle at 26% 50%, #c9cfd7 0 22%, transparent 23%), linear-gradient(90deg, #e8ebef 0 42%, #9ca3ad 42% 58%, #e8ebef 58%)' },
-  { id: 'silver-classic', name: 'Silver Classic', preview: 'radial-gradient(circle at 26% 50%, #bfc5cd 0 22%, transparent 23%), linear-gradient(90deg, #d4d8de 0 42%, #8c939e 42% 58%, #d4d8de 58%)' },
-  { id: 'battle-art', name: 'Battle Artwork', preview: 'radial-gradient(circle at 26% 50%, #080809 0 22%, transparent 23%), linear-gradient(90deg, #383a3b 0 42%, #1a1b1d 42% 58%, #383a3b 58%)' },
+  // Hardware replicas: each rebuilds the deck, record and mixer of one rig (rigs.ts, dj-rigs.css).
+  { id: 'silver-wave', name: 'Technics Silver', preview: 'radial-gradient(circle at 26% 50%, #1b3a66 0 7%, #c9cfd7 8% 22%, transparent 23%), radial-gradient(circle at 74% 50%, #1b3a66 0 7%, #c9cfd7 8% 22%, transparent 23%), linear-gradient(90deg, #e8ebef 0 42%, #9ca3ad 42% 58%, #e8ebef 58%)' },
+  { id: 'silver-classic', name: 'Technics Silver 4', preview: 'radial-gradient(circle at 26% 50%, #1b3a66 0 7%, #bfc5cd 8% 22%, transparent 23%), radial-gradient(circle at 74% 50%, #1b3a66 0 7%, #bfc5cd 8% 22%, transparent 23%), repeating-linear-gradient(90deg, #d4d8de 0 6px, #8c939e 6px 8px)' },
+  { id: 'classic-1200', name: 'Classic 1200', preview: 'radial-gradient(circle at 26% 50%, #2ea44f 0 7%, #111 8% 22%, transparent 23%), radial-gradient(circle at 74% 50%, #d61f26 0 7%, #111 8% 22%, transparent 23%), linear-gradient(90deg, #a7abb1 0 42%, #1c1d20 42% 58%, #a7abb1 58%)' },
+  { id: 'battle-art', name: 'Battle Artwork', preview: 'radial-gradient(circle at 26% 50%, #e51b23 0 6%, #7a5b8c 7% 22%, transparent 23%), radial-gradient(circle at 74% 50%, #e51b23 0 6%, #8c6b5b 7% 22%, transparent 23%), linear-gradient(90deg, #383a3b 0 42%, #1a1b1d 42% 58%, #383a3b 58%)' },
+  { id: 'battle-black', name: 'Battle Black', preview: 'radial-gradient(circle at 26% 50%, #e51b23 0 8%, #0b0b0c 9% 22%, transparent 23%), radial-gradient(circle at 74% 50%, #e51b23 0 8%, #0b0b0c 9% 22%, transparent 23%), linear-gradient(90deg, #2a2b2d 0 42%, #111214 42% 58%, #2a2b2d 58%)' },
+  { id: 'ember-vinyl', name: 'Ember Vinyl', preview: 'radial-gradient(circle at 26% 50%, #15171b 0 6%, #e94208 7% 22%, transparent 23%), radial-gradient(circle at 74% 50%, #15171b 0 6%, #e94208 7% 22%, transparent 23%), linear-gradient(90deg, #26272a 0 42%, #090a0c 42% 58%, #26272a 58%)' },
   // Material skins — real finishes (dj-skins-real.css).
   { id: 'walnut-hifi', name: 'Walnut Hi-Fi', preview: 'linear-gradient(90deg, #5a3218 0 16%, #d9d5cc 16% 84%, #5a3218 84%)' },
   { id: 'rose-gold', name: 'Rose Gold', preview: 'linear-gradient(135deg, #f6d6c8, #c98e7a)' },
@@ -134,7 +138,7 @@ export const DJ_LOOKS: { id: string; name: string; preview: string }[] = [
   { id: 'ocean', name: 'Ocean Anodized', preview: 'linear-gradient(90deg, #2dd4bf 0 8%, #0e4c55 8% 92%, #fb7185 92%)' },
   { id: 'obsidian', name: 'Obsidian Glass', preview: 'linear-gradient(115deg, #0a0b0d 0 40%, #2a2b30 44%, #0a0b0d 48%)' },
 ]
-const REFERENCE_LOOKS = new Set(['ember-vinyl', 'silver-wave', 'silver-classic', 'battle-art'])
+const REFERENCE_LOOKS = new Set(Object.keys(RIGS))
 const LOOK_KEY = 'aihub-dj-look'
 
 /** Layouts arrange the console for a way of working; any layout goes with any look and colour. */
@@ -435,6 +439,7 @@ function Console({ engine }: { engine: DjEngine }) {
   return (
     <DjEnvContext.Provider value={env}>
     <DesignContext.Provider value={partsFor(look)}>
+    <RigContext.Provider value={rigFor(look)}>
     {/* The stage sits beside the console, not inside it: the console is
         CSS-zoomed to fit the tab and the stage must not be scaled with it. */}
     <div className="dj-host">
@@ -512,6 +517,7 @@ function Console({ engine }: { engine: DjEngine }) {
         stage, which hid every answer ("what's playing?") while the stage was up. */}
     {toast && <div className={`dj-toast${stageView === 'stage' ? ' on-stage' : ''}`} role="status">{toast}</div>}
     </div>
+    </RigContext.Provider>
     </DesignContext.Provider>
     </DjEnvContext.Provider>
   )

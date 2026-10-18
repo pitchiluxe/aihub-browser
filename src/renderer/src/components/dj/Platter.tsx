@@ -15,8 +15,44 @@
  */
 import React, { useRef } from 'react'
 import type { Deck } from './engine/DjEngine'
-import { useDeck } from './controls'
+import { fmtTime, useDeck, useRafThrottled } from './controls'
 import { useDeckSpin, useScratch } from './jogHooks'
+import { useRig } from './rigs'
+
+/**
+ * The blue LCD in a silver jog's hub: elapsed time and tempo, live. Written
+ * straight into the text nodes so the ticking clock never re-renders the deck.
+ */
+function JogLcd({ deck, c }: { deck: Deck; c: number }) {
+  const timeRef = useRef<SVGTextElement>(null)
+  const bpmRef = useRef<SVGTextElement>(null)
+  useRafThrottled(() => {
+    const t = fmtTime(deck.time, false)
+    const bpm = deck.effectiveBpm ? deck.effectiveBpm.toFixed(1) : '--.-'
+    if (timeRef.current && timeRef.current.textContent !== t) timeRef.current.textContent = t
+    if (bpmRef.current && bpmRef.current.textContent !== bpm) bpmRef.current.textContent = bpm
+  }, 100)
+  return (
+    <g className="dj-jog-lcd">
+      <text x={c} y={c - c * 0.075} textAnchor="middle" fontSize={c * 0.055} fill="#7fb8ff" fontFamily="Arial, sans-serif" letterSpacing={1}>{deck.id === 'A' ? 'DECK A' : `DECK ${deck.id}`}</text>
+      <text ref={timeRef} x={c} y={c + c * 0.045} textAnchor="middle" fontSize={c * 0.11} fill="#e6f1ff" fontFamily="'Courier New', monospace" fontWeight={700}>0:00</text>
+      <text ref={bpmRef} x={c} y={c + c * 0.135} textAnchor="middle" fontSize={c * 0.07} fill="#8dceff" fontFamily="'Courier New', monospace">--.-</text>
+    </g>
+  )
+}
+
+/** A red power cap over the spindle, like a battle turntable's centre button. */
+function PowerCap({ c, r }: { c: number; r: number }) {
+  const a = r * 0.5
+  return (
+    <g className="dj-power-cap">
+      <circle cx={c} cy={c} r={r} fill="#e51b23" stroke="#1a0406" strokeWidth={Math.max(1, r * 0.08)} />
+      <circle cx={c} cy={c} r={r * 0.82} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth={1} />
+      <path d={`M${c - a * 0.62} ${c - a * 0.62} A${a * 0.88} ${a * 0.88} 0 1 0 ${c + a * 0.62} ${c - a * 0.62}`} fill="none" stroke="#fff" strokeWidth={Math.max(1.5, r * 0.14)} strokeLinecap="round" />
+      <line x1={c} y1={c - a * 1.05} x2={c} y2={c - a * 0.1} stroke="#fff" strokeWidth={Math.max(1.5, r * 0.14)} strokeLinecap="round" />
+    </g>
+  )
+}
 
 /**
  * The light reflections on the vinyl, painted once per platter size into a
@@ -70,6 +106,34 @@ function glossImage(d: number): string {
   return url
 }
 
+/**
+ * A turntable S-arm: counterweight behind the pivot, a curved chrome tube and a
+ * headshell with a finger lift. Same pivot as the plain arm, so tracking and
+ * the load swing are unchanged.
+ */
+function SArm({ size: s }: { size: number }) {
+  const px = s * 0.86, py = s * 0.13
+  return (
+    <svg className="dj-sarm" width={s} height={s} style={{ display: 'block', overflow: 'visible' }}>
+      {/* Counterweight on the stub behind the pivot */}
+      <line x1={px} y1={py} x2={px + s * 0.03} y2={py - s * 0.1} stroke="#9ea3aa" strokeWidth={s * 0.016} strokeLinecap="round" />
+      <rect className="dj-sarm-weight" x={px - s * 0.035 + s * 0.03} y={py - s * 0.15} width={s * 0.07} height={s * 0.06} rx={s * 0.01}
+        fill="#2b2d31" stroke="#8e939a" strokeWidth={1} transform={`rotate(14 ${px + s * 0.03} ${py - s * 0.12})`} />
+      {/* Gimbal base */}
+      <circle className="dj-sarm-base" cx={px} cy={py} r={s * 0.07} fill="#232528" stroke="#8e939a" strokeWidth={2} />
+      <circle cx={px} cy={py} r={s * 0.04} fill="#c5c9ce" stroke="#55595f" strokeWidth={1} />
+      {/* S-shaped tube */}
+      <path className="dj-sarm-tube" d={`M${px} ${py} C${s * 0.93} ${s * 0.38}, ${s * 0.92} ${s * 0.52}, ${s * 0.86} ${s * 0.64} S${s * 0.79} ${s * 0.76}, ${s * 0.79} ${s * 0.8}`}
+        stroke="#e2e5e8" strokeWidth={s * 0.017} fill="none" strokeLinecap="round" />
+      {/* Headshell with finger lift */}
+      <g transform={`rotate(28 ${s * 0.79} ${s * 0.8})`}>
+        <rect className="dj-sarm-head" x={s * 0.765} y={s * 0.79} width={s * 0.05} height={s * 0.095} rx={2} fill="#2f3135" stroke="#7d8289" strokeWidth={0.8} />
+        <line x1={s * 0.815} y1={s * 0.81} x2={s * 0.85} y2={s * 0.8} stroke="#cfd3d8" strokeWidth={s * 0.008} strokeLinecap="round" />
+      </g>
+    </svg>
+  )
+}
+
 export default function Platter({ deck, size = 230 }: { deck: Deck; size?: number }) {
   useDeck(deck)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -77,6 +141,7 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
   const armRef = useRef<HTMLDivElement>(null)
   const armAngle = useRef(-20)
 
+  const rig = useRig()
   const loaded = !!deck.track
   const cover = deck.track?.cover
   const c = size / 2
@@ -107,7 +172,8 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
   const layer: React.CSSProperties = { position: 'absolute', inset: 0, pointerEvents: 'none' }
 
   return (
-    <div ref={rootRef} className="dj-platter" style={{ width: size, height: size, cursor: loaded ? (deck.held ? 'grabbing' : 'grab') : 'default', touchAction: 'none' }}
+    <div ref={rootRef} className={`dj-platter${rig ? ` dj-rig-${rig.platter}` : ''}`}
+      style={{ width: size, height: size, cursor: loaded ? (deck.held ? 'grabbing' : 'grab') : 'default', touchAction: 'none', '--dj-jog-metal': `url(#jogmetal-${deck.id})` } as React.CSSProperties}
       {...hand}>
       {/* Platter rim */}
       <svg width={size} height={size} style={layer}>
@@ -130,6 +196,16 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
               <stop offset="100%" stopColor="#050506" />
             </radialGradient>
             <clipPath id={`disc-clip-${deck.id}`}><circle cx={c} cy={c} r={c * 0.9} /></clipPath>
+            {/* Machined jog face for the silver rigs (selected in CSS through --dj-jog-metal) */}
+            {rig?.platter === 'silver' && (
+              <radialGradient id={`jogmetal-${deck.id}`} cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#f4f6f8" />
+                <stop offset="55%" stopColor="#d3d7dc" />
+                <stop offset="80%" stopColor="#b3b9c1" />
+                <stop offset="93%" stopColor="#e9ecef" />
+                <stop offset="100%" stopColor="#8b929b" />
+              </radialGradient>
+            )}
           </defs>
           {dots}
           <circle cx={c} cy={c} r={c * 0.92} fill={`var(--dj-record-fill, url(#vinyl-${deck.id}))`} />
@@ -140,18 +216,25 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
               <image className="dj-record-artwork" href={cover} x={c - c * 0.9} y={c - c * 0.9} width={c * 1.8} height={c * 1.8}
                 preserveAspectRatio="xMidYMid slice" clipPath={`url(#disc-clip-${deck.id})`} />
               <circle cx={c} cy={c} r={c * 0.9} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={2} />
-              <circle cx={c} cy={c} r={c * 0.12} fill="rgba(0,0,0,0.25)" />
-              {/* Marker so the spin reads even on a plain cover */}
-              <rect x={c - 2.5} y={c - c * 0.42} width={5} height={c * 0.24} rx={2} fill="#fff" stroke="rgba(0,0,0,0.4)" strokeWidth={0.6} />
+              {rig?.label === 'power'
+                // Battle rigs: the red power cap spins with the record and shows the turn.
+                ? <PowerCap c={c} r={c * 0.13} />
+                : <>
+                  <circle cx={c} cy={c} r={c * 0.12} fill="rgba(0,0,0,0.25)" />
+                  {/* Marker so the spin reads even on a plain cover */}
+                  <rect x={c - 2.5} y={c - c * 0.42} width={5} height={c * 0.24} rx={2} fill="#fff" stroke="rgba(0,0,0,0.4)" strokeWidth={0.6} />
+                </>}
             </>
           ) : (
             <>
               {/* Label */}
               <circle className="dj-record-label" cx={c} cy={c} r={c * 0.36} fill="var(--dj-record-label, #d71920)" />
               <circle cx={c} cy={c} r={c * 0.36} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth={1.5} />
-              <rect x={c - 2.5} y={c - c * 0.35} width={5} height={c * 0.27} rx={2} fill="#fff" />
-              <text x={c} y={c + c * 0.1} textAnchor="middle" fontSize={c * 0.12} fontWeight={800} fill="#fff" fontFamily="Inter, Arial, sans-serif" letterSpacing={0.5}>AIHub</text>
-              <text x={c} y={c + c * 0.24} textAnchor="middle" fontSize={c * 0.1} fontWeight={800} fill="#ffd2d2" fontFamily="Inter, Arial, sans-serif" letterSpacing={2}>DJ</text>
+              {rig?.label === 'power' ? <PowerCap c={c} r={c * 0.2} /> : <>
+                <rect x={c - 2.5} y={c - c * 0.35} width={5} height={c * 0.27} rx={2} fill="#fff" />
+                <text className="dj-label-text" x={c} y={c + c * 0.1} textAnchor="middle" fontSize={c * 0.12} fontWeight={800} fill="#fff" fontFamily="Inter, Arial, sans-serif" letterSpacing={0.5}>AIHub</text>
+                <text className="dj-label-text dj-label-sub" x={c} y={c + c * 0.24} textAnchor="middle" fontSize={c * 0.1} fontWeight={800} fill="#ffd2d2" fontFamily="Inter, Arial, sans-serif" letterSpacing={2}>DJ</text>
+              </>}
             </>
           )}
         </svg>
@@ -161,8 +244,10 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
         <circle cx={c} cy={c} r={c * 0.38} fill="#3c4047" stroke="#747b85" strokeWidth={3} />
         <circle cx={c} cy={c} r={c * 0.29} fill="#b7bcc3" stroke="#24272e" strokeWidth={2} />
         <circle cx={c} cy={c} r={c * 0.21} fill="#101e34" stroke="#7e8998" strokeWidth={3} />
-        <text x={c} y={c - 2} textAnchor="middle" fontSize={c * 0.09} fill="#8dceff" fontFamily="monospace">AIHUB</text>
-        <text x={c} y={c + c * 0.1} textAnchor="middle" fontSize={c * 0.07} fill="#d8e9ff" fontFamily="monospace">DIRECT DRIVE</text>
+        {rig?.platter === 'silver' ? <JogLcd deck={deck} c={c} /> : <>
+          <text x={c} y={c - 2} textAnchor="middle" fontSize={c * 0.09} fill="#8dceff" fontFamily="monospace">AIHUB</text>
+          <text x={c} y={c + c * 0.1} textAnchor="middle" fontSize={c * 0.07} fill="#d8e9ff" fontFamily="monospace">DIRECT DRIVE</text>
+        </>}
         {[0, 1, 2, 3, 4, 5].map(i => { const a = i * Math.PI / 3; return <circle key={i} cx={c + Math.cos(a) * c * 0.33} cy={c + Math.sin(a) * c * 0.33} r={c * 0.018} fill={i === 4 ? '#f15b68' : '#25282e'} /> })}
       </svg>}
 
@@ -187,12 +272,12 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
       </svg>
       {/* Tonearm: its own layer, turned by the GPU about its pivot — no repaint as it tracks inwards */}
       <div ref={armRef} className="dj-tonearm" style={{ ...layer, transformOrigin: `${size * 0.86}px ${size * 0.13}px`, transform: `rotate(${armAngle.current}deg)`, willChange: 'transform', transition: 'transform 0.7s cubic-bezier(.2,.7,.2,1)' }}>
-        <svg width={size} height={size} style={{ display: 'block' }}>
+        {rig?.platter === 'vinyl' ? <SArm size={size} /> : <svg width={size} height={size} style={{ display: 'block' }}>
           <circle cx={size * 0.86} cy={size * 0.13} r={size * 0.075} fill="#2b2d31" stroke="#9aa0a8" strokeWidth={2} />
           <circle cx={size * 0.86} cy={size * 0.13} r={size * 0.03} fill="#c9ccd1" />
           <path d={`M${size * 0.86} ${size * 0.13} L${size * 0.9} ${size * 0.55} L${size * 0.8} ${size * 0.8}`} stroke="#d4d7db" strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
           <rect x={size * 0.765} y={size * 0.78} width={size * 0.06} height={size * 0.1} rx={2} fill="#3a3c40" transform={`rotate(25 ${size * 0.8} ${size * 0.8})`} />
-        </svg>
+        </svg>}
       </div>
       {/* Light reflections on the vinyl — fixed, so the record spins beneath them */}
       <img className="dj-vinyl-gloss-img" src={glossImage(Math.round(size * 0.92))} alt="" draggable={false}

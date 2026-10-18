@@ -11,6 +11,7 @@ import { OverviewWave, ZoomWave } from './Waveforms'
 import Platter from './Platter'
 import { CdjJog, LedJog, ScreenDeck } from './Decks'
 import { useDesign } from './designs'
+import { useRig } from './rigs'
 import { recordTaste } from './taste'
 
 export const TRACK_MIME = 'application/x-aihub-dj-track'
@@ -261,16 +262,19 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
   // The platter fills whatever the column leaves next to the pitch fader.
   const mainRef = useRef<HTMLDivElement>(null)
   const [platter, setPlatter] = useState(220)
+  // Hardware-replica rigs give the record the whole deck, like the real plinth.
+  const rig = useRig()
+  const maxPlatter = rig ? 440 : 320
   useEffect(() => {
     const el = mainRef.current
     if (!el) return
     const ro = new ResizeObserver(([e]) => {
       const { width, height } = e.contentRect
-      setPlatter(Math.round(Math.max(130, Math.min(320, height - 4, width - 52))))
+      setPlatter(Math.round(Math.max(130, Math.min(maxPlatter, height - (rig ? 18 : 4), width - (rig ? 78 : 52)))))
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [maxPlatter])
   const kind = useDesign().deck
   return (
     <div className={`dj-tt dj-panel dj-deck-${kind} ${deck.id === 'B' ? 'dj-mirror' : ''}`} {...dropProps(onDropTrack)}
@@ -301,6 +305,7 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
         <button type="button" className={`dj-tbtn dj-play ${deck.active ? 'dj-playing' : ''}`} onClick={() => deck.toggle()} disabled={!deck.track}
           title={deck.active ? 'Pause' : 'Play'} aria-label={deck.active ? 'Pause' : 'Play'}>
           {deck.active ? <Pause size={22} fill="currentColor" strokeWidth={0} /> : <Play size={22} fill="currentColor" strokeWidth={0} />}
+          {rig && <span className="dj-start-label">START·STOP</span>}
         </button>
         <button type="button" className={`dj-mini dj-keylock ${deck.keyLock ? 'dj-on dj-on-blue' : ''}`} onClick={() => deck.setKeyLock(!deck.keyLock)} title="Key lock — keep pitch when changing tempo">
           <Lock size={10} />

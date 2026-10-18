@@ -1,0 +1,285 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Hardware rigs (rigs.ts): Technics Silver, Technics Silver 4, Classic 1200,
+   Battle Artwork, Battle Black and Ember Vinyl.
+
+   Each rig rebuilds one piece of DJ hardware: the deck plinth, the platter or
+   record, the arm, the START·STOP key, the mixer and its display, the strip
+   under the decks and the browser. Every rule is scoped to its look, so the
+   other skins keep their geometry.
+
+   Colour palettes: finishes are drawn from --rig-* tokens. "Skin original"
+   keeps each rig's own finish; any other palette maps the tokens onto the
+   palette's metal and ink (bottom of this file), so a rig can be repainted
+   while the records, LCDs and lamps stay true to the hardware.
+
+   Performance: no filters, blend modes or animations here (they starve the
+   hidden YouTube players), and nothing that moves sits inside a rounded clip.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Shared structure ─────────────────────────────────────────────────── */
+.aihub-dj[data-dj-reference='1'] {
+  --rig-bg: #060607;
+  --rig-deck: linear-gradient(180deg, #2a2b2e, #151618);
+  --rig-mixer: linear-gradient(180deg, #232427, #121315);
+  --rig-ink: #e6e7e9;
+  --rig-ink-soft: #9ba1aa;
+  --rig-well: #0b0c0e;
+  --rig-key: linear-gradient(#3a3c40, #1d1f22);
+  --rig-key-ink: #e9eaec;
+  --rig-key-edge: #08090a;
+  --rig-a: #2fd3ff;
+  --rig-b: #ff4b4b;
+  --rig-strip: #050506;
+  --rig-lib: #111214;
+  --rig-lib-alt: #16171a;
+  --rig-lib-head: linear-gradient(#3b3c40, #222326);
+  --rig-lib-sel: #5f5712;
+  --rig-lib-ink: #e4e4e7;
+  background: var(--rig-bg);
+}
+
+/* Track strips sit under the decks, as on the hardware software skins. */
+.aihub-dj[data-dj-reference='1'] > .dj-row-info { order: 1; }
+.aihub-dj[data-dj-reference='1'] > .dj-library { order: 2; }
+
+/* Deck: transport becomes a column at the plinth's left edge, with the big
+   START·STOP key at the bottom like a turntable; the record takes the rest. */
+.aihub-dj[data-dj-reference='1']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-tt {
+  display: grid; grid-template-columns: 74px minmax(0, 1fr); grid-template-rows: 20px minmax(0, 1fr);
+  column-gap: 8px; padding: 6px 10px 8px;
+}
+.aihub-dj[data-dj-reference='1']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-tt .dj-reference-deck-header { grid-column: 1 / -1; }
+.aihub-dj[data-dj-reference='1']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-tt .dj-tt-main { grid-column: 2; grid-row: 2; }
+.aihub-dj[data-dj-reference='1']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-tt .dj-transport {
+  grid-column: 1; grid-row: 2; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 6px; padding: 0;
+}
+.aihub-dj[data-dj-reference='1']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-transport .dj-tbtn { flex: none; height: 26px; }
+.aihub-dj[data-dj-reference='1']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-transport .dj-sync { order: 1; }
+.aihub-dj[data-dj-reference='1']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-transport .dj-keylock { order: 2; align-self: center; }
+.aihub-dj[data-dj-reference='1']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-transport .dj-cue { order: 3; }
+.aihub-dj[data-dj-reference='1']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-transport .dj-tbtn:not(.dj-cue):not(.dj-play):not(.dj-sync) { order: 4; }
+.aihub-dj[data-dj-reference='1']:is([data-dj-layout='classic'], [data-dj-layout='essentials']) .dj-transport .dj-play {
+  order: 5; height: 58px; flex-direction: column; gap: 2px;
+}
+.aihub-dj .dj-start-label { display: none; }
+.aihub-dj[data-dj-reference='1'] .dj-tbtn.dj-play { display: flex; align-items: center; justify-content: center; }
+.aihub-dj[data-dj-reference='1'] .dj-start-label { display: block; font-size: 8px; font-weight: 700; letter-spacing: 0.6px; line-height: 1; }
+.aihub-dj[data-dj-reference='1']:not([data-dj-layout='classic']):not([data-dj-layout='essentials']) .dj-start-label { display: none; }
+
+/* Hardware keys: square-cut, short travel. */
+.aihub-dj[data-dj-reference='1'] .dj-transport .dj-tbtn,
+.aihub-dj[data-dj-reference='1'] .dj-transport .dj-tbtn.dj-cue,
+.aihub-dj[data-dj-reference='1'] .dj-transport .dj-tbtn.dj-sync,
+.aihub-dj[data-dj-reference='1'] .dj-transport .dj-tbtn:disabled {
+  background: var(--rig-key); color: var(--rig-key-ink); border: 1px solid var(--rig-key-edge); border-radius: 2px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.5px; text-shadow: none; opacity: 1;
+  box-shadow: inset 0 1px rgba(255,255,255,0.28), 0 1px 2px rgba(0,0,0,0.6);
+}
+.aihub-dj[data-dj-reference='1'] .dj-transport .dj-tbtn.dj-cue:not(:disabled) { color: #ffb02e; }
+.aihub-dj[data-dj-reference='1'] .dj-transport .dj-tbtn.dj-play:not(:disabled) { color: #5df08a; }
+.aihub-dj[data-dj-reference='1'] .dj-transport .dj-tbtn.dj-play.dj-playing {
+  color: #fff; background: linear-gradient(#3fcf6e, #16833d); box-shadow: 0 0 10px rgba(34,197,94,0.7), inset 0 1px rgba(255,255,255,0.45);
+}
+
+/* Deck plinth */
+.aihub-dj[data-dj-reference='1'] .dj-tt { background: var(--rig-deck); border-color: #000; }
+.aihub-dj[data-dj-reference='1'] .dj-reference-deck-header { color: var(--rig-ink); }
+.aihub-dj[data-dj-reference='1'] .dj-reference-deck-header b { color: var(--rig-ink-soft); }
+
+/* Pitch fader: long slot, aluminium cap with a centre line. */
+.aihub-dj[data-dj-reference='1'] .dj-tt-side { align-self: stretch; justify-content: flex-end; padding-bottom: 4px; }
+.aihub-dj[data-dj-reference='1'] .dj-pitch .dj-vfader-slot { width: 4px; background: #000; box-shadow: inset 0 1px 2px #000, 0 0 0 2px rgba(0,0,0,0.25); }
+.aihub-dj[data-dj-reference='1'] .dj-pitch .dj-vfader-ticks i { background: var(--rig-ink-soft); opacity: 0.6; }
+.aihub-dj[data-dj-reference='1'] .dj-pitch .dj-vfader-cap {
+  background: linear-gradient(180deg, #d9dce0 0%, #8f959d 46%, #f2f3f5 48%, #f2f3f5 52%, #8f959d 54%, #c5c9ce 100%); border-color: #1a1b1d;
+}
+.aihub-dj[data-dj-reference='1'] .dj-range { background: #050607; color: #6ff0a0; }
+
+/* Mixer */
+.aihub-dj[data-dj-reference='1'] .dj-mixer { background: var(--rig-mixer); color: var(--rig-ink); }
+.aihub-dj[data-dj-reference='1'] .dj-mixer :is(.dj-knob-label, .dj-section-title, .dj-mixer-tabs, .dj-xfader) { color: var(--rig-ink); }
+.aihub-dj[data-dj-reference='1'] .dj-mixer-body { background: rgba(0,0,0,0.12); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35); }
+.aihub-dj[data-dj-reference='1'] .dj-mixer-faders { border-top: 1px solid rgba(0,0,0,0.45); box-shadow: inset 0 1px rgba(255,255,255,0.08); }
+.aihub-dj[data-dj-reference='1'] .dj-mixer-faders .dj-vfader-slot,
+.aihub-dj[data-dj-reference='1'] .dj-xfader .dj-hfader-slot { background: #000; }
+
+/* Mixer display (Mixer.tsx MixerScreen) */
+.aihub-dj .dj-mscreen {
+  width: 100%; display: flex; flex-direction: column; gap: 3px; padding: 4px 6px; margin-bottom: 2px;
+  border-radius: 2px; border: 1px solid #000; box-shadow: inset 0 1px 6px rgba(0,0,0,0.9), 0 1px rgba(255,255,255,0.12);
+  font-family: 'Courier New', monospace;
+}
+.aihub-dj .dj-mscreen-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.aihub-dj .dj-mscreen-title { font-size: 8px; letter-spacing: 1px; opacity: 0.7; }
+.aihub-dj .dj-mscreen-deck { display: flex; align-items: baseline; gap: 3px; opacity: 0.6; }
+.aihub-dj .dj-mscreen-deck.dj-live { opacity: 1; }
+.aihub-dj .dj-mscreen-id { font-size: 8px; font-weight: 700; }
+.aihub-dj .dj-mscreen-deck b { font-size: 14px; font-weight: 700; }
+.aihub-dj .dj-mscreen-deck small { font-size: 8px; }
+.aihub-dj .dj-mscreen .dj-vu.dj-vu-h { width: 100%; height: 4px; }
+.aihub-dj .dj-mscreen-amber { background: linear-gradient(#0d0b04, #050402); color: #ffd23a; }
+.aihub-dj .dj-mscreen-amber .dj-vu .lit { background: #ffc61a !important; }
+.aihub-dj .dj-mscreen-blue { background: linear-gradient(#071a33, #030b18); color: #8fd0ff; }
+.aihub-dj .dj-mscreen-blue .dj-vu .lit { background: #3ba7ff !important; }
+.aihub-dj .dj-mscreen-red { background: linear-gradient(#140303, #070101); color: #ff3a2e; }
+.aihub-dj .dj-mscreen-red .dj-vu .lit { background: #ff2a1e !important; }
+
+/* Track strip under each deck: black display, deck-coloured title. */
+.aihub-dj[data-dj-reference='1'] .dj-info { background: var(--rig-strip); border-color: #000; }
+.aihub-dj[data-dj-reference='1'] .dj-info .dj-lcd { background: #000; border-color: #1c1d20; }
+.aihub-dj[data-dj-reference='1'] .dj-info:not(.dj-mirror) .dj-title-line { color: var(--rig-a); }
+.aihub-dj[data-dj-reference='1'] .dj-info.dj-mirror .dj-title-line { color: var(--rig-b); }
+.aihub-dj[data-dj-reference='1'] .dj-info .dj-title-line b { color: inherit; }
+.aihub-dj[data-dj-reference='1'] .dj-clock { background: var(--rig-strip); border-color: #000; }
+.aihub-dj[data-dj-reference='1'] .dj-clock:not(.dj-mirror) .dj-lcd-big { color: var(--rig-a); }
+.aihub-dj[data-dj-reference='1'] .dj-clock.dj-mirror .dj-lcd-big { color: var(--rig-b); }
+.aihub-dj[data-dj-reference='1'] .dj-clock:not(.dj-mirror) .dj-deck-letter { background: var(--rig-a); color: #000; }
+.aihub-dj[data-dj-reference='1'] .dj-clock.dj-mirror .dj-deck-letter { background: var(--rig-b); color: #000; }
+.aihub-dj[data-dj-reference='1'] .dj-zoom { background: #000; border-color: #000; }
+.aihub-dj[data-dj-reference='1'] .dj-top { background: linear-gradient(#1b1c1f, #0c0d0f); color: var(--rig-lib-ink); border-color: #000; }
+
+/* Browser */
+.aihub-dj[data-dj-reference='1'] :is(.dj-library, .dj-browser, .dj-side) { background: var(--rig-lib); color: var(--rig-lib-ink); }
+.aihub-dj[data-dj-reference='1'] .dj-library { border-color: #000; }
+.aihub-dj[data-dj-reference='1'] .dj-thead { background: var(--rig-lib-head); color: var(--rig-lib-ink); }
+.aihub-dj[data-dj-reference='1'] .dj-tr:nth-child(even) { background: var(--rig-lib-alt); }
+.aihub-dj[data-dj-reference='1'] .dj-tr.dj-sel { background: var(--rig-lib-sel); color: #fff; }
+
+/* ── Technics Silver / Technics Silver 4 ─────────────────────────────── */
+.aihub-dj:is([data-dj-look='silver-wave'], [data-dj-look='silver-classic']) {
+  --rig-bg: #030303;
+  --rig-deck: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0 1px, transparent 1px 3px), linear-gradient(180deg, #eef0f2 0%, #cfd3d8 55%, #b4b9c0 100%);
+  --rig-mixer: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0 1px, transparent 1px 3px), linear-gradient(180deg, #e3e6e9, #a9afb7);
+  --rig-ink: #1f2731;
+  --rig-ink-soft: #4b5563;
+  --rig-key: linear-gradient(#f6f7f8, #b9bec5);
+  --rig-key-ink: #1f2731;
+  --rig-key-edge: #6b727c;
+  --rig-a: #2fd3ff;
+  --rig-b: #ff4b4b;
+  --rig-lib: #0d0e10;
+  --rig-lib-sel: #234a73;
+}
+/* Machined jog: dimpled rim, satin face, stepped hub with the live blue LCD. */
+.aihub-dj:is([data-dj-look='silver-wave'], [data-dj-look='silver-classic']) .dj-platter {
+  --dj-record-fill: var(--dj-jog-metal);
+  box-shadow: 0 0 0 2px #5f6670, 0 0 0 7px #d7dbe0, 0 0 0 8px #6d747e, 0 10px 18px rgba(0,0,0,0.55);
+}
+.aihub-dj:is([data-dj-look='silver-wave'], [data-dj-look='silver-classic']) .dj-disc circle[stroke='rgba(255,255,255,0.045)'] { stroke: rgba(70,78,90,0.12); }
+.aihub-dj:is([data-dj-look='silver-wave'], [data-dj-look='silver-classic']) .dj-disc > svg > circle[r='1.3'] { fill: #59606a; }
+.aihub-dj:is([data-dj-look='silver-wave'], [data-dj-look='silver-classic']) .dj-vinyl-gloss-img { opacity: 0.22; }
+.aihub-dj:is([data-dj-look='silver-wave'], [data-dj-look='silver-classic']) .dj-transport .dj-tbtn:not(.dj-play) { border-radius: 13px; }
+.aihub-dj:is([data-dj-look='silver-wave'], [data-dj-look='silver-classic']) .dj-transport .dj-tbtn.dj-cue:not(:disabled) { color: #c2410c; }
+.aihub-dj:is([data-dj-look='silver-wave'], [data-dj-look='silver-classic']) .dj-transport .dj-tbtn.dj-play:not(:disabled):not(.dj-playing) { color: #15803d; }
+.aihub-dj:is([data-dj-look='silver-wave'], [data-dj-look='silver-classic']) .dj-knob svg .dj-knob-base { fill: #2b3038; }
+.aihub-dj:is([data-dj-look='silver-wave'], [data-dj-look='silver-classic']) .dj-mixer .dj-meters {
+  padding: 4px; background: #050505; border-radius: 2px; box-shadow: inset 0 1px 5px #000;
+}
+.aihub-dj[data-dj-look='silver-wave'] .dj-mixer .dj-meters .lit { background: #ffd21f; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-mixer-body { gap: 2px; }
+.aihub-dj[data-dj-look='silver-classic'] .dj-mixer .dj-ch { padding: 4px 2px; background: rgba(0,0,0,0.06); border-left: 1px solid rgba(255,255,255,0.5); border-right: 1px solid rgba(0,0,0,0.18); }
+
+/* ── Classic 1200 ─────────────────────────────────────────────────────── */
+.aihub-dj[data-dj-look='classic-1200'] {
+  --dj-record-label: #2ea44f;
+  --rig-bg: #2e2f32;
+  --rig-deck: repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 2px), linear-gradient(180deg, #bcc0c5 0%, #a2a7ae 60%, #8f949b 100%);
+  --rig-mixer: linear-gradient(180deg, #2a2b2e, #17181a);
+  --rig-ink: #f1f2f3;
+  --rig-ink-soft: #b6bbc2;
+  --rig-key: linear-gradient(#d9dce0, #8e949b);
+  --rig-key-ink: #1a1c1f;
+  --rig-key-edge: #3d4248;
+  --rig-a: #63e07f;
+  --rig-b: #ff5b5b;
+  --rig-lib: #1d1e21;
+  --rig-lib-alt: #232427;
+  --rig-lib-head: linear-gradient(#45474b, #2c2d30);
+  --rig-lib-sel: #2f4f7a;
+}
+.aihub-dj[data-dj-look='classic-1200'] .dj-tt .dj-reference-deck-header { color: #1f2328; }
+.aihub-dj[data-dj-look='classic-1200'] .dj-tt .dj-reference-deck-header b { color: #3c4148; }
+.aihub-dj[data-dj-look='classic-1200'] .dj-tt.dj-mirror .dj-platter { --dj-record-label: #d61f26; }
+.aihub-dj[data-dj-look='classic-1200'] .dj-platter { --dj-record-fill: #0d0d0f; box-shadow: 0 0 0 3px #1b1c1e, 0 0 0 6px #b9bdc2, 0 0 0 7px #4a4f56, 0 8px 14px rgba(0,0,0,0.5); }
+.aihub-dj[data-dj-look='classic-1200'] .dj-label-sub { fill: #fff; }
+.aihub-dj[data-dj-look='classic-1200'] .dj-knob svg .dj-knob-cap { fill: #2a2c30; stroke: #5d636b; }
+.aihub-dj[data-dj-look='classic-1200'] .dj-knob svg .dj-knob-ptr { fill: #f2f3f5; }
+.aihub-dj[data-dj-look='classic-1200'] .dj-mixer .dj-meters { padding: 4px; background: #0a0a0b; border-radius: 2px; }
+
+/* ── Battle Artwork / Battle Black ───────────────────────────────────── */
+.aihub-dj:is([data-dj-look='battle-art'], [data-dj-look='battle-black']) {
+  --rig-bg: #0a0a0b;
+  --rig-deck: repeating-linear-gradient(45deg, rgba(255,255,255,0.018) 0 2px, transparent 2px 4px), linear-gradient(180deg, #343638 0%, #1e1f21 60%, #151617 100%);
+  --rig-mixer: linear-gradient(180deg, #1d1e20, #0e0f10);
+  --rig-ink: #ececec;
+  --rig-ink-soft: #a3a7ad;
+  --rig-key: linear-gradient(#45474b, #1f2023);
+  --rig-key-ink: #f1f1f1;
+  --rig-a: #ff3b30;
+  --rig-b: #ff3b30;
+  --rig-lib: #0c0c0d;
+  --rig-lib-alt: #131315;
+  --rig-lib-sel: #6e6413;
+}
+.aihub-dj[data-dj-look='battle-art'] { --rig-a: #24d3e8; --rig-b: #f84da5; }
+.aihub-dj[data-dj-look='battle-black'] { --dj-record-label: #e51b23; }
+.aihub-dj:is([data-dj-look='battle-art'], [data-dj-look='battle-black']) .dj-platter {
+  --dj-record-fill: #0a0a0b; box-shadow: 0 0 0 3px #050505, 0 0 0 6px #3c3e42, 0 0 0 7px #0b0b0c, 0 8px 16px rgba(0,0,0,0.7);
+}
+.aihub-dj:is([data-dj-look='battle-art'], [data-dj-look='battle-black']) .dj-transport .dj-tbtn.dj-play:not(:disabled):not(.dj-playing) { color: #ff3b30; }
+.aihub-dj:is([data-dj-look='battle-art'], [data-dj-look='battle-black']) .dj-knob svg .dj-knob-cap { fill: #141516; stroke: #9aa0a8; }
+.aihub-dj:is([data-dj-look='battle-art'], [data-dj-look='battle-black']) .dj-knob svg .dj-knob-ptr { fill: #ff3b30; }
+.aihub-dj:is([data-dj-look='battle-art'], [data-dj-look='battle-black']) .dj-mixer-logo .dj-logo-ai { color: #ff3b30; }
+
+/* ── Ember Vinyl ──────────────────────────────────────────────────────── */
+.aihub-dj[data-dj-look='ember-vinyl'] {
+  --dj-record-label: #14161a;
+  --rig-bg: #050506;
+  --rig-deck: repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 3px), linear-gradient(180deg, #2b2c30 0%, #18191c 100%);
+  --rig-mixer: linear-gradient(90deg, #141518, #2c2d32 45%, #16171a);
+  --rig-ink: #e6e7e9;
+  --rig-ink-soft: #9ba1aa;
+  --rig-a: #ff7a2e;
+  --rig-b: #ff7a2e;
+  --rig-lib-sel: #1f4f7a;
+}
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-platter {
+  --dj-record-fill: #e5480f; box-shadow: 0 0 0 3px #08090a, 0 0 0 6px #9ea3aa, 0 0 0 7px #202226, 0 8px 16px rgba(0,0,0,0.7);
+}
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-disc circle[stroke='rgba(255,255,255,0.045)'] { stroke: rgba(120,20,0,0.22); }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-vinyl-gloss-img { opacity: 0.55; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-label-sub { fill: #ff8a4c; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-knob svg .dj-knob-cap { fill: #1c1d20; stroke: #6a7078; }
+.aihub-dj[data-dj-look='ember-vinyl'] .dj-knob svg .dj-knob-ptr { fill: #ff7a2e; }
+
+/* ── Colour palettes repaint the rig's finish ────────────────────────────
+   A chosen palette (anything but "Skin original") supplies the metal, keys
+   and ink; records, LCDs and lamps keep the hardware's own colours. */
+.aihub-dj[data-dj-reference='1'][data-dj-theme]:not([data-dj-theme='original']) {
+  --rig-deck: repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 3px), var(--dj-metal);
+  --rig-mixer: var(--dj-metal);
+  --rig-ink: var(--dj-label);
+  --rig-ink-soft: var(--dj-label-soft);
+  --rig-key: var(--dj-light);
+  --rig-key-ink: var(--dj-light-ink);
+  --rig-key-edge: var(--dj-light-edge);
+  --rig-bg: var(--dj-bg);
+}
+.aihub-dj[data-dj-reference='1'][data-dj-theme]:not([data-dj-theme='original']) .dj-tt .dj-reference-deck-header { color: var(--dj-label); }
+
+/* Huge platters: the deck row grows and the performance tray under each deck
+   gets shallower, so the record fills the plinth like the hardware. */
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-row-decks { height: 560px; grid-template-rows: minmax(0, 1fr) 104px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads { padding: 4px 6px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='classic'] .dj-pads :is(.dj-stem, .dj-btn) { height: 18px; }
+.aihub-dj[data-dj-reference='1'][data-dj-layout='essentials'] .dj-row-decks { height: 470px; }
+
+/* Performance tray in the rig's own finish. */
+.aihub-dj[data-dj-reference='1'] .dj-pads { background: var(--rig-deck); color: var(--rig-ink); border-color: #000; }
+.aihub-dj[data-dj-reference='1'] .dj-pads :is(.dj-section-title, .dj-knob-label) { color: var(--rig-ink); text-shadow: none; }
+.aihub-dj[data-dj-reference='1'] .dj-pads .dj-stems { background: rgba(0,0,0,0.18); border-color: rgba(0,0,0,0.4); }
+.aihub-dj[data-dj-reference='1'] .dj-mscreen-deck small { display: none; }
+/* The platter's rim rings are box-shadows outside its box: keep the pitch column clear of them. */
+.aihub-dj[data-dj-reference='1'] .dj-tt-main { gap: 20px; }
+/* A jog has no spindle: it would sit on the hub LCD's clock. */
+.aihub-dj .dj-platter.dj-rig-silver circle[fill='#d9dce0'] { display: none; }
