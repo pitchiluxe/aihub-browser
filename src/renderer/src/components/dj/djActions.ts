@@ -7,6 +7,7 @@ import { createContext } from 'react'
 import { crossfadeGains, DECK_IDS, deckSide, faderGain, type Deck, type DjEngine, type DjTrack } from './engine/DjEngine'
 import type { AutoMixer } from './engine/autoMixer'
 import { searchYouTube } from './libraryData'
+import { isAiMusic } from './ai/candidatePool'
 import { recordTaste } from './taste'
 import { setVoiceEnabled } from './djVoice'
 import type { DjIntent, Energy } from './djBrain'
@@ -59,10 +60,10 @@ export function describeDeck(d: Deck): string {
   return `${t.artist ? `${t.artist} – ` : ''}${t.title}${bits ? ` (${bits})` : ''}`
 }
 
-/** The first playable result for a spoken request: not a mix hours long, not a duplicate of what is loaded. */
+/** The first playable result for a spoken request: not a mix hours long, not AI-generated music. */
 async function find(query: string): Promise<DjTrack | null> {
   const results = await searchYouTube(query, 8)
-  return results.find(t => !t.durationHint || t.durationHint <= 12 * 60) ?? null
+  return results.find(t => (!t.durationHint || t.durationHint <= 12 * 60) && !isAiMusic(t)) ?? null
 }
 
 /** Move to the next song now. Returns what the DJ should be told. */

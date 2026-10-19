@@ -5,7 +5,7 @@
 import { Emitter, type DjTrack } from '../engine/DjEngine'
 import { trackId, type TrackFacts } from './types'
 import { curveAt, type SetBrief } from './setBrief'
-import { gatherCandidates, isSong, type PoolDeps } from './candidatePool'
+import { gatherCandidates, isAiMusic, isSong, type PoolDeps } from './candidatePool'
 import { allowedByRules, rankCandidates, type Candidate, type PlanContext, type Scored } from './setPlanner'
 import { ruleLabel, type Parsed, type SetRule } from './instructions'
 
@@ -151,7 +151,8 @@ export class SetConductor extends Emitter {
     this.serving = (async () => {
       while (this.state.active && this.playNextQueries.length) {
         const q = this.playNextQueries.shift()!
-        const found = (await this.fetching(() => this.deps.pool.search(q, 1)).catch(() => []))[0]
+        // The first original recording: an AI cover can top the results for a real song.
+        const found = (await this.fetching(() => this.deps.pool.search(q, 5)).catch(() => [])).find(t => !isAiMusic(t))
         if (found) this.playNextQueue.push(found)
         else this.set({ message: `Couldn't find "${q}".` })
       }

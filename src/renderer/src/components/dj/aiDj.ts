@@ -8,6 +8,7 @@
  */
 import type { DjTrack } from './engine/DjEngine'
 import { searchYouTube } from './libraryData'
+import { isAiMusic } from './ai/candidatePool'
 import { contextLines, type SetContext } from './djBrain'
 
 export interface SongPick {
@@ -75,6 +76,7 @@ export function buildPrompt(vibe: string, count: number, avoid: string[], follow
     ...(ctx ? contextLines(ctx) : []),
     `Pick ${count} real, well-known released songs that fit, in the order you would play them,`,
     'so energy and tempo flow smoothly from one to the next.',
+    'Only original recordings by the real artists: never AI-generated songs, AI covers or AI voice versions.',
     avoid.length ? `Do not repeat any of these: ${avoid.slice(-40).join('; ')}.` : '',
     'Reply with ONLY a JSON array, no other text, like:',
     '[{"artist":"Artist Name","title":"Song Title","reason":"five words on why it fits"}]',
@@ -102,7 +104,8 @@ const MAX_PICK_SECONDS = 12 * 60
 export async function resolvePick(p: SongPick, taken: ReadonlySet<string> = new Set()): Promise<DjTrack | null> {
   const q = p.query ?? `${p.artist} ${p.title} audio`.trim()
   const results = await searchYouTube(q, p.query ? 12 : 6)
-  const ok = results.filter(t => (!t.durationHint || t.durationHint <= MAX_PICK_SECONDS) && !(t.youtubeId && taken.has(t.youtubeId)))
+  // Original recordings only: AI-generated uploads are never picked.
+  const ok = results.filter(t => (!t.durationHint || t.durationHint <= MAX_PICK_SECONDS) && !(t.youtubeId && taken.has(t.youtubeId)) && !isAiMusic(t))
   if (p.query) {
     // A search is not a song: take a fresh result, and keep YouTube's own title.
     const pool = ok.slice(0, 5)

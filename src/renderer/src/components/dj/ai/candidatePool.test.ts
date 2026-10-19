@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { gatherCandidates, isSong } from './candidatePool'
+import { gatherCandidates, isAiMusic, isSong } from './candidatePool'
 
 const t = (name: string, title = name, durationHint = 220) => ({ token: 'x', path: '', size: 0, name, title, artist: '', durationHint }) as any
 
@@ -20,6 +20,38 @@ describe('isSong', () => {
     expect(isSong(t('Lazy Vibes - Afro Lofi Background Music', 'Afro Lofi Background Music'))).toBe(false)
     expect(isSong(t('Lazy Vibes - Afro Lofi Study Beats', 'Afro Lofi Study Beats'))).toBe(false)
     expect(isSong(t('Lazy Vibes - Afro Lofi BGM', 'Afro Lofi BGM'))).toBe(false)
+  })
+})
+
+describe('isAiMusic — the AI DJ plays original recordings only', () => {
+  const yt = (name: string, album = 'Video · Some Channel') => ({ ...t(name), album }) as any
+  it.each([
+    'Burna Boy - Last Last (AI Cover)',
+    'Drake ft. Michael Jackson - Starlight [AI]',
+    'Afrobeats Love Song (Made with Suno)',
+    'Calm Down - AI Generated Version',
+    'Amapiano 2026 | Udio original',
+    'Tems sings Rihanna – A.I. vocals',
+    'Midnight Groove (AI Music)',
+    'Song created using artificial intelligence',
+  ])('drops %s', name => {
+    expect(isAiMusic(yt(name))).toBe(true)
+    expect(isSong(yt(name))).toBe(false)
+  })
+
+  it('drops uploads from a channel that labels itself AI music', () => {
+    expect(isAiMusic(yt('Lagos Nights', 'Video · Afro AI Music'))).toBe(true)
+  })
+
+  it.each([
+    ['Rema - Calm Down (Official Music Video)', 'Official video · Rema'],
+    ['Ai - Story', 'Audio · Ai'],
+    ['Kizz Daniel - Buga (Lyrics)', 'Lyrics · Kizz Daniel'],
+    ['Wizkid - Ojuelegba (Remix) ft. Drake', 'Remix · Wizkid'],
+    ['Aidonia - Fight Over Me', 'Video · Aidonia'],
+    ['Air - Sexy Boy', 'Audio · Air'],
+  ])('keeps the original %s', (name, album) => {
+    expect(isAiMusic(yt(name, album))).toBe(false)
   })
 })
 

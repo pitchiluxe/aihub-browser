@@ -898,6 +898,10 @@ export class Deck extends Emitter {
   private trimGain(): number {
     return Math.pow(10, ((this.gainKnob - 0.5) * 24) / 20) * (this.engine.autoGain ? this.autoGain : 1)
   }
+  /** Heard in the room right now: playing, with its channel fader and crossfader side open. */
+  audible(): boolean {
+    return this.playing && faderGain(this.volume) * this.xfade.gain.value > 0.05
+  }
   /** Re-apply trim × auto-gain (the engine calls this when auto-gain is switched). */
   applyTrim(): void {
     this.trim.gain.setTargetAtTime(this.trimGain(), this.engine.ctx.currentTime, 0.08)
@@ -1031,7 +1035,12 @@ export class Deck extends Emitter {
         this.liveFirstBeat = ((first % beat) + beat) % beat
         this.applyRate()
       }
-      if (this.autoGain === 1) {
+      // A streamed song's loudness is only known ~24 s into playback. Applying
+      // auto-gain then turned the music up (up to 4×) under the listener's ears
+      // ("the volume increases by itself on first play"). Level a deck only
+      // while it cannot be heard — cueing in headphones, fader or crossfader
+      // closed — the way a DJ sets the trim before bringing a song in.
+      if (this.autoGain === 1 && !this.audible()) {
         this.autoGain = autoGainFor(rmsOf(d.data))
         this.applyTrim()
       }
