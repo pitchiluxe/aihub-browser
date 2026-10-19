@@ -8,7 +8,7 @@ import type { Deck, StemKey } from './engine/DjEngine'
 import { FX_LABELS, type FxType } from './engine/effects'
 import { Knob, LedButton, VFader, fmtTime, useDeck, useRafThrottled } from './controls'
 import { OverviewWave, ZoomWave } from './Waveforms'
-import Platter from './Platter'
+import Platter, { ARM_MARGIN } from './Platter'
 import { CdjJog, LedJog, ScreenDeck } from './Decks'
 import { useDesign } from './designs'
 import { useRig } from './rigs'
@@ -265,19 +265,21 @@ export function Turntable({ deck, other, onDropTrack }: { deck: Deck; other: Dec
   // Hardware-replica rigs give the record the whole deck, like the real plinth.
   const rig = useRig()
   const maxPlatter = rig ? 440 : 320
+  const kind = useDesign().deck
+  // Every turntable deck gets the furniture of a real one; jogs and screens don't.
+  const furnished = kind === 'turntable' && rig?.platter !== 'silver'
+  // A turntable's arm and its rest sit beside the record, so leave room for them.
+  const widthShare = furnished ? 1 + ARM_MARGIN : 1
   useEffect(() => {
     const el = mainRef.current
     if (!el) return
     const ro = new ResizeObserver(([e]) => {
       const { width, height } = e.contentRect
-      setPlatter(Math.round(Math.max(130, Math.min(maxPlatter, height - (rig ? 18 : 4), width - (rig ? 78 : 52)))))
+      setPlatter(Math.round(Math.max(130, Math.min(maxPlatter, height - (rig ? 18 : 4), (width - (rig ? 78 : 52)) / widthShare))))
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [maxPlatter])
-  const kind = useDesign().deck
-  // Every turntable deck gets the furniture of a real one; jogs and screens don't.
-  const furnished = kind === 'turntable' && rig?.platter !== 'silver'
+  }, [maxPlatter, widthShare])
   return (
     <div className={`dj-tt dj-panel dj-deck-${kind} ${furnished ? 'dj-tt-furnished' : ''} ${deck.id === 'B' ? 'dj-mirror' : ''}`} {...dropProps(onDropTrack)}
       title={deck.track ? undefined : 'Drop a song here, then press play'}>

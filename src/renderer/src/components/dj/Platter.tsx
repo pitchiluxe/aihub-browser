@@ -107,32 +107,56 @@ function glossImage(d: number): string {
 }
 
 /**
- * A turntable S-arm: counterweight behind the pivot, a curved chrome tube and a
- * headshell with a finger lift. Same pivot as the plain arm, so tracking and
- * the load swing are unchanged.
+ * Tonearm geometry, in fractions of the platter size. The pivot sits off the
+ * record's top-right corner, as on a Technics deck; at rest the arm lies on
+ * its rest beside the record, clear of it. Loading a song swings the needle
+ * onto the lead-in groove (radius ≈ 0.44), and it tracks inwards to the run-out
+ * (≈ 0.2) by the end — the angles below put the stylus on exactly those radii.
  */
-function SArm({ size: s }: { size: number }) {
-  const px = s * 0.86, py = s * 0.13
+export const ARM = { px: 0.98, py: 0.12, rest: 0, leadIn: 19, runOut: 43 }
+/** Room the arm and its rest take to the right of the platter, as a fraction of its size. */
+export const ARM_MARGIN = 0.09
+
+/** Where the arm points for a deck: off the record when empty, then lead-in → run-out with the song. */
+export function armAngleFor(loaded: boolean, progress: number): number {
+  return loaded ? ARM.leadIn + Math.min(1, Math.max(0, progress)) * (ARM.runOut - ARM.leadIn) : ARM.rest
+}
+
+/**
+ * Technics-style straight arm: counterweight above the gimbal on a black base,
+ * a straight chrome tube with a bend near the end, and a headshell with its
+ * finger lift. Drawn in the rest position; the layer rotates about the pivot.
+ */
+function TechnicsArm({ size: s }: { size: number }) {
+  const px = s * ARM.px, py = s * ARM.py
+  const tube = `M${px} ${py} L${s * 1.03} ${s * 0.7} Q${s * 1.035} ${s * 0.76}, ${s * 1.005} ${s * 0.8}`
   return (
-    <svg className="dj-sarm" width={s} height={s} style={{ display: 'block', overflow: 'visible' }}>
+    <svg className="dj-arm" width={s} height={s} style={{ display: 'block', overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="dj-arm-chrome" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#8e949b" /><stop offset="45%" stopColor="#ffffff" /><stop offset="100%" stopColor="#7c828a" />
+        </linearGradient>
+        <linearGradient id="dj-arm-weight" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#1b1c1f" /><stop offset="50%" stopColor="#4a4d53" /><stop offset="100%" stopColor="#151618" />
+        </linearGradient>
+      </defs>
+      {/* Base: black plinth disc with a machined rim */}
+      <circle className="dj-arm-board" cx={px} cy={py} r={s * 0.085} fill="#141517" stroke="#5a5f66" strokeWidth={1.5} />
+      <circle cx={px} cy={py} r={s * 0.065} fill="#202225" stroke="rgba(255,255,255,0.14)" strokeWidth={1} />
       {/* Counterweight on the stub behind the pivot */}
-      <line x1={px} y1={py} x2={px + s * 0.03} y2={py - s * 0.1} stroke="#9ea3aa" strokeWidth={s * 0.016} strokeLinecap="round" />
-      <rect className="dj-sarm-weight" x={px - s * 0.035 + s * 0.03} y={py - s * 0.15} width={s * 0.07} height={s * 0.06} rx={s * 0.01}
-        fill="#2b2d31" stroke="#8e939a" strokeWidth={1} transform={`rotate(14 ${px + s * 0.03} ${py - s * 0.12})`} />
-      {/* Arm board: a wide black plinth disc with a machined rim, and the arm rest */}
-      <circle className="dj-sarm-board" cx={px} cy={py} r={s * 0.125} fill="#141517" stroke="#5a5f66" strokeWidth={1.5} />
-      <circle cx={px} cy={py} r={s * 0.112} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={1} />
-      <rect className="dj-sarm-rest" x={px + s * 0.055} y={py + s * 0.17} width={s * 0.022} height={s * 0.05} rx={s * 0.006} fill="#2a2c30" stroke="#8e939a" strokeWidth={0.8} />
-      {/* Gimbal base */}
-      <circle className="dj-sarm-base" cx={px} cy={py} r={s * 0.07} fill="#232528" stroke="#8e939a" strokeWidth={2} />
-      <circle cx={px} cy={py} r={s * 0.04} fill="#c5c9ce" stroke="#55595f" strokeWidth={1} />
-      {/* S-shaped tube */}
-      <path className="dj-sarm-tube" d={`M${px} ${py} C${s * 0.93} ${s * 0.38}, ${s * 0.92} ${s * 0.52}, ${s * 0.86} ${s * 0.64} S${s * 0.79} ${s * 0.76}, ${s * 0.79} ${s * 0.8}`}
-        stroke="#e2e5e8" strokeWidth={s * 0.017} fill="none" strokeLinecap="round" />
-      {/* Headshell with finger lift */}
-      <g transform={`rotate(28 ${s * 0.79} ${s * 0.8})`}>
-        <rect className="dj-sarm-head" x={s * 0.765} y={s * 0.79} width={s * 0.05} height={s * 0.095} rx={2} fill="#2f3135" stroke="#7d8289" strokeWidth={0.8} />
-        <line x1={s * 0.815} y1={s * 0.81} x2={s * 0.85} y2={s * 0.8} stroke="#cfd3d8" strokeWidth={s * 0.008} strokeLinecap="round" />
+      <line x1={px} y1={py} x2={px - s * 0.004} y2={py - s * 0.085} stroke="url(#dj-arm-chrome)" strokeWidth={s * 0.016} />
+      <rect className="dj-arm-weight" x={px - s * 0.032} y={py - s * 0.12} width={s * 0.06} height={s * 0.06} rx={s * 0.008}
+        fill="url(#dj-arm-weight)" stroke="#6f747b" strokeWidth={0.8} />
+      <line x1={px - s * 0.03} y1={py - s * 0.075} x2={px + s * 0.026} y2={py - s * 0.075} stroke="#9aa0a8" strokeWidth={0.8} />
+      {/* Gimbal */}
+      <circle cx={px} cy={py} r={s * 0.03} fill="#c9cdd2" stroke="#4d5157" strokeWidth={1} />
+      {/* Tube: dark edge under a chrome highlight */}
+      <path d={tube} stroke="#3a3d42" strokeWidth={s * 0.022} fill="none" strokeLinecap="round" />
+      <path className="dj-arm-tube" d={tube} stroke="url(#dj-arm-chrome)" strokeWidth={s * 0.015} fill="none" strokeLinecap="round" />
+      {/* Headshell and finger lift */}
+      <g transform={`rotate(-14 ${s * 1.005} ${s * 0.8})`}>
+        <rect className="dj-arm-head" x={s * 0.983} y={s * 0.79} width={s * 0.044} height={s * 0.085} rx={s * 0.006} fill="#2a2c30" stroke="#8a9097" strokeWidth={0.8} />
+        <line x1={s * 1.027} y1={s * 0.805} x2={s * 1.06} y2={s * 0.795} stroke="#d4d8dd" strokeWidth={s * 0.007} strokeLinecap="round" />
       </g>
     </svg>
   )
@@ -143,7 +167,7 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
   const rootRef = useRef<HTMLDivElement>(null)
   const discRef = useRef<HTMLDivElement>(null)
   const armRef = useRef<HTMLDivElement>(null)
-  const armAngle = useRef(-20)
+  const armAngle = useRef(ARM.rest)
 
   const rig = useRig()
   const loaded = !!deck.track
@@ -154,10 +178,10 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
   // The record turns as a compositor animation (see jogHooks): the GPU spins
   // it at exactly the deck's speed; the page only lines it up again.
   useDeckSpin(deck, discRef, progress => {
-    // Rest off the record at -20°, lower onto the lead-in at 0°, and track
-    // inwards to 16° by the end of the song. Eased so loading swings the arm.
-    const armTarget = loaded ? progress * 16 : -20
-    // Only move it when the change is visible (a song tracks inwards ~16° over minutes).
+    // Rest beside the record, swing onto the lead-in, track inwards to the
+    // run-out by the end of the song (see ARM). Eased so loading swings the arm.
+    const armTarget = armAngleFor(loaded, progress)
+    // Only move it when the change is visible (a song tracks inwards ~24° over minutes).
     // A CSS transition makes the swing; the page only sets where the arm should be.
     if (Math.abs(armTarget - armAngle.current) > 0.05) {
       armAngle.current = armTarget
@@ -177,7 +201,7 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
 
   return (
     <div ref={rootRef} className={`dj-platter${rig ? ` dj-rig-${rig.platter}` : ''}`}
-      style={{ width: size, height: size, cursor: loaded ? (deck.held ? 'grabbing' : 'grab') : 'default', touchAction: 'none', '--dj-jog-metal': `url(#jogmetal-${deck.id})` } as React.CSSProperties}
+      style={{ width: size, height: size, marginRight: rig?.platter === 'silver' ? undefined : size * ARM_MARGIN, cursor: loaded ? (deck.held ? 'grabbing' : 'grab') : 'default', touchAction: 'none', '--dj-jog-metal': `url(#jogmetal-${deck.id})` } as React.CSSProperties}
       {...hand}>
       {/* Platter rim */}
       <svg width={size} height={size} style={layer}>
@@ -275,15 +299,13 @@ export default function Platter({ deck, size = 230 }: { deck: Deck; size?: numbe
         <circle cx={c} cy={c} r={c * 0.035} fill="#d9dce0" stroke="#555" strokeWidth={0.5} />
       </svg>
       {/* Tonearm: its own layer, turned by the GPU about its pivot — no repaint as it tracks inwards */}
-      <div ref={armRef} className="dj-tonearm" style={{ ...layer, transformOrigin: `${size * 0.86}px ${size * 0.13}px`, transform: `rotate(${armAngle.current}deg)`, willChange: 'transform', transition: 'transform 0.7s cubic-bezier(.2,.7,.2,1)' }}>
-        {rig?.platter === 'vinyl' ? <SArm size={size} /> : <svg width={size} height={size} style={{ display: 'block', overflow: 'visible' }}>
-          {/* Arm board under the pivot */}
-          <circle className="dj-arm-board" cx={size * 0.86} cy={size * 0.13} r={size * 0.115} fill="#141517" stroke="#5a5f66" strokeWidth={1.5} />
-          <circle cx={size * 0.86} cy={size * 0.13} r={size * 0.075} fill="#2b2d31" stroke="#9aa0a8" strokeWidth={2} />
-          <circle cx={size * 0.86} cy={size * 0.13} r={size * 0.03} fill="#c9ccd1" />
-          <path d={`M${size * 0.86} ${size * 0.13} L${size * 0.9} ${size * 0.55} L${size * 0.8} ${size * 0.8}`} stroke="#d4d7db" strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          <rect x={size * 0.765} y={size * 0.78} width={size * 0.06} height={size * 0.1} rx={2} fill="#3a3c40" transform={`rotate(25 ${size * 0.8} ${size * 0.8})`} />
-        </svg>}
+      {/* Arm rest: fixed beside the record; the arm lies in it when no song is loaded */}
+      {rig?.platter !== 'silver' && <svg className="dj-arm-rest" width={size} height={size} style={{ ...layer, overflow: 'visible' }} aria-hidden="true">
+        <rect x={size * 1.012} y={size * 0.6} width={size * 0.036} height={size * 0.05} rx={size * 0.006} fill="#1c1d20" stroke="#7a8087" strokeWidth={0.8} />
+        <path d={`M${size * 1.014} ${size * 0.6} Q${size * 1.03} ${size * 0.585}, ${size * 1.046} ${size * 0.6}`} stroke="#b8bdc3" strokeWidth={1.2} fill="none" />
+      </svg>}
+      <div ref={armRef} className="dj-tonearm" style={{ ...layer, transformOrigin: `${size * ARM.px}px ${size * ARM.py}px`, transform: `rotate(${armAngle.current}deg)`, willChange: 'transform', transition: 'transform 0.7s cubic-bezier(.2,.7,.2,1)' }}>
+        <TechnicsArm size={size} />
       </div>
       {/* Turntable furniture in the corners the round platter leaves free: the
           45 adapter top-left and the stylus target light bottom-left (lit while

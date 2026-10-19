@@ -5,8 +5,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Deck } from './engine/DjEngine'
-import Platter from './Platter'
+import Platter, { ARM, armAngleFor } from './Platter'
 import { RIGS, RigContext, rigFor } from './rigs'
+
+describe('tonearm geometry', () => {
+  // The stylus point at rest (end of the headshell), in fractions of the platter size.
+  const tip = { x: 1.023, y: 0.873 }
+  const at = (deg: number) => {
+    const a = deg * Math.PI / 180, dx = tip.x - ARM.px, dy = tip.y - ARM.py
+    return { x: ARM.px + dx * Math.cos(a) - dy * Math.sin(a), y: ARM.py + dx * Math.sin(a) + dy * Math.cos(a) }
+  }
+  const fromCentre = (p: { x: number; y: number }) => Math.hypot(p.x - 0.5, p.y - 0.5)
+
+  it('rests beside the record, off the platter', () => {
+    expect(armAngleFor(false, 0)).toBe(ARM.rest)
+    expect(fromCentre(at(ARM.rest))).toBeGreaterThan(0.5)
+    expect(ARM.px + 0.0).toBeGreaterThan(0.95)
+  })
+  it('drops onto the lead-in groove when a song loads', () => {
+    expect(fromCentre(at(armAngleFor(true, 0)))).toBeCloseTo(0.44, 1)
+  })
+  it('tracks to the run-out by the end of the song, clear of the label', () => {
+    const r = fromCentre(at(armAngleFor(true, 1)))
+    expect(r).toBeCloseTo(0.2, 1)
+    expect(r).toBeGreaterThan(0.18)   // label radius
+  })
+})
 
 vi.mock('./controls', () => ({ useDeck: () => {}, useRafThrottled: () => {}, fmtTime: () => '0:00' }))
 vi.mock('./jogHooks', () => ({ useScratch: () => ({}), useDeckSpin: () => {} }))
@@ -50,19 +74,19 @@ describe('hardware rigs', () => {
     expect(rigFor('studio')).toBeNull()
   })
 
-  it('a silver jog shows a live LCD in its hub and no tonearm swap', () => {
+  it('a silver jog shows a live LCD in its hub and has no arm rest', () => {
     const r = render('silver-wave', {})
     try {
       expect(r.host.querySelector('.dj-jog-lcd')).not.toBeNull()
       expect(r.host.querySelector('#jogmetal-A')).not.toBeNull()
-      expect(r.host.querySelector('.dj-sarm')).toBeNull()
+      expect(r.host.querySelector('.dj-arm-rest')).toBeNull()
     } finally { r.done() }
   })
 
-  it('vinyl rigs carry the S-arm; battle rigs put a power cap on the record', () => {
+  it('turntables carry the Technics arm; battle rigs put a power cap on the record', () => {
     const r = render('battle-black', {})
     try {
-      expect(r.host.querySelector('.dj-sarm')).not.toBeNull()
+      expect(r.host.querySelector('.dj-arm')).not.toBeNull()
       expect(r.host.querySelector('.dj-power-cap')).not.toBeNull()
     } finally { r.done() }
   })
