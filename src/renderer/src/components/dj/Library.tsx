@@ -6,7 +6,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   ChevronRight, ChevronDown, Folder as FolderIcon, FolderOpen, HardDrive, Music, Monitor, Download,
-  FileText, Video, Home, Plus, Search, X, ListMusic, Shuffle, Trash2, Loader2, FolderPlus, Youtube, Sparkles, Images, ListPlus, Heart, ArrowLeftRight,
+  FileText, Video, Home, Plus, Search, X, ListMusic, Shuffle, Trash2, Loader2, FolderPlus, Youtube, Sparkles, Images, ListPlus, Heart, ArrowLeftRight, Wand2,
 } from 'lucide-react'
 import QueuePanel from './QueuePanel'
 import { addToList, isFavorite, queueStore, toggleFavorite, trackFrom } from './ytQueue'
@@ -15,6 +15,10 @@ import TrackThumb from './TrackThumb'
 import { useCover, resolveCover } from './coverLookup'
 import { recordTaste } from './taste'
 import AiDjPanel from './AiDjPanel'
+import SuggestPanel from './SuggestPanel'
+import type { SuggestionEngine } from './suggest/suggestEngine'
+import type { DjEngine } from './engine/DjEngine'
+import { note as noteRecord, recordFromTrack } from './suggest/libraryDb'
 import type { DeckId, DjTrack } from './engine/DjEngine'
 import { cachedTrack, onTrackCacheChange } from './engine/trackCache'
 import { fmtTime } from './controls'
@@ -49,9 +53,12 @@ interface Props {
   say: (m: string) => void
   /** Decks a row can be loaded straight onto (four in the 4-Deck layout). */
   deckIds?: DeckId[]
+  /** The song suggester, for the NEXT tab. */
+  suggester?: SuggestionEngine
+  engine?: DjEngine
 }
 
-export default function Library({ onLoad, sidelist, setSidelist, automix, setAutomix, mixNow, say, deckIds = ['A', 'B'] }: Props) {
+export default function Library({ onLoad, sidelist, setSidelist, automix, setAutomix, mixNow, say, deckIds = ['A', 'B'], suggester, engine }: Props) {
   const [roots, setRoots] = useState<{ places: Folder[]; drives: Folder[] }>({ places: [], drives: [] })
   const [mine, setMine] = useState<Folder[]>(savedFolders)
   const [current, setCurrent] = useState<Folder | null>(null)
@@ -100,7 +107,7 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
   const findTracks = useMemo(() => finds.map(trackFrom), [finds])
   const [ytTracks, setYtTracks] = useState<DjTrack[]>([])
   const [ytQuery, setYtQuery] = useState('')
-  const [sideTab, setSideTab] = useState<'list' | 'queue' | 'ai'>('list')
+  const [sideTab, setSideTab] = useState<'list' | 'queue' | 'ai' | 'next'>('list')
   // Re-render rows when a song is queued or hearted elsewhere.
   useSyncExternalStore(queueStore.subscribe, queueStore.get)
   const [showCovers, setShowCovers] = useState(() => {
@@ -210,6 +217,8 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
     let alive = true
     for (const raw of raws.slice(0, PROBE_LIMIT)) {
       if (!knownMeta(raw.token)) void loadMeta(raw).then(m => {
+        // Every file browsed goes into the suggester's library database with its tags.
+        noteRecord(recordFromTrack(toTrack(raw, m)))
         if (!alive) return
         bump()
         if (!m.durationSec && !cachedTrack(raw.path)?.d) void probeDuration(raw).then(() => alive && bump())
@@ -444,6 +453,11 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
           <button type="button" className={`dj-side-tab dj-side-tab-ai ${sideTab === 'ai' ? 'on' : ''}`} onClick={() => setSideTab('ai')} title="AI DJ">
             <Sparkles size={12} /> AI DJ
           </button>
+          {suggester && (
+            <button type="button" className={`dj-side-tab dj-side-tab-next ${sideTab === 'next' ? 'on' : ''}`} onClick={() => setSideTab('next')} title="Next-song suggestions from the local model">
+              <Wand2 size={12} /> NEXT
+            </button>
+          )}
           {sidelist.length > 0 && sideTab === 'list' && (
             <button type="button" className="dj-icon-btn" onClick={() => setSidelist(() => [])} title="Clear"><Trash2 size={12} /></button>
           )}
@@ -451,6 +465,7 @@ export default function Library({ onLoad, sidelist, setSidelist, automix, setAut
         <QueuePanel visible={sideTab === 'queue'} automix={automix} setAutomix={setAutomix} onLoad={onLoad} mixNow={mixNow} say={say} />
         <AiDjPanel visible={sideTab === 'ai'} sidelistCount={sidelist.length} addTracks={ts => setSidelist(s => [...s, ...ts])}
           automix={automix} setAutomix={setAutomix} />
+        {suggester && engine && <SuggestPanel suggester={suggester} engine={engine} visible={sideTab === 'next'} />}
         <div className="dj-side-body" style={{ display: sideTab === 'list' ? 'flex' : 'none' }}>
         <button type="button" className={`dj-automix ${automix ? 'dj-on dj-on-green' : ''}`} onClick={() => setAutomix(!automix)}
           title="Automatically mix through the sidelist">

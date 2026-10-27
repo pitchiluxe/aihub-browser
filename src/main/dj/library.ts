@@ -195,7 +195,7 @@ async function readMeta(token: string) {
   const t = await readId3(p).catch(() => null)
   const cover = (t?.cover && coverDataUrl(t.cover.data, t.cover.mime)) || await folderArt(p)
   return {
-    title: t?.title, artist: t?.artist, album: t?.album, bpm: t?.bpm, key: t?.key,
+    title: t?.title, artist: t?.artist, album: t?.album, bpm: t?.bpm, key: t?.key, genre: t?.genre, year: t?.year,
     durationSec: t?.lengthMs ? t.lengthMs / 1000 : undefined,
     cover,
   }

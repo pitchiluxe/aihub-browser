@@ -36,6 +36,9 @@ export interface DjTrack {
   cover?: string
   tagBpm?: number
   key?: string
+  /** From the file's tags. */
+  genre?: string
+  year?: number
   size: number
   /** Set for a YouTube stream instead of a local file. */
   youtubeId?: string
@@ -433,6 +436,26 @@ export class Deck extends Emitter {
   /** A beat grid measured from the audio itself (not just a tag). */
   get gridKnown(): boolean { return !!(this.analysis?.bpm || this.liveBpm) }
 
+  private freqBuf: Float32Array<ArrayBuffer> | null = null
+  /**
+   * Where the song's energy sits right now, before EQ and filter: the vocal band
+   * (300 Hz – 3 kHz) and the bass (40 – 150 Hz), each 0..1. The suggester's stem
+   * trigger compares two decks with it to hear vocals or basslines collide.
+   */
+  bandLevels(): { vocal: number; bass: number } {
+    const a = this.preAnalyser
+    if (!this.freqBuf || this.freqBuf.length !== a.frequencyBinCount) this.freqBuf = new Float32Array(a.frequencyBinCount)
+    a.getFloatFrequencyData(this.freqBuf)
+    const hz = this.engine.ctx.sampleRate / a.fftSize
+    const band = (lo: number, hi: number) => {
+      let sum = 0, n = 0
+      for (let b = Math.max(1, Math.floor(lo / hz)); b <= Math.min(this.freqBuf!.length - 1, Math.ceil(hi / hz)); b++) { sum += this.freqBuf![b]; n++ }
+      // -90 dB … -20 dB → 0..1
+      return n ? Math.max(0, Math.min(1, (sum / n + 90) / 70)) : 0
+    }
+    return { vocal: band(300, 3000), bass: band(40, 150) }
+  }
+
   /** Peak level after the channel fader, in dBFS. */
   meterDb(): number { return peakDb(this.meter, this.meterBuf) }
 
@@ -731,6 +754,12 @@ export class Deck extends Emitter {
     else this.seek(at)
   }
   clearHotCue(i: number): void { this.hotCues[i] = null; this.emit() }
+  /** Set a hot cue to an exact point (seconds) — cues the song suggester worked out. */
+  setHotCueAt(i: number, t: number | null): void {
+    if (i < 0 || i >= this.hotCues.length) return
+    this.hotCues[i] = t == null ? null : Math.max(0, this.duration ? Math.min(t, this.duration) : t)
+    this.emit()
+  }
 
   /** Snap to the nearest beat when the grid is known (within a 1/8 beat). */
   private snap(t: number): number {
@@ -749,6 +778,15 @@ export class Deck extends Emitter {
     if (t <= this.loopIn + 0.05) return
     this.loopOut = t
     this.loopActive = true
+    this.emit()
+  }
+  /** A loop region set from outside (suggested phrase loops); `active` starts it now. */
+  setLoopRegion(inT: number, outT: number, active = false): void {
+    if (!this.track || !(outT > inT + 0.05)) return
+    this.loopIn = Math.max(0, inT)
+    this.loopOut = outT
+    this.loopActive = active
+    if (active && (this.time < this.loopIn || this.time > outT)) this.seek(this.loopIn)
     this.emit()
   }
   loopToggle(): void {
@@ -1137,6 +1175,9 @@ export class DjEngine extends Emitter {
   private fade: { from: number; to: number; start: number; ms: number } | null = null
 
   private raf = 0
+  private tickers = new Set<() => void>()
+  /** Run `fn` on the engine clock (every 20 ms, playing or not). Returns the unsubscribe. */
+  onTick(fn: () => void): () => void { this.tickers.add(fn); return () => { this.tickers.delete(fn) } }
   /** Restarts the audio output when the device under it went away (no sound, no waveforms). */
   private watchdog: AudioWatchdog
   private onOutputChange = (): void => this.watchdog.nudge()
@@ -1201,6 +1242,7 @@ export class DjEngine extends Emitter {
     this.raf = window.setInterval(() => {
       for (const id of DECK_IDS) this.decks[id].tick()
       this.tickFade()
+      for (const fn of this.tickers) { try { fn() } catch { /* a listener must not stop the clock */ } }
       // A second deck may have started playing since a scan was queued.
       if (this.scanQueue.length) this.nextScan()
       this.watchdog.check()

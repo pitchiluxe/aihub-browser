@@ -21,6 +21,7 @@ import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutF
 import { sanitizeChatMessages, fitMessagesToBudget, withLocalSystem } from './chatMessages'
 import { createFareEngine } from './fares/engine'
 import { putFacts, type TrackFacts as DjTrackFacts } from './dj/facts'
+import { registerDjSuggestIpc, upsertTrackRecords } from './djSuggest'
 import { createElectronDriver, FARES_PARTITION } from './fares/hiddenPage'
 import { FARE_ADAPTERS, handoffLinks, isFareSiteUrl } from './fares/adapters'
 import { googleAdapter } from './fares/adapters/google'
@@ -4859,6 +4860,17 @@ handlePersistent('dj:facts:put', (_e, id: unknown, facts: unknown) => {
   djFactsStore.set(after)
   return { ok: true }
 }, () => ({ ok: false }))
+
+// AI DJ song suggester (djSuggest.ts): library database, structured answers
+// from local Ollama, voice commands, floor-energy feed. Private windows never
+// write the library.
+handlePersistent('dj:db:upsert', (_e, records: unknown) => upsertTrackRecords(records), () => ({ ok: false, changed: 0 }))
+registerDjSuggestIpc({
+  appDir: APP_DIR,
+  ollamaBase: () => getAIConfig().olBase,
+  resolveModel: preferred => resolveInstalledOllamaModel(preferred),
+  fallback: messages => runAiRequest(messages, undefined, { maxTokens: 1500 }),
+})
 
 ipcMain.handle('dj:youtubeSearch', async (_e, query: string, limit = 20) => {
   const q = typeof query === 'string' ? query.trim().slice(0, 200) : ''

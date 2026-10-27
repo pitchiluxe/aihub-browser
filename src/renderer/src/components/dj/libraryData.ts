@@ -8,7 +8,7 @@ import { cachedTrack, rememberTrack } from './engine/trackCache'
 
 export interface RawTrack { token: string; name: string; path: string; size: number; ext: string }
 export interface Folder { name: string; path: string }
-export interface TrackMeta { title?: string; artist?: string; album?: string; bpm?: number; key?: string; durationSec?: number; cover?: string }
+export interface TrackMeta { title?: string; artist?: string; album?: string; bpm?: number; key?: string; genre?: string; year?: number; durationSec?: number; cover?: string }
 
 const api = () => (window as any).electronAPI.dj as {
   roots(): Promise<{ places: Folder[]; drives: Folder[] }>
@@ -51,6 +51,8 @@ export function toTrack(raw: RawTrack, meta?: TrackMeta): DjTrack {
     cover: meta?.cover,
     tagBpm: meta?.bpm,
     key: meta?.key,
+    genre: meta?.genre,
+    year: meta?.year,
     video: VIDEO_EXT.has(raw.ext),
   }
   registry.set(raw.token, t)

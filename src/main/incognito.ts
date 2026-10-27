@@ -63,6 +63,7 @@ export const PRIVATE_BLOCKED_CHANNELS = [
   'fares:openSite',         // visible verify window, same persistent partition
   'fares:watch',            // saves a fare price watch to watches.json
   'dj:facts:put',           // measured song facts (reveals what was queued)
+  'dj:db:upsert',           // song suggester library (reveals what was played)
 ] as const
 
 /**

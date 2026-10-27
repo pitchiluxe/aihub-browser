@@ -12,6 +12,9 @@ export interface TrackTags {
   album?: string
   bpm?: number
   key?: string
+  genre?: string
+  /** Release year, from TYER / TDRC. */
+  year?: number
   /** Milliseconds, from TLEN — rarely present. */
   lengthMs?: number
   cover?: { mime: string; data: Buffer }
@@ -109,6 +112,11 @@ export function parseId3(buf: Buffer): TrackTags {
   return tags
 }
 
+/** The common ID3v1 genre numbers some taggers still write in TCON. */
+const ID3V1_GENRES = ['Blues', 'Classic Rock', 'Country', 'Dance', 'Disco', 'Funk', 'Grunge', 'Hip-Hop', 'Jazz', 'Metal', 'New Age', 'Oldies',
+  'Other', 'Pop', 'R&B', 'Rap', 'Reggae', 'Rock', 'Techno', 'Industrial', 'Alternative', 'Ska', 'Death Metal', 'Pranks', 'Soundtrack',
+  'Euro-Techno', 'Ambient', 'Trip-Hop', 'Vocal', 'Jazz+Funk', 'Fusion', 'Trance', 'Classical', 'Instrumental', 'Acid', 'House']
+
 function readFrame(tags: TrackTags, id: string, data: Buffer): void {
   if (!data.length) return
   const text = () => decodeText(data[0], data.subarray(1))
@@ -117,6 +125,19 @@ function readFrame(tags: TrackTags, id: string, data: Buffer): void {
     case 'TPE1': case 'TP1': tags.artist = text() || tags.artist; break
     case 'TALB': case 'TAL': tags.album = text() || tags.album; break
     case 'TKEY': case 'TKE': tags.key = text() || tags.key; break
+    case 'TCON': case 'TCO': {
+      // "(17)Rock", "(17)" or "Rock": the ID3v1 number in brackets is dropped when a name follows.
+      const raw = text().trim()
+      const num = /^\((\d+)\)|^(\d+)$/.exec(raw)
+      const g = raw.replace(/^\(\d+\)/, '').replace(/^\d+$/, '').trim() || (num ? ID3V1_GENRES[Number(num[1] ?? num[2])] : '')
+      if (g) tags.genre = g
+      break
+    }
+    case 'TYER': case 'TYE': case 'TDRC': case 'TDOR': {
+      const y = parseInt(/\d{4}/.exec(text())?.[0] ?? '', 10)
+      if (y > 1900 && y < 2100 && (!tags.year || id !== 'TDOR')) tags.year = y
+      break
+    }
     case 'TBPM': case 'TBP': {
       const n = parseFloat(text())
       if (n > 0 && n < 400) tags.bpm = n

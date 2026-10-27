@@ -196,6 +196,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
       getMany: (ids: string[]) => ipcRenderer.invoke('dj:facts:getMany', ids),
       put:     (id: string, facts: unknown) => ipcRenderer.invoke('dj:facts:put', id, facts),
     },
+    // The song suggester's library database (djSuggest.ts).
+    db: {
+      upsert: (records: unknown[]) => ipcRenderer.invoke('dj:db:upsert', records),
+      get:    (ids: string[]) => ipcRenderer.invoke('dj:db:get', ids),
+      query:  (q: unknown) => ipcRenderer.invoke('dj:db:query', q),
+      count:  () => ipcRenderer.invoke('dj:db:count'),
+    },
+    // Floor-energy readings from outside the app (floorFeed.ts).
+    floor: {
+      setFeed: (on: boolean) => ipcRenderer.invoke('dj:floor:feed', on),
+      onReading: (cb: (r: unknown) => void) => {
+        const h = (_e: unknown, r: unknown) => cb(r)
+        ipcRenderer.on('dj:floor:reading', h)
+        return () => { ipcRenderer.removeListener('dj:floor:reading', h) }
+      },
+    },
     // Audio files dropped from the desktop: File.path is gone in modern Electron.
     pathForFile:   (file: File) => { try { return webUtils.getPathForFile(file) } catch { return '' } },
     registerFile:  (path: string) => ipcRenderer.invoke('dj:registerFile', path),
@@ -528,6 +544,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     checkDuplicate:     (url:string, e:string[]) => ipcRenderer.invoke('ai:checkDuplicate', url, e),
     categorizeBookmark: (url:string, t:string)   => ipcRenderer.invoke('ai:categorizeBookmark', url, t),
     chat:               (msgs:any[], m?:string, opts?:{preferCloud?:boolean; needsTools?:boolean; localSystem?:string; streamId?:string}) => ipcRenderer.invoke('ai:chat', msgs, m, opts),
+    // AI DJ song suggester: a JSON answer constrained to `schema` (Ollama structured outputs),
+    // voice commands through a local speech-to-text server, and that server's address.
+    json:               (msgs:unknown[], schema:unknown) => ipcRenderer.invoke('ai:json', msgs, schema),
+    transcribe:         (wav:ArrayBuffer)        => ipcRenderer.invoke('stt:transcribe', wav),
+    settings: {
+      get: () => ipcRenderer.invoke('dj:stt:get'),
+      set: (s: Record<string, unknown>) => ipcRenderer.invoke('dj:stt:set', s),
+    },
     // Partial tokens for the request that passed a matching streamId. The
     // promise from chat() still resolves with the complete text — this is
     // purely so the answer can be shown while it is still being written.

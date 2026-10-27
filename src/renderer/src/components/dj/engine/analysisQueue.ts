@@ -15,9 +15,11 @@ export class AnalysisQueue {
   private readonly isBusy: () => boolean
   private readonly sleep: (ms: number) => Promise<void>
   private readonly now: () => number
+  private readonly onMeasured?: (track: DjTrack, facts: TrackFacts) => void
 
-  constructor(private source: FactSource, private cache: FactsCache, opts: { isBusy?: () => boolean; sleep?: (ms: number) => Promise<void>; now?: () => number } = {}) {
+  constructor(private source: FactSource, private cache: FactsCache, opts: { isBusy?: () => boolean; sleep?: (ms: number) => Promise<void>; now?: () => number; /** Each successful measurement, with its track (the suggester's library database). */ onMeasured?: (track: DjTrack, facts: TrackFacts) => void } = {}) {
     this.isBusy = opts.isBusy ?? (() => false)
+    this.onMeasured = opts.onMeasured
     this.sleep = opts.sleep ?? (ms => new Promise(r => setTimeout(r, ms)))
     this.now = opts.now ?? Date.now
   }
@@ -45,7 +47,7 @@ export class AnalysisQueue {
         ? { ...m, playable: true, at: this.now() }
         : { bpm: null, bpmConfidence: 0, camelot: null, keyConfidence: 0, energy: 0.5, introEndSec: 0, outroStartSec: 0, durationSec: 0, playable: false, at: this.now() }
       if (signal.cancelled) return facts
-      if (m) this.cache.put(id, facts)
+      if (m) { this.cache.put(id, facts); this.onMeasured?.(track, facts) }
       else this.unplayable.set(id, facts)
       return facts
     }).finally(() => { this.waiting--; this.inflight.delete(id) })

@@ -146,7 +146,7 @@
 .aihub-dj[data-dj-reference='1'] .dj-mixer-logo small { font-size: 7px; }
 .aihub-dj[data-dj-reference='1'] .dj-xfader { padding-top: 8px; padding-bottom: 5px; border-top: 1px solid #0008; }
 .aihub-dj[data-dj-reference='1'] .dj-knob svg { filter: none; }
-.aihub-dj[data-dj-reference='1'] .dj-library { padding: 2px; grid-template-columns: 190px minmax(0,1fr) 245px; border: 1px solid #444; }
+.aihub-dj[data-dj-reference='1'] .dj-library { padding: 2px; grid-template-columns: 190px minmax(0,1fr) 320px; border: 1px solid #444; }
 .aihub-dj[data-dj-reference='1'] .dj-tr { font-size: 11px; min-height: 20px; }
 .aihub-dj[data-dj-reference='1'] .dj-tr:nth-child(even) { background: #ffffff03; }
 .aihub-dj[data-dj-reference='1'] .dj-tr.dj-sel { background: #6e6413; color: #fff; }

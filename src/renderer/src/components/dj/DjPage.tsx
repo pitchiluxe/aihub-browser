@@ -57,6 +57,8 @@ import './dj-palettes.css'
 import { DesignContext, partsFor } from './designs'
 import { RIGS, RigContext, rigFor } from './rigs'
 import { withDeckCover } from './coverLookup'
+import { SuggestionEngine } from './suggest/suggestEngine'
+import { note as noteRecord, recordFromTrack } from './suggest/libraryDb'
 
 export interface DjTheme { id: string; name: string; swatch: string; dark?: boolean; lightBg?: boolean }
 export const DJ_THEMES: DjTheme[] = [
@@ -330,8 +332,15 @@ function Console({ engine }: { engine: DjEngine }) {
   const showView = useCallback((v: 'stage' | 'console') => {
     setStageView(v); writePref(STAGE_VIEW_KEY, v)
   }, [])
-  const analysis = useMemo(() => new AnalysisQueue(createFactSource(engine.ctx), factsCache, { isBusy: () => mixer.busy }), [engine, mixer])
+  const analysis = useMemo(() => new AnalysisQueue(createFactSource(engine.ctx), factsCache, {
+    isBusy: () => mixer.busy,
+    // Measured songs join the suggester's library database.
+    onMeasured: (t, f) => noteRecord(recordFromTrack(t, f)),
+  }), [engine, mixer])
   useEffect(() => () => analysis.dispose(), [analysis])
+  // Next-song suggestions from the local model (the NEXT tab).
+  const suggester = useMemo(() => new SuggestionEngine({ engine, mixer, facts: t => analysis.known(t), say }), [engine, mixer, analysis, say])
+  useEffect(() => () => suggester.dispose(), [suggester])
   const conductor = useMemo(() => new SetConductor({
     pool: {
       profile: () => buildProfile([...tasteEvents()]),
@@ -510,7 +519,7 @@ function Console({ engine }: { engine: DjEngine }) {
       )}
 
       <Library onLoad={load} sidelist={sidelist} setSidelist={setSidelist} automix={automix} setAutomix={setAutomix} mixNow={mixNow} say={say}
-        deckIds={layout === '4deck' ? ['A', 'B', 'C', 'D'] : ['A', 'B']} />
+        deckIds={layout === '4deck' ? ['A', 'B', 'C', 'D'] : ['A', 'B']} suggester={suggester} engine={engine} />
 
     </div>
     {/* Beside the console, not inside it: the console is display:none under the

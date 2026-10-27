@@ -1,0 +1,49 @@
+/* NEXT — the song suggester panel (SuggestPanel.tsx). Same dark side-panel look as the AI DJ tab. */
+.aihub-dj .dj-sg { overflow-y: auto; overflow-x: hidden; font-size: 12px; color: #cbd5e1; }
+.aihub-dj .dj-sg-now { display: flex; flex-direction: column; gap: 1px; position: relative; padding: 5px 26px 5px 7px; background: #16171a; border: 1px solid #000; border-radius: 4px; }
+.aihub-dj .dj-sg-now b { color: #f3f4f6; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aihub-dj .dj-sg-now span { color: #9ca3af; font-size: 11.5px; }
+.aihub-dj .dj-sg-now .dj-icon-btn { position: absolute; top: 4px; right: 4px; }
+.aihub-dj .dj-sg-row { display: flex; align-items: center; gap: 6px; }
+.aihub-dj .dj-sg-row input[type=range] { flex: 1; min-width: 0; accent-color: #a855f7; }
+.aihub-dj .dj-sg-k { font-size: 11px; font-weight: 800; letter-spacing: 0.8px; color: #9ca3af; }
+.aihub-dj .dj-sg-dir { flex: none; padding: 1px 6px; border-radius: 9px; font-size: 11px; font-weight: 800; background: #26282d; color: #cbd5e1; }
+.aihub-dj .dj-sg-step_up { background: rgba(34,197,94,0.18); color: #86efac; }
+.aihub-dj .dj-sg-cool_down { background: rgba(56,189,248,0.18); color: #7dd3fc; }
+.aihub-dj .dj-sg-mic { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border: 1px solid #000; border-radius: 4px; background: #26282d; color: #e5e7eb; font-size: 12px; font-weight: 700; touch-action: none; user-select: none; }
+.aihub-dj .dj-sg-mic.on { background: linear-gradient(#dc2626, #991b1b); color: #fff; }
+.aihub-dj .dj-sg-chips { flex: 1; min-width: 0; }
+.aihub-dj .dj-sg-chips span { padding: 2px 7px; border: 1px solid #6b21a8; border-radius: 10px; background: rgba(168,85,247,0.15); color: #e9d5ff; font-size: 11.5px; }
+.aihub-dj .dj-sg-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.aihub-dj .dj-sg-dim { color: #8b9099; font-size: 11.5px; }
+.aihub-dj .dj-sg-err { color: #fca5a5; font-size: 11.5px; line-height: 1.35; }
+.aihub-dj .dj-sg-list { display: flex; flex-direction: column; gap: 6px; }
+.aihub-dj .dj-sg-card { display: flex; flex-direction: column; gap: 4px; padding: 6px 7px; background: #16171a; border: 1px solid #000; border-radius: 4px; }
+.aihub-dj .dj-sg-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e5e7eb; }
+.aihub-dj .dj-sg-t i { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #6b21a8; color: #fff; font-style: normal; font-size: 10.5px; font-weight: 800; }
+.aihub-dj .dj-sg-t small { color: #a78bfa; font-weight: 700; margin-right: 3px; }
+.aihub-dj .dj-sg-meta { display: flex; flex-wrap: wrap; gap: 3px 8px; color: #9ca3af; font-size: 11px; }
+.aihub-dj .dj-sg-why { color: #d8b4fe; font-size: 11.5px; line-height: 1.35; }
+.aihub-dj .dj-sg-cues { display: flex; flex-wrap: wrap; gap: 3px; }
+.aihub-dj .dj-sg-cues span { padding: 1px 5px; border-radius: 3px; background: #0d0e10; border: 1px solid #2c2f35; color: #cbd5e1; font-size: 11px; font-variant-numeric: tabular-nums; }
+.aihub-dj .dj-sg-cues b { color: #fbbf24; }
+.aihub-dj .dj-sg-acts { display: flex; gap: 4px; }
+.aihub-dj .dj-sg-acts button, .aihub-dj .dj-sg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 22px; padding: 0 8px; border: 1px solid #000; border-radius: 3px; background: #2c2f35; color: #e5e7eb; font-size: 11.5px; font-weight: 700; }
+.aihub-dj .dj-sg-acts button:hover, .aihub-dj .dj-sg-btn:hover { background: #3a3d44; }
+.aihub-dj .dj-sg-acts button:last-child { margin-left: auto; background: linear-gradient(#9333ea, #6b21a8); color: #fff; }
+.aihub-dj .dj-sg-btn.on { background: linear-gradient(#f59e0b, #b45309); color: #111; }
+.aihub-dj .dj-sg-h { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; color: #9ca3af; }
+.aihub-dj .dj-sg-fx { display: flex; flex-direction: column; gap: 1px; font-size: 11px; color: #cbd5e1; font-variant-numeric: tabular-nums; }
+.aihub-dj .dj-sg-src { text-align: right; }
+
+/* Four tabs share the side header: tighter, so NEXT is not cut off. */
+.aihub-dj .dj-side .dj-side-head .dj-side-tab { padding: 0 5px; gap: 3px; letter-spacing: 0.4px; }
+.aihub-dj .dj-side .dj-side-head .dj-side-tab.dj-side-tab-next.on { background: #6b21a8; color: #fff; }
+.aihub-dj .dj-side .dj-side-head .dj-side-tab.dj-side-tab-next svg { color: #c084fc; }
+.aihub-dj .dj-sg-hist { display: flex; align-items: center; gap: 6px; }
+.aihub-dj .dj-sg-hist span { flex: 1; min-width: 0; text-align: center; color: #9ca3af; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aihub-dj .dj-sg-hist .dj-icon-btn { display: inline-flex; align-items: center; gap: 2px; width: auto; padding: 0 6px; font-size: 11.5px; font-weight: 700; color: #e5e7eb; }
+.aihub-dj .dj-sg-hist .dj-icon-btn:disabled { opacity: 0.35; }
+.aihub-dj .dj-sg-url { flex: 1; min-width: 0; height: 24px; padding: 2px 6px; font-size: 12px; }
+/* Room under the last card for the floating "AI DJ stage" button. */
+.aihub-dj .dj-sg { padding-bottom: 48px; }

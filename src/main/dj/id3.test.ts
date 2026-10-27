@@ -27,6 +27,13 @@ describe('id3', () => {
     expect(parseId3(Buffer.alloc(20))).toEqual({})
   })
 
+  it('reads genre and release year', () => {
+    expect(parseId3(tag23([textFrame('TCON', 'Afrobeats'), textFrame('TYER', '2019')]))).toMatchObject({ genre: 'Afrobeats', year: 2019 })
+    expect(parseId3(tag23([textFrame('TCON', '(17)Rock'), textFrame('TDRC', '1994-05-01')]))).toMatchObject({ genre: 'Rock', year: 1994 })
+    expect(parseId3(tag23([textFrame('TCON', '(35)')])).genre).toBe('House')
+    expect(parseId3(tag23([textFrame('TCON', '7')])).genre).toBe('Hip-Hop')
+  })
+
   it('reads text frames in utf8 and utf16', () => {
     const buf = tag23([
       textFrame('TIT2', 'WAIT FOR U'),
