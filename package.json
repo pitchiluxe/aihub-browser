@@ -1,6 +1,6 @@
 {
   "name": "aihub-browser",
-  "version": "1.88.2",
+  "version": "1.88.3",
   "description": "AIHub — Next-Generation AI-Powered Browser",
   "main": "./out/main/index.js",
   "homepage": ".",
@@ -177,7 +177,9 @@
         "out/**/*",
         "resources/icon.ico",
         "LICENSE.txt",
-        "!node_modules/onnxruntime-node/bin/napi-v3/{win32,darwin}/**"
+        "!node_modules/onnxruntime-node/bin/napi-v3/{win32,darwin}/**",
+        "!node_modules/onnxruntime-node/bin/napi-v3/linux/arm64/**",
+        "!node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_{cuda,tensorrt}.so"
       ]
     },
     "asarUnpack": [
