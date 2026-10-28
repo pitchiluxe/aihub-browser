@@ -16,7 +16,24 @@
 
 import { KokoroTTS } from 'kokoro-js'
 import { env } from '@huggingface/transformers'
-import { MODEL_ID, MODEL_DTYPE } from './voiceModel'
+import { join } from 'path'
+import { ESPEAK_WASM, MODEL_ID, MODEL_DTYPE, voiceLang } from './voiceModel'
+import { frenchPhonemes } from './frenchPhonemes'
+
+// Beside the voice files, which the build copies to out/voices/ — see
+// copyNaturalVoices in electron.vite.config.ts.
+const ESPEAK_PATH = join(__dirname, '..', 'voices', ESPEAK_WASM)
+
+/**
+ * kokoro-js's generate() is English-only (its phonemizer and its voice list).
+ * generate_from_ids() is not: French is phonemized here and handed over as
+ * token ids, read with the model's French voice.
+ */
+async function generateFrench(model: KokoroTTS, text: string, voice: string, speed: number) {
+  const phonemes = await frenchPhonemes(text, ESPEAK_PATH)
+  const { input_ids } = model.tokenizer(phonemes, { truncation: true })
+  return model.generate_from_ids(input_ids, { voice: voice as any, speed })
+}
 
 const port = (process as any).parentPort as {
   on: (event: 'message', cb: (e: { data: any }) => void) => void
@@ -72,7 +89,9 @@ port.on('message', ({ data }) => {
     queue = queue.then(async () => {
       try {
         const model = await load()
-        const audio = await model.generate(String(text), { voice, speed })
+        const audio = voiceLang(voice) === 'fr'
+          ? await generateFrench(model, String(text), voice, speed)
+          : await model.generate(String(text), { voice, speed })
         port.postMessage({ type: 'audio', id, samples: audio.audio, sampleRate: audio.sampling_rate })
       } catch (err: any) {
         port.postMessage({ type: 'error', id, message: String(err?.message || err) })

@@ -1,6 +1,6 @@
 {
   "name": "aihub-browser",
-  "version": "1.88.4",
+  "version": "1.88.5",
   "description": "AIHub — Next-Generation AI-Powered Browser",
   "main": "./out/main/index.js",
   "homepage": ".",
@@ -59,6 +59,7 @@
     "electron": "44.5.1",
     "electron-builder": "^26.0.12",
     "electron-vite": "^2.3.0",
+    "espeak-ng": "^1.0.2",
     "jsdom": "^29.1.1",
     "kokoro-js": "^1.2.1",
     "postcss": "^8.4.38",

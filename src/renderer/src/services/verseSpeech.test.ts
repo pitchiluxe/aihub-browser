@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  naturalSpeed, pauseAfter, pickVoice, scoreVoice, speakable, speechChunks, spokenReference,
+  FRENCH_VOICE, naturalSpeed, naturalVoiceFor, naturalVoiceSpeaks, pauseAfter, pickVoice, scoreVoice, speakable, speechChunks, spokenReference,
   systemProsody, VERSE_PITCH, VERSE_RATE, type VoiceLike,
 } from './verseSpeech'
 
@@ -159,5 +159,31 @@ describe('reading like a person', () => {
   it('follows the reading pace setting', () => {
     expect(naturalSpeed(0, 3, 0.8)).toBeLessThan(naturalSpeed(0, 3, 1.1))
     expect(systemProsody('x.', 0, 3, 0.8).rate).toBeLessThan(systemProsody('x.', 0, 3, 1.1).rate)
+  })
+})
+
+describe('French and the choice of voice', () => {
+  it('announces a French reference the French way', () => {
+    expect(spokenReference('Jean 3:16', 'fr')).toBe('Jean 3, verset 16')
+    expect(spokenReference('1 Thessaloniciens 5:16–18', 'fr')).toBe('1 Thessaloniciens 5, verset 16 à 18')
+  })
+
+  it('reads English and French with the natural voice, nothing else', () => {
+    expect(naturalVoiceSpeaks('en')).toBe(true)
+    expect(naturalVoiceSpeaks('fr')).toBe(true)
+    expect(naturalVoiceSpeaks('de')).toBe(false)
+  })
+
+  it('uses the voice the reader picked for English', () => {
+    expect(naturalVoiceFor('en', 'am_michael')).toBe('am_michael')
+  })
+
+  it('always reads French with the French voice, whatever was picked', () => {
+    expect(naturalVoiceFor('fr', 'am_michael')).toBe(FRENCH_VOICE)
+  })
+
+  it('never asks the French voice to read English', () => {
+    expect(naturalVoiceFor('en', FRENCH_VOICE)).toBe('af_heart')
+    expect(naturalVoiceFor('en', '')).toBe('af_heart')
   })
 })

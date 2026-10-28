@@ -94,6 +94,38 @@ async function main() {
   await win.locator('button', { hasText: /^\s*Listen\s*$/ }).first().waitFor({ timeout: 3000 })
   console.log('stopped cleanly')
 
+  // ── Louis Segond in the main reader: the French natural voice, not the
+  //    robotic English one (this machine has no French system voice) ────
+  await win.evaluate(() => { window.__systemUtterances = 0 })
+  const bibleEntry = () => win.evaluate(() => {
+    const el = [...document.querySelectorAll('span')].find(e => e.textContent === 'Bible' && e.getBoundingClientRect().left < 200 && e.getBoundingClientRect().width > 0)
+    if (el) (el.closest('button') || el).click()
+    return !!el
+  })
+  if (!(await bibleEntry())) { await win.mouse.click(26, 66); await win.waitForTimeout(500); await bibleEntry() }
+  const version = win.locator('select[title="Bible version"]')
+  await win.waitForTimeout(1500)
+  if (!(await version.isVisible().catch(() => false))) {
+    // The Bible opens on its closed cover; clicking the book opens it.
+    const box = await win.evaluate(() => {
+      const r = [...document.querySelectorAll('div')].find(d => /HOLY|Holy Bible/.test(d.textContent || '') && d.getBoundingClientRect().width > 300 && d.getBoundingClientRect().width < 900)?.getBoundingClientRect()
+      return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null
+    })
+    await win.mouse.click(box?.x ?? 840, box?.y ?? 480)
+    await win.waitForTimeout(2500)
+  }
+  await version.selectOption('LSG', { timeout: 15000 })
+  await win.waitForTimeout(1500)
+  t = Date.now()
+  await win.locator('button[title="Read this aloud"]:visible').first().click()
+  await win.locator('button', { hasText: /^\s*Stop\s*$/ }).first().waitFor({ timeout: 60000 })
+  console.log('LSG main reader Listen → playing after', (Date.now() - t) + 'ms')
+  await win.waitForTimeout(3000)
+  const frenchSystem = await win.evaluate(() => window.__systemUtterances)
+  console.log('LSG utterances sent to the system voice:', frenchSystem)
+  if (frenchSystem !== 0) throw new Error('French reading fell back to the robotic system voice')
+  await win.locator('button', { hasText: /^\s*Stop\s*$/ }).first().click()
+
   await app.close()
   fs.rmSync(ISOLATED, { recursive: true, force: true })
 }

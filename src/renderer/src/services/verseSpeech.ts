@@ -141,12 +141,14 @@ export function speechChunks(text: string, maxChars = 180): string[] {
 
 /**
  * `John 3:16` → the spoken form, so the engine doesn't say "three colon
- * sixteen"; `5:16–18` → "5 verse 16 to 18".
+ * sixteen"; `5:16–18` → "5 verse 16 to 18". In French, `Jean 3:16–18` →
+ * "Jean 3, verset 16 à 18" — the way a French reader announces it.
  */
-export function spokenReference(label: string): string {
+export function spokenReference(label: string, lang = 'en'): string {
+  const fr = lang.toLowerCase().startsWith('fr')
   return String(label || '')
-    .replace(/(\d+)\s*:\s*(\d+)/, '$1 verse $2')
-    .replace(/(\d+)\s*[–-]\s*(\d+)/g, '$1 to $2')
+    .replace(/(\d+)\s*[:.]\s*(\d+)/, fr ? '$1, verset $2' : '$1 verse $2')
+    .replace(/(\d+)\s*[–-]\s*(\d+)/g, fr ? '$1 à $2' : '$1 to $2')
 }
 
 /**
@@ -252,11 +254,26 @@ function voiceApi(): any {
 }
 
 /**
- * The model speaks English (American and British voices). French and the
- * rest stay with the system voice, which at least has the right language.
+ * The model reads English (American and British voices) and French (one
+ * voice, for Louis Segond). Anything else stays with the system voice, which
+ * at least has the right language.
  */
 export function naturalVoiceSpeaks(lang: string): boolean {
-  return lang.toLowerCase().startsWith('en')
+  const l = lang.toLowerCase()
+  return l.startsWith('en') || l.startsWith('fr')
+}
+
+/** The model's French voice — the only one, so French always reads with it. */
+export const FRENCH_VOICE = 'ff_siwis'
+
+/**
+ * Which natural voice reads this language: the reader's chosen voice for
+ * English, the French voice for French. A French voice left as the English
+ * choice (it cannot read English) falls back to the default.
+ */
+export function naturalVoiceFor(lang: string, chosen: string): string {
+  if (lang.toLowerCase().startsWith('fr')) return FRENCH_VOICE
+  return chosen && chosen !== FRENCH_VOICE ? chosen : 'af_heart'
 }
 
 /** Whether the natural voice is installed and speaks this language. */
@@ -329,7 +346,9 @@ async function synthesize(text: string, voice: string, speed: number): Promise<C
  * to the system voice instead of reading nothing.
  */
 async function speakNatural(chunks: string[], hasIntro: boolean, opts: SpeakOptions, isCancelled: () => boolean, register: (stop: () => void) => void): Promise<boolean> {
-  const { readingVoice, readingPace } = loadBibleSettings()
+  const settings = loadBibleSettings()
+  const readingPace = settings.readingPace
+  const readingVoice = naturalVoiceFor(opts.lang || 'en', settings.readingVoice)
   const ctx = new AudioContext()
   let source: AudioBufferSourceNode | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -432,7 +451,7 @@ export async function speak(text: string, opts: SpeakOptions = {}): Promise<Spee
   // sentence far better than a fragment of one.
   const chunks = speechChunks(speakable(text), useNatural ? 240 : 180)
   const hasIntro = !!opts.intro
-  if (opts.intro) chunks.unshift(spokenReference(opts.intro))
+  if (opts.intro) chunks.unshift(spokenReference(opts.intro, lang))
   if (!chunks.length) return { stop: () => {} }
 
   let cancelled = false

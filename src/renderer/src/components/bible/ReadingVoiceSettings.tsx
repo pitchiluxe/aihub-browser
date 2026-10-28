@@ -8,12 +8,14 @@ interface VoiceStatus {
   installing: boolean
   progress: number
   sizeMb: number
-  voices: { id: string; label: string; description: string }[]
+  voices: { id: string; label: string; description: string; lang?: 'en' | 'fr' }[]
   error?: string
 }
 
 const SAMPLE = 'The Lord is my shepherd; I shall lack nothing. He makes me lie down in green pastures. He leads me beside still waters. He restores my soul.'
 const SAMPLE_REF = 'Psalm 23:1–3'
+const SAMPLE_FR = "L'Éternel est mon berger: je ne manquerai de rien. Il me fait reposer dans de verts pâturages, il me dirige près des eaux paisibles. Il restaure mon âme."
+const SAMPLE_FR_REF = 'Psaume 23:1–3'
 
 const api = () => (window as any).electronAPI?.voice
 
@@ -49,13 +51,17 @@ export default function ReadingVoiceSettings({ rowClass, labelClass }: { rowClas
     api()?.remove().then(setStatus).catch(() => {})
   }, [setBible])
 
-  const play = useCallback(async (voiceId: string | null) => {
+  // Picking an English voice makes it THE voice: every Listen button reads
+  // with it from then on. The French voice is the only one that reads Louis
+  // Segond, so it is previewed here but never replaces the English choice.
+  const play = useCallback(async (voiceId: string | null, lang: 'en' | 'fr' = 'en') => {
     preview.current?.stop()
     if (previewing === (voiceId ?? 'system')) { setPreviewing(null); return }
-    if (voiceId) setBible({ readingVoice: voiceId })
+    if (voiceId && lang === 'en') setBible({ readingVoice: voiceId })
     setPreviewing(voiceId ?? 'system')
-    preview.current = await speak(SAMPLE, {
-      intro: SAMPLE_REF,
+    preview.current = await speak(lang === 'fr' ? SAMPLE_FR : SAMPLE, {
+      intro: lang === 'fr' ? SAMPLE_FR_REF : SAMPLE_REF,
+      lang,
       onDone: () => setPreviewing(null),
     })
   }, [previewing, setBible])
@@ -72,7 +78,7 @@ export default function ReadingVoiceSettings({ rowClass, labelClass }: { rowClas
             <div className="text-xs text-aihub-muted">
               {status?.installed
                 ? 'Installed. Scripture is read by a natural, human-sounding voice — on this device, offline.'
-                : `A neural voice that reads like a person instead of a machine. ${bible.naturalVoiceDeclined ? 'Removed — install it again here.' : 'Downloads on its own the first time scripture is on screen'} (about ${status?.sizeMb ?? 165} MB, once); it then works offline and nothing you read leaves this device. English only — other versions keep the system voice.`}
+                : `A neural voice that reads like a person instead of a machine. ${bible.naturalVoiceDeclined ? 'Removed — install it again here.' : 'Downloads on its own the first time scripture is on screen'} (about ${status?.sizeMb ?? 165} MB, once); it then works offline and nothing you read leaves this device. Reads English and French (Louis Segond); the Kids versions follow their language.`}
             </div>
           </div>
           {status && !status.installed && (
@@ -105,16 +111,18 @@ export default function ReadingVoiceSettings({ rowClass, labelClass }: { rowClas
         {status?.installed ? (
           <div className="flex flex-wrap gap-2">
             {status.voices.map(v => {
-              const active = bible.readingVoice === v.id
+              const french = v.lang === 'fr'
+              const active = french || bible.readingVoice === v.id
               return (
-                <button key={v.id} onClick={() => play(v.id)} title={`${v.description} — click to hear it`}
+                <button key={v.id} onClick={() => play(v.id, french ? 'fr' : 'en')}
+                  title={french ? 'Reads Louis Segond — click to hear it' : `${v.description} — click to hear it and make it your reading voice`}
                   className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all"
                   style={active
                     ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
                     : { background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))' }}>
                   {previewing === v.id ? <Square size={10} /> : <Play size={10} />}
                   {v.label}
-                  <span className="opacity-60">· {v.description}</span>
+                  <span className="opacity-60">· {v.description}{french ? ' (Louis Segond)' : ''}</span>
                 </button>
               )
             })}
