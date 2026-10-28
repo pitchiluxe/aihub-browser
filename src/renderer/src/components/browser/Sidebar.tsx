@@ -7,6 +7,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import Favicon from '../common/Favicon'
 import type { PageType } from '../../../../shared/pageTypes'
+import { biblePageName, useBibleLang } from '../../services/bibleLang'
 
 const preloadObsidianGraph = () => import('../pages/ObsidianGraphView')
 
@@ -52,6 +53,7 @@ const NAV_ITEMS: NavItem[] = [
 
 function Sidebar({ onNavigate, onOpenPage }: Props) {
   // F6: local state for hover summary affordance
+  const { lang } = useBibleLang()
   const [hoveredSummaryId, setHoveredSummaryId] = useState<string | null>(null)
   const [summarizingId, setSummarizingId] = useState<string | null>(null)
 
@@ -165,7 +167,7 @@ function Sidebar({ onNavigate, onOpenPage }: Props) {
               <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                 <Icon size={14} />
               </span>
-              <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
+              <span style={{ flex: 1, textAlign: 'left' }}>{biblePageName(type, label, lang)}</span>
               {active && (
                 <span style={{
                   width: 5, height: 5, borderRadius: '50%', flexShrink: 0,

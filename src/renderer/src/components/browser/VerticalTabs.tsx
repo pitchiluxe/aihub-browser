@@ -3,6 +3,7 @@ import { X, Plus, Home, ChevronDown, ChevronRight, Globe, Layers, Columns2 } fro
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore, type Tab } from '../../store/browserStore'
 import { buildStripRows } from '../../services/tabGroups'
+import { biblePageName, useBibleLang } from '../../services/bibleLang'
 
 /**
  * The left-hand tab strip.
@@ -112,6 +113,7 @@ interface VerticalTabItemProps {
 }
 
 const VerticalTabItem = React.memo(function VerticalTabItem({ tab, isActive, isSplit, isHovered, groupColor, containerColor, onHover, onActivate, onClose, onSplit }: VerticalTabItemProps) {
+  const { lang } = useBibleLang()
   return <div
     onMouseEnter={() => onHover(tab.id)}
     onMouseLeave={() => onHover(null)}
@@ -123,7 +125,7 @@ const VerticalTabItem = React.memo(function VerticalTabItem({ tab, isActive, isS
   >
     {tab.containerId && <span className="shrink-0 rounded-full" style={{ width: 6, height: 6, background: containerColor }} title={`Container: ${tab.containerId}`} />}
     {tab.isHome ? <Home size={13} className="shrink-0" /> : tab.favicon ? <img src={tab.favicon} alt="" style={{ width: 14, height: 14, borderRadius: 3 }} className="shrink-0" /> : <Globe size={13} className="shrink-0" />}
-    <span className="flex-1 min-w-0 truncate text-xs">{tab.title || (tab.isHome ? 'New Tab' : tab.url)}</span>
+    <span className="flex-1 min-w-0 truncate text-xs">{biblePageName(tab.pageType, tab.title, lang) || (tab.isHome ? 'New Tab' : tab.url)}</span>
     {isSplit && <Columns2 size={11} className="shrink-0 text-aihub-accent" />}
     <button onClick={e => { e.stopPropagation(); onSplit(isSplit ? null : tab.id) }} title={isSplit ? 'Leave split view' : 'Show beside the current tab'} className={`p-0.5 rounded transition-opacity hover:bg-aihub-border/40 ${isHovered && !isActive ? 'opacity-100' : 'opacity-0'}`}><Columns2 size={11} /></button>
     <button onClick={e => { e.stopPropagation(); onClose(tab.id) }} title="Close tab" className={`p-0.5 rounded transition-opacity hover:bg-aihub-border/40 ${isHovered || isActive ? 'opacity-100' : 'opacity-0'}`}><X size={11} /></button>

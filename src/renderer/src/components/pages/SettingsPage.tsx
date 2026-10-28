@@ -4,7 +4,8 @@ import ClaudeKitSection from './ClaudeKitSection'
 import { useBibleSettings } from '../../services/bibleSettings'
 import ReadingVoiceSettings from '../bible/ReadingVoiceSettings'
 import { TRANSLATIONS } from '../../services/bibleService'
-import { BADGES, isUnlocked, type UnlockKind } from '../../services/bibleRewards'
+import { BADGES, badgeText, isUnlocked, type UnlockKind } from '../../services/bibleRewards'
+import { useBibleLang } from '../../services/bibleLang'
 import { useBrowserStore } from '../../store/browserStore'
 import {
   THEMES, loadCustomThemes, deleteCustomTheme, generateThemes, CustomTheme,
@@ -376,6 +377,8 @@ export default function SettingsPage() {
   const [gmailError, setGmailError] = useState('')
   // Bible reader preferences (localStorage; the open reader updates live)
   const [bible, setBible] = useBibleSettings()
+  // The Bible section speaks the open version's language, like the Bible itself.
+  const { lang: bibleUiLang, t: tb } = useBibleLang()
   // Which reader styles the study room has earned. Read once — the badge list
   // only grows, and Settings is not the place to watch it happen live.
   const [studyBadges, setStudyBadges] = useState<string[]>([])
@@ -1119,9 +1122,9 @@ export default function SettingsPage() {
       <Section icon={<BookMarked size={15} />} title="Bible">
         <div className={ROW}>
           <div>
-            <div className={LBL}>Version</div>
+            <div className={LBL}>{tb('Version', 'Version')}</div>
             <div className="text-xs text-aihub-muted">
-              Which translation the reader, the search and the study room all work from
+              {tb('Which translation the reader, the search and the study room all work from', 'La version utilisée par la lecture, la recherche et l’étude')}
             </div>
           </div>
           <div className="flex gap-1.5">
@@ -1140,8 +1143,8 @@ export default function SettingsPage() {
 
         <div className={ROW}>
           <div>
-            <div className={LBL}>Text size</div>
-            <div className="text-xs text-aihub-muted">How large the verses read on the page</div>
+            <div className={LBL}>{tb('Text size', 'Taille du texte')}</div>
+            <div className="text-xs text-aihub-muted">{tb('How large the verses read on the page', 'La taille des versets sur la page')}</div>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -1156,9 +1159,9 @@ export default function SettingsPage() {
 
         <div className={ROW}>
           <div>
-            <div className={LBL}>Paper</div>
+            <div className={LBL}>{tb('Paper', 'Papier')}</div>
             <div className="text-xs text-aihub-muted">
-              Aged parchment, or plain modern stock. Linen and midnight are earned in Bible Study.
+              {tb('Aged parchment, or plain modern stock. Linen and midnight are earned in Bible Study.', 'Parchemin vieilli, ou papier moderne. Le lin et le minuit se gagnent dans l’Étude biblique.')}
             </div>
           </div>
           <div className="flex gap-1.5">
@@ -1167,12 +1170,12 @@ export default function SettingsPage() {
               return (
                 <button key={p} onClick={() => !locked && setBible({ paper: p })}
                   disabled={locked}
-                  title={locked ? lockedHint('paper', p) : undefined}
+                  title={locked ? lockedHint('paper', p, bibleUiLang) : undefined}
                   className="flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium capitalize transition-all disabled:cursor-not-allowed disabled:opacity-40"
                   style={bible.paper === p
                     ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
                     : { background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))' }}>
-                  {locked && <Lock size={10} />}{p}
+                  {locked && <Lock size={10} />}{styleName(p, bibleUiLang)}
                 </button>
               )
             })}
@@ -1181,8 +1184,8 @@ export default function SettingsPage() {
 
         <div className={ROW}>
           <div>
-            <div className={LBL}>Binding</div>
-            <div className="text-xs text-aihub-muted">The cover you open the book on</div>
+            <div className={LBL}>{tb('Binding', 'Reliure')}</div>
+            <div className="text-xs text-aihub-muted">{tb('The cover you open the book on', 'La couverture sur laquelle s’ouvre le livre')}</div>
           </div>
           <div className="flex gap-1.5">
             {(['oxblood', 'forest', 'midnight'] as const).map(c => {
@@ -1190,12 +1193,12 @@ export default function SettingsPage() {
               return (
                 <button key={c} onClick={() => !locked && setBible({ cover: c })}
                   disabled={locked}
-                  title={locked ? lockedHint('cover', c) : undefined}
+                  title={locked ? lockedHint('cover', c, bibleUiLang) : undefined}
                   className="flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium capitalize transition-all disabled:cursor-not-allowed disabled:opacity-40"
                   style={bible.cover === c
                     ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
                     : { background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-4))' }}>
-                  {locked && <Lock size={10} />}{c}
+                  {locked && <Lock size={10} />}{styleName(c, bibleUiLang)}
                 </button>
               )
             })}
@@ -1204,32 +1207,32 @@ export default function SettingsPage() {
 
         <div className={ROW}>
           <div>
-            <div className={LBL}>Justified columns</div>
-            <div className="text-xs text-aihub-muted">Straight edges like a printed Bible</div>
+            <div className={LBL}>{tb('Justified columns', 'Colonnes justifiées')}</div>
+            <div className="text-xs text-aihub-muted">{tb('Straight edges like a printed Bible', 'Des bords droits comme une Bible imprimée')}</div>
           </div>
           <BibleToggle on={bible.justify} onClick={() => setBible({ justify: !bible.justify })} />
         </div>
 
         <div className={ROW}>
           <div>
-            <div className={LBL}>Verse numbers</div>
-            <div className="text-xs text-aihub-muted">Superscript numbers before each verse</div>
+            <div className={LBL}>{tb('Verse numbers', 'Numéros de versets')}</div>
+            <div className="text-xs text-aihub-muted">{tb('Superscript numbers before each verse', 'Des numéros en exposant devant chaque verset')}</div>
           </div>
           <BibleToggle on={bible.verseNumbers} onClick={() => setBible({ verseNumbers: !bible.verseNumbers })} />
         </div>
 
         <div className={ROW}>
           <div>
-            <div className={LBL}>Animate page turns</div>
-            <div className="text-xs text-aihub-muted">The 3D fold. Off changes the page instantly</div>
+            <div className={LBL}>{tb('Animate page turns', 'Animer les pages tournées')}</div>
+            <div className="text-xs text-aihub-muted">{tb('The 3D fold. Off changes the page instantly', 'Le pli en 3D. Désactivé, la page change instantanément')}</div>
           </div>
           <BibleToggle on={bible.animateTurn} onClick={() => setBible({ animateTurn: !bible.animateTurn })} />
         </div>
 
         <div className={ROW}>
           <div>
-            <div className={LBL}>Open on the cover</div>
-            <div className="text-xs text-aihub-muted">Off goes straight to where you left off</div>
+            <div className={LBL}>{tb('Open on the cover', 'Ouvrir sur la couverture')}</div>
+            <div className="text-xs text-aihub-muted">{tb('Off goes straight to where you left off', 'Désactivé, la Bible s’ouvre là où vous vous êtes arrêté')}</div>
           </div>
           <BibleToggle on={bible.showCover} onClick={() => setBible({ showCover: !bible.showCover })} />
         </div>
@@ -1238,19 +1241,19 @@ export default function SettingsPage() {
 
         <div className={ROW}>
           <div>
-            <div className={LBL}>Highlights, notes &amp; saved verses</div>
-            <div className="text-xs text-aihub-muted">Stored on this device only — never uploaded</div>
+            <div className={LBL}>{tb('Highlights, notes & saved verses', 'Surlignages, notes et versets enregistrés')}</div>
+            <div className="text-xs text-aihub-muted">{tb('Stored on this device only — never uploaded', 'Conservés sur cet appareil uniquement — jamais envoyés')}</div>
           </div>
           <button
             onClick={async () => {
-              if (!confirm('Delete every highlight, note and saved verse? This cannot be undone.')) return
+              if (!confirm(tb('Delete every highlight, note and saved verse? This cannot be undone.', 'Supprimer tous les surlignages, notes et versets enregistrés ? C’est irréversible.'))) return
               await window.electronAPI.bible.setMarks({ highlights: {}, saved: [], notes: {}, lastRead: null }, { allowEmpty: true })
-              alert('Bible marks cleared.')
+              alert(tb('Bible marks cleared.', 'Annotations de la Bible effacées.'))
             }}
             className="rounded-xl px-3 py-1.5 text-xs font-medium"
             style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}
           >
-            Clear all
+            {tb('Clear all', 'Tout effacer')}
           </button>
         </div>
       </Section>
@@ -1670,7 +1673,16 @@ function Pager({ total, page, setPage }: { total: number; page: number; setPage:
 }
 
 /** Why a reader style is greyed out — the requirement in the reader's words. */
-function lockedHint(kind: UnlockKind, value: string): string {
+function lockedHint(kind: UnlockKind, value: string, lang: 'en' | 'fr' = 'en'): string {
   const badge = BADGES.find(b => b.unlock?.kind === kind && b.unlock.value === value)
+  if (lang === 'fr') return badge ? `Verrouillé — ${badgeText(badge, 'fr').requirement.toLowerCase()} dans l’Étude biblique` : 'Verrouillé'
   return badge ? `Locked — ${badge.requirement.toLowerCase()} in Bible Study` : 'Locked'
+}
+
+// Paper and binding names as the Bible section shows them.
+const STYLE_NAMES_FR: Record<string, string> = {
+  aged: 'vieilli', clean: 'moderne', linen: 'lin', midnight: 'minuit', oxblood: 'bordeaux', forest: 'forêt',
+}
+function styleName(value: string, lang: 'en' | 'fr'): string {
+  return lang === 'fr' ? (STYLE_NAMES_FR[value] ?? value) : value
 }

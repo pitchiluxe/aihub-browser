@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore, Tab } from '../../store/browserStore'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
+import { biblePageName, useBibleLang } from '../../services/bibleLang'
 
 // macOS keeps its native traffic lights (inset into the tab strip by the main
 // process via titleBarStyle 'hiddenInset'); the strip reserves room for them
@@ -222,6 +223,8 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
 }) {
   const [hovered, setHovered] = useState(false)
   const itemRef = useRef<HTMLDivElement>(null)
+  const { lang } = useBibleLang()
+  const title = biblePageName(tab.pageType, tab.title, lang)
 
   // framer-motion treats onDragStart as one of ITS gesture props: it strips it
   // from the props handed to the DOM node, so passing an HTML5 drag handler to
@@ -293,7 +296,7 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
         color: isActive ? 'rgb(var(--ds-text-2))' : undefined,
         opacity: tab.asleep ? 0.5 : undefined,
       }}>
-        {tab.title || 'Loading…'}
+        {title || 'Loading…'}
       </span>
 
       {/* Loading spinner */}
@@ -309,7 +312,7 @@ function TabItem({ tab, isActive, isDropTarget, onActivate, onClose, onContextMe
 
       {/* Close */}
       <button
-        aria-label={`Close tab: ${tab.title || 'New tab'}`}
+        aria-label={`Close tab: ${title || 'New tab'}`}
         title="Close tab (Ctrl+W)"
         onClick={e => { e.stopPropagation(); onClose() }}
         className="shrink-0 flex items-center justify-center rounded-md no-drag"

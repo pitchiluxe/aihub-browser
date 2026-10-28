@@ -43,3 +43,14 @@ export function plural(lang: BibleLang, n: number, en: [string, string], fr: [st
   const single = lang === 'fr' ? n <= 1 : n === 1
   return `${n} ${single ? one : many}`
 }
+
+/**
+ * The browser's own names for the Bible pages — tab titles and sidebar
+ * entries — in the open version's language, so a French Bible does not sit in
+ * a tab called "Study". Other pages keep the name they were given.
+ */
+export function biblePageName(pageType: string | undefined, fallback: string, lang: BibleLang): string {
+  if (pageType === 'study') return lang === 'fr' ? 'Étude biblique' : 'Bible Study'
+  if (pageType === 'bible') return 'Bible'
+  return fallback
+}

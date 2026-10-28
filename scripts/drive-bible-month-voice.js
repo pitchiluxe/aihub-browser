@@ -31,7 +31,8 @@ async function main() {
   const openStudy = async () => {
     // The sidebar entry, not the home page's app tile of the same name.
     const sidebarEntry = () => win.evaluate(() => {
-      const el = [...document.querySelectorAll('span')].find(e => e.textContent === 'Bible Study' && e.getBoundingClientRect().left < 200 && e.getBoundingClientRect().width > 0)
+      // In Louis Segond the sidebar entry is French too.
+    const el = [...document.querySelectorAll('span')].find(e => /^(Bible Study|Étude biblique)$/.test(e.textContent || '') && e.getBoundingClientRect().left < 200 && e.getBoundingClientRect().width > 0)
       if (el) (el.closest('button') || el).click()
       return !!el
     })
@@ -144,14 +145,16 @@ async function main() {
   }
   let leftovers = await report('reader (Louis Segond)')
   const studyEntry = () => win.evaluate(() => {
-    const el = [...document.querySelectorAll('span')].find(e => e.textContent === 'Bible Study' && e.getBoundingClientRect().left < 200 && e.getBoundingClientRect().width > 0)
+    // In Louis Segond the sidebar entry is French too.
+    const el = [...document.querySelectorAll('span')].find(e => /^(Bible Study|Étude biblique)$/.test(e.textContent || '') && e.getBoundingClientRect().left < 200 && e.getBoundingClientRect().width > 0)
     if (el) (el.closest('button') || el).click()
     return !!el
   })
   if (!(await studyEntry())) { await win.mouse.click(26, 66); await win.waitForTimeout(500); await studyEntry() }
   await win.waitForTimeout(1500)
   for (const room of ['Aujourd’hui', 'Étude', 'Classe', 'Labo', 'Progrès']) {
-    await win.locator('button:visible', { hasText: room }).first().click()
+    // Exact: the sidebar's "Étude biblique" also contains "Étude".
+    await win.locator('button:visible', { hasText: new RegExp(`^\\s*${room}\\s*$`) }).first().click()
     await win.waitForTimeout(1200)
     leftovers += await report(`study: ${room}`)
     if (room === 'Étude') {
@@ -161,6 +164,36 @@ async function main() {
       leftovers += await report('study: plans de lecture')
     }
   }
+  // ── The browser around the Bible follows too: tabs, sidebar, Settings → Bible ──
+  const chrome = await win.evaluate(() => {
+    const visible = e => e.getBoundingClientRect().width > 0
+    const tabText = [...document.querySelectorAll('span')].filter(visible).map(e => e.textContent).join(' | ')
+    return {
+      studyTab: /Étude biblique/.test(tabText),
+      englishStudyTab: /(^|\| )(Study|Bible Study)( \||$)/.test(tabText),
+    }
+  })
+  console.log('tabs/sidebar:', chrome.studyTab && !chrome.englishStudyTab ? 'French ("Étude biblique")' : 'ENGLISH LEFT ' + JSON.stringify(chrome))
+  if (!chrome.studyTab || chrome.englishStudyTab) leftovers++
+  const settingsEntry = () => win.evaluate(() => {
+    const el = [...document.querySelectorAll('span, button')].find(e => /^Settings$/.test((e.textContent || '').trim()) && e.getBoundingClientRect().left < 200 && e.getBoundingClientRect().width > 0)
+    if (el) (el.closest('button') || el).click()
+    return !!el
+  })
+  if (!(await settingsEntry())) { await win.mouse.click(26, 66); await win.waitForTimeout(500); await settingsEntry() }
+  await win.waitForTimeout(1500)
+  const settingsEnglish = await win.evaluate(() => {
+    // Only the Bible section: from its heading to the next section.
+    const heading = [...document.querySelectorAll('*')].find(e => e.children.length === 0 && e.textContent === 'Taille du texte')
+    const section = heading?.closest('section, [class*="border-b"]')?.parentElement
+    const text = section ? section.innerText : ''
+    const words = ['Text size', 'Paper', 'Binding', 'Justified columns', 'Verse numbers', 'Animate page turns',
+      'Open on the cover', 'Clear all', 'Natural reading voice', 'Reading pace', 'Install', 'Remove']
+    // Whole words: "Install" must not match the French "Installée".
+    return { found: !!section, english: words.filter(w => new RegExp(`(^|[^\\p{L}])${w}([^\\p{L}]|$)`, 'u').test(text)) }
+  })
+  console.log('settings → Bible:', !settingsEnglish.found ? 'FRENCH HEADING NOT FOUND' : settingsEnglish.english.length ? 'ENGLISH LEFT → ' + settingsEnglish.english.join(', ') : 'all French')
+  if (!settingsEnglish.found || settingsEnglish.english.length) leftovers++
   if (leftovers) throw new Error('English left in the French Bible')
 
   await app.close()
