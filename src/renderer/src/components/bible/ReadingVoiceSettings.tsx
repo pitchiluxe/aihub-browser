@@ -37,14 +37,17 @@ export default function ReadingVoiceSettings({ rowClass, labelClass }: { rowClas
   }, [])
 
   const install = useCallback(() => {
+    setBible({ naturalVoiceDeclined: false })
     setStatus(s => s && { ...s, installing: true, progress: 0, error: undefined })
     api()?.install().then(setStatus).catch(() => {})
-  }, [])
+  }, [setBible])
 
+  // Removing is also a choice: the voice is not fetched again on its own.
   const remove = useCallback(() => {
     preview.current?.stop()
+    setBible({ naturalVoiceDeclined: true })
     api()?.remove().then(setStatus).catch(() => {})
-  }, [])
+  }, [setBible])
 
   const play = useCallback(async (voiceId: string | null) => {
     preview.current?.stop()
@@ -69,7 +72,7 @@ export default function ReadingVoiceSettings({ rowClass, labelClass }: { rowClas
             <div className="text-xs text-aihub-muted">
               {status?.installed
                 ? 'Installed. Scripture is read by a natural, human-sounding voice — on this device, offline.'
-                : `A neural voice that reads like a person instead of a machine. One-time download of about ${status?.sizeMb ?? 165} MB; it then works offline and nothing you read leaves this device. English only — other versions keep the system voice.`}
+                : `A neural voice that reads like a person instead of a machine. ${bible.naturalVoiceDeclined ? 'Removed — install it again here.' : 'Downloads on its own the first time scripture is on screen'} (about ${status?.sizeMb ?? 165} MB, once); it then works offline and nothing you read leaves this device. English only — other versions keep the system voice.`}
             </div>
           </div>
           {status && !status.installed && (

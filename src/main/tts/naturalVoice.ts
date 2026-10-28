@@ -60,6 +60,8 @@ function status(): VoiceStatus {
 function settle(id: number, value: any) {
   const p = pending.get(id)
   if (!p) return
+  // The reader hears the robotic fallback when this happens; say why.
+  if (value?.error) console.warn('[natural voice] speak failed:', value.error)
   clearTimeout(p.timer)
   pending.delete(id)
   p.resolve(value)

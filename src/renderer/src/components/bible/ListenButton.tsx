@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Volume2, VolumeX } from 'lucide-react'
-import { speak, speechSupported, type SpeechHandle } from '../../services/verseSpeech'
+import {
+  ensureNaturalVoice, naturalVoiceSpeaks, naturalVoiceState, onNaturalVoiceProgress,
+  speak, speechSupported, type SpeechHandle,
+} from '../../services/verseSpeech'
 import { getTranslationMeta } from '../../services/bibleService'
 
 interface Props {
@@ -18,6 +21,12 @@ interface Props {
  * One button, everywhere scripture is on screen: press to hear it, press again
  * to stop.
  *
+ * Its appearance is what fetches the natural voice: by the time anyone
+ * presses Listen, the human-sounding voice is usually installed. Pressed while
+ * the download is still running, the button shows its progress and reads
+ * with the natural voice once it lands, rather than falling back to the
+ * robotic system voice in the meantime. Pressing it again cancels the wait.
+ *
  * The reading is stopped on unmount as well as on a second press. A popup
  * closed mid-verse that keeps narrating from nowhere is the single most
  * annoying thing a feature like this can do.
@@ -25,11 +34,17 @@ interface Props {
 export default function ListenButton({
   text, reference, variant = 'chip', label = 'Listen', accent = '#e6c86e',
 }: Props) {
-  const [state, setState] = useState<'idle' | 'starting' | 'playing'>('idle')
+  const [state, setState] = useState<'idle' | 'preparing' | 'starting' | 'playing'>('idle')
+  const [progress, setProgress] = useState(0)
   const handle = useRef<SpeechHandle | null>(null)
+  // Bumped by every press and every stop, so a reading whose download finishes
+  // after the reader gave up on it never starts.
+  const attempt = useRef(0)
   const supported = speechSupported()
+  const lang = getTranslationMeta().locale
 
   const stop = useCallback(() => {
+    attempt.current++
     handle.current?.stop()
     handle.current = null
     setState('idle')
@@ -39,9 +54,25 @@ export default function ListenButton({
   // A new verse means the old reading is no longer what is on screen.
   useEffect(() => { stop() }, [text, stop])
 
+  // Fetch the natural voice in the background as soon as there is something
+  // it could read.
+  useEffect(() => {
+    if (naturalVoiceSpeaks(lang)) void ensureNaturalVoice()
+  }, [lang])
+
+  useEffect(() => onNaturalVoiceProgress(p => setProgress(p)), [])
+
   const toggle = useCallback(async () => {
     if (state !== 'idle') { stop(); return }
     if (!text.trim()) return
+    const mine = ++attempt.current
+
+    if (naturalVoiceSpeaks(lang) && await naturalVoiceState() !== 'installed') {
+      setState('preparing')
+      await ensureNaturalVoice()
+      if (attempt.current !== mine) return
+    }
+
     // Voices load asynchronously, so there is a real gap before the first
     // word on a cold start — the button says so rather than looking dead.
     setState('starting')
@@ -49,38 +80,48 @@ export default function ListenButton({
       intro: reference,
       // Read in the language of the open version: a French psalm handed to an
       // English voice is unintelligible, however good that voice is.
-      lang: getTranslationMeta().locale,
-      onChunk: () => setState('playing'),
-      onDone: () => { handle.current = null; setState('idle') },
+      lang,
+      onChunk: () => { if (attempt.current === mine) setState('playing') },
+      onDone: () => {
+        if (attempt.current !== mine) return
+        handle.current = null
+        setState('idle')
+      },
     })
+    if (attempt.current !== mine) { h.stop(); return }
     handle.current = h
-  }, [state, stop, text, reference])
+  }, [state, stop, text, reference, lang])
 
   if (!supported) return null
 
   const active = state !== 'idle'
-  const icon = state === 'starting'
-    ? <Loader2 size={variant === 'icon' ? 14 : 13} className="animate-spin" />
-    : active ? <VolumeX size={variant === 'icon' ? 14 : 13} /> : <Volume2 size={variant === 'icon' ? 14 : 13} />
+  const size = variant === 'icon' ? 14 : 13
+  const icon = state === 'preparing' || state === 'starting'
+    ? <Loader2 size={size} className="animate-spin" />
+    : active ? <VolumeX size={size} /> : <Volume2 size={size} />
+  const caption = state === 'preparing'
+    ? `Preparing voice${progress > 0 ? ` ${Math.round(progress * 100)}%` : '…'}`
+    : active ? 'Stop' : label
+  const title = state === 'preparing'
+    ? 'Getting the natural reading voice ready — a one-time download. Click to cancel.'
+    : active ? 'Stop reading' : 'Read this aloud'
 
   if (variant === 'icon') {
     return (
-      <button onClick={toggle} disabled={!text.trim()}
-        title={active ? 'Stop reading' : 'Read this aloud'}
+      <button onClick={toggle} disabled={!text.trim()} title={title}
         className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm disabled:opacity-40">
-        {icon} {active ? 'Stop' : label}
+        {icon} {caption}
       </button>
     )
   }
 
   return (
-    <button onClick={toggle} disabled={!text.trim()}
-      title={active ? 'Stop reading' : 'Read this aloud'}
+    <button onClick={toggle} disabled={!text.trim()} title={title}
       className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all disabled:opacity-40"
       style={active
         ? { background: `${accent}28`, border: `1px solid ${accent}55`, color: accent }
         : { background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
-      {icon} {active ? 'Stop' : label}
+      {icon} {caption}
     </button>
   )
 }

@@ -16,6 +16,7 @@ async function main() {
   delete env.ELECTRON_RUN_AS_NODE
   const app = await _electron.launch({ executablePath: ELECTRON, args: [REPO], cwd: REPO, env })
   app.process().stdout.on('data', d => { const s = String(d); if (/voice|tts|kokoro/i.test(s)) process.stdout.write('[main] ' + s) })
+  app.process().stderr.on('data', d => { const s = String(d); if (/voice|tts|kokoro/i.test(s)) process.stdout.write('[main:err] ' + s) })
   const win = await app.firstWindow()
   win.on('pageerror', err => console.log('[page error]', err.message))
   await win.waitForFunction(() => document.querySelectorAll('#root > *').length > 0, { timeout: 30000 })
@@ -59,27 +60,35 @@ async function main() {
   await win.waitForSelector('text=1/30 days', { timeout: 3000 })
   console.log('progress recorded: 1/30')
 
-  // ── Natural voice: install from Settings ─────────────────────────────
-  const before = await win.evaluate(() => window.electronAPI.voice.status())
-  console.log('voice before:', before.installed, before.sizeMb + 'MB')
-  let t = Date.now()
-  const after = await win.evaluate(() => window.electronAPI.voice.install())
-  console.log('install:', after.installed, after.error || '', (Date.now() - t) + 'ms')
+  // ── Natural voice: nobody installs it — a Listen button on screen does ──
+  const status = await win.evaluate(() => window.electronAPI.voice.status())
+  console.log('voice on a fresh profile, page open:', status.installed ? 'installed' : status.installing ? 'downloading by itself' : 'NOT STARTED')
+  if (!status.installed && !status.installing) throw new Error('natural voice download did not start on its own')
 
-  t = Date.now()
-  const clip = await win.evaluate(async () => {
-    const r = await window.electronAPI.voice.speak('He restores my soul.', 'af_heart', 0.92)
-    return { error: r.error, n: r.samples?.length, rate: r.sampleRate, type: r.samples?.constructor?.name }
+  // Count every utterance handed to the system (robotic) voice.
+  await win.evaluate(() => {
+    window.__systemUtterances = 0
+    const original = window.speechSynthesis.speak.bind(window.speechSynthesis)
+    window.__systemTexts = []
+    window.speechSynthesis.speak = u => { window.__systemUtterances++; window.__systemTexts.push(u.text); return original(u) }
   })
-  console.log('renderer got clip:', JSON.stringify(clip), (Date.now() - t) + 'ms')
 
-  // ── Listen on the month verse uses it (still on the November card) ────
+  // ── Listen on the month verse, pressed straight away ─────────────────
   const listen = win.locator('button', { hasText: /^\s*Listen\s*$/ }).first()
   await listen.waitFor({ timeout: 10000 })
-  t = Date.now()
+  let t = Date.now()
   await listen.click()
-  await win.locator('button', { hasText: /^\s*Stop\s*$/ }).first().waitFor({ timeout: 15000 })
+  const preparing = await win.locator('button', { hasText: /Preparing voice/ }).first().isVisible().catch(() => false)
+  console.log('button while downloading:', preparing ? '"Preparing voice …%"' : '(already installed)')
+  await win.locator('button', { hasText: /^\s*Stop\s*$/ }).first().waitFor({ timeout: 300000 })
   console.log('Listen → playing after', (Date.now() - t) + 'ms')
+  const systemUtterances = await win.evaluate(() => window.__systemUtterances)
+  console.log('utterances sent to the system voice:', systemUtterances)
+  if (systemUtterances) {
+    console.log('system voice read:', JSON.stringify(await win.evaluate(() => window.__systemTexts)))
+    console.log('direct speak now:', JSON.stringify(await win.evaluate(async () => { const r = await window.electronAPI.voice.speak('Always rejoice.', 'af_heart', 0.92); return { error: r.error, n: r.samples && r.samples.length } })))
+  }
+  if (systemUtterances !== 0) throw new Error('fell back to the robotic system voice')
   await win.waitForTimeout(4000)
   await win.locator('button', { hasText: /^\s*Stop\s*$/ }).first().click()
   await win.locator('button', { hasText: /^\s*Listen\s*$/ }).first().waitFor({ timeout: 3000 })

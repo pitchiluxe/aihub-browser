@@ -251,12 +251,62 @@ function voiceApi(): any {
   return typeof window !== 'undefined' ? (window as any).electronAPI?.voice : undefined
 }
 
+/**
+ * The model speaks English (American and British voices). French and the
+ * rest stay with the system voice, which at least has the right language.
+ */
+export function naturalVoiceSpeaks(lang: string): boolean {
+  return lang.toLowerCase().startsWith('en')
+}
+
 /** Whether the natural voice is installed and speaks this language. */
 async function naturalReady(lang: string): Promise<boolean> {
-  // The model speaks English (American and British voices). French and the
-  // rest stay with the system voice, which at least has the right language.
-  if (!lang.toLowerCase().startsWith('en')) return false
+  if (!naturalVoiceSpeaks(lang)) return false
   try { return !!(await voiceApi()?.status())?.installed } catch { return false }
+}
+
+let ensuring: Promise<boolean> | null = null
+
+/**
+ * Make sure the natural voice is installed, fetching it once if it is not.
+ * Resolves true once it can read.
+ *
+ * Called as soon as a Listen button appears, so the download is usually done
+ * before anyone presses one — the robotic system voice is what nobody asked
+ * to hear. Skipped for good once the reader removes the voice. Concurrent
+ * calls share one download (main dedupes it too); a failure is forgotten so
+ * the next call retries.
+ */
+export function ensureNaturalVoice(): Promise<boolean> {
+  const api = voiceApi()
+  if (!api || loadBibleSettings().naturalVoiceDeclined) return Promise.resolve(false)
+  if (!ensuring) {
+    ensuring = (async () => {
+      try {
+        if ((await api.status())?.installed) return true
+        return !!(await api.install())?.installed
+      } catch {
+        return false
+      }
+    })().then(ok => { if (!ok) ensuring = null; return ok })
+  }
+  return ensuring
+}
+
+/** Download progress of the natural voice, 0–1, while it is being fetched. */
+export function onNaturalVoiceProgress(cb: (progress: number, installing: boolean) => void): () => void {
+  const off = voiceApi()?.onProgress?.((s: any) => cb(s?.progress || 0, !!s?.installing))
+  return typeof off === 'function' ? off : () => {}
+}
+
+/** Installed, being fetched, or neither. */
+export async function naturalVoiceState(): Promise<'installed' | 'installing' | 'absent'> {
+  try {
+    const s = await voiceApi()?.status()
+    return s?.installed ? 'installed' : s?.installing ? 'installing' : 'absent'
+  } catch {
+    return 'absent'
+  }
 }
 
 interface Clip { samples: Float32Array; sampleRate: number }
@@ -299,9 +349,16 @@ async function speakNatural(chunks: string[], hasIntro: boolean, opts: SpeakOpti
 
   for (let i = 0; i < chunks.length; i++) {
     for (let k = i; k <= i + AHEAD; k++) request(k)
-    const clip = await clips.get(i)!
+    let clip = await clips.get(i)!
     clips.delete(i)
     if (isCancelled()) return true
+    // The first clause decides which voice reads the whole passage. One
+    // transient failure (the voice process restarting, the model still
+    // warming) is worth a second try before giving up to the robotic voice.
+    if (!clip && i === 0) {
+      clip = await synthesize(chunks[0], readingVoice, naturalSpeed(0, chunks.length, readingPace))
+      if (isCancelled()) return true
+    }
     if (!clip) {
       if (i === 0) { ctx.close().catch(() => {}); return false }
       continue // one bad clause should not end the reading

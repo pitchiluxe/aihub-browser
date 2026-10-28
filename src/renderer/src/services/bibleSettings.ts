@@ -20,6 +20,9 @@ export interface BibleSettings {
   // Bible); until then, and for languages it does not speak, the system voice.
   readingVoice: string     // a natural voice id — see src/main/tts/voiceModel.ts
   readingPace: number      // 0.8 – 1.15; 1 is an unhurried reading pace, not the engine default
+  // Set when the reader removes the natural voice: it is then never fetched
+  // again on its own, only from the Install button.
+  naturalVoiceDeclined: boolean
 }
 
 export const DEFAULT_BIBLE_SETTINGS: BibleSettings = {
@@ -33,6 +36,7 @@ export const DEFAULT_BIBLE_SETTINGS: BibleSettings = {
   verseNumbers: true,
   readingVoice: 'af_heart',
   readingPace: 1,
+  naturalVoiceDeclined: false,
 }
 
 const KEY = 'aihub-bible-settings'
