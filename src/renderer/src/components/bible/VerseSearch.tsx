@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search, X, Loader2, CornerDownLeft } from 'lucide-react'
 import { getBooks, refKey } from '../../services/bibleService'
 import { buildIndex, isReady, search, expandQuery, type Hit } from '../../services/bibleSearch'
+import { useBibleLang } from '../../services/bibleLang'
 
 interface Props {
   open: boolean
@@ -65,6 +66,7 @@ export function parseTypedRef(input: string): ParsedRef | null {
 }
 
 export default function VerseSearch({ open, onClose, onGoto }: Props) {
+  const { t } = useBibleLang()
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<Hit[]>([])
   const [busy, setBusy] = useState(false)
@@ -137,7 +139,7 @@ export default function VerseSearch({ open, onClose, onGoto }: Props) {
             value={q}
             onChange={e => setQ(e.target.value)}
             onKeyDown={onKey}
-            placeholder="Search a reference or any words — John 3:16, or “love your enemies”"
+            placeholder={t('Search a reference or any words — John 3:16, or “love your enemies”', 'Cherchez une référence ou des mots — Jean 3:16, ou « aimez vos ennemis »')}
             className="flex-1 bg-transparent text-sm outline-none"
             style={{ userSelect: 'text' }}
           />
@@ -178,12 +180,12 @@ export default function VerseSearch({ open, onClose, onGoto }: Props) {
 
           {!busy && q.trim().length >= 3 && !rows && !typedRef && (
             <div className="px-4 py-8 text-center text-xs opacity-55">
-              Nothing found for “{q.trim()}”.
+              {t(`Nothing found for “${q.trim()}”.`, `Aucun résultat pour « ${q.trim()} ».`)}
             </div>
           )}
           {q.trim().length < 3 && !typedRef && (
             <div className="px-4 py-8 text-center text-xs opacity-50">
-              Type a reference like <strong>John 3:16</strong>, or words from a verse you half-remember.
+              {t('Type a reference like ', 'Tapez une référence comme ')}<strong>{t('John 3:16', 'Jean 3:16')}</strong>{t(', or words from a verse you half-remember.', ', ou des mots d’un verset dont vous vous souvenez à moitié.')}
             </div>
           )}
         </div>

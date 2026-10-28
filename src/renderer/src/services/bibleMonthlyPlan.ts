@@ -13,6 +13,7 @@
 
 import { getBookMeta } from './bibleService'
 import type { Passage } from './bibleCourses'
+import { MONTH_WORDS_FR } from './bibleMonthlyPlanFr'
 
 /** A run of whole chapters of one book, inclusive. */
 export interface ChapterRun { bookId: string; from: number; to: number }
@@ -253,8 +254,14 @@ export function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate()
 }
 
-export function themeFor(month: number): MonthTheme {
-  return MONTH_THEMES[(((month - 1) % 12) + 12) % 12]
+/**
+ * The month's theme in the reader's language. The readings and the verse are
+ * the same in both; only the words around them are translated.
+ */
+export function themeFor(month: number, lang: 'en' | 'fr' = 'en'): MonthTheme {
+  const theme = MONTH_THEMES[(((month - 1) % 12) + 12) % 12]
+  const fr = lang === 'fr' ? MONTH_WORDS_FR[theme.month] : undefined
+  return fr ? { ...theme, ...fr } : theme
 }
 
 function bookName(bookId: string): string {
@@ -271,7 +278,7 @@ export function themeChapters(theme: MonthTheme): { bookId: string; chapter: num
 }
 
 /** "Genesis 1–2", "Psalm 95", "Ruth 4 · Hosea 1". */
-export function dayLabel(chapters: { bookId: string; chapter: number }[]): string {
+export function dayLabel(chapters: { bookId: string; chapter: number }[], lang: 'en' | 'fr' = 'en'): string {
   const groups: { bookId: string; first: number; last: number }[] = []
   for (const c of chapters) {
     const g = groups[groups.length - 1]
@@ -280,7 +287,7 @@ export function dayLabel(chapters: { bookId: string; chapter: number }[]): strin
   }
   return groups.map(g => {
     // One psalm is a Psalm, not a Psalms.
-    const name = g.bookId === 'PSA' && g.first === g.last ? 'Psalm' : bookName(g.bookId)
+    const name = g.bookId === 'PSA' && g.first === g.last ? (lang === 'fr' ? 'Psaume' : 'Psalm') : bookName(g.bookId)
     return g.first === g.last ? `${name} ${g.first}` : `${name} ${g.first}–${g.last}`
   }).join(' · ')
 }
@@ -294,8 +301,8 @@ export function dayLabel(chapters: { bookId: string; chapter: number }[]): strin
  * empty, no chapter is read twice, and the extra chapters spread across the
  * month instead of piling up at the end.
  */
-export function monthlyPlan(year: number, month: number): MonthPlan {
-  const theme = themeFor(month)
+export function monthlyPlan(year: number, month: number, lang: 'en' | 'fr' = 'en'): MonthPlan {
+  const theme = themeFor(month, lang)
   const total = daysInMonth(year, month)
   const chapters = themeChapters(theme)
   const days: MonthDay[] = []
@@ -306,12 +313,12 @@ export function monthlyPlan(year: number, month: number): MonthPlan {
     )
     days.push({
       date: i + 1,
-      label: dayLabel(slice),
+      label: dayLabel(slice, lang),
       // to: 999 is "to the end of the chapter" — the passage filter is a range
       // check, so whole chapters need no verse counts loaded up front.
       passages: slice.map(c => ({
         bookId: c.bookId, chapter: c.chapter, from: 1, to: 999,
-        label: dayLabel([c]),
+        label: dayLabel([c], lang),
       })),
       focus: theme.weeks[Math.min(4, Math.floor(i / 7))],
     })
@@ -326,3 +333,13 @@ export const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
+
+export const MONTH_NAMES_FR = [
+  'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+  'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+]
+
+/** "November" / "novembre" — French month names are not capitalised mid-sentence. */
+export function monthName(month: number, lang: 'en' | 'fr' = 'en'): string {
+  return (lang === 'fr' ? MONTH_NAMES_FR : MONTH_NAMES)[month - 1]
+}

@@ -11,6 +11,8 @@ import VerseActions from './VerseActions'
 import NoteEditor from './NoteEditor'
 import ShareSheet from './ShareSheet'
 import ListenButton from './ListenButton'
+import { passageLabel } from '../../services/bibleCourses'
+import { useBibleLang } from '../../services/bibleLang'
 
 export interface PassageView {
   bookId: string
@@ -60,6 +62,7 @@ export default function PassageModal({
   onClose, onOpenInBible, onToggleSave, onHighlight, onSaveNote, onAddToLab, inLab,
 }: Props) {
   const [settings] = useBibleSettings()
+  const { lang, t } = useBibleLang()
   const [noteOpen, setNoteOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [index, setIndex] = useState(Math.min(Math.max(startIndex, 0), Math.max(views.length - 1, 0)))
@@ -150,7 +153,8 @@ export default function PassageModal({
   if (!view) return null
 
   const bookName = meta?.name || view.bookId
-  const heading = offChapter ? `${bookName} ${chapter}` : view.label
+  // In the open version's book names: a course's "Luke 2:1–20" is "Luc 2:1–20" in Louis Segond.
+  const heading = offChapter ? `${bookName} ${chapter}` : passageLabel(view, lang)
   const savedSet = new Set(savedRefs)
   const selectedSaved = !!selected && savedSet.has(selected)
   const canPrev = index > 0 || chapter > 1
@@ -189,13 +193,13 @@ export default function PassageModal({
             </div>
             <button
               onClick={() => { setWhole(w => !w); setChapterOffset(0) }}
-              title={whole || offChapter ? 'Just the passage' : 'Read the whole chapter'}
+              title={whole || offChapter ? t('Just the passage', 'Seulement le passage') : t('Read the whole chapter', 'Lire tout le chapitre')}
               className="rounded-lg p-1.5 opacity-55 transition-opacity hover:opacity-100"
               style={{ border: '1px solid var(--ds-border-sm)' }}
             >
               {whole || offChapter ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             </button>
-            <button onClick={onClose} title="Close (Esc)"
+            <button onClick={onClose} title={t('Close (Esc)', 'Fermer (Échap)')}
               className="rounded-lg p-1.5 opacity-55 transition-opacity hover:opacity-100"
               style={{ border: '1px solid var(--ds-border-sm)' }}>
               <X size={14} />
@@ -213,10 +217,10 @@ export default function PassageModal({
           >
             {shown === null ? (
               <div className="flex items-center gap-2 py-10 text-sm opacity-60">
-                <Loader2 size={14} className="animate-spin" /> Turning to the page…
+                <Loader2 size={14} className="animate-spin" /> {t('Turning to the page…', 'Ouverture de la page…')}
               </div>
             ) : shown.length === 0 ? (
-              <p className="py-10 text-sm opacity-60">That passage is not in this translation.</p>
+              <p className="py-10 text-sm opacity-60">{t('That passage is not in this translation.', 'Ce passage n’existe pas dans cette version.')}</p>
             ) : (
               <>
                 <div className="mb-5 text-center text-[11px] font-bold uppercase tracking-[0.3em]"
@@ -243,12 +247,12 @@ export default function PassageModal({
             <button onClick={prev} disabled={!canPrev}
               className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-25"
               style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
-              <ChevronLeft size={13} /> Back
+              <ChevronLeft size={13} /> {t('Back', 'Précédent')}
             </button>
             <button onClick={next} disabled={!canNext}
               className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-25"
               style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
-              Next <ChevronRight size={13} />
+              {t('Next', 'Suivant')} <ChevronRight size={13} />
             </button>
 
             {/* Reads what is actually on the page — the selected verse alone
@@ -256,7 +260,7 @@ export default function PassageModal({
             <ListenButton
               text={selected ? selectedText : (shown || []).map(v => v.t).join(' ')}
               reference={heading}
-              label="Listen"
+              label={t('Listen', 'Écouter')}
             />
 
             <div className="flex-1" />
@@ -265,18 +269,18 @@ export default function PassageModal({
               <button onClick={() => onAddToLab(selected)} disabled={inLab?.(selected)}
                 className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-40"
                 style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
-                <FlaskConical size={12} /> {inLab?.(selected) ? 'In the Lab' : 'Learn it'}
+                <FlaskConical size={12} /> {inLab?.(selected) ? t('In the Lab', 'Dans le Labo') : t('Learn it', 'L’apprendre')}
               </button>
             ) : !selected ? (
-              <span className="text-[10.5px] opacity-40">Tap a verse to highlight, bookmark or note it</span>
+              <span className="text-[10.5px] opacity-40">{t('Tap a verse to highlight, bookmark or note it', 'Touchez un verset pour le surligner, l’enregistrer ou l’annoter')}</span>
             ) : null}
 
             <button
               onClick={() => onOpenInBible(selected || refKey(view.bookId, chapter, whole || offChapter ? 1 : view.from))}
-              title="Open this passage in the full Bible reader"
+              title={t('Open this passage in the full Bible reader', 'Ouvrir ce passage dans la Bible')}
               className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold"
               style={{ background: 'rgba(230,200,110,0.1)', border: '1px solid rgba(230,200,110,0.24)', color: '#e6c86e' }}>
-              <ExternalLink size={12} /> Open in the Bible
+              <ExternalLink size={12} /> {t('Open in the Bible', 'Ouvrir dans la Bible')}
             </button>
           </div>
         </motion.div>

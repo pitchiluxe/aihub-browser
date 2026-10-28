@@ -3,6 +3,7 @@ import { BookOpen, Bookmark, BookmarkCheck, Check, FlaskConical, Flame, Loader2 
 import { formatRef, getTranslationMeta } from '../../services/bibleService'
 import { verseText } from '../../services/verseText'
 import ListenButton from '../bible/ListenButton'
+import { plural, useBibleLang } from '../../services/bibleLang'
 
 interface Props {
   verseRef: string
@@ -23,6 +24,7 @@ interface Props {
 export default function DailyVerseCard({
   verseRef, meditatedToday, streak, inLab, saved, onMeditate, onRead, onToggleSave, onAddToLab,
 }: Props) {
+  const { lang, t } = useBibleLang()
   const [text, setText] = useState<string | null>(null)
 
   useEffect(() => {
@@ -36,13 +38,13 @@ export default function DailyVerseCard({
     <div className="mx-auto w-full max-w-3xl">
       <div className="mb-3 flex items-center justify-between">
         <div className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: 'rgb(var(--ds-text-4))' }}>
-          Verse for today
+          {t('Verse for today', 'Verset du jour')}
         </div>
         {streak > 0 && (
           <div className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
             style={{ background: 'rgba(251,146,60,0.12)', color: '#fb923c' }}>
             <Flame size={12} />
-            {streak} day{streak === 1 ? '' : 's'} running
+            {lang === 'fr' ? `${plural(lang, streak, ['', ''], ['jour', 'jours'])} d’affilée` : `${plural(lang, streak, ['day', 'days'], ['', ''])} running`}
           </div>
         )}
       </div>
@@ -54,7 +56,7 @@ export default function DailyVerseCard({
         }}>
         {text === null ? (
           <div className="flex items-center gap-2 py-6 text-sm opacity-60">
-            <Loader2 size={14} className="animate-spin" /> Finding it…
+            <Loader2 size={14} className="animate-spin" /> {t('Finding it…', 'Recherche…')}
           </div>
         ) : (
           <>
@@ -66,7 +68,7 @@ export default function DailyVerseCard({
                 color: 'rgb(var(--ds-text-2))',
               }}
             >
-              {text || 'That verse could not be found in this translation.'}
+              {text || t('That verse could not be found in this translation.', 'Ce verset est introuvable dans cette version.')}
             </blockquote>
             <div className="mt-4 text-sm font-semibold" style={{ color: '#e6c86e' }}>
               {formatRef(verseRef)}
@@ -84,15 +86,15 @@ export default function DailyVerseCard({
               ? { background: 'rgba(52,211,153,0.14)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399' }
               : { background: 'rgba(230,200,110,0.16)', border: '1px solid rgba(230,200,110,0.32)', color: '#e6c86e' }}
           >
-            {meditatedToday ? <><Check size={13} /> Sat with it today</> : <>Meditate on this</>}
+            {meditatedToday ? <><Check size={13} /> {t('Sat with it today', 'Médité aujourd’hui')}</> : <>{t('Meditate on this', 'Méditer ce verset')}</>}
           </button>
-          <ListenButton text={text || ''} reference={formatRef(verseRef)} label="Listen" />
+          <ListenButton text={text || ''} reference={formatRef(verseRef)} label={t('Listen', 'Écouter')} />
           <button
             onClick={() => onRead(verseRef)}
             className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold"
             style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}
           >
-            <BookOpen size={13} /> Read it
+            <BookOpen size={13} /> {t('Read it', 'Lire')}
           </button>
           {/* Saves to the same list the reader's own Save button writes, so a
               verse kept here is waiting in Saved verses when the Bible opens. */}
@@ -103,7 +105,7 @@ export default function DailyVerseCard({
               ? { background: 'rgba(52,211,153,0.14)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399' }
               : { background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}
           >
-            {saved ? <><BookmarkCheck size={13} /> Saved</> : <><Bookmark size={13} /> Save verse</>}
+            {saved ? <><BookmarkCheck size={13} /> {t('Saved', 'Enregistré')}</> : <><Bookmark size={13} /> {t('Save verse', 'Enregistrer')}</>}
           </button>
           <button
             onClick={() => onAddToLab(verseRef)}
@@ -111,13 +113,13 @@ export default function DailyVerseCard({
             className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold disabled:opacity-50"
             style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}
           >
-            <FlaskConical size={13} /> {inLab ? 'In the Lab' : 'Learn by heart'}
+            <FlaskConical size={13} /> {inLab ? t('In the Lab', 'Dans le Labo') : t('Learn by heart', 'Apprendre par cœur')}
           </button>
         </div>
       </div>
 
       <p className="mt-4 text-[11px] leading-relaxed opacity-45">
-        The same verse all day, chosen from the date — it will not change if you close the app and come back.
+        {t('The same verse all day, chosen from the date — it will not change if you close the app and come back.', 'Le même verset toute la journée, choisi selon la date — il ne changera pas si vous fermez l’application et revenez.')}
       </p>
     </div>
   )

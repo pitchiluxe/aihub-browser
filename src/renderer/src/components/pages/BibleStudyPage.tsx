@@ -13,6 +13,8 @@ import {
 } from '../../services/bibleStudyStore'
 import { formatRef, parseRef } from '../../services/bibleService'
 import { requestBibleVerse } from '../../services/bibleNavigation'
+import { useBibleLang } from '../../services/bibleLang'
+import { badgeText } from '../../services/bibleRewards'
 import PassageModal, { verseView, type PassageView } from '../bible/PassageModal'
 import VerseGraph from '../bible/VerseGraph'
 import DailyVerseCard from '../study/DailyVerseCard'
@@ -23,12 +25,12 @@ import ProgressPanel from '../study/ProgressPanel'
 
 type Room = 'today' | 'study' | 'classroom' | 'lab' | 'progress'
 
-const ROOMS: { id: Room; label: string; icon: React.ReactNode }[] = [
-  { id: 'today',     label: 'Today',     icon: <Sun size={14} /> },
-  { id: 'study',     label: 'Study',     icon: <BookOpen size={14} /> },
-  { id: 'classroom', label: 'Classroom', icon: <GraduationCap size={14} /> },
-  { id: 'lab',       label: 'Lab',       icon: <FlaskConical size={14} /> },
-  { id: 'progress',  label: 'Progress',  icon: <Award size={14} /> },
+const ROOMS: { id: Room; label: [string, string]; icon: React.ReactNode }[] = [
+  { id: 'today',     label: ['Today', 'Aujourd’hui'], icon: <Sun size={14} /> },
+  { id: 'study',     label: ['Study', 'Étude'],       icon: <BookOpen size={14} /> },
+  { id: 'classroom', label: ['Classroom', 'Classe'],  icon: <GraduationCap size={14} /> },
+  { id: 'lab',       label: ['Lab', 'Labo'],          icon: <FlaskConical size={14} /> },
+  { id: 'progress',  label: ['Progress', 'Progrès'],  icon: <Award size={14} /> },
 ]
 
 const EMPTY_MARKS: DeskMarks = { highlights: {}, saved: [], notes: {} }
@@ -40,6 +42,7 @@ interface Reading { views: PassageView[]; index: number; focusRef: string | null
 
 export default function BibleStudyPage() {
   const { study, loaded, update } = useBibleStudy()
+  const { lang, t } = useBibleLang()
   const focusOrOpenPage = useBrowserStore(s => s.focusOrOpenPage)
   const [room, setRoom] = useState<Room>('today')
   const [marks, setMarks] = useState<DeskMarks>(EMPTY_MARKS)
@@ -211,18 +214,18 @@ export default function BibleStudyPage() {
             <GraduationCap size={18} style={{ color: '#e6c86e' }} />
           </div>
           <div>
-            <div className="text-sm font-bold" style={{ color: 'rgb(var(--ds-text-2))' }}>Bible Study</div>
-            <div className="text-xs opacity-50">A verse a day, courses, and a drill room that remembers for you</div>
+            <div className="text-sm font-bold" style={{ color: 'rgb(var(--ds-text-2))' }}>{t('Bible Study', 'Étude biblique')}</div>
+            <div className="text-xs opacity-50">{t('A verse a day, courses, and a drill room that remembers for you', 'Un verset par jour, des cours, et une salle d’entraînement qui se souvient pour vous')}</div>
           </div>
         </div>
         <div className="flex items-center gap-1">
           {/* The constellation of everything saved, without a trip back to the
               reader to reach it. */}
           <button onClick={() => setGraphOpen(true)}
-            title="Verse constellation — your saved verses as a graph"
+            title={t('Verse constellation — your saved verses as a graph', 'Constellation — vos versets enregistrés en graphe')}
             className="mr-1 flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-semibold transition-all"
             style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-4))' }}>
-            <Share2 size={14} /> Graph
+            <Share2 size={14} /> {t('Graph', 'Graphe')}
           </button>
           {ROOMS.map(r => (
             <button key={r.id} onClick={() => setRoom(r.id)}
@@ -230,7 +233,7 @@ export default function BibleStudyPage() {
               style={room === r.id
                 ? { background: 'rgba(230,200,110,0.16)', border: '1px solid rgba(230,200,110,0.32)', color: '#e6c86e' }
                 : { background: 'transparent', border: '1px solid transparent', color: 'rgb(var(--ds-text-4))' }}>
-              {r.icon} {r.label}
+              {r.icon} {t(r.label[0], r.label[1])}
               {r.id === 'lab' && dueCount > 0 && (
                 <span className="ml-0.5 rounded-full px-1.5 text-[9.5px] font-bold"
                   style={{ background: '#e6c86e', color: '#241d0c' }}>{dueCount}</span>
@@ -334,12 +337,13 @@ export default function BibleStudyPage() {
               <Award size={18} style={{ color: '#e6c86e' }} />
               <div>
                 <div className="text-[13px] font-bold" style={{ color: '#e6c86e' }}>
-                  {celebrating.map(b => b.name).join(' · ')}
+                  {celebrating.map(b => badgeText(b, lang).name).join(' · ')}
                 </div>
                 <div className="text-[11px] opacity-55">
                   {celebrating.find(b => b.unlock)
-                    ? `Unlocked ${celebrating.filter(b => b.unlock).map(b => b.unlock!.label).join(' and ')} in Settings → Bible.`
-                    : celebrating[0].requirement}
+                    ? t(`Unlocked ${celebrating.filter(b => b.unlock).map(b => badgeText(b, lang).unlock).join(' and ')} in Settings → Bible.`,
+                        `${celebrating.filter(b => b.unlock).map(b => badgeText(b, lang).unlock).join(' et ')} débloqué dans Paramètres → Bible.`)
+                    : badgeText(celebrating[0], lang).requirement}
                 </div>
               </div>
             </div>

@@ -5,6 +5,7 @@ import {
   speak, speechSupported, type SpeechHandle,
 } from '../../services/verseSpeech'
 import { getTranslationMeta } from '../../services/bibleService'
+import { useBibleLang } from '../../services/bibleLang'
 
 interface Props {
   /** The scripture to read. Empty disables the button. */
@@ -32,8 +33,9 @@ interface Props {
  * annoying thing a feature like this can do.
  */
 export default function ListenButton({
-  text, reference, variant = 'chip', label = 'Listen', accent = '#e6c86e',
+  text, reference, variant = 'chip', label, accent = '#e6c86e',
 }: Props) {
+  const { t } = useBibleLang()
   const [state, setState] = useState<'idle' | 'preparing' | 'starting' | 'playing'>('idle')
   const [progress, setProgress] = useState(0)
   const handle = useRef<SpeechHandle | null>(null)
@@ -99,16 +101,17 @@ export default function ListenButton({
   const icon = state === 'preparing' || state === 'starting'
     ? <Loader2 size={size} className="animate-spin" />
     : active ? <VolumeX size={size} /> : <Volume2 size={size} />
+  const pct = progress > 0 ? ` ${Math.round(progress * 100)}%` : '…'
   const caption = state === 'preparing'
-    ? `Preparing voice${progress > 0 ? ` ${Math.round(progress * 100)}%` : '…'}`
-    : active ? 'Stop' : label
+    ? t(`Preparing voice${pct}`, `Préparation de la voix${pct}`)
+    : active ? t('Stop', 'Arrêter') : (label ?? t('Listen', 'Écouter'))
   const title = state === 'preparing'
-    ? 'Getting the natural reading voice ready — a one-time download. Click to cancel.'
-    : active ? 'Stop reading' : 'Read this aloud'
+    ? t('Getting the natural reading voice ready — a one-time download. Click to cancel.', 'Préparation de la voix de lecture naturelle — un téléchargement unique. Cliquez pour annuler.')
+    : active ? t('Stop reading', 'Arrêter la lecture') : t('Read this aloud', 'Lire à voix haute')
 
   if (variant === 'icon') {
     return (
-      <button onClick={toggle} disabled={!text.trim()} title={title}
+      <button onClick={toggle} disabled={!text.trim()} title={title} data-listen={state}
         className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm disabled:opacity-40">
         {icon} {caption}
       </button>
@@ -116,7 +119,7 @@ export default function ListenButton({
   }
 
   return (
-    <button onClick={toggle} disabled={!text.trim()} title={title}
+    <button onClick={toggle} disabled={!text.trim()} title={title} data-listen={state}
       className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all disabled:opacity-40"
       style={active
         ? { background: `${accent}28`, border: `1px solid ${accent}55`, color: accent }

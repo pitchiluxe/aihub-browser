@@ -5,6 +5,7 @@ import {
   Menu as MenuIcon, Music, Play, Search, Share2, Shuffle, Sparkles, WifiOff, X,
 } from 'lucide-react'
 import { useBrowserStore } from '../../store/browserStore'
+import { bibleLang, translator, useBibleLang } from '../../services/bibleLang'
 
 // Built to the same shape as the tutorials page in the user's QuickBooks app:
 // a sticky header with a shuffle and a search, the player expanding inline
@@ -31,17 +32,21 @@ interface SearchResult {
 
 // The rows across the top. Each is a search, so the room is never one
 // artist's back catalogue.
-const SHELVES: { label: string; query: string }[] = [
-  { label: 'Now showing',   query: '' },
-  { label: 'Choir',         query: 'black gospel choir performance' },
-  { label: 'Worship',       query: 'contemporary christian worship live' },
-  { label: 'Hymns',         query: 'traditional hymns choir' },
-  { label: 'Quartet',       query: 'southern gospel quartet' },
-  { label: 'Instrumental',  query: 'gospel piano instrumental worship' },
-  { label: 'African',       query: 'african gospel music' },
-  { label: 'En español',    query: 'musica cristiana adoracion en vivo' },
-  { label: 'A cappella',    query: 'acapella gospel choir' },
+// [English label, French label]. The language shelf follows the reader: Spanish
+// worship for English readers as before, French worship for Louis Segond.
+const SHELVES: { label: [string, string]; query: string; fr?: string }[] = [
+  { label: ['Now showing', 'À l’affiche'],     query: '' },
+  { label: ['Choir', 'Chorale'],               query: 'black gospel choir performance' },
+  { label: ['Worship', 'Adoration'],           query: 'contemporary christian worship live' },
+  { label: ['Hymns', 'Cantiques'],             query: 'traditional hymns choir' },
+  { label: ['Quartet', 'Quatuor'],             query: 'southern gospel quartet' },
+  { label: ['Instrumental', 'Instrumental'],   query: 'gospel piano instrumental worship' },
+  { label: ['African', 'Africain'],            query: 'african gospel music' },
+  { label: ['En español', 'En français'],      query: 'musica cristiana adoracion en vivo', fr: 'louange adoration chrétienne en français' },
+  { label: ['A cappella', 'A cappella'],       query: 'acapella gospel choir' },
 ]
+
+const shelfQuery = (s: typeof SHELVES[number], lang: 'en' | 'fr') => (lang === 'fr' && s.fr) || s.query
 
 /** Fisher-Yates with a seed, so one open keeps one order. */
 function shuffleSeeded<T>(items: T[], seed: number): T[] {
@@ -64,13 +69,13 @@ function shuffleSeeded<T>(items: T[], seed: number): T[] {
 /** Everywhere the reader can go from inside the room. */
 export type GospelDestination = 'reader' | 'search' | 'saved' | 'graph' | 'study' | 'ask'
 
-const DESTINATIONS: { id: GospelDestination; label: string; icon: React.ReactNode }[] = [
-  { id: 'reader', label: 'Back to the reading', icon: <BookOpen size={14} /> },
-  { id: 'search', label: 'Search the Bible',    icon: <Search size={14} /> },
-  { id: 'saved',  label: 'Saved verses',        icon: <Bookmark size={14} /> },
-  { id: 'graph',  label: 'Verse constellation', icon: <Share2 size={14} /> },
-  { id: 'study',  label: 'Bible Study',         icon: <GraduationCap size={14} /> },
-  { id: 'ask',    label: 'Ask about a verse',   icon: <Sparkles size={14} /> },
+const DESTINATIONS: { id: GospelDestination; label: [string, string]; icon: React.ReactNode }[] = [
+  { id: 'reader', label: ['Back to the reading', 'Retour à la lecture'],  icon: <BookOpen size={14} /> },
+  { id: 'search', label: ['Search the Bible', 'Rechercher dans la Bible'], icon: <Search size={14} /> },
+  { id: 'saved',  label: ['Saved verses', 'Versets enregistrés'],         icon: <Bookmark size={14} /> },
+  { id: 'graph',  label: ['Verse constellation', 'Constellation'],        icon: <Share2 size={14} /> },
+  { id: 'study',  label: ['Bible Study', 'Étude biblique'],               icon: <GraduationCap size={14} /> },
+  { id: 'ask',    label: ['Ask about a verse', 'Poser une question'],     icon: <Sparkles size={14} /> },
 ]
 
 interface Props {
@@ -85,6 +90,7 @@ interface Props {
 
 export default function GospelRoom({ open, onClose, onNavigate }: Props) {
   const addTab = useBrowserStore(s => s.addTab)
+  const { lang, t } = useBibleLang()
   const [shelf, setShelf]       = useState(0)
   // The way out. The room is a full-screen overlay over the reader, and the
   // listing is long enough to scroll the header off the top — which left the
@@ -123,13 +129,14 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
         setVideos([])
         // "no-results" means YouTube answered but the page shape changed —
         // a different problem from being offline, and worth saying so.
+        const tr = translator(bibleLang())
         setError(res?.error === 'no-results'
-          ? "YouTube answered, but nothing could be read from the page. That usually means their layout changed and this needs updating."
-          : 'Could not reach YouTube. Check the connection and try again.')
+          ? tr('YouTube answered, but nothing could be read from the page. That usually means their layout changed and this needs updating.', 'YouTube a répondu, mais rien n’a pu être lu sur la page. En général, cela veut dire que leur mise en page a changé et que ceci doit être mis à jour.')
+          : tr('Could not reach YouTube. Check the connection and try again.', 'Impossible de joindre YouTube. Vérifiez la connexion et réessayez.'))
       }
     } catch {
       setVideos([])
-      setError('Could not reach YouTube. Check the connection and try again.')
+      setError(translator(bibleLang())('Could not reach YouTube. Check the connection and try again.', 'Impossible de joindre YouTube. Vérifiez la connexion et réessayez.'))
     } finally {
       setLoading(false)
     }
@@ -146,7 +153,7 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
     setNonce(n => n + 1)
   }, [open])
 
-  useEffect(() => { if (open) load(SHELVES[shelf].query) }, [open, shelf, nonce, load])
+  useEffect(() => { if (open) load(shelfQuery(SHELVES[shelf], lang)) }, [open, shelf, nonce, load, lang])
 
   // Escape closes it, like every other overlay in the reader — but an open
   // menu is what it dismisses first, so the key never skips a layer.
@@ -222,7 +229,7 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
       <div className="sticky top-0 z-20 -mx-6 -mt-7 mb-5 flex flex-wrap items-center gap-3 px-6 pb-3 pt-7"
         style={{ background: 'rgba(6,4,9,0.97)', backdropFilter: 'blur(14px)', borderBottom: '1px solid var(--ds-border-sm)' }}>
         <button onClick={() => leaveTo('reader')}
-          title="Back to the Bible"
+          title={t('Back to the Bible', 'Retour à la Bible')}
           className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-bold transition-all"
           style={{ background: 'rgba(207,111,126,0.18)', border: '1px solid rgba(207,111,126,0.40)', color: '#f0a5b0' }}>
           <ArrowLeft size={14} /> Bible
@@ -234,9 +241,9 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
         <div className="min-w-0">
           <h1 className="text-xl font-black" style={{ color: 'rgb(var(--ds-text-1, var(--ds-text-2)))' }}>Gospel</h1>
           <p className="text-[11px] opacity-50">
-            {loading ? 'Finding something to play…'
-              : videos.length ? <>{videos.length} showing{query && <> · “{query}”</>}</>
-              : 'Nothing playing yet'}
+            {loading ? t('Finding something to play…', 'Recherche de quelque chose à écouter…')
+              : videos.length ? <>{videos.length} {t('showing', 'à l’affiche')}{query && <> · “{query}”</>}</>
+              : t('Nothing playing yet', 'Rien en lecture pour l’instant')}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -249,14 +256,14 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
           {onNavigate && (
             <div className="relative" ref={menuRef}>
               <button onClick={() => setMenuOpen(o => !o)}
-                title="Go somewhere else in the Bible"
+                title={t('Go somewhere else in the Bible', 'Aller ailleurs dans la Bible')}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all"
                 style={menuOpen
                   ? { background: 'rgba(207,111,126,0.20)', border: '1px solid rgba(207,111,126,0.42)', color: '#f0a5b0' }
                   : { background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
-                <MenuIcon size={13} /> Go to
+                <MenuIcon size={13} /> {t('Go to', 'Aller à')}
               </button>
               <AnimatePresence>
                 {menuOpen && (
@@ -272,7 +279,7 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
                       <button key={d.id} role="menuitem" onClick={() => leaveTo(d.id)}
                         className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium transition-colors hover:bg-white/[0.07]"
                         style={{ color: 'rgb(var(--ds-text-3))' }}>
-                        <span style={{ color: '#f0a5b0' }}>{d.icon}</span> {d.label}
+                        <span style={{ color: '#f0a5b0' }}>{d.icon}</span> {t(d.label[0], d.label[1])}
                       </button>
                     ))}
                   </motion.div>
@@ -281,7 +288,7 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
             </div>
           )}
 
-          <button onClick={onClose} title="Back to the Bible"
+          <button onClick={onClose} title={t('Back to the Bible', 'Retour à la Bible')}
             className="flex h-8 w-8 items-center justify-center rounded-lg"
             style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)' }}>
             <X size={15} />
@@ -295,7 +302,7 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Filter what is showing…"
+          placeholder={t('Filter what is showing…', 'Filtrer ce qui est affiché…')}
           className="w-full rounded-xl py-2.5 pl-9 pr-9 text-sm outline-none"
           style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-2))', userSelect: 'text' }}
         />
@@ -309,12 +316,12 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
       {/* Shelves */}
       <div className="mb-6 flex gap-1.5 overflow-x-auto pb-1">
         {SHELVES.map((s, i) => (
-          <button key={s.label} onClick={() => setShelf(i)}
+          <button key={s.label[0]} onClick={() => setShelf(i)}
             className="flex-shrink-0 rounded-lg px-3 py-1.5 text-[11.5px] font-semibold transition-all"
             style={i === shelf
               ? { background: 'rgba(207,111,126,0.20)', border: '1px solid rgba(207,111,126,0.42)', color: '#f0a5b0' }
               : { background: 'transparent', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-4))' }}>
-            {s.label}
+            {t(s.label[0], s.label[1])}
           </button>
         ))}
       </div>
@@ -336,7 +343,7 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-center gap-2">
                     <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full" style={{ background: '#f0a5b0' }} />
-                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#f0a5b0' }}>Now playing</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#f0a5b0' }}>{t('Now playing', 'En lecture')}</span>
                   </div>
                   <h2 className="text-sm font-bold leading-snug" style={{ color: 'rgb(var(--ds-text-1, var(--ds-text-2)))' }}>{playing.title}</h2>
                   <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -368,13 +375,13 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
                   <button
                     onClick={() => addTab(playing.url, 'browser')}
                     className="inline-flex items-center gap-1 text-[10.5px] opacity-50 transition-opacity hover:opacity-100">
-                    Open on YouTube <ChevronRight size={11} />
+                    {t('Open on YouTube', 'Ouvrir sur YouTube')} <ChevronRight size={11} />
                   </button>
                   <button
                     onClick={() => setAltHost(h => !h)}
-                    title="Reload the player on the other YouTube host"
+                    title={t('Reload the player on the other YouTube host', 'Recharger le lecteur sur l’autre serveur YouTube')}
                     className="inline-flex items-center gap-1 text-[10.5px] opacity-40 transition-opacity hover:opacity-100">
-                    {altHost ? 'Back to the private player' : "Won't play? Try the standard player"}
+                    {altHost ? t('Back to the private player', 'Revenir au lecteur privé') : t('Won’t play? Try the standard player', 'Ça ne joue pas ? Essayez le lecteur standard')}
                   </button>
                 </div>
               </div>
@@ -406,13 +413,13 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
             <button onClick={() => setNonce(n => n + 1)}
               className="rounded-xl px-3.5 py-2 text-xs font-semibold"
               style={{ background: 'rgba(207,111,126,0.16)', border: '1px solid rgba(207,111,126,0.34)', color: '#f0a5b0' }}>
-              Try again
+              {t('Try again', 'Réessayer')}
             </button>
             <button
               onClick={() => addTab('https://www.youtube.com/results?search_query=gospel+music', 'browser')}
               className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold"
               style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
-              <ExternalLink size={12} /> Search on YouTube
+              <ExternalLink size={12} /> {t('Search on YouTube', 'Chercher sur YouTube')}
             </button>
           </div>
         </div>
@@ -420,7 +427,7 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
         <div className="rounded-2xl px-6 py-12 text-center"
           style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)' }}>
           <Music size={26} className="mx-auto mb-3 opacity-25" />
-          <p className="text-[12.5px] opacity-55">Nothing here matches “{search}”.</p>
+          <p className="text-[12.5px] opacity-55">{t(`Nothing here matches “${search}”.`, `Rien ne correspond à « ${search} ».`)}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -433,8 +440,8 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
       )}
 
       <p className="mt-6 text-[11px] leading-relaxed opacity-40">
-        Played from YouTube in a privacy-preserving embed. Nothing about you is sent with the
-        search — no account, no cookies — and nothing is stored.
+        {t('Played from YouTube in a privacy-preserving embed. Nothing about you is sent with the search — no account, no cookies — and nothing is stored.',
+          'Lu depuis YouTube dans un lecteur qui protège la vie privée. Rien sur vous n’est envoyé avec la recherche — pas de compte, pas de cookies — et rien n’est conservé.')}
       </p>
     </div>
     </div>
@@ -444,6 +451,7 @@ export default function GospelRoom({ open, onClose, onNavigate }: Props) {
 function VideoCard({ video, index, isPlaying, onPlay }: {
   video: GospelVideo; index: number; isPlaying: boolean; onPlay: () => void
 }) {
+  const { t } = useBibleLang()
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -488,7 +496,7 @@ function VideoCard({ video, index, isPlaying, onPlay }: {
         {isPlaying && (
           <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold text-white"
             style={{ background: '#cf6f7e' }}>
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> PLAYING
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> {t('PLAYING', 'EN LECTURE')}
           </div>
         )}
       </div>

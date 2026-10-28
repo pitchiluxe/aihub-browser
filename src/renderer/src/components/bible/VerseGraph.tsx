@@ -10,6 +10,7 @@ import { getBookMeta, getChapter, parseRef, formatRef } from '../../services/bib
 import {
   drawGraphNode, drawSpawnRipple, hexToRgba, HUB_THRESHOLD, LABEL_INK, LABEL_ZOOM, NODE_STYLE,
 } from '../graph/nodeStyle'
+import { useBibleLang } from '../../services/bibleLang'
 
 interface Saved { ref: string; ts: number }
 interface Props {
@@ -113,6 +114,7 @@ function buildGraph(saved: Saved[]): { nodes: GNode[]; links: GLink[] } {
 }
 
 export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: Props) {
+  const { t } = useBibleLang()
   const mountRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const simRef = useRef<Simulation<GNode, GLink> | null>(null)
@@ -672,11 +674,11 @@ export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: P
           className="pointer-events-auto flex h-9 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-slate-200 hover:text-white"
           style={PANEL}
         >
-          <ChevronLeft size={15} /> Back to Bible
+          <ChevronLeft size={15} /> {t('Back to Bible', 'Retour à la Bible')}
         </button>
         <div className="pointer-events-none flex h-9 items-center gap-1.5 rounded-xl px-3" style={PANEL}>
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: '#e6c86e', boxShadow: '0 0 6px #e6c86e' }} />
-          <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">Verse Constellation</span>
+          <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">{t('Verse Constellation', 'Constellation des versets')}</span>
           <span className="ml-1 text-xs text-slate-600">{total} {total === 1 ? 'verse' : 'verses'}</span>
         </div>
       </div>
@@ -687,7 +689,7 @@ export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: P
           <div className="pointer-events-auto flex h-9 items-center gap-2 rounded-xl px-2.5" style={PANEL}>
             <button
               onClick={() => (tlPlaying ? stopTimelapse() : startTimelapse())}
-              title={tlPlaying ? 'Stop timelapse' : 'Play timelapse'}
+              title={tlPlaying ? t('Stop timelapse', 'Arrêter l’accéléré') : t('Play timelapse', 'Lire en accéléré')}
               className="flex h-6 w-6 items-center justify-center rounded-lg"
               style={{ background: 'rgba(230,200,110,0.18)', color: '#e6c86e' }}
             >
@@ -696,16 +698,16 @@ export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: P
             <div className="h-1.5 w-28 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.1)' }}>
               <div className="h-full rounded-full" style={{ width: `${tlProgress}%`, background: '#e6c86e', transition: 'width 0.2s' }} />
             </div>
-            <button onClick={startTimelapse} title="Replay from the beginning"
+            <button onClick={startTimelapse} title={t('Replay from the beginning', 'Rejouer depuis le début')}
               className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:text-white">
               <RotateCcw size={12} />
             </button>
           </div>
         )}
         <div className="pointer-events-auto flex h-9 items-center gap-1 rounded-xl px-1.5" style={PANEL}>
-          <button onClick={() => applyZoom(1.25)} title="Zoom in" className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:text-white"><ZoomIn size={13} /></button>
-          <button onClick={() => applyZoom(0.8)} title="Zoom out" className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:text-white"><ZoomOut size={13} /></button>
-          <button onClick={fitView} title="Fit to view" className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:text-white"><Crosshair size={13} /></button>
+          <button onClick={() => applyZoom(1.25)} title={t('Zoom in', 'Zoom avant')} className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:text-white"><ZoomIn size={13} /></button>
+          <button onClick={() => applyZoom(0.8)} title={t('Zoom out', 'Zoom arrière')} className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:text-white"><ZoomOut size={13} /></button>
+          <button onClick={fitView} title={t('Fit to view', 'Ajuster à la vue')} className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:text-white"><Crosshair size={13} /></button>
           <span className="px-1 text-[10px] tabular-nums text-slate-500">{Math.round(zoom * 100)}%</span>
         </div>
       </div>
@@ -713,8 +715,8 @@ export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: P
       {total === 0 && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-center text-slate-400">
           <BookOpen size={40} style={{ color: '#e6c86e', opacity: 0.7 }} />
-          <div className="text-sm">No saved verses yet.</div>
-          <div className="max-w-xs text-xs text-slate-500">Tap a verse while reading and choose <b>Save</b> — it'll appear here, linked into your constellation.</div>
+          <div className="text-sm">{t('No saved verses yet.', 'Aucun verset enregistré pour l’instant.')}</div>
+          <div className="max-w-xs text-xs text-slate-500">{t('Tap a verse while reading and choose ', 'Touchez un verset pendant la lecture et choisissez ')}<b>{t('Save', 'Enregistrer')}</b>{t(' — it’ll appear here, linked into your constellation.', ' — il apparaîtra ici, relié à votre constellation.')}</div>
         </div>
       )}
 
@@ -728,7 +730,7 @@ export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: P
             {selNode.ts > 0 && <span className="ml-auto text-[11px] text-slate-500">Saved {new Date(selNode.ts).toLocaleDateString()}</span>}
           </div>
           <p className="mb-3 text-[13px] leading-relaxed text-slate-200">
-            {verseText || <span className="text-slate-500">Loading…</span>}
+            {verseText || <span className="text-slate-500">{t('Loading…', 'Chargement…')}</span>}
           </p>
           {notes[selNode.ref] && (
             <p className="mb-3 rounded-lg px-3 py-2 text-[12px] italic text-slate-300" style={{ background: 'rgba(255,255,255,0.05)' }}>
@@ -739,11 +741,11 @@ export default function VerseGraph({ open, onClose, saved, notes, onOpenRef }: P
             <button onClick={openInBible}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-white"
               style={{ background: 'linear-gradient(135deg, #b8892e, #e6c86e)' }}>
-              <BookOpen size={15} /> Open in Bible
+              <BookOpen size={15} /> {t('Open in Bible', 'Ouvrir dans la Bible')}
             </button>
             <button onClick={() => { setSelNode(null); selIdRef.current = null }}
               className="rounded-xl px-4 py-2 text-sm text-slate-300" style={{ background: 'rgba(255,255,255,0.07)' }}>
-              Close
+              {t('Close', 'Fermer')}
             </button>
           </div>
         </div>

@@ -206,3 +206,56 @@ export function isUnlocked(kind: UnlockKind, value: string, earned: string[] | u
   const u = unlockedStyles(earned)
   return (kind === 'paper' ? u.papers : u.covers).includes(value)
 }
+
+// ── French ───────────────────────────────────────────────────────────────
+
+/** The badge wall in French, for Louis Segond readers. Keyed by badge id. */
+const BADGES_FR: Record<string, { name: string; requirement: string; unlock?: string }> = {
+  'first-verse': { name: 'Premier verset', requirement: 'Ajouter un verset au Labo' },
+  'streak-3': { name: 'Trois jours', requirement: 'Méditer trois jours de suite' },
+  'streak-7': { name: 'Une semaine entière', requirement: 'Méditer sept jours de suite', unlock: 'Papier lin' },
+  'streak-30': { name: 'Un mois de matins', requirement: 'Méditer trente jours de suite', unlock: 'Reliure vert forêt' },
+  'verses-10': { name: 'Dix par cœur', requirement: 'Maîtriser dix versets' },
+  'verses-25': { name: 'Vingt-cinq par cœur', requirement: 'Maîtriser vingt-cinq versets', unlock: 'Papier minuit' },
+  'verses-50': { name: 'Cinquante par cœur', requirement: 'Maîtriser cinquante versets' },
+  'verses-100': { name: 'Cent par cœur', requirement: 'Maîtriser cent versets' },
+  'first-lesson': { name: 'Première leçon', requirement: 'Terminer une leçon' },
+  'course-life-of-christ': { name: 'La vie du Christ', requirement: 'Terminer le cours La vie du Christ' },
+  'course-parables': { name: 'Les paraboles', requirement: 'Terminer le cours Les paraboles' },
+  'course-psalms': { name: 'Psaumes pour les jours difficiles', requirement: 'Terminer Psaumes pour les jours difficiles' },
+  'course-genesis': { name: 'Au commencement', requirement: 'Terminer Genèse : Au commencement' },
+  'course-exodus': { name: 'Sortis d’Égypte', requirement: 'Terminer Exode : Sortis d’Égypte' },
+  'course-proverbs': { name: 'Sagesse de tous les jours', requirement: 'Terminer Proverbes : la sagesse pour les jours ordinaires' },
+  'course-john': { name: 'Le livre des signes', requirement: 'Terminer Jean : le livre des signes' },
+  'course-romans': { name: 'L’argument', requirement: 'Terminer Romains : l’Évangile argumenté' },
+  'course-acts': { name: 'L’Église commence', requirement: 'Terminer Actes : comment l’Église a commencé' },
+  'course-ruth': { name: 'Fidélité dans la famine', requirement: 'Terminer Ruth : fidélité dans la famine' },
+  'course-1samuel': { name: 'Choisir un roi', requirement: 'Terminer Samuel et David : choisir un roi' },
+  'course-job': { name: 'Pas de réponse', requirement: 'Terminer Job : quand il n’y a pas de réponse' },
+  'course-ecclesiastes': { name: 'Sous le soleil', requirement: 'Terminer Ecclésiaste : sous le soleil' },
+  'course-isaiah': { name: 'La consolation et le Serviteur', requirement: 'Terminer Ésaïe : la consolation et le Serviteur' },
+  'course-daniel': { name: 'La foi en exil', requirement: 'Terminer Daniel : la foi en exil' },
+  'course-jonah': { name: 'Le prophète réticent', requirement: 'Terminer Jonas : le prophète réticent' },
+  'course-matthew': { name: 'Le Sermon sur la montagne', requirement: 'Terminer Matthieu : le Sermon sur la montagne' },
+  'course-1corinthians': { name: 'Une Église difficile', requirement: 'Terminer 1 Corinthiens : une Église difficile' },
+  'course-ephesians': { name: 'La nouvelle humanité', requirement: 'Terminer Éphésiens : la grâce et la nouvelle humanité' },
+  'course-philippians': { name: 'La joie depuis une cellule', requirement: 'Terminer Philippiens : la joie depuis une prison' },
+  'course-hebrews': { name: 'De meilleures choses', requirement: 'Terminer Hébreux : de meilleures choses' },
+  'course-james': { name: 'Une foi qui agit', requirement: 'Terminer Jacques : une foi qui agit' },
+  'course-1john': { name: 'Lumière et amour', requirement: 'Terminer 1 Jean : lumière, amour et assurance' },
+  'course-revelation': { name: 'L’espérance sous la pression', requirement: 'Terminer Apocalypse : l’espérance sous la pression' },
+  'all-courses': { name: 'Tous les cours', requirement: 'Terminer tous les cours de la Classe', unlock: 'Reliure bleu nuit' },
+}
+
+/** A badge's name, requirement and unlock label in the reader's language. */
+export function badgeText(badge: Badge, lang: 'en' | 'fr'): { name: string; requirement: string; unlock?: string } {
+  const fr = lang === 'fr' ? BADGES_FR[badge.id] : undefined
+  return {
+    name: fr?.name ?? badge.name,
+    requirement: fr?.requirement ?? badge.requirement,
+    unlock: badge.unlock ? (fr?.unlock ?? badge.unlock.label) : undefined,
+  }
+}
+
+/** Every badge has French text — checked by the tests. */
+export const FRENCH_BADGE_IDS = Object.keys(BADGES_FR)

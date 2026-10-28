@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { StickyNote, Trash2, X, Download, Upload } from 'lucide-react'
 import { formatRef } from '../../services/bibleService'
 import { mergeLocalJsonArrays } from '../../services/backupLocal'
+import { useBibleLang } from '../../services/bibleLang'
 
 interface Props {
   saved: { ref: string; ts: number }[]
@@ -14,6 +15,7 @@ interface Props {
 // The read side of `marks.saved` — without it a saved verse could never be
 // found again. Entries are already stored newest-first by the save action.
 export default function SavedVerses({ saved, notes, onOpen, onRemove, onClose }: Props) {
+  const { t } = useBibleLang()
   const [busy, setBusy] = useState(false)
   const [transferMsg, setTransferMsg] = useState('')
 
@@ -33,24 +35,24 @@ export default function SavedVerses({ saved, notes, onOpen, onRemove, onClose }:
     setBusy(false)
     if (res?.cancelled) return
     setTransferMsg(res?.ok
-      ? `Saved ${res.summary.verses} verses, ${res.summary.highlights} highlights and ${res.summary.bookmarks} bookmarks.`
-      : (res?.error || 'Export failed'))
+      ? t(`Saved ${res.summary.verses} verses, ${res.summary.highlights} highlights and ${res.summary.bookmarks} bookmarks.`, `${res.summary.verses} versets, ${res.summary.highlights} surlignages et ${res.summary.bookmarks} favoris enregistrés.`)
+      : (res?.error || t('Export failed', 'L’export a échoué')))
   }
 
   const importAll = async () => {
     setBusy(true); setTransferMsg('')
     const preview = await window.electronAPI.backup.preview()
     if (preview?.cancelled) { setBusy(false); return }
-    if (!preview?.ok) { setBusy(false); setTransferMsg(preview?.error || 'Could not read that file'); return }
+    if (!preview?.ok) { setBusy(false); setTransferMsg(preview?.error || t('Could not read that file', 'Impossible de lire ce fichier')); return }
 
     const res = await window.electronAPI.backup.apply()
     setBusy(false)
-    if (!res?.ok) { setTransferMsg(res?.error || 'Import failed'); return }
+    if (!res?.ok) { setTransferMsg(res?.error || t('Import failed', 'L’import a échoué')); return }
     for (const [key, incoming] of Object.entries(res.local || {})) {
       const merged = mergeLocalJsonArrays(localStorage.getItem(key) || undefined, incoming as string)
       if (merged) localStorage.setItem(key, merged)
     }
-    setTransferMsg(`Imported ${res.summary.verses} verses and ${res.summary.bookmarks} bookmarks from ${preview.device}. Reloading…`)
+    setTransferMsg(t(`Imported ${res.summary.verses} verses and ${res.summary.bookmarks} bookmarks from ${preview.device}. Reloading…`, `${res.summary.verses} versets et ${res.summary.bookmarks} favoris importés depuis ${preview.device}. Rechargement…`))
     setTimeout(() => window.location.reload(), 1400)
   }
 
@@ -67,7 +69,7 @@ export default function SavedVerses({ saved, notes, onOpen, onRemove, onClose }:
         onClick={e => e.stopPropagation()}
       >
         <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-sm font-bold text-aihub-text">Saved verses</h3>
+          <h3 className="text-sm font-bold text-aihub-text">{t('Saved verses', 'Versets enregistrés')}</h3>
           <div className="flex items-center gap-1.5">
             {/* Right where the verses are — the same whole-app backup as
                 Settings, offered at the moment someone is looking at the thing
@@ -75,18 +77,18 @@ export default function SavedVerses({ saved, notes, onOpen, onRemove, onClose }:
             <button
               onClick={exportAll}
               disabled={busy}
-              title="Save everything (verses, highlights, notes, bookmarks) to a file you can carry to another computer"
+              title={t('Save everything (verses, highlights, notes, bookmarks) to a file you can carry to another computer', 'Tout enregistrer (versets, surlignages, notes, favoris) dans un fichier à emporter sur un autre ordinateur')}
               className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-aihub-muted hover:bg-aihub-border/30 hover:text-aihub-text disabled:opacity-50"
             >
-              <Download size={12} /> Export
+              <Download size={12} /> {t('Export', 'Exporter')}
             </button>
             <button
               onClick={importAll}
               disabled={busy}
-              title="Bring verses and bookmarks in from another computer's backup file"
+              title={t('Bring verses and bookmarks in from another computer’s backup file', 'Importer les versets et favoris depuis la sauvegarde d’un autre ordinateur')}
               className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-aihub-muted hover:bg-aihub-border/30 hover:text-aihub-text disabled:opacity-50"
             >
-              <Upload size={12} /> Import
+              <Upload size={12} /> {t('Import', 'Importer')}
             </button>
             <button onClick={onClose} className="text-aihub-muted hover:text-aihub-text"><X size={16} /></button>
           </div>
@@ -101,7 +103,7 @@ export default function SavedVerses({ saved, notes, onOpen, onRemove, onClose }:
 
         {saved.length === 0 ? (
           <p className="py-6 text-center text-xs text-aihub-muted">
-            Nothing saved yet. Select a verse and tap the bookmark to keep it here.
+            {t('Nothing saved yet. Select a verse and tap the bookmark to keep it here.', 'Rien d’enregistré pour l’instant. Sélectionnez un verset et touchez le signet pour le garder ici.')}
           </p>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -119,7 +121,7 @@ export default function SavedVerses({ saved, notes, onOpen, onRemove, onClose }:
                 </button>
                 <button
                   onClick={() => onRemove(s.ref)}
-                  title="Remove from saved"
+                  title={t('Remove from saved', 'Retirer des enregistrés')}
                   className="shrink-0 rounded-lg p-1 text-aihub-muted opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
                 >
                   <Trash2 size={13} />

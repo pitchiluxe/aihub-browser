@@ -189,6 +189,19 @@ export function splitPhrases(text: string, target = 4): string[] {
 
 // ── Building an exercise ────────────────────────────────────────────────────
 
+const INSTRUCTIONS_FR: Record<ExerciseType, string> = {
+  'choose-text':   'Lequel de ces textes est le verset ?',
+  'fill-blank':    'Il manque un mot. Lequel ?',
+  'first-letters': 'Il ne reste que les premières lettres. Dites le verset.',
+  'scramble':      'Remettez les morceaux dans l’ordre.',
+  'type-recall':   'Tapez le verset de mémoire.',
+}
+
+/** An exercise's instruction in the reader's language. */
+export function exerciseInstruction(type: ExerciseType, lang: 'en' | 'fr'): string {
+  return (lang === 'fr' ? INSTRUCTIONS_FR : INSTRUCTIONS)[type]
+}
+
 const INSTRUCTIONS: Record<ExerciseType, string> = {
   'choose-text':   'Which of these is the verse?',
   'fill-blank':    'One word is missing. What is it?',

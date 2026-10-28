@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { refKey, getTranslationMeta, type Verse } from '../../services/bibleService'
+import { useBibleLang } from '../../services/bibleLang'
 
 export const HIGHLIGHT_COLORS: Record<string, string> = {
   yellow: 'rgba(250, 204, 21, 0.38)',
@@ -48,6 +49,7 @@ interface Props {
  * font.
  */
 export default function VerseText({ showNumbers = true, bookId, chapter, verses, highlights, notes, selectedRef, onSelectVerse }: Props) {
+  const { t } = useBibleLang()
   const [expandedImage, setExpandedImage] = useState<string | null>(null)
   const kids = !!getTranslationMeta().isKids
 
@@ -99,7 +101,7 @@ export default function VerseText({ showNumbers = true, bookId, chapter, verses,
                   the verse carries a quiet marker of its own — same superscript
                   rhythm as the verse number, tinted like a highlight. */}
               {hasNote && (
-                <sup title="This verse has a note" className="mr-0.5 select-none text-aihub-accent opacity-80">&#9679;</sup>
+                <sup title={t('This verse has a note', 'Ce verset a une note')} className="mr-0.5 select-none text-aihub-accent opacity-80">&#9679;</sup>
               )}
               {isOmitted ? (
                 <span className="text-xs italic text-aihub-muted opacity-70">
@@ -120,7 +122,7 @@ export default function VerseText({ showNumbers = true, bookId, chapter, verses,
               {art && (
                 <button
                   onClick={() => setExpandedImage(art)}
-                  title="Look closer"
+                  title={t('Look closer', 'Regarder de plus près')}
                   className="mt-2 block w-full overflow-hidden rounded-2xl transition-transform hover:scale-[1.01]"
                   style={{ border: '1px solid rgba(120,90,50,0.18)', boxShadow: '0 6px 18px rgba(80,60,30,0.13)' }}
                 >
@@ -141,7 +143,7 @@ export default function VerseText({ showNumbers = true, bookId, chapter, verses,
           <div className="relative w-full max-w-3xl" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setExpandedImage(null)}
-              title="Close"
+              title={t('Close', 'Fermer')}
               className="absolute -top-11 right-0 text-white/90 transition-colors hover:text-white"
             >
               <X size={26} />

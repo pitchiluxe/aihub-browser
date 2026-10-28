@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Check, Loader2, X } from 'lucide-react'
 import { formatRef, parseRef } from '../../services/bibleService'
-import { buildExercise, checkAnswer, type Exercise } from '../../services/bibleQuiz'
+import { buildExercise, checkAnswer, exerciseInstruction, type Exercise } from '../../services/bibleQuiz'
+import { useBibleLang } from '../../services/bibleLang'
 import { distractorPool, quizVerse } from '../../services/verseText'
 import type { Box } from '../../services/bibleSrs'
 
@@ -19,6 +20,7 @@ interface Props {
 // a missed verse simply comes back tomorrow, and the drill should feel like
 // devotion rather than an exam.
 export default function DrillRunner({ queue, seed, onGrade, onDone, onQuit }: Props) {
+  const { lang, t } = useBibleLang()
   const [index, setIndex] = useState(0)
   const [exercise, setExercise] = useState<Exercise | null>(null)
   const [loading, setLoading] = useState(true)
@@ -108,7 +110,7 @@ export default function DrillRunner({ queue, seed, onGrade, onDone, onQuit }: Pr
           Verse {index + 1} of {queue.length}
         </div>
         <button onClick={onQuit} className="rounded-lg px-2 py-1 text-[11px] opacity-55 hover:opacity-100">
-          Finish later
+          {t('Finish later', 'Finir plus tard')}
         </button>
       </div>
 
@@ -122,12 +124,12 @@ export default function DrillRunner({ queue, seed, onGrade, onDone, onQuit }: Pr
 
         {loading || !exercise ? (
           <div className="flex items-center gap-2 py-10 text-sm opacity-60">
-            <Loader2 size={14} className="animate-spin" /> Loading the verse…
+            <Loader2 size={14} className="animate-spin" /> {t('Loading the verse…', 'Chargement du verset…')}
           </div>
         ) : (
           <>
             <div className="mb-1 text-sm font-bold" style={{ color: '#e6c86e' }}>{formatRef(exercise.ref)}</div>
-            <div className="mb-5 text-[13px] opacity-65">{exercise.instruction}</div>
+            <div className="mb-5 text-[13px] opacity-65">{exerciseInstruction(exercise.type, lang)}</div>
 
             {exercise.type === 'choose-text' && (
               <div className="flex flex-col gap-2">
@@ -167,7 +169,7 @@ export default function DrillRunner({ queue, seed, onGrade, onDone, onQuit }: Pr
                   value={typed}
                   onChange={e => setTyped(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') (verdict === null ? submit() : next()) }}
-                  placeholder="The missing word…"
+                  placeholder={t('The missing word…', 'Le mot manquant…')}
                   disabled={verdict !== null}
                   autoFocus
                   className="w-full rounded-xl px-3.5 py-2.5 text-sm outline-none"
@@ -188,7 +190,7 @@ export default function DrillRunner({ queue, seed, onGrade, onDone, onQuit }: Pr
                   value={typed}
                   onChange={e => setTyped(e.target.value)}
                   rows={4}
-                  placeholder="Type it out…"
+                  placeholder={t('Type it out…', 'Tapez-le…')}
                   disabled={verdict !== null}
                   autoFocus
                   className="w-full resize-none rounded-xl px-3.5 py-2.5 text-sm outline-none"
@@ -223,7 +225,7 @@ export default function DrillRunner({ queue, seed, onGrade, onDone, onQuit }: Pr
                 }}>
                 <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold"
                   style={{ color: verdict ? '#34d399' : '#e6c86e' }}>
-                  {verdict ? <><Check size={13} /> That is it</> : <><X size={13} /> Not quite — it comes back tomorrow</>}
+                  {verdict ? <><Check size={13} /> {t('That is it', 'C’est bien ça')}</> : <><X size={13} /> {t('Not quite — it comes back tomorrow', 'Pas tout à fait — il reviendra demain')}</>}
                 </div>
                 <p className="selectable-text text-[13px] leading-relaxed" style={{ fontFamily: 'Georgia, serif', color: 'rgb(var(--ds-text-2))' }}>
                   {exercise.fullText}
@@ -236,13 +238,13 @@ export default function DrillRunner({ queue, seed, onGrade, onDone, onQuit }: Pr
                 <button onClick={submit} disabled={!canSubmit}
                   className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-35"
                   style={{ background: 'rgba(230,200,110,0.18)', border: '1px solid rgba(230,200,110,0.35)', color: '#e6c86e' }}>
-                  Check
+                  {t('Check', 'Vérifier')}
                 </button>
               ) : (
                 <button onClick={() => next()} autoFocus
                   className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold"
                   style={{ background: 'rgba(230,200,110,0.18)', border: '1px solid rgba(230,200,110,0.35)', color: '#e6c86e' }}>
-                  {index + 1 >= queue.length ? 'Finish' : 'Next'} <ArrowRight size={13} />
+                  {index + 1 >= queue.length ? t('Finish', 'Terminer') : t('Next', 'Suivant')} <ArrowRight size={13} />
                 </button>
               )}
             </div>

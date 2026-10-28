@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useBibleLang } from '../../services/bibleLang'
 
 export type CoverStyle = 'oxblood' | 'forest' | 'midnight'
 
@@ -33,6 +34,7 @@ const SWING_MS = 900
 // Everything is drawn in CSS — no image asset — so it stays crisp at any size
 // and costs nothing to ship.
 export default function BookCover({ onOpen, subtitle, cover = 'oxblood' }: Props) {
+  const { t } = useBibleLang()
   const [opening, setOpening] = useState(false)
   // The book settles onto the table on first paint rather than being there
   // already — a short entrance is what makes it read as a real object arriving
@@ -98,7 +100,7 @@ export default function BookCover({ onOpen, subtitle, cover = 'oxblood' }: Props
         role="button"
         tabIndex={0}
         onClick={open}
-        aria-label="Open the Bible"
+        aria-label={t('Open the Bible', 'Ouvrir la Bible')}
         // Centred rather than pinned to the right half: a closed book sits on
         // the table in the middle of the space it will open into, and the board
         // still hinges on its own left edge exactly where the spine will be.
@@ -182,7 +184,7 @@ export default function BookCover({ onOpen, subtitle, cover = 'oxblood' }: Props
               textShadow: '0 1px 0 rgba(0,0,0,0.4)',
             }}
           >
-            HOLY<br />BIBLE
+            {t('HOLY', 'SAINTE')}<br />BIBLE
           </div>
 
           <div className="my-5" style={{
@@ -231,7 +233,7 @@ export default function BookCover({ onOpen, subtitle, cover = 'oxblood' }: Props
           opacity: opening ? 0 : 1, transition: 'opacity 200ms linear',
         }}
       >
-        {subtitle || 'Click to open'}
+        {subtitle || t('Click to open', 'Cliquez pour ouvrir')}
       </div>
      </div>
     </div>

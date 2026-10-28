@@ -117,14 +117,51 @@ async function main() {
   await version.selectOption('LSG', { timeout: 15000 })
   await win.waitForTimeout(1500)
   t = Date.now()
-  await win.locator('button[title="Read this aloud"]:visible').first().click()
-  await win.locator('button', { hasText: /^\s*Stop\s*$/ }).first().waitFor({ timeout: 60000 })
+  await win.locator('button[data-listen="idle"]:visible').first().click()
+  await win.locator('button[data-listen="playing"]:visible').first().waitFor({ timeout: 60000 })
   console.log('LSG main reader Listen → playing after', (Date.now() - t) + 'ms')
   await win.waitForTimeout(3000)
   const frenchSystem = await win.evaluate(() => window.__systemUtterances)
   console.log('LSG utterances sent to the system voice:', frenchSystem)
   if (frenchSystem !== 0) throw new Error('French reading fell back to the robotic system voice')
-  await win.locator('button', { hasText: /^\s*Stop\s*$/ }).first().click()
+  await win.locator('button[data-listen="playing"]:visible').first().click()
+
+  // ── One language: with Louis Segond open, no English in the Bible screens ──
+  // Words from the Bible's own interface that must not survive in French.
+  const ENGLISH = ['Read it', 'Listen', 'Monthly reading', 'Reading plans', 'Saved', 'Highlighted',
+    'Today', 'Classroom', 'Progress', 'Verse for today', 'Meditate', 'Learn by heart', 'Search',
+    'Study', 'Graph', 'Ask', 'Mark', 'days', 'Finding it', 'courses', 'lessons', 'Badges',
+    'Nothing', 'verse for the month', 'Previous', 'Next', 'Generate', 'Drill', 'Known by heart']
+  const englishOnScreen = () => win.evaluate(words => {
+    const pages = [...document.querySelectorAll('.page-enter, .bg-aihub-bg')].filter(e => e.getBoundingClientRect().width > 0)
+    const text = pages.map(p => p.innerText).join('\n')
+    return words.filter(w => new RegExp(`(^|[^\\p{L}])${w}([^\\p{L}]|$)`, 'u').test(text))
+  }, ENGLISH)
+  const report = async where => {
+    const found = await englishOnScreen()
+    console.log(`${where}: ${found.length ? 'ENGLISH LEFT → ' + found.join(', ') : 'all French'}`)
+    return found.length
+  }
+  let leftovers = await report('reader (Louis Segond)')
+  const studyEntry = () => win.evaluate(() => {
+    const el = [...document.querySelectorAll('span')].find(e => e.textContent === 'Bible Study' && e.getBoundingClientRect().left < 200 && e.getBoundingClientRect().width > 0)
+    if (el) (el.closest('button') || el).click()
+    return !!el
+  })
+  if (!(await studyEntry())) { await win.mouse.click(26, 66); await win.waitForTimeout(500); await studyEntry() }
+  await win.waitForTimeout(1500)
+  for (const room of ['Aujourd’hui', 'Étude', 'Classe', 'Labo', 'Progrès']) {
+    await win.locator('button:visible', { hasText: room }).first().click()
+    await win.waitForTimeout(1200)
+    leftovers += await report(`study: ${room}`)
+    if (room === 'Étude') {
+      await win.screenshot({ path: path.join(SHOTS, 'study-french.png') })
+      await win.locator('button:visible', { hasText: 'Plans de lecture' }).first().click()
+      await win.waitForTimeout(800)
+      leftovers += await report('study: plans de lecture')
+    }
+  }
+  if (leftovers) throw new Error('English left in the French Bible')
 
   await app.close()
   fs.rmSync(ISOLATED, { recursive: true, force: true })

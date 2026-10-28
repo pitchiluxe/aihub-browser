@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, BookOpen, Check, FlaskConical, Loader2, Sparkles } from 'lucide-react'
-import type { Course, Lesson, Passage } from '../../services/bibleCourses'
+import { passageLabel, type Course, type Lesson, type Passage } from '../../services/bibleCourses'
+import { useBibleLang } from '../../services/bibleLang'
 import { formatRef, parseRef } from '../../services/bibleService'
 import { buildExercise, checkAnswer, type Exercise } from '../../services/bibleQuiz'
 import { distractorPool, passageVerses, quizVerses } from '../../services/verseText'
@@ -30,6 +31,7 @@ export default function LessonView({
   course, lesson, completed, inLab, onBack, onComplete, onAddToLab, onOpenReader, onReadPassages, onAskAI,
 }: Props) {
   const [settings] = useBibleSettings()
+  const { lang, t } = useBibleLang()
   const [stage, setStage] = useState<Stage>('read')
   const [passages, setPassages] = useState<Record<string, { ref: string; v: number; t: string }[]>>({})
   const [quiz, setQuiz] = useState<Exercise[] | null>(null)
@@ -82,7 +84,7 @@ export default function LessonView({
       </button>
 
       <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: course.accent }}>
-        {lesson.subtitle || `Lesson ${lesson.id}`}
+        {lesson.subtitle || t(`Lesson ${lesson.id}`, `Leçon ${lesson.id}`)}
       </div>
       <h1 className="mb-6 text-2xl font-bold" style={{ color: 'rgb(var(--ds-text-1, var(--ds-text-2)))' }}>
         {lesson.title}
@@ -96,7 +98,7 @@ export default function LessonView({
             ))}
           </div>
 
-          <div className="mt-8 mb-2 text-[11px] font-bold uppercase tracking-[0.16em] opacity-45">Read</div>
+          <div className="mt-8 mb-2 text-[11px] font-bold uppercase tracking-[0.16em] opacity-45">{t('Read', 'Lire')}</div>
           <div className="flex flex-col gap-4">
             {/* Scripture in a lesson is scripture, so it gets the reader's own
                 page — same paper, same serif column, same font-scale and
@@ -108,19 +110,19 @@ export default function LessonView({
                 style={{ border: '1px solid var(--ds-border-sm)' }}>
                 <div className="flex items-center justify-between px-4 py-2"
                   style={{ background: 'var(--ds-glass-xs)' }}>
-                  <div className="text-xs font-bold" style={{ color: course.accent }}>{p.label}</div>
+                  <div className="text-xs font-bold" style={{ color: course.accent }}>{passageLabel(p, lang)}</div>
                   <div className="flex gap-1.5">
                     <button onClick={() => onReadPassages(lesson.passages, null, pi)}
-                      title="Read it on the page"
+                      title={t('Read it on the page', 'Lire sur la page')}
                       className="flex items-center gap-1 rounded-lg px-2 py-1 text-[10.5px] font-semibold opacity-60 hover:opacity-100"
                       style={{ border: '1px solid var(--ds-border-sm)' }}>
-                      <BookOpen size={11} /> Read it
+                      <BookOpen size={11} /> {t('Read it', 'Lire')}
                     </button>
                     {onAskAI && (
-                      <button onClick={() => onAskAI(`Explain ${p.label} — what does it mean and what was going on when it was written?`)}
+                      <button onClick={() => onAskAI(t(`Explain ${passageLabel(p, lang)} — what does it mean and what was going on when it was written?`, `Explique ${passageLabel(p, lang)} — que veut dire ce passage, et que se passait-il quand il a été écrit ?`))}
                         className="flex items-center gap-1 rounded-lg px-2 py-1 text-[10.5px] font-semibold opacity-60 hover:opacity-100"
                         style={{ border: '1px solid var(--ds-border-sm)' }}>
-                        <Sparkles size={11} /> Explain
+                        <Sparkles size={11} /> {t('Explain', 'Expliquer')}
                       </button>
                     )}
                   </div>
@@ -152,7 +154,7 @@ export default function LessonView({
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 py-3 text-xs" style={{ color: 'rgba(80,58,30,0.7)' }}>
-                      <Loader2 size={12} className="animate-spin" /> Loading the passage…
+                      <Loader2 size={12} className="animate-spin" /> {t('Loading the passage…', 'Chargement du passage…')}
                     </div>
                   )}
                 </div>
@@ -163,7 +165,7 @@ export default function LessonView({
           <button onClick={startQuiz}
             className="mt-8 w-full rounded-2xl py-3.5 text-sm font-bold"
             style={{ background: `${course.accent}22`, border: `1px solid ${course.accent}45`, color: course.accent }}>
-            {completed ? 'Take the quiz again' : 'I have read it — take the quiz'}
+            {completed ? t('Take the quiz again', 'Refaire le quiz') : t('I have read it — take the quiz', 'Je l’ai lu — faire le quiz')}
           </button>
         </>
       )}
@@ -172,19 +174,19 @@ export default function LessonView({
         <>
           {!quiz ? (
             <div className="flex items-center gap-2 py-8 text-sm opacity-60">
-              <Loader2 size={14} className="animate-spin" /> Building the quiz from this lesson's verses…
+              <Loader2 size={14} className="animate-spin" /> {t('Building the quiz from this lesson’s verses…', 'Préparation du quiz à partir des versets de la leçon…')}
             </div>
           ) : (
             <>
               <div className="mb-5 text-[13px] opacity-60">
                 {revealed
-                  ? `${score} of ${quiz.length} right.`
-                  : 'Which verse is which? Every option is a real verse from the same book.'}
+                  ? t(`${score} of ${quiz.length} right.`, `${score} sur ${quiz.length} justes.`)
+                  : t('Which verse is which? Every option is a real verse from the same book.', 'Quel verset est lequel ? Chaque choix est un vrai verset du même livre.')}
               </div>
               <div className="flex flex-col gap-6">
                 {quiz.map((ex, qi) => (
                   <div key={ex.ref}>
-                    <button onClick={() => onOpenReader(ex.ref)} title="Read it on the page"
+                    <button onClick={() => onOpenReader(ex.ref)} title={t('Read it on the page', 'Lire sur la page')}
                       className="mb-2 text-xs font-bold" style={{ color: course.accent }}>
                       {formatRef(ex.ref)}
                     </button>
@@ -222,31 +224,31 @@ export default function LessonView({
                   disabled={answers.some(a => a < 0)}
                   className="mt-8 w-full rounded-2xl py-3.5 text-sm font-bold disabled:opacity-35"
                   style={{ background: `${course.accent}22`, border: `1px solid ${course.accent}45`, color: course.accent }}>
-                  Finish the lesson
+                  {t('Finish the lesson', 'Terminer la leçon')}
                 </button>
               ) : (
                 <div className="mt-8 rounded-2xl p-5"
                   style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.22)' }}>
                   <div className="mb-2 flex items-center gap-2 text-sm font-bold" style={{ color: '#34d399' }}>
-                    <Check size={15} /> Lesson finished
+                    <Check size={15} /> {t('Lesson finished', 'Leçon terminée')}
                   </div>
                   <p className="mb-4 text-[12.5px] leading-relaxed opacity-70">
                     {memoryNotInLab.length
-                      ? `This lesson's verses can go into the Lab, where they will come back on a schedule until you know them.`
-                      : `Its verses are already in the Lab.`}
+                      ? t('This lesson’s verses can go into the Lab, where they will come back on a schedule until you know them.', 'Les versets de cette leçon peuvent aller dans le Labo, où ils reviendront régulièrement jusqu’à ce que vous les sachiez.')
+                      : t('Its verses are already in the Lab.', 'Ses versets sont déjà dans le Labo.')}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {memoryNotInLab.length > 0 && (
                       <button onClick={() => onAddToLab(memoryNotInLab)}
                         className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold"
                         style={{ background: 'rgba(230,200,110,0.16)', border: '1px solid rgba(230,200,110,0.32)', color: '#e6c86e' }}>
-                        <FlaskConical size={13} /> Add {memoryNotInLab.length} verse{memoryNotInLab.length === 1 ? '' : 's'} to the Lab
+                        <FlaskConical size={13} /> {lang === 'fr' ? `Ajouter ${memoryNotInLab.length} verset${memoryNotInLab.length <= 1 ? '' : 's'} au Labo` : `Add ${memoryNotInLab.length} verse${memoryNotInLab.length === 1 ? '' : 's'} to the Lab`}
                       </button>
                     )}
                     <button onClick={onBack}
                       className="rounded-xl px-3.5 py-2 text-xs font-semibold"
                       style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
-                      Back to the course
+                      {t('Back to the course', 'Retour au cours')}
                     </button>
                   </div>
                 </div>

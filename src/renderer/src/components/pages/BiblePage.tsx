@@ -15,6 +15,7 @@ import VerseGraph from '../bible/VerseGraph'
 import ListenButton from '../bible/ListenButton'
 import GospelRoom from '../bible/GospelRoom'
 import { useBibleSettings } from '../../services/bibleSettings'
+import { useBibleLang } from '../../services/bibleLang'
 import { onBibleVerseRequest, takeBibleVerseRequest } from '../../services/bibleNavigation'
 import { useBrowserStore } from '../../store/browserStore'
 
@@ -66,6 +67,7 @@ export default function BiblePage() {
   const [graphOpen, setGraphOpen] = useState(false)
   const [gospelOpen, setGospelOpen] = useState(false)
   const [bibleSettings] = useBibleSettings()
+  const { t } = useBibleLang()
 
   // Highlights, saved verses, notes and reading position. `marks` drives
   // rendering; `marksRef` mirrors it synchronously and is what every write
@@ -587,7 +589,7 @@ export default function BiblePage() {
           // Only offer to "continue" once the saved position has actually been
           // restored — before that, `chapter` is still the default and the
           // cover would promise a page the reader never left off on.
-          subtitle={restored && marks.lastRead && book ? `Continue — ${book.name} ${chapter}` : 'Click to open'}
+          subtitle={restored && marks.lastRead && book ? t(`Continue — ${book.name} ${chapter}`, `Reprendre — ${book.name} ${chapter}`) : t('Click to open', 'Cliquez pour ouvrir')}
           cover={bibleSettings.cover}
         />
       </div>
@@ -606,7 +608,8 @@ export default function BiblePage() {
           value={bibleSettings.translation}
           onChange={e => setTranslation(e.target.value as TranslationId)}
           disabled={!!turning}
-          title="Bible version"
+          title={t('Bible version', 'Version de la Bible')}
+          data-testid="bible-version"
           className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-40"
         >
           {TRANSLATIONS.map(t => (
@@ -637,11 +640,11 @@ export default function BiblePage() {
           value={chapter}
           onChange={e => jumpToChapter(Number(e.target.value))}
           disabled={!!turning}
-          title="Jump to chapter"
+          title={t('Jump to chapter', 'Aller au chapitre')}
           className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-40"
         >
           {Array.from({ length: lastChapter }, (_, i) => i + 1).map(c => (
-            <option key={c} value={c}>Ch {c}</option>
+            <option key={c} value={c}>{t('Ch', 'Ch.')} {c}</option>
           ))}
         </select>
         <select
@@ -654,10 +657,10 @@ export default function BiblePage() {
           })()}
           onChange={e => jumpToVerse(Number(e.target.value))}
           disabled={!!turning || chapterVerses(chapter).length === 0}
-          title="Jump to verse"
+          title={t('Jump to verse', 'Aller au verset')}
           className="bg-aihub-surface border border-aihub-border/40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-40"
         >
-          <option value="" disabled>Verse</option>
+          <option value="" disabled>{t('Verse', 'Verset')}</option>
           {chapterVerses(chapter).map(v => (
             <option key={v.v} value={v.v}>v{v.v}</option>
           ))}
@@ -666,18 +669,18 @@ export default function BiblePage() {
           onClick={() => startTurn('prev')}
           disabled={!canTurn('prev') || !!turning}
           className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm disabled:opacity-40"
-        >Prev</button>
+        >{t('Prev', 'Préc.')}</button>
         <button
           onClick={() => startTurn('next')}
           disabled={!canTurn('next') || !!turning}
           className="px-3 py-1.5 rounded-lg bg-aihub-surface border border-aihub-border/40 text-sm disabled:opacity-40"
-        >Next</button>
+        >{t('Next', 'Suiv.')}</button>
         {/* Reads the spread that is open — the selected verse if one is
             chosen, otherwise both pages, in order. */}
         <div className="ml-auto">
           <ListenButton
             variant="icon"
-            label="Listen"
+            label={t('Listen', 'Écouter')}
             text={selectedRef
               ? selectedVerseText
               : [spreadBase, spreadBase + 1]
@@ -688,31 +691,31 @@ export default function BiblePage() {
         </div>
         <button
           onClick={() => setSearchOpen(true)}
-          title="Search the Bible (Ctrl+F)"
+          title={t('Search the Bible (Ctrl+F)', 'Rechercher dans la Bible (Ctrl+F)')}
           className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
         >
-          <Search size={14} /> Search
+          <Search size={14} /> {t('Search', 'Rechercher')}
         </button>
         <button
           onClick={() => useBrowserStore.getState().focusOrOpenPage('aihub://study', 'study')}
-          title="Bible Study — daily verse, courses and memorisation"
+          title={t('Bible Study — daily verse, courses and memorisation', 'Étude biblique — verset du jour, cours et mémorisation')}
           className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
         >
-          <GraduationCap size={14} /> Study
+          <GraduationCap size={14} /> {t('Study', 'Étude')}
         </button>
         <button
           onClick={() => setGospelOpen(true)}
-          title="Gospel — music to read to"
+          title={t('Gospel — music to read to', 'Gospel — de la musique pour accompagner la lecture')}
           className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
         >
           <Music size={14} /> Gospel
         </button>
         <button
           onClick={() => setGraphOpen(true)}
-          title="Verse constellation — your saved verses as a graph"
+          title={t('Verse constellation — your saved verses as a graph', 'Constellation — vos versets enregistrés en graphe')}
           className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
         >
-          <Share2 size={14} /> Graph
+          <Share2 size={14} /> {t('Graph', 'Graphe')}
           {marks.saved.length > 0 && (
             <span className="rounded-full bg-aihub-accent/20 px-1.5 text-[10px] font-bold text-aihub-accent">
               {marks.saved.length}
@@ -721,20 +724,20 @@ export default function BiblePage() {
         </button>
         <button
           onClick={() => setAiOpen(o => !o)}
-          title="Study with AI"
+          title={t('Study with AI', 'Étudier avec l’IA')}
           className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium"
           style={aiOpen
             ? { background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }
             : { background: 'rgb(var(--ds-accent) / 0.14)', color: 'rgb(var(--ds-accent-soft))' }}
         >
-          <Sparkles size={14} /> Ask
+          <Sparkles size={14} /> {t('Ask', 'Demander')}
         </button>
         <button
           onClick={() => setSavedOpen(true)}
-          title="Saved verses"
+          title={t('Saved verses', 'Versets enregistrés')}
           className="flex items-center gap-1.5 rounded-lg border border-aihub-border/40 bg-aihub-surface px-3 py-1.5 text-sm"
         >
-          <Bookmark size={14} /> Saved
+          <Bookmark size={14} /> {t('Saved', 'Enregistrés')}
           {marks.saved.length > 0 && (
             <span className="rounded-full bg-aihub-accent/20 px-1.5 text-[10px] font-bold text-aihub-accent">
               {marks.saved.length}

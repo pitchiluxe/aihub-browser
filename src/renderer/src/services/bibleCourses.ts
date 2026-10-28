@@ -7,6 +7,8 @@
 
 import coursesAsset from '../assets/study/courses.json'
 import plansAsset from '../assets/study/plans.json'
+import coursesFrAsset from '../assets/study/courses.fr.json'
+import { getBookMeta } from './bibleService'
 
 export interface Passage {
   bookId: string
@@ -234,3 +236,78 @@ export function lessonsCompleted(lessons: LessonBook | undefined): number {
 export function courseMemoryVerses(course: Course): string[] {
   return Array.from(new Set(course.lessons.flatMap(l => l.memory)))
 }
+
+// ── Language ─────────────────────────────────────────────────────────────
+
+const PLAN_WORDS_FR: Record<string, { title: string; blurb: string }> = {
+  'john-21': {
+    title: 'Jean en 21 jours',
+    blurb: 'Un chapitre par jour à travers le quatrième Évangile — le chemin complet le plus court pour entrer dans l’histoire.',
+  },
+  'proverbs-31': {
+    title: 'Un mois de Proverbes',
+    blurb: 'Un chapitre des Proverbes pour chaque jour du mois. Concret, direct, et facile à tenir.',
+  },
+  'psalms-comfort': {
+    title: 'Quatorze psaumes pour les semaines difficiles',
+    blurb: 'Deux semaines de psaumes écrits par des gens qui passaient une journée encore plus dure que la vôtre.',
+  },
+  'sermon-on-the-mount': {
+    title: 'Le Sermon sur la montagne en 7 jours',
+    blurb: 'Matthieu 5 à 7, lu par petites séances plutôt que d’une traite.',
+  },
+}
+
+/** A reading plan's title and blurb in the reader's language. */
+export function planText(plan: ReadingPlan, lang: 'en' | 'fr'): { title: string; blurb: string } {
+  return (lang === 'fr' && PLAN_WORDS_FR[plan.id]) || { title: plan.title, blurb: plan.blurb }
+}
+
+/** "Day 3" → "Jour 3". */
+export function dayText(label: string, lang: 'en' | 'fr'): string {
+  return lang === 'fr' ? label.replace(/^Day\b/, 'Jour') : label
+}
+
+/**
+ * A passage's label in the open version's book names — "Luke 2:1–20" reads
+ * "Luc 2:1–20" in Louis Segond. The stored label is English; it is only used
+ * to tell a verse range ("Luke 2:1–20") from a whole chapter ("John 1").
+ */
+export function passageLabel(p: Passage, lang: 'en' | 'fr'): string {
+  const meta = getBookMeta(p.bookId)
+  if (!meta) return p.label
+  const name = p.bookId === 'PSA' ? (lang === 'fr' ? 'Psaume' : 'Psalm') : meta.name
+  if (!p.label.includes(':')) return `${name} ${p.chapter}`
+  return p.from === p.to ? `${name} ${p.chapter}:${p.from}` : `${name} ${p.chapter}:${p.from}–${p.to}`
+}
+
+/** Plans whose words are translated — checked by the tests against the asset. */
+export const FRENCH_PLAN_IDS = Object.keys(PLAN_WORDS_FR)
+
+/** French for a course: courses.fr.json, keyed by course id, then lesson id. */
+interface LessonFr { title: string; subtitle?: string; teaching: string[] }
+interface CourseFr { title: string; blurb: string; lessons: Record<string, LessonFr> }
+const COURSES_FR = coursesFrAsset as unknown as Record<string, CourseFr>
+
+/**
+ * A course in the reader's language: its French title, blurb and lesson text
+ * from courses.fr.json when it has them, the English otherwise. Passages and
+ * memory verses are references, the same in every language — the open
+ * version supplies their words.
+ */
+export function localCourse(course: Course, lang: 'en' | 'fr'): Course {
+  const fr = lang === 'fr' ? COURSES_FR[course.id] : undefined
+  if (!fr) return course
+  return {
+    ...course,
+    title: fr.title,
+    blurb: fr.blurb,
+    lessons: course.lessons.map(lesson => {
+      const lf = fr.lessons[lesson.id]
+      return lf ? { ...lesson, title: lf.title, subtitle: lf.subtitle ?? lesson.subtitle, teaching: lf.teaching } : lesson
+    }),
+  }
+}
+
+/** Course ids with a French translation — checked by the tests. */
+export const FRENCH_COURSE_IDS = Object.keys(COURSES_FR)

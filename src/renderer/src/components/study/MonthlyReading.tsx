@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { BookOpen, CalendarDays, Check, ChevronLeft, ChevronRight, Loader2, RotateCcw, Sparkles } from 'lucide-react'
 import { formatRef, getTranslationMeta, parseRef } from '../../services/bibleService'
-import { MONTH_NAMES, monthlyPlan, type MonthDay } from '../../services/bibleMonthlyPlan'
+import { monthlyPlan, monthName, type MonthDay } from '../../services/bibleMonthlyPlan'
+import { plural, useBibleLang } from '../../services/bibleLang'
 import { verseText } from '../../services/verseText'
 import type { Passage } from '../../services/bibleCourses'
 import type { PlanProgress } from '../../services/bibleStudyStore'
@@ -28,12 +29,13 @@ function rangeLabel(refs: string[]): string {
 // every day of the month. Opens on the current month; the arrows step to the
 // next one so the reader can see what is coming before it starts.
 export default function MonthlyReading({ plans, onAdvancePlan, onReadPassages, onOpenReader }: Props) {
+  const { lang, t } = useBibleLang()
   const now = new Date()
   const [offset, setOffset] = useState(0)
   const target = new Date(now.getFullYear(), now.getMonth() + offset, 1)
   const year = target.getFullYear()
   const month = target.getMonth() + 1
-  const plan = useMemo(() => monthlyPlan(year, month), [year, month])
+  const plan = useMemo(() => monthlyPlan(year, month, lang), [year, month, lang])
   const { theme, days } = plan
 
   const isCurrent = offset === 0
@@ -59,12 +61,13 @@ export default function MonthlyReading({ plans, onAdvancePlan, onReadPassages, o
 
   useEffect(() => { setViewing(null) }, [plan.id])
 
-  const monthLabel = `${MONTH_NAMES[month - 1]} ${year}`
+  const name = monthName(month, lang)
+  const monthLabel = `${name} ${year}`
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <button onClick={() => setOffset(o => o - 1)} title="Previous month"
+        <button onClick={() => setOffset(o => o - 1)} title={t('Previous month', 'Mois précédent')}
           className="rounded-lg p-1.5 opacity-50 hover:opacity-100"><ChevronLeft size={15} /></button>
         <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em]"
           style={{ color: 'rgb(var(--ds-text-4))' }}>
@@ -73,11 +76,12 @@ export default function MonthlyReading({ plans, onAdvancePlan, onReadPassages, o
             <button onClick={() => setOffset(0)}
               className="ml-1 rounded-full px-2 py-0.5 text-[10px] normal-case tracking-normal"
               style={{ background: 'var(--ds-glass-sm)', color: 'rgb(var(--ds-text-3))' }}>
-              back to this month
+              {t('back to this month', 'revenir à ce mois-ci')}
             </button>
           )}
         </div>
-        <button onClick={() => setOffset(o => o + 1)} title="Next month"
+        <button onClick={() => setOffset(o => o + 1)} title={t('Next month', 'Mois suivant')}
+          data-testid="next-month"
           className="rounded-lg p-1.5 opacity-50 hover:opacity-100"><ChevronRight size={15} /></button>
       </div>
 
@@ -95,14 +99,14 @@ export default function MonthlyReading({ plans, onAdvancePlan, onReadPassages, o
             <div className="mt-1 text-[12px] opacity-60">{theme.tagline}</div>
           </div>
           {done > 0 && (
-            <button onClick={() => onAdvancePlan(plan.id, 0)} title="Start the month over"
+            <button onClick={() => onAdvancePlan(plan.id, 0)} title={t('Start the month over', 'Recommencer le mois')}
               className="shrink-0 rounded-lg p-1.5 opacity-40 hover:opacity-90"><RotateCcw size={12} /></button>
           )}
         </div>
 
         <div className="mt-5">
           {verse === null ? (
-            <div className="flex items-center gap-2 text-sm opacity-60"><Loader2 size={14} className="animate-spin" /> Finding it…</div>
+            <div className="flex items-center gap-2 text-sm opacity-60"><Loader2 size={14} className="animate-spin" /> {t('Finding it…', 'Recherche…')}</div>
           ) : (
             <>
               <blockquote className="selectable-text"
@@ -110,15 +114,15 @@ export default function MonthlyReading({ plans, onAdvancePlan, onReadPassages, o
                   fontFamily: 'Georgia, "Iowan Old Style", serif',
                   fontSize: 'clamp(16px, 2vw, 19px)', lineHeight: 1.7, color: 'rgb(var(--ds-text-2))',
                 }}>
-                {verse || 'That verse could not be found in this translation.'}
+                {verse || t('That verse could not be found in this translation.', 'Ce verset est introuvable dans cette version.')}
               </blockquote>
               <div className="mt-2 flex flex-wrap items-center gap-3">
                 <button onClick={() => onOpenReader(theme.verses[0])}
                   className="text-sm font-semibold" style={{ color: GOLD }}>
                   {rangeLabel(theme.verses)}
                 </button>
-                <span className="text-[11px] opacity-50">{getTranslationMeta().name} · verse for the month</span>
-                <ListenButton text={verse} reference={rangeLabel(theme.verses)} label="Listen" />
+                <span className="text-[11px] opacity-50">{getTranslationMeta().name} · {t('verse for the month', 'verset du mois')}</span>
+                <ListenButton text={verse} reference={rangeLabel(theme.verses)} label={t('Listen', 'Écouter')} />
               </div>
             </>
           )}
@@ -130,7 +134,7 @@ export default function MonthlyReading({ plans, onAdvancePlan, onReadPassages, o
           <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--ds-glass-md)' }}>
             <div className="h-full rounded-full transition-all" style={{ width: `${(done / days.length) * 100}%`, background: GOLD }} />
           </div>
-          <span className="text-[10.5px] font-semibold opacity-55">{done}/{days.length} days</span>
+          <span className="text-[10.5px] font-semibold opacity-55">{done}/{days.length} {t('days', 'jours')}</span>
         </div>
       </div>
 
@@ -138,19 +142,19 @@ export default function MonthlyReading({ plans, onAdvancePlan, onReadPassages, o
       {finished && viewing == null ? (
         <div className="flex items-center gap-2 rounded-2xl px-5 py-4 text-[13px] font-semibold"
           style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.28)', color: '#34d399' }}>
-          <Check size={15} /> You read all of {MONTH_NAMES[month - 1]}. Well done, good and faithful reader.
+          <Check size={15} /> {t(`You read all of ${name}. Well done, good and faithful reader.`, `Vous avez lu tout le mois de ${name}. C’est bien, bon et fidèle lecteur.`)}
         </div>
       ) : shown && (
         <div className="rounded-2xl p-5" style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)' }}>
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: GOLD }}>
-              {MONTH_NAMES[month - 1]} {shown.date}
-              {isCurrent && shown.date === todayDate && <span className="ml-2 normal-case tracking-normal opacity-70">· today</span>}
+              {lang === 'fr' ? `${shown.date} ${name}` : `${name} ${shown.date}`}
+              {isCurrent && shown.date === todayDate && <span className="ml-2 normal-case tracking-normal opacity-70">· {t('today', 'aujourd’hui')}</span>}
             </div>
             {behind > 0 && viewing == null && (
               <span className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
                 style={{ background: 'rgba(251,146,60,0.12)', color: '#fb923c' }}>
-                {behind} day{behind === 1 ? '' : 's'} to catch up
+                {lang === 'fr' ? `${plural(lang, behind, ['', ''], ['jour', 'jours'])} à rattraper` : `${plural(lang, behind, ['day', 'days'], ['', ''])} to catch up`}
               </span>
             )}
           </div>
@@ -162,19 +166,19 @@ export default function MonthlyReading({ plans, onAdvancePlan, onReadPassages, o
             <button onClick={() => onReadPassages(shown.passages)}
               className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold"
               style={{ background: 'var(--ds-glass-sm)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-3))' }}>
-              <BookOpen size={13} /> Read it
+              <BookOpen size={13} /> {t('Read it', 'Lire')}
             </button>
             {shown === next && (
               <button onClick={() => onAdvancePlan(plan.id, done + 1)}
                 className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold"
                 style={{ background: 'rgba(230,200,110,0.16)', border: '1px solid rgba(230,200,110,0.32)', color: GOLD }}>
-                <Check size={13} /> Mark {MONTH_NAMES[month - 1]} {shown.date} read
+                <Check size={13} /> {t(`Mark ${name} ${shown.date} read`, `Marquer le ${shown.date} ${name} comme lu`)}
               </button>
             )}
             {viewing != null && (
               <button onClick={() => setViewing(null)}
                 className="rounded-xl px-3.5 py-2 text-xs font-semibold opacity-60 hover:opacity-100">
-                Back to my next reading
+                {t('Back to my next reading', 'Revenir à ma prochaine lecture')}
               </button>
             )}
           </div>

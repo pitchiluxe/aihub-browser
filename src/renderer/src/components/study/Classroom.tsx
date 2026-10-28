@@ -3,7 +3,9 @@ import { AlertTriangle, ArrowLeft, Check, ChevronLeft, ChevronRight, GraduationC
 import {
   addCustomCourse, courseProgress, getCourses, lessonKey, onCoursesChanged, removeCustomCourse,
   type LessonBook, type Passage,
+  localCourse, passageLabel,
 } from '../../services/bibleCourses'
+import { translator, useBibleLang } from '../../services/bibleLang'
 import { generateCourse, isGeneratedId, type VerseResolver } from '../../services/bibleCourseGen'
 import { getBook } from '../../services/bibleService'
 import { streamChat } from '../../services/streamingChat'
@@ -33,7 +35,9 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
   // Re-read on change so a freshly generated course appears without a reload.
   const [revision, setRevision] = useState(0)
   useEffect(() => onCoursesChanged(() => setRevision(r => r + 1)), [])
-  const courses = useMemo(() => getCourses(), [revision])
+  const { lang, t } = useBibleLang()
+  // In the reader's language: French titles and lessons when the asset has them.
+  const courses = useMemo(() => getCourses().map(c => localCourse(c, lang)), [revision, lang])
   const [generating, setGenerating] = useState(false)
   const [genOpen, setGenOpen] = useState(false)
   const [openCourse, setOpenCourse] = useState<string | null>(null)
@@ -83,7 +87,7 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
         setGenOpen(false)
         setPage(Math.floor(courses.length / COURSES_PER_PAGE))
       } else {
-        setGenError(res.errors || ['The course could not be generated.'])
+        setGenError(res.errors || [t('The course could not be generated.', 'Le cours n’a pas pu être créé.')])
       }
     } finally {
       setGenerating(false)
@@ -115,11 +119,11 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
     return (
       <div className="mx-auto w-full max-w-3xl">
         <button onClick={() => setOpenCourse(null)} className="mb-5 flex items-center gap-1.5 text-[11px] font-semibold opacity-55 hover:opacity-100">
-          <ArrowLeft size={12} /> All courses
+          <ArrowLeft size={12} /> {t('All courses', 'Tous les cours')}
         </button>
         <h1 className="text-2xl font-bold" style={{ color: 'rgb(var(--ds-text-1, var(--ds-text-2)))' }}>{course.title}</h1>
         <p className="mt-1 mb-5 text-[13px] opacity-60">{course.blurb}</p>
-        <ProgressBar fraction={p.fraction} accent={course.accent} label={`${p.done} of ${p.total} lessons`} />
+        <ProgressBar fraction={p.fraction} accent={course.accent} label={t(`${p.done} of ${p.total} lessons`, `${p.done} leçons sur ${p.total}`)} />
 
         <div className="mt-6 flex flex-col gap-2">
           {course.lessons.map((l, i) => {
@@ -137,7 +141,7 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-semibold" style={{ color: 'rgb(var(--ds-text-2))' }}>{l.title}</div>
-                  <div className="text-[11px] opacity-50">{l.subtitle} · {l.passages.map(p => p.label).join(' · ')}</div>
+                  <div className="text-[11px] opacity-50">{l.subtitle} · {l.passages.map(p => passageLabel(p, lang)).join(' · ')}</div>
                 </div>
               </button>
             )
@@ -151,22 +155,22 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
     <div className="mx-auto w-full max-w-6xl">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'rgb(var(--ds-text-1, var(--ds-text-2)))' }}>Classroom</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'rgb(var(--ds-text-1, var(--ds-text-2)))' }}>{t('Classroom', 'Classe')}</h1>
           <p className="mt-1 text-[13px] opacity-60">
-            Work through a course at your own pace. Every lesson is teaching text, the passages it is about,
-            and a short quiz built from the verses themselves.
+            {t('Work through a course at your own pace. Every lesson is teaching text, the passages it is about, and a short quiz built from the verses themselves.',
+              'Suivez un cours à votre rythme. Chaque leçon contient un enseignement, les passages dont il parle, et un court quiz construit à partir des versets eux-mêmes.')}
           </p>
         </div>
         <div className="flex items-center gap-3">
           {courses.length > 0 && (
             <div className="text-[11px] font-semibold opacity-45">
-              {courses.length} courses · {courses.reduce((n, c) => n + c.lessons.length, 0)} lessons
+              {courses.length} {t('courses', 'cours')} · {courses.reduce((n, c) => n + c.lessons.length, 0)} {t('lessons', 'leçons')}
             </div>
           )}
           <button onClick={() => { setGenError(null); setGenOpen(true) }}
             className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-semibold transition-all"
             style={{ background: 'rgba(167,139,250,0.14)', border: '1px solid rgba(167,139,250,0.32)', color: '#a78bfa' }}>
-            <Sparkles size={13} /> Generate a course
+            <Sparkles size={13} /> {t('Generate a course', 'Créer un cours')}
           </button>
         </div>
       </div>
@@ -193,7 +197,7 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
                 {isGeneratedId(c.id) && (
                   <span role="button" tabIndex={-1}
                     onClick={e => { e.stopPropagation(); removeCustomCourse(c.id) }}
-                    title="Delete this course"
+                    title={t('Delete this course', 'Supprimer ce cours')}
                     className="ml-auto rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100">
                     <Trash2 size={12} />
                   </span>
@@ -214,7 +218,7 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
       {pageCount > 1 && (
         <div className="mt-6 flex items-center justify-center gap-2">
           <button onClick={() => setPage(Math.max(0, current - 1))} disabled={current === 0}
-            title="Previous page"
+            title={t('Previous page', 'Page précédente')}
             className="flex h-8 w-8 items-center justify-center rounded-lg transition-opacity disabled:opacity-25"
             style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)' }}>
             <ChevronLeft size={14} />
@@ -230,7 +234,7 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
             </button>
           ))}
           <button onClick={() => setPage(Math.min(pageCount - 1, current + 1))} disabled={current === pageCount - 1}
-            title="Next page"
+            title={t('Next page', 'Page suivante')}
             className="flex h-8 w-8 items-center justify-center rounded-lg transition-opacity disabled:opacity-25"
             style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)' }}>
             <ChevronRight size={14} />
@@ -240,6 +244,7 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
 
       {genOpen && (
         <GenerateModal
+          lang={lang}
           busy={generating}
           errors={genError}
           onClose={() => setGenOpen(false)}
@@ -251,8 +256,8 @@ export default function Classroom({ lessons, inLab, onComplete, onAddToLab, onOp
         <div className="rounded-2xl px-6 py-10 text-center"
           style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)' }}>
           <Lock size={22} className="mx-auto mb-3 opacity-25" />
-          <div className="text-sm font-semibold opacity-70">No courses could be loaded</div>
-          <p className="mt-1 text-[12px] opacity-50">The course file shipped with this build could not be read.</p>
+          <div className="text-sm font-semibold opacity-70">{t('No courses could be loaded', 'Aucun cours n’a pu être chargé')}</div>
+          <p className="mt-1 text-[12px] opacity-50">{t('The course file shipped with this build could not be read.', 'Le fichier de cours fourni avec cette version est illisible.')}</p>
         </div>
       )}
     </div>
@@ -275,6 +280,17 @@ function ProgressBar({ fraction, accent, label, compact }: {
 
 // ── The generator ────────────────────────────────────────────────────────────
 
+const TOPIC_IDEAS_FR = [
+  'Les prières de la Bible',
+  'L’argent et la générosité',
+  'Les femmes des Évangiles',
+  'Le repos et le sabbat',
+  'Le pardon, de Joseph à la croix',
+  'Les prophètes et la justice',
+  'La souffrance et la lamentation',
+  'Les paraboles du Royaume',
+]
+
 const TOPIC_IDEAS = [
   'The prayers of the Bible',
   'Money and generosity',
@@ -286,12 +302,14 @@ const TOPIC_IDEAS = [
   'The kingdom parables',
 ]
 
-function GenerateModal({ busy, errors, onClose, onGenerate }: {
+function GenerateModal({ lang, busy, errors, onClose, onGenerate }: {
+  lang: 'en' | 'fr'
   busy: boolean
   errors: string[] | null
   onClose: () => void
   onGenerate: (topic: string) => void
 }) {
+  const t = translator(lang)
   const [topic, setTopic] = useState('')
 
   return (
@@ -304,23 +322,22 @@ function GenerateModal({ busy, errors, onClose, onGenerate }: {
 
         <div className="mb-1 flex items-center gap-2">
           <Sparkles size={16} style={{ color: '#a78bfa' }} />
-          <div className="flex-1 text-sm font-bold" style={{ color: 'rgb(var(--ds-text-2))' }}>Generate a course</div>
+          <div className="flex-1 text-sm font-bold" style={{ color: 'rgb(var(--ds-text-2))' }}>{t('Generate a course', 'Créer un cours')}</div>
           <button onClick={onClose} disabled={busy} className="opacity-50 hover:opacity-100 disabled:opacity-20">
             <X size={15} />
           </button>
         </div>
         <p className="mb-4 text-[11.5px] leading-relaxed opacity-55">
-          The model writes the lessons. It does not get to decide what the Bible says —
-          every passage and memory verse is checked against the bundled text first, and a
-          course citing a verse that does not exist is rejected rather than patched.
+          {t('The model writes the lessons. It does not get to decide what the Bible says — every passage and memory verse is checked against the bundled text first, and a course citing a verse that does not exist is rejected rather than patched.',
+            'Le modèle rédige les leçons. Ce n’est pas lui qui décide de ce que dit la Bible — chaque passage et chaque verset à retenir est d’abord vérifié dans le texte fourni, et un cours qui cite un verset inexistant est rejeté plutôt que corrigé.')}
         </p>
 
-        <label className="mb-1.5 block text-[11px] font-semibold opacity-60">What should it be about?</label>
+        <label className="mb-1.5 block text-[11px] font-semibold opacity-60">{t('What should it be about?', 'Sur quel sujet ?')}</label>
         <input
           value={topic}
           onChange={e => setTopic(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && topic.trim() && !busy) onGenerate(topic.trim()) }}
-          placeholder="e.g. The parables of Luke"
+          placeholder={t('e.g. The parables of Luke', 'ex. Les paraboles de Luc')}
           disabled={busy}
           autoFocus
           className="w-full rounded-xl px-3 py-2 text-sm outline-none"
@@ -328,11 +345,11 @@ function GenerateModal({ busy, errors, onClose, onGenerate }: {
         />
 
         <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {TOPIC_IDEAS.map(t => (
-            <button key={t} onClick={() => setTopic(t)} disabled={busy}
+          {(lang === 'fr' ? TOPIC_IDEAS_FR : TOPIC_IDEAS).map(idea => (
+            <button key={idea} onClick={() => setTopic(idea)} disabled={busy}
               className="rounded-lg px-2 py-1 text-[10.5px] transition-all disabled:opacity-40"
               style={{ background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-4))' }}>
-              {t}
+              {idea}
             </button>
           ))}
         </div>
@@ -341,14 +358,14 @@ function GenerateModal({ busy, errors, onClose, onGenerate }: {
           <div className="mt-4 rounded-xl p-3"
             style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.28)' }}>
             <div className="mb-1.5 flex items-center gap-1.5 text-[11.5px] font-bold" style={{ color: '#f87171' }}>
-              <AlertTriangle size={12} /> Not saved
+              <AlertTriangle size={12} /> {t('Not saved', 'Non enregistré')}
             </div>
             <ul className="flex flex-col gap-1">
               {errors.slice(0, 5).map((e, i) => (
                 <li key={i} className="text-[11px] leading-relaxed opacity-75">{e}</li>
               ))}
             </ul>
-            <p className="mt-2 text-[10.5px] opacity-50">Try again — the next attempt usually lands.</p>
+            <p className="mt-2 text-[10.5px] opacity-50">{t('Try again — the next attempt usually lands.', 'Réessayez — la tentative suivante réussit en général.')}</p>
           </div>
         )}
 
@@ -357,11 +374,11 @@ function GenerateModal({ busy, errors, onClose, onGenerate }: {
           disabled={busy || !topic.trim()}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all disabled:opacity-35"
           style={{ background: 'rgba(167,139,250,0.20)', border: '1px solid rgba(167,139,250,0.38)', color: '#a78bfa' }}>
-          {busy ? <><Loader2 size={14} className="animate-spin" /> Writing and checking it…</> : <>Generate</>}
+          {busy ? <><Loader2 size={14} className="animate-spin" /> {t('Writing and checking it…', 'Rédaction et vérification…')}</> : <>{t('Generate', 'Créer')}</>}
         </button>
         {busy && (
           <p className="mt-2 text-center text-[10.5px] opacity-45">
-            This takes a while — the whole course is written in one pass.
+            {t('This takes a while — the whole course is written in one pass.', 'Cela prend un moment — le cours entier est rédigé d’un seul coup.')}
           </p>
         )}
       </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Copy, Check, Download, X } from 'lucide-react'
 import { formatRef, getTranslationMeta } from '../../services/bibleService'
+import { useBibleLang } from '../../services/bibleLang'
 
 interface Props {
   verseRef: string
@@ -48,6 +49,7 @@ const TARGETS = [
 ]
 
 export default function ShareSheet({ verseRef, text, onClose }: Props) {
+  const { t } = useBibleLang()
   const [copied, setCopied] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const payload = `"${text}"\n\n— ${formatRef(verseRef)} (${getTranslationMeta().short})`
@@ -183,13 +185,13 @@ export default function ShareSheet({ verseRef, text, onClose }: Props) {
             onClick={copy}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-aihub-border/20 py-2.5 text-xs font-semibold text-aihub-text hover:bg-aihub-border/30"
           >
-            {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}
+            {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? t('Copied', 'Copié') : t('Copy', 'Copier')}
           </button>
           <button
             onClick={saveImage}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-aihub-accent py-2.5 text-xs font-bold text-white hover:bg-aihub-accent-glow"
           >
-            <Download size={14} /> Save image
+            <Download size={14} /> {t('Save image', 'Enregistrer l’image')}
           </button>
         </div>
         <p className="mt-2 text-center text-[10px] text-aihub-muted/70">

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { formatRef } from '../../services/bibleService'
+import { useBibleLang } from '../../services/bibleLang'
 
 interface Props {
   verseRef: string
@@ -14,6 +15,7 @@ interface Props {
 // dialog never appeared and the click handler died mid-way. Nothing here
 // touches prompt/alert/confirm.
 export default function NoteEditor({ verseRef, initial, onSave, onClose }: Props) {
+  const { t } = useBibleLang()
   const [text, setText] = useState(initial)
   const areaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -43,7 +45,7 @@ export default function NoteEditor({ verseRef, initial, onSave, onClose }: Props
           value={text}
           onChange={e => setText(e.target.value)}
           rows={6}
-          placeholder="What does this verse say to you?"
+          placeholder={t('What does this verse say to you?', 'Que vous dit ce verset ?')}
           className="w-full resize-none rounded-xl border border-aihub-border/40 bg-aihub-bg/60 p-3 text-xs leading-relaxed text-aihub-text outline-none placeholder:text-aihub-muted/60 focus:border-aihub-accent/50"
         />
 
@@ -53,13 +55,13 @@ export default function NoteEditor({ verseRef, initial, onSave, onClose }: Props
             disabled={!initial}
             className="flex-1 rounded-xl bg-aihub-border/20 py-2.5 text-xs font-semibold text-aihub-text hover:bg-aihub-border/30 disabled:opacity-40"
           >
-            Clear note
+            {t('Clear note', 'Effacer la note')}
           </button>
           <button
             onClick={() => onSave(text)}
             className="flex-1 rounded-xl bg-aihub-accent py-2.5 text-xs font-bold text-white hover:bg-aihub-accent-glow"
           >
-            Save
+            {t('Save', 'Enregistrer')}
           </button>
         </div>
       </div>

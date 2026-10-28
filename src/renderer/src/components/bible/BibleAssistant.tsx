@@ -5,13 +5,17 @@ import { parseRef, formatRef, refKey, getTranslationMeta } from '../../services/
 import { parseTypedRef } from './VerseSearch'
 import { cleanNarration } from '../../services/agentTools'
 import Markdown from '../ai/Markdown'
+import { useBibleLang } from '../../services/bibleLang'
 
 interface Msg { role: 'user' | 'assistant'; content: string; cites?: Hit[] }
 
 // Shown whenever the model can't be reached (Ollama not running, no OpenRouter
 // key, network hiccup). Deliberately hides every technical detail.
-const AI_UNAVAILABLE =
+const AI_UNAVAILABLE_EN =
   "The study companion isn't connected right now. Open Settings to turn on AI — run Ollama locally or add an OpenRouter key — then ask again."
+const AI_UNAVAILABLE_FR =
+  'Le compagnon d’étude n’est pas connecté pour le moment. Ouvrez les paramètres pour activer l’IA — lancez Ollama sur cet ordinateur ou ajoutez une clé OpenRouter — puis posez à nouveau votre question.'
+const isUnavailable = (s: string) => s === AI_UNAVAILABLE_EN || s === AI_UNAVAILABLE_FR
 
 interface Props {
   open: boolean
@@ -29,6 +33,12 @@ const SUGGESTIONS = [
   'What does the Bible say about forgiveness?',
   'Explain this chapter to me',
   'Give me a verse for when I feel afraid',
+]
+const SUGGESTIONS_FR = [
+  'Trouve des versets sur l’argent',
+  'Que dit la Bible sur le pardon ?',
+  'Explique-moi ce chapitre',
+  'Donne-moi un verset pour quand j’ai peur',
 ]
 
 // The assistant is grounded, not recalled. Every answer is written against
@@ -81,6 +91,8 @@ const buildSystem = (): string => {
 export default function BibleAssistant({
   open, onClose, bookId, bookName, chapter, selectedRef, onOpenRef,
 }: Props) {
+  const { lang, t } = useBibleLang()
+  const AI_UNAVAILABLE = lang === 'fr' ? AI_UNAVAILABLE_FR : AI_UNAVAILABLE_EN
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -239,18 +251,18 @@ export default function BibleAssistant({
       <div className="flex shrink-0 items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--ds-border-sm)' }}>
         <Sparkles size={15} style={{ color: 'rgb(var(--ds-accent-soft))' }} />
         <div className="flex-1">
-          <div className="text-sm font-semibold">Study with AI</div>
-          <div className="text-[11px] opacity-55">Answers grounded in the text you're reading</div>
+          <div className="text-sm font-semibold">{t('Study with AI', 'Étudier avec l’IA')}</div>
+          <div className="text-[11px] opacity-55">{t('Answers grounded in the text you’re reading', 'Des réponses fondées sur le texte que vous lisez')}</div>
         </div>
         <button
           onClick={() => setMsgs([])}
           disabled={msgs.length === 0}
           className="rounded-lg p-1.5 opacity-60 hover:opacity-100 disabled:opacity-25"
-          title="Clear chat"
+          title={t('Clear chat', 'Effacer la conversation')}
         >
           <Trash2 size={15} />
         </button>
-        <button onClick={onClose} className="rounded-lg p-1.5 opacity-60 hover:opacity-100" title="Close (Esc)">
+        <button onClick={onClose} className="rounded-lg p-1.5 opacity-60 hover:opacity-100" title={t('Close (Esc)', 'Fermer (Échap)')}>
           <X size={15} />
         </button>
       </div>
@@ -260,18 +272,18 @@ export default function BibleAssistant({
           <div className="mb-4 flex items-center gap-2 rounded-xl px-3 py-2 text-xs"
             style={{ background: 'rgb(var(--ds-accent) / 0.10)' }}>
             <Loader2 size={13} className="animate-spin" />
-            Reading the whole Bible so I can search it… {progress}%
+            {t('Reading the whole Bible so I can search it…', 'Lecture de toute la Bible pour pouvoir y chercher…')} {progress}%
           </div>
         )}
 
         {msgs.length === 0 && !indexing && (
           <div className="mt-2">
             <p className="mb-3 text-xs leading-relaxed opacity-60">
-              Ask about what you're reading, or search the whole Bible by meaning.
-              Every answer quotes verses found in the text — nothing is recalled from memory.
+              {t('Ask about what you’re reading, or search the whole Bible by meaning. Every answer quotes verses found in the text — nothing is recalled from memory.',
+                'Posez une question sur ce que vous lisez, ou cherchez dans toute la Bible par le sens. Chaque réponse cite des versets trouvés dans le texte — rien n’est récité de mémoire.')}
             </p>
             <div className="flex flex-col gap-1.5">
-              {SUGGESTIONS.map(s => (
+              {(lang === 'fr' ? SUGGESTIONS_FR : SUGGESTIONS).map(s => (
                 <button key={s} onClick={() => ask(s)}
                   className="rounded-xl px-3 py-2 text-left text-xs transition-colors"
                   style={{ background: 'rgb(var(--ds-accent) / 0.08)' }}>
@@ -294,16 +306,16 @@ export default function BibleAssistant({
             </div>
             {/* Copy the answer — offered on real answers, not the "not connected"
                 notice (which carries nothing worth copying). */}
-            {m.role === 'assistant' && m.content !== AI_UNAVAILABLE && (
+            {m.role === 'assistant' && !isUnavailable(m.content) && (
               <div>
                 <button
                   onClick={() => copyMsg(i, m.content)}
                   className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] opacity-55 transition-opacity hover:opacity-100"
-                  title="Copy answer"
+                  title={t('Copy answer', 'Copier la réponse')}
                 >
                   {copiedIdx === i
-                    ? <><Check size={12} /> Copied</>
-                    : <><Copy size={12} /> Copy</>}
+                    ? <><Check size={12} /> {t('Copied', 'Copié')}</>
+                    : <><Copy size={12} /> {t('Copy', 'Copier')}</>}
                 </button>
               </div>
             )}
@@ -312,7 +324,7 @@ export default function BibleAssistant({
 
         {busy && (
           <div className="flex items-center gap-2 text-xs opacity-60">
-            <Loader2 size={13} className="animate-spin" /> Searching the scriptures…
+            <Loader2 size={13} className="animate-spin" /> {t('Searching the scriptures…', 'Recherche dans les Écritures…')}
           </div>
         )}
       </div>
@@ -320,12 +332,12 @@ export default function BibleAssistant({
       <div className="shrink-0 px-3 pt-3 pb-5" style={{ borderTop: '1px solid var(--ds-border-sm)' }}>
         {selectedRef && (
           <button
-            onClick={() => ask(`Explain ${formatRef(selectedRef)} to me — what does it mean and how do I live it?`)}
+            onClick={() => ask(t(`Explain ${formatRef(selectedRef)} to me — what does it mean and how do I live it?`, `Explique-moi ${formatRef(selectedRef)} — que veut dire ce verset, et comment le vivre ?`))}
             disabled={busy}
             className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium disabled:opacity-40"
             style={{ background: 'rgb(var(--ds-accent) / 0.14)', color: 'rgb(var(--ds-accent-soft))' }}
           >
-            <BookOpen size={13} /> Explain {formatRef(selectedRef)}
+            <BookOpen size={13} /> {t('Explain', 'Expliquer')} {formatRef(selectedRef)}
           </button>
         )}
         <div className="flex items-end gap-2">
@@ -337,7 +349,7 @@ export default function BibleAssistant({
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input) }
             }}
             rows={2}
-            placeholder="Ask anything about the Bible…"
+            placeholder={t('Ask anything about the Bible…', 'Posez n’importe quelle question sur la Bible…')}
             className="min-h-0 flex-1 resize-none rounded-xl px-3 py-2 text-[13px] outline-none"
             style={{ background: 'rgb(127 127 127 / 0.10)', border: '1px solid var(--ds-border-sm)' }}
           />
@@ -346,7 +358,7 @@ export default function BibleAssistant({
             disabled={busy || !input.trim()}
             className="rounded-xl p-2.5 disabled:opacity-35"
             style={{ background: 'rgb(var(--ds-accent) / 0.9)', color: '#fff' }}
-            title="Ask (Enter)"
+            title={t('Ask (Enter)', 'Demander (Entrée)')}
           >
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
           </button>
