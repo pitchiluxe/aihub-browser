@@ -1,6 +1,6 @@
 {
   "name": "aihub-browser",
-  "version": "1.88.1",
+  "version": "1.88.2",
   "description": "AIHub — Next-Generation AI-Powered Browser",
   "main": "./out/main/index.js",
   "homepage": ".",
@@ -112,6 +112,9 @@
       "artifactName": "AIHub-Browser-${version}-${os}-${arch}.${ext}",
       "requestedExecutionLevel": "asInvoker",
       "files": [
+        "out/**/*",
+        "resources/icon.ico",
+        "LICENSE.txt",
         "!node_modules/onnxruntime-node/bin/napi-v3/{darwin,linux}/**",
         "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**"
       ]
@@ -151,6 +154,9 @@
       "identity": null,
       "darkModeSupport": true,
       "files": [
+        "out/**/*",
+        "resources/icon.ico",
+        "LICENSE.txt",
         "!node_modules/onnxruntime-node/bin/napi-v3/{win32,linux}/**"
       ],
       "x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/onnxruntime-node/bin/napi-v3/darwin/**"
@@ -168,6 +174,9 @@
       "category": "Network",
       "artifactName": "AIHub-Browser-${version}-linux-${arch}.${ext}",
       "files": [
+        "out/**/*",
+        "resources/icon.ico",
+        "LICENSE.txt",
         "!node_modules/onnxruntime-node/bin/napi-v3/{win32,darwin}/**"
       ]
     },
