@@ -1,6 +1,6 @@
 {
   "name": "aihub-browser",
-  "version": "1.88.0",
+  "version": "1.88.1",
   "description": "AIHub — Next-Generation AI-Powered Browser",
   "main": "./out/main/index.js",
   "homepage": ".",
@@ -152,7 +152,8 @@
       "darkModeSupport": true,
       "files": [
         "!node_modules/onnxruntime-node/bin/napi-v3/{win32,linux}/**"
-      ]
+      ],
+      "x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/onnxruntime-node/bin/napi-v3/darwin/**"
     },
     "linux": {
       "target": [
