@@ -16,6 +16,10 @@ export interface BibleSettings {
   animateTurn: boolean     // 3D page turn, or an instant change
   showCover: boolean       // open on the closed book, or straight into the text
   verseNumbers: boolean    // superscript verse numbers
+  // Reading aloud. The natural voice is used once it is installed (Settings →
+  // Bible); until then, and for languages it does not speak, the system voice.
+  readingVoice: string     // a natural voice id — see src/main/tts/voiceModel.ts
+  readingPace: number      // 0.8 – 1.15; 1 is an unhurried reading pace, not the engine default
 }
 
 export const DEFAULT_BIBLE_SETTINGS: BibleSettings = {
@@ -27,6 +31,8 @@ export const DEFAULT_BIBLE_SETTINGS: BibleSettings = {
   animateTurn: true,
   showCover: true,
   verseNumbers: true,
+  readingVoice: 'af_heart',
+  readingPace: 1,
 }
 
 const KEY = 'aihub-bible-settings'

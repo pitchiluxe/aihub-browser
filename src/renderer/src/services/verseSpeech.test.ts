@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  pickVoice, scoreVoice, speechChunks, spokenReference,
-  VERSE_PITCH, VERSE_RATE, type VoiceLike,
+  naturalSpeed, pauseAfter, pickVoice, scoreVoice, speakable, speechChunks, spokenReference,
+  systemProsody, VERSE_PITCH, VERSE_RATE, type VoiceLike,
 } from './verseSpeech'
 
 const v = (name: string, lang = 'en-US', extra: Partial<VoiceLike> = {}): VoiceLike =>
@@ -105,6 +105,10 @@ describe('spoken references', () => {
     expect(spokenReference('John 3:16')).toBe('John 3 verse 16')
   })
 
+  it('reads a verse range as "to"', () => {
+    expect(spokenReference('1 Thessalonians 5:16–18')).toBe('1 Thessalonians 5 verse 16 to 18')
+  })
+
   it('leaves a reference without a colon alone', () => {
     expect(spokenReference('Psalm 23')).toBe('Psalm 23')
   })
@@ -115,5 +119,45 @@ describe('prosody', () => {
     // Scripture at rate 1.0 sounds like a terms-and-conditions readout.
     expect(VERSE_RATE).toBeLessThan(1)
     expect(VERSE_PITCH).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('reading like a person', () => {
+  it('says LORD as a word, not four letters', () => {
+    expect(speakable('The LORD is my shepherd. [GOD] said')).toBe('The Lord is my shepherd. God said')
+  })
+
+  it('rests longer after a full stop than after a comma', () => {
+    expect(pauseAfter('He restores my soul.')).toBeGreaterThan(pauseAfter('He leads me,'))
+  })
+
+  it('leaves the longest rest after the announced reference', () => {
+    expect(pauseAfter('Psalm 23', true)).toBeGreaterThan(pauseAfter('Amen.'))
+  })
+
+  it('does not read every clause at one identical rate', () => {
+    const rates = new Set([0, 1, 2, 3].map(i => systemProsody('and the earth.', i, 10).rate.toFixed(3)))
+    expect(rates.size).toBeGreaterThan(1)
+  })
+
+  it('stays close to the base rate — drift, not wobble', () => {
+    for (let i = 0; i < 12; i++) {
+      const { rate } = systemProsody('x.', i, 20)
+      expect(Math.abs(rate - VERSE_RATE) / VERSE_RATE).toBeLessThan(0.05)
+    }
+  })
+
+  it('lifts the pitch on a question', () => {
+    expect(systemProsody('Who is like you?', 0, 3).pitch).toBeGreaterThan(systemProsody('You are.', 0, 3).pitch)
+  })
+
+  it('slows down to land the last clause', () => {
+    expect(systemProsody('Amen.', 4, 5).rate).toBeLessThan(systemProsody('Amen.', 0, 5).rate)
+    expect(naturalSpeed(4, 5)).toBeLessThan(naturalSpeed(0, 5))
+  })
+
+  it('follows the reading pace setting', () => {
+    expect(naturalSpeed(0, 3, 0.8)).toBeLessThan(naturalSpeed(0, 3, 1.1))
+    expect(systemProsody('x.', 0, 3, 0.8).rate).toBeLessThan(systemProsody('x.', 0, 3, 1.1).rate)
   })
 })

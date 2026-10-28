@@ -35,6 +35,8 @@
     "livekit-client": "^2.22.0",
     "livekit-server-sdk": "^2.18.0",
     "lucide-react": "^0.400.0",
+    "onnxruntime-common": "1.21.0",
+    "onnxruntime-node": "1.21.0",
     "parse5": "8.0.1",
     "qrcode-generator": "^1.4.4",
     "react": "^18.3.1",
@@ -58,6 +60,7 @@
     "electron-builder": "^26.0.12",
     "electron-vite": "^2.3.0",
     "jsdom": "^29.1.1",
+    "kokoro-js": "^1.2.1",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.4.5",
@@ -107,7 +110,11 @@
       ],
       "icon": "resources/icon.ico",
       "artifactName": "AIHub-Browser-${version}-${os}-${arch}.${ext}",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "asInvoker",
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v3/{darwin,linux}/**",
+        "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -142,7 +149,10 @@
       "category": "public.app-category.productivity",
       "artifactName": "AIHub-Browser-${version}-${os}-${arch}.${ext}",
       "identity": null,
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v3/{win32,linux}/**"
+      ]
     },
     "linux": {
       "target": [
@@ -155,7 +165,13 @@
       ],
       "icon": "resources/icon.png",
       "category": "Network",
-      "artifactName": "AIHub-Browser-${version}-linux-${arch}.${ext}"
-    }
+      "artifactName": "AIHub-Browser-${version}-linux-${arch}.${ext}",
+      "files": [
+        "!node_modules/onnxruntime-node/bin/napi-v3/{win32,darwin}/**"
+      ]
+    },
+    "asarUnpack": [
+      "node_modules/onnxruntime-node/**"
+    ]
   }
 }

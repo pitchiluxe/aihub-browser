@@ -1,15 +1,22 @@
 // Reading scripture aloud.
 //
-// This uses the Web Speech API, which is the only text-to-speech available to
-// the app without a network call, an account and a per-character bill. That
-// choice has a real ceiling and it is worth stating plainly: the voices it can
-// reach are the ones installed on the machine, and a local SAPI voice cannot
-// act. It will not weep at Lamentations. Genuinely emotive narration needs a
-// neural cloud voice (ElevenLabs, Azure Neural, OpenAI) and therefore a key, a
-// connection, and sending the text off the device — none of which this app
-// assumes it has.
+// Two engines. The natural voice is a small neural model (Kokoro, see
+// src/main/tts) that the user installs once from Settings → Bible; it runs on
+// the device, offline, and sounds like a person reading. Until it is installed
+// — and for languages it does not speak — the Web Speech API reads instead,
+// and on most Windows machines that means David or Zira: the robotic voices.
 //
-// What can be done offline, and is done here, is most of the distance:
+// Both engines are fed the same way, because most of what makes a reading
+// sound human is not the voice but the pacing:
+//
+//   - one clause at a time, with a real silence after it whose length follows
+//     the punctuation — a breath at a comma, a beat at a full stop, a longer
+//     rest after the reference is announced;
+//   - a slight slowing on the last clause, the way a reader lands a passage;
+//   - for the system voice, a small deterministic drift in rate and a lift on
+//     questions, so twenty clauses are not delivered in one identical tone.
+//
+// For the system voice, the rest of the distance is:
 //
 //   1. Pick the best voice actually present rather than whatever the browser
 //      hands back first. Windows and macOS both ship natural/neural-class
@@ -24,6 +31,8 @@
 //
 // Everything here is pure except the thin controller at the bottom, so the
 // voice ranking and the chunking are unit-tested rather than eyeballed.
+
+import { loadBibleSettings } from './bibleSettings'
 
 export interface VoiceLike {
   name: string
@@ -130,9 +139,66 @@ export function speechChunks(text: string, maxChars = 180): string[] {
   return out.filter(Boolean)
 }
 
-/** `John 3:16` → the spoken form, so the engine doesn't say "three colon sixteen". */
+/**
+ * `John 3:16` → the spoken form, so the engine doesn't say "three colon
+ * sixteen"; `5:16–18` → "5 verse 16 to 18".
+ */
 export function spokenReference(label: string): string {
-  return String(label || '').replace(/(\d+)\s*:\s*(\d+)/, '$1 verse $2')
+  return String(label || '')
+    .replace(/(\d+)\s*:\s*(\d+)/, '$1 verse $2')
+    .replace(/(\d+)\s*[–-]\s*(\d+)/g, '$1 to $2')
+}
+
+/**
+ * Text as it should be heard rather than as it is printed. Small caps LORD is
+ * a typographic convention, not an acronym — some engines spell it out letter
+ * by letter. Editorial brackets are dropped; their words are kept.
+ */
+export function speakable(text: string): string {
+  return String(text || '')
+    .replace(/\bLORD\b/g, 'Lord')
+    .replace(/\bGOD\b/g, 'God')
+    .replace(/[[\]¶]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * The silence after a clause, in milliseconds, from how it ends — a breath at
+ * a comma, a beat at a full stop, a longer rest once the reference has been
+ * announced and before the scripture itself begins.
+ */
+export function pauseAfter(chunk: string, isIntro = false): number {
+  if (isIntro) return 650
+  const end = chunk.trim().slice(-1)
+  if (end === '?' || end === '!') return 430
+  if (end === '.') return 380
+  if (end === ';' || end === ':') return 260
+  if (end === '—') return 220
+  if (end === ',') return 180
+  return 140
+}
+
+// A fixed, repeating drift rather than Math.random(), so a passage reads the
+// same way twice and the shape is testable. Small enough to be heard as life,
+// not as wobble.
+const RATE_DRIFT = [0, 0.018, -0.012, 0.024, -0.02, 0.008]
+
+/** Rate and pitch for one clause read by the system voice. */
+export function systemProsody(chunk: string, index: number, total: number, pace = 1): { rate: number; pitch: number } {
+  let rate = VERSE_RATE * pace * (1 + RATE_DRIFT[index % RATE_DRIFT.length])
+  // A reader slows as they land the end of a passage.
+  if (total > 1 && index === total - 1) rate *= 0.94
+  let pitch = VERSE_PITCH
+  if (chunk.trim().endsWith('?')) pitch += 0.05
+  return { rate: Math.max(0.5, Math.min(1.3, rate)), pitch }
+}
+
+/** Speed for one clause read by the natural voice. 1 is the model's own pace. */
+export function naturalSpeed(index: number, total: number, pace = 1): number {
+  let speed = 0.92 * pace
+  if (total > 1 && index === total - 1) speed *= 0.95
+  return Math.max(0.6, Math.min(1.4, speed))
 }
 
 // ── Controller ──────────────────────────────────────────────────────────────
@@ -177,54 +243,174 @@ export function loadVoices(timeoutMs = 1200): Promise<SpeechSynthesisVoice[]> {
   })
 }
 
-/**
- * Speak a passage. Returns a handle whose stop() is safe to call at any time,
- * including after the reading has already finished.
- */
-export async function speak(text: string, opts: SpeakOptions = {}): Promise<SpeechHandle> {
-  if (!speechSupported()) return { stop: () => {} }
-  const synth = window.speechSynthesis
-  synth.cancel()
+// The one reading in progress, app-wide. Starting another stops it — two
+// voices reading over each other is never what anyone meant.
+let current: SpeechHandle | null = null
 
+function voiceApi(): any {
+  return typeof window !== 'undefined' ? (window as any).electronAPI?.voice : undefined
+}
+
+/** Whether the natural voice is installed and speaks this language. */
+async function naturalReady(lang: string): Promise<boolean> {
+  // The model speaks English (American and British voices). French and the
+  // rest stay with the system voice, which at least has the right language.
+  if (!lang.toLowerCase().startsWith('en')) return false
+  try { return !!(await voiceApi()?.status())?.installed } catch { return false }
+}
+
+interface Clip { samples: Float32Array; sampleRate: number }
+
+async function synthesize(text: string, voice: string, speed: number): Promise<Clip | null> {
+  try {
+    const r = await voiceApi()?.speak(text, voice, speed)
+    return r && r.samples && r.samples.length ? { samples: r.samples, sampleRate: r.sampleRate } : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The natural voice. Each clause is synthesised in the utility process while
+ * the one before it plays, two ahead, so the reading flows without gaps on a
+ * laptop CPU (synthesis runs at about 0.65× real time).
+ *
+ * Resolves false if the very first clause fails, so the caller can fall back
+ * to the system voice instead of reading nothing.
+ */
+async function speakNatural(chunks: string[], hasIntro: boolean, opts: SpeakOptions, isCancelled: () => boolean, register: (stop: () => void) => void): Promise<boolean> {
+  const { readingVoice, readingPace } = loadBibleSettings()
+  const ctx = new AudioContext()
+  let source: AudioBufferSourceNode | null = null
+  let timer: ReturnType<typeof setTimeout> | null = null
+  register(() => {
+    if (timer) clearTimeout(timer)
+    try { source?.stop() } catch {}
+    ctx.close().catch(() => {})
+  })
+
+  const AHEAD = 2
+  const clips = new Map<number, Promise<Clip | null>>()
+  const request = (i: number) => {
+    if (i < chunks.length && !clips.has(i)) {
+      clips.set(i, synthesize(chunks[i], readingVoice, naturalSpeed(i, chunks.length, readingPace)))
+    }
+  }
+
+  for (let i = 0; i < chunks.length; i++) {
+    for (let k = i; k <= i + AHEAD; k++) request(k)
+    const clip = await clips.get(i)!
+    clips.delete(i)
+    if (isCancelled()) return true
+    if (!clip) {
+      if (i === 0) { ctx.close().catch(() => {}); return false }
+      continue // one bad clause should not end the reading
+    }
+    opts.onChunk?.(i, chunks.length)
+    const buffer = ctx.createBuffer(1, clip.samples.length, clip.sampleRate)
+    buffer.getChannelData(0).set(clip.samples)
+    await new Promise<void>(resolve => {
+      source = ctx.createBufferSource()
+      source.buffer = buffer
+      source.connect(ctx.destination)
+      source.onended = () => {
+        source = null
+        // The silence a reader leaves before the next clause.
+        timer = setTimeout(resolve, pauseAfter(chunks[i], hasIntro && i === 0))
+      }
+      source.start()
+    })
+    if (isCancelled()) return true
+  }
+  ctx.close().catch(() => {})
+  if (!isCancelled()) opts.onDone?.()
+  return true
+}
+
+/** The system voice, paced clause by clause. */
+async function speakSystem(chunks: string[], hasIntro: boolean, opts: SpeakOptions, isCancelled: () => boolean, register: (stop: () => void) => void) {
+  const synth = window.speechSynthesis
   const voices = await loadVoices()
   const voice = pickVoice(voices, opts.lang || 'en')
-  const chunks = speechChunks(text)
-  if (opts.intro) chunks.unshift(spokenReference(opts.intro))
-  if (!chunks.length) return { stop: () => {} }
+  const { readingPace } = loadBibleSettings()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  register(() => {
+    if (timer) clearTimeout(timer)
+    try { synth.cancel() } catch {}
+  })
 
-  let cancelled = false
   let index = 0
-
   const next = () => {
-    if (cancelled || index >= chunks.length) {
-      if (!cancelled) opts.onDone?.()
-      return
-    }
+    if (isCancelled()) return
+    if (index >= chunks.length) { opts.onDone?.(); return }
     const i = index++
     const u = new SpeechSynthesisUtterance(chunks[i])
     if (voice) u.voice = voice as SpeechSynthesisVoice
     u.lang = voice?.lang || opts.lang || 'en-US'
-    u.rate = VERSE_RATE
-    u.pitch = VERSE_PITCH
+    const { rate, pitch } = systemProsody(chunks[i], i, chunks.length, readingPace)
+    u.rate = rate
+    u.pitch = pitch
     opts.onChunk?.(i, chunks.length)
-    u.onend = next
+    u.onend = () => { timer = setTimeout(next, pauseAfter(chunks[i], hasIntro && i === 0)) }
     // An error on one clause must not silently end the reading — skip to the
     // next rather than leaving the button stuck showing "playing".
     u.onerror = next
     synth.speak(u)
   }
   next()
+}
 
-  return {
+/**
+ * Speak a passage. Returns a handle whose stop() is safe to call at any time,
+ * including after the reading has already finished.
+ */
+export async function speak(text: string, opts: SpeakOptions = {}): Promise<SpeechHandle> {
+  current?.stop()
+  const lang = opts.lang || 'en'
+  const useNatural = await naturalReady(lang)
+  if (!useNatural && !speechSupported()) return { stop: () => {} }
+  if (speechSupported()) window.speechSynthesis.cancel()
+
+  // Sentence-sized pieces suit the neural model, which phrases a whole
+  // sentence far better than a fragment of one.
+  const chunks = speechChunks(speakable(text), useNatural ? 240 : 180)
+  const hasIntro = !!opts.intro
+  if (opts.intro) chunks.unshift(spokenReference(opts.intro))
+  if (!chunks.length) return { stop: () => {} }
+
+  let cancelled = false
+  let finished = false
+  const stops: (() => void)[] = []
+  // onDone fires exactly once: at the natural end, or when the reading is
+  // stopped — including by another Listen button starting, so the first
+  // button does not stay stuck on "Stop".
+  const userDone = opts.onDone
+  opts = { ...opts, onDone: () => { if (!finished) { finished = true; userDone?.() } } }
+  const handle: SpeechHandle = {
     stop: () => {
       cancelled = true
-      try { synth.cancel() } catch {}
+      for (const s of stops.splice(0)) { try { s() } catch {} }
+      if (current === handle) current = null
+      opts.onDone?.()
     },
   }
+  current = handle
+  const isCancelled = () => cancelled
+  const register = (s: () => void) => { if (cancelled) s(); else stops.push(s) }
+
+  void (async () => {
+    if (useNatural && await speakNatural(chunks, hasIntro, opts, isCancelled, register)) return
+    if (cancelled) return
+    if (speechSupported()) await speakSystem(chunks, hasIntro, opts, isCancelled, register)
+    else opts.onDone?.()
+  })()
+
+  return handle
 }
 
 /** Stop anything currently being read, from anywhere in the app. */
 export function stopSpeaking(): void {
+  current?.stop()
   if (speechSupported()) {
     try { window.speechSynthesis.cancel() } catch {}
   }

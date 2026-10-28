@@ -1,7 +1,9 @@
 import { resolve } from 'path'
-import { readFileSync } from 'fs'
+import { copyFileSync, mkdirSync, readFileSync } from 'fs'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import { NATURAL_VOICES } from './src/main/tts/voiceModel'
 
 // ── Parse .env.local manually (no dotenv dep needed) ───────────────────────
 function parseEnvFile(filePath: string): Record<string, string> {
@@ -47,16 +49,43 @@ const mainDefine: Record<string, string> = {
   'process.env.NEXT_PUBLIC_OLLAMA_BASE_URL':    JSON.stringify(e('NEXT_PUBLIC_OLLAMA_BASE_URL', 'http://localhost:11434')),
 }
 
+// kokoro-js reads its voice files from `../voices/` next to its own code. Once
+// bundled into out/main/ttsWorker.js that is out/voices/, so the voices the
+// app offers are copied there after each main build.
+function copyNaturalVoices(): Plugin {
+  return {
+    name: 'aihub-copy-natural-voices',
+    apply: 'build',
+    closeBundle() {
+      const src = resolve('node_modules/kokoro-js/voices')
+      const dest = resolve('out/voices')
+      mkdirSync(dest, { recursive: true })
+      for (const v of NATURAL_VOICES) copyFileSync(resolve(src, `${v.id}.bin`), resolve(dest, `${v.id}.bin`))
+    },
+  }
+}
+
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), copyNaturalVoices()],
     define: mainDefine,
     resolve: {
-      alias: { '@main': resolve('src/main') }
+      alias: {
+        '@main': resolve('src/main'),
+        // The natural voice worker bundles transformers.js, which imports
+        // sharp for images it never handles here. See src/main/tts/sharpStub.ts.
+        sharp: resolve('src/main/tts/sharpStub.ts'),
+      }
     },
     build: {
       rollupOptions: {
-        output: { format: 'cjs' }
+        // The app's main process, plus the natural voice's utility process —
+        // a separate entry so main never loads the model's code at all.
+        input: {
+          index:     resolve('src/main/index.ts'),
+          ttsWorker: resolve('src/main/tts/worker.ts'),
+        },
+        output: { format: 'cjs', entryFileNames: '[name].js' }
       }
     }
   },

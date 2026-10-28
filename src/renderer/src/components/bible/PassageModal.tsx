@@ -255,7 +255,7 @@ export default function PassageModal({
                 when one is tapped, otherwise the whole passage. */}
             <ListenButton
               text={selected ? selectedText : (shown || []).map(v => v.t).join(' ')}
-              reference={selected ? heading : undefined}
+              reference={heading}
               label="Listen"
             />
 

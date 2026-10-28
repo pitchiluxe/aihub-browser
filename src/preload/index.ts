@@ -495,6 +495,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getStudy: () => ipcRenderer.invoke('bible:getStudy'),
     setStudy: (study: any, opts?: { allowEmpty?: boolean }) => ipcRenderer.invoke('bible:setStudy', study, opts),
   },
+  // The natural (neural) reading voice. Installed on request; speak() returns
+  // { samples: Float32Array, sampleRate } or { error }.
+  voice: {
+    status:  () => ipcRenderer.invoke('voice:status'),
+    install: () => ipcRenderer.invoke('voice:install'),
+    remove:  () => ipcRenderer.invoke('voice:remove'),
+    speak:   (text: string, voice: string, speed: number) => ipcRenderer.invoke('voice:speak', text, voice, speed),
+    onProgress: (cb: (s: any) => void) => { const h = (_: any, s: any) => cb(s); ipcRenderer.on('voice:progress', h); return () => ipcRenderer.removeListener('voice:progress', h) },
+  },
   // Opens a URL in the user's default system browser (or default mail
   // client for mailto:), never inside the app shell. Used by the Bible
   // share sheet to hand social-share links off to the real browser instead

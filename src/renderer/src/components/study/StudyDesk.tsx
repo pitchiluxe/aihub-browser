@@ -4,6 +4,7 @@ import { formatRef } from '../../services/bibleService'
 import { getPlans, type Passage, type ReadingPlan } from '../../services/bibleCourses'
 import { passageVerses } from '../../services/verseText'
 import type { PlanProgress } from '../../services/bibleStudyStore'
+import MonthlyReading from './MonthlyReading'
 
 export interface DeskMarks {
   highlights: Record<string, string>
@@ -22,17 +23,18 @@ interface Props {
   inLab: (ref: string) => boolean
 }
 
-type Tab = 'plans' | 'saved' | 'highlights' | 'notes'
+type Tab = 'month' | 'plans' | 'saved' | 'highlights' | 'notes'
 
 // The self-directed desk. It reads the reader's own marks rather than keeping
 // a second copy of them — a verse saved here and a verse saved in the reader
 // are the same verse, and there is no second source of truth to drift.
 export default function StudyDesk({ marks, plans, onAdvancePlan, onOpenReader, onReadPassages, onAddToLab, inLab }: Props) {
-  const [tab, setTab] = useState<Tab>('plans')
+  const [tab, setTab] = useState<Tab>('month')
   const highlighted = Object.keys(marks.highlights || {})
   const noted = Object.keys(marks.notes || {})
 
-  const TABS: { id: Tab; label: string; count: number }[] = [
+  const TABS: { id: Tab; label: string; count?: number }[] = [
+    { id: 'month',      label: 'Monthly reading' },
     { id: 'plans',      label: 'Reading plans', count: getPlans().length },
     { id: 'saved',      label: 'Saved',         count: marks.saved?.length || 0 },
     { id: 'highlights', label: 'Highlighted',   count: highlighted.length },
@@ -48,10 +50,15 @@ export default function StudyDesk({ marks, plans, onAdvancePlan, onOpenReader, o
             style={tab === t.id
               ? { background: 'rgba(230,200,110,0.16)', border: '1px solid rgba(230,200,110,0.32)', color: '#e6c86e' }
               : { background: 'var(--ds-glass-xs)', border: '1px solid var(--ds-border-sm)', color: 'rgb(var(--ds-text-4))' }}>
-            {t.label} <span className="opacity-50">{t.count}</span>
+            {t.label} {t.count != null && <span className="opacity-50">{t.count}</span>}
           </button>
         ))}
       </div>
+
+      {tab === 'month' && (
+        <MonthlyReading plans={plans} onAdvancePlan={onAdvancePlan}
+          onReadPassages={onReadPassages} onOpenReader={onOpenReader} />
+      )}
 
       {tab === 'plans' && (
         <div className="flex flex-col gap-3">

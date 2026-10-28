@@ -22,6 +22,7 @@ import { sanitizeChatMessages, fitMessagesToBudget, withLocalSystem } from './ch
 import { createFareEngine } from './fares/engine'
 import { putFacts, type TrackFacts as DjTrackFacts } from './dj/facts'
 import { registerDjSuggestIpc, upsertTrackRecords } from './djSuggest'
+import { registerNaturalVoiceIpc } from './tts/naturalVoice'
 import { createElectronDriver, FARES_PARTITION } from './fares/hiddenPage'
 import { FARE_ADAPTERS, handoffLinks, isFareSiteUrl } from './fares/adapters'
 import { googleAdapter } from './fares/adapters/google'
@@ -2924,6 +2925,8 @@ researchService = registerResearchIpc({
   },
 })
 registerFaviconIpc({ mayRemember: mayPersistFrom })
+// The Bible's natural reading voice — installed on request, run out of process.
+registerNaturalVoiceIpc({ appDir: APP_DIR, send: safelySend })
 
 // ── IPC: Tab content views (BrowserView) ────────────────────────────────────
 ipcMain.handle('tabview:create', (e, tabId: string, url: string, containerId?: string | null) =>

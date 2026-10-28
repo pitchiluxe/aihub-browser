@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Palette, Bot, Shield, ShieldBan, Layers, Info, CheckCircle2, Loader2, RefreshCw, Download, Brain, Globe, Sparkles, Trash2, Mail, FileCode , BookMarked, Lock, VenetianMask } from 'lucide-react'
 import ClaudeKitSection from './ClaudeKitSection'
 import { useBibleSettings } from '../../services/bibleSettings'
+import ReadingVoiceSettings from '../bible/ReadingVoiceSettings'
 import { TRANSLATIONS } from '../../services/bibleService'
 import { BADGES, isUnlocked, type UnlockKind } from '../../services/bibleRewards'
 import { useBrowserStore } from '../../store/browserStore'
@@ -1232,6 +1233,8 @@ export default function SettingsPage() {
           </div>
           <BibleToggle on={bible.showCover} onClick={() => setBible({ showCover: !bible.showCover })} />
         </div>
+
+        <ReadingVoiceSettings rowClass={ROW} labelClass={LBL} />
 
         <div className={ROW}>
           <div>
