@@ -650,6 +650,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     save: (request: unknown) => ipcRenderer.invoke('developer:save', request),
     delete: (id: string) => ipcRenderer.invoke('developer:delete', id),
   },
+  grammar: {
+    correct: (id: string) => ipcRenderer.invoke('grammar:correct', { id }),
+    apply: (id: string, text: string) => ipcRenderer.invoke('grammar:apply', { id, text }),
+    copy: (id: string, text: string) => ipcRenderer.invoke('grammar:copy', { id, text }),
+    close: (id: string) => ipcRenderer.invoke('grammar:close', { id }),
+  },
   tabView: {
     create:          (tabId: string, url: string, containerId?: string | null)                    => ipcRenderer.invoke('tabview:create', tabId, url, containerId),
     destroy:         (tabId: string)                                                            => ipcRenderer.invoke('tabview:destroy', tabId),

@@ -16,6 +16,8 @@ import { registerAttachmentScheme, registerAttachmentProtocol } from './communit
 import { registerMediaScheme, registerMediaProtocol, registerDjIpc } from './dj/library'
 import { viewRect } from './viewBounds'
 import { createNavigationWarmup } from './navigationWarmup'
+import { GRAMMAR_SYSTEM, registerGrammarIpc } from './grammar'
+import { preserveGrammarWhitespace } from '../shared/grammarEditing'
 import { registerDeveloperIpc, developmentHeaders } from './developerIpc'
 import { EMPTY_NAVIGATION_GRAPH, recordTransition, removeTrailUrl, type NavigationGraph } from '../shared/navigationGraph'
 import { extractStructuredClip } from '../shared/structuredClip'
@@ -1256,6 +1258,9 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
 
     const menu = new Menu()
     const sep = () => { if (menu.items.length && menu.items[menu.items.length - 1].type !== 'separator') menu.append(new MenuItem({ type: 'separator' })) }
+    const grammarCapture = menuCtx && params.formControlType !== 'input-password' && (sel || params.isEditable)
+      ? grammarService.capture(wc, params.isEditable, params.selectionText || '', params.frame === wc.mainFrame)
+      : null
 
     // ── Navigation (browsing tabs only) ──
     if (onPage) {
@@ -1280,6 +1285,15 @@ function attachContextMenu(wc: Electron.WebContents, opts?: { tabId?: string }) 
       if (params.editFlags.canCopy || sel) menu.append(new MenuItem({ label: 'Copy', role: 'copy', accelerator: 'Ctrl+C' }))
       if (params.editFlags.canPaste) menu.append(new MenuItem({ label: 'Paste', role: 'paste', accelerator: 'Ctrl+V' }))
       if (params.editFlags.canSelectAll) menu.append(new MenuItem({ label: 'Select All', role: 'selectAll', accelerator: 'Ctrl+A' }))
+    }
+
+    if (grammarCapture) {
+      sep()
+      menu.append(new MenuItem({ label: 'Correct grammar…', click: async () => {
+        const request = await grammarCapture
+        if (request) sendTo(menuCtx, 'grammar:open', request)
+        else notifyQuiet('Select text to correct', 'Select up to 8,000 characters in a text field or on the page.')
+      } }))
     }
 
     // ── Selected text ──
@@ -3005,6 +3019,20 @@ researchService = registerResearchIpc({
   },
 })
 registerFaviconIpc({ mayRemember: mayPersistFrom })
+const grammarService = registerGrammarIpc({
+  owner: wc => ctxOwning(wc)?.win.webContents,
+  async generate(text) {
+    const result = await runAiRequest([
+      { role: 'system', content: GRAMMAR_SYSTEM },
+      { role: 'user', content: JSON.stringify({ text }) },
+    ], undefined, { maxTokens: 4000 })
+    const content = (result.content || '').trim()
+    if (result.provider === 'none' || !content || /^ERROR:/i.test(content)) throw Error('Grammar correction is unavailable. Check your AI provider in Settings, then try again.')
+    const corrected = preserveGrammarWhitespace(text, content)
+    if (corrected.length > 16000) throw Error('The correction is too long. Try a shorter selection.')
+    return corrected
+  },
+})
 registerDeveloperIpc({
   appDir: APP_DIR,
   owner: ctxFromEvent,

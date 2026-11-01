@@ -51,6 +51,8 @@ const DeclutterPage = lazy(() => import('./components/pages/DeclutterPage'))
 const DeveloperPage = lazy(() => import('./components/pages/DeveloperPage'))
 
 import type { PageType } from '../../shared/pageTypes'
+import type { GrammarRequest } from '../../shared/grammarEditing'
+const GrammarModal = lazy(() => import('./components/browser/GrammarModal'))
 
 // Overlays that are closed at startup. Each already refused to render until
 // its open flag flipped, so gating the MOUNT on the same flag changes nothing
@@ -148,6 +150,8 @@ export default function App() {
 
   // URL for the "Create QR Code" page context-menu action (null = modal closed)
   const [qrUrl, setQrUrl] = useState<string | null>(null)
+  const [grammarRequest, setGrammarRequest] = useState<GrammarRequest | null>(null)
+  useEffect(() => window.electronAPI.ipc.on('grammar:open', (_event: unknown, request: GrammarRequest) => setGrammarRequest(request)), [])
 
   // Find-in-page bar (Ctrl+F). Only meaningful over a real browsing tab —
   // the bar occupies a reserved strip above the native view (see bounds sync).
@@ -1094,6 +1098,7 @@ export default function App() {
       <UpdateNotification />
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
+        {grammarRequest && <Suspense fallback={null}><GrammarModal request={grammarRequest} onClose={() => setGrammarRequest(null)} /></Suspense>}
         <Sidebar onNavigate={navigate} onOpenPage={openSpecialPage} />
         {/* The tab BrowserViews are positioned from the content element's own
             bounds, so the rail simply makes that element narrower — no extra
