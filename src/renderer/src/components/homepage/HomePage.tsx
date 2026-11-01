@@ -230,6 +230,27 @@ export default function HomePage({ onNavigate }: Props) {
             <SearchBar onNavigate={onNavigate} />
           </motion.div>
 
+          <button
+            type="button"
+            aria-label="Game room"
+            onClick={() => useBrowserStore.getState().focusOrOpenPage('aihub://games', 'games')}
+            className="mt-4 w-full max-w-2xl flex items-center gap-4 rounded-2xl px-5 py-4 text-left transition-[filter] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-400 hover:brightness-110"
+            style={{
+              backgroundColor: isLight ? 'rgba(245, 204, 104, 0.20)' : 'rgba(245, 204, 104, 0.10)',
+              border: `1px solid ${isLight ? 'rgba(161, 98, 7, 0.30)' : 'rgba(245, 204, 104, 0.35)'}`,
+              color: isLight ? '#854d0e' : '#f5cc68',
+            }}
+          >
+            <Gamepad2 size={28} aria-hidden="true" className="shrink-0" />
+            <span className="flex-1 min-w-0">
+              <span className="block text-base font-semibold">Game room</span>
+              <span className={`block mt-0.5 text-xs ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+                Arcade, cards, board games, and your classics
+              </span>
+            </span>
+            <ChevronRight size={20} aria-hidden="true" className="shrink-0" />
+          </button>
+
         </div>
 
         {/* ── Feature shortcuts ── */}
@@ -251,8 +272,6 @@ export default function HomePage({ onNavigate }: Props) {
             onClick={() => onNavigate('aihub://history')} />
           <FeaturePill icon={<Disc3 size={13} />} label="AIHub DJ" color="#f43f5e"
             onClick={() => onNavigate('aihub://dj')} />
-          <FeaturePill icon={<Gamepad2 size={13} />} label="Game room" color="#f5cc68"
-            onClick={() => useBrowserStore.getState().focusOrOpenPage('aihub://games', 'games')} />
         </motion.div>
 
         {/* ── Focus session — sits under the shortcut pills ── */}
