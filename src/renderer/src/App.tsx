@@ -24,6 +24,7 @@ import { buildDeclutterStyleScript, loadDeclutterRules, normalizeOrigin, selecto
 const SettingsPage   = lazy(() => import('./components/pages/SettingsPage'))
 const HistoryPage    = lazy(() => import('./components/pages/HistoryPage'))
 const DownloadsPage  = lazy(() => import('./components/pages/DownloadsPage'))
+const SecurityPage = lazy(() => import('./components/pages/SecurityPage'))
 const WifiPage       = lazy(() => import('./components/pages/WifiPage'))
 const VpnPage        = lazy(() => import('./components/pages/VpnPage'))
 const ResearchPage   = lazy(() => import('./components/pages/ResearchPage'))
@@ -206,7 +207,7 @@ export default function App() {
     }
 
     let finalUrl = url.trim()
-    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+    if (!/^(?:https?|file):\/\//i.test(finalUrl)) {
       finalUrl = `https://${finalUrl}`
     }
 
@@ -909,12 +910,16 @@ export default function App() {
           break
         }
 
+        case 'security-findings':
+          store.updateTab(tabId, { securityFindings: payload.findings })
+          break
+
         case 'did-navigate': {
           const t = loadTimers.current.get(tabId)
           if (t) { clearTimeout(t); loadTimers.current.delete(tabId) }
           const url = payload.url
           if (!url || url === 'about:blank') break
-          store.updateTab(tabId, { url })
+          store.updateTab(tabId, { url, securityFindings: [] })
           if (url.startsWith('http://') || url.startsWith('https://')) {
             const tab = store.tabs.find(item => item.id === tabId)
             const wcId = store.tabWcIds[tabId]
@@ -1113,6 +1118,7 @@ export default function App() {
                     {tab.pageType === 'settings'   && <SettingsPage />}
                     {tab.pageType === 'history'    && <HistoryPage onNavigate={navigate} />}
                     {tab.pageType === 'downloads'  && <DownloadsPage />}
+                    {tab.pageType === 'security' && <SecurityPage />}
                     {tab.pageType === 'wifi'       && <WifiPage />}
                     {tab.pageType === 'vpn'        && <VpnPage />}
                     {tab.pageType === 'research'   && <ResearchPage onNavigate={navigate} />}

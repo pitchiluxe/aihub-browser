@@ -8,6 +8,7 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore, DownloadItem } from '../../store/browserStore'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
+import DownloadSecurity from './DownloadSecurity'
 import {
   kindOf, formatProgress, percentOf, stateLabel, activeCount, formatWhen,
   type DownloadKind,
@@ -264,9 +265,11 @@ function DownloadRow({ dl }: { dl: DownloadItem }) {
         </div>
       </div>
 
+      {done && <DownloadSecurity scan={dl.security} />}
       {done && dl.savePath && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
           <button
+            disabled={dl.security?.state === 'detected' || dl.security?.state === 'blocked' || dl.security?.state === 'scanning'}
             onClick={() => window.electronAPI.downloads.openFile(dl.savePath)}
             title="Open this file"
             style={{

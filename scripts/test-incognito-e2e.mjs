@@ -140,7 +140,9 @@ const openTab = (app, wcId, url) =>
   app.evaluate(({ webContents }, [id, u]) => { webContents.fromId(id).send('open-in-new-tab', u) }, [wcId, url])
 
 const findTab = (app, prefix) => app.evaluate(({ webContents }, p) => {
-  const wc = webContents.getAllWebContents().find(w => w.getType() === 'browserView' && !w.isDestroyed() && w.getURL().startsWith(p) && !w.isLoading())
+  // WebContentsView reports "window" on current Electron. The test origin
+  // identifies its own content without relying on the retired BrowserView type.
+  const wc = webContents.getAllWebContents().find(w => !w.isDestroyed() && w.getURL().startsWith(p) && !w.isLoading())
   return wc ? { id: wc.id, persistent: wc.session.isPersistent(), storagePath: wc.session.storagePath } : null
 }, prefix)
 
@@ -149,9 +151,11 @@ const waitTab = (app, prefix) => until(() => findTab(app, prefix), { label: `tab
 const inTab = (app, wcId, script) =>
   app.evaluate(({ webContents }, [id, s]) => webContents.fromId(id).executeJavaScript(s, true), [wcId, script])
 
-const tabsAll = (app) => app.evaluate(({ webContents }) => webContents.getAllWebContents()
-  .filter(w => w.getType() === 'browserView' && !w.isDestroyed())
-  .map(w => ({ id: w.id, url: w.getURL(), persistent: w.session.isPersistent() })))
+const tabsAll = (app) => app.evaluate(({ webContents, BrowserWindow }) => {
+  const hosts = new Set(BrowserWindow.getAllWindows().map(w => w.webContents.id))
+  return webContents.getAllWebContents().filter(w => !w.isDestroyed() && !hosts.has(w.id))
+    .map(w => ({ id: w.id, url: w.getURL(), persistent: w.session.isPersistent() }))
+})
 
 const READ_IDB = `new Promise(res => { const r = indexedDB.open('e2e', 1);
   r.onupgradeneeded = () => r.result.createObjectStore('kv');

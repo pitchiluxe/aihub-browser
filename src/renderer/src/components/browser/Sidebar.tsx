@@ -42,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Library,      label: 'Reading Lists', page: 'community-lists', type: 'community-lists', accent: '#a78bfa' },
   { icon: History,      label: 'History',      page: 'history',      type: 'history'    },
   { icon: Download,     label: 'Downloads',    page: 'downloads',    type: 'downloads'  },
+  { icon: Shield,       label: 'Security Center', page: 'security', type: 'security', accent: '#34d399' },
   { icon: Puzzle,       label: 'Extensions',   page: 'extensions',   type: 'extensions', accent: '#fb923c' },
   { icon: WandSparkles, label: 'Site Declutter', page: 'declutter', type: 'declutter', accent: '#67e8f9' },
   { icon: Wifi,         label: 'Free WiFi',    page: 'wifi',         type: 'wifi'       },

@@ -22,7 +22,7 @@ export interface NavTarget {
 // a React page (pageType), never handed to a BrowserView, or the tab loads
 // nothing at all.
 const IN_APP_PAGES = [
-  'settings', 'history', 'downloads', 'wifi', 'vpn', 'research', 'agents',
+  'settings', 'history', 'downloads', 'wifi', 'vpn', 'research', 'agents', 'security',
   'extensions', 'mail', 'notes', 'obsidian-graph', 'manual', 'rewind', 'watch', 'bible', 'study', 'dj', 'travel', 'flights-rentals',
 ] as const
 
@@ -35,6 +35,7 @@ export function pageTypeForUrl(url: string | undefined): PageType {
 // Spoken names for the built-in pages. Matched on the whole (normalised) query
 // only, so "open bible" opens the reader while "open biblegateway" does not.
 const BUILT_IN_APPS: { pageType: PageType; title: string; aliases: string[] }[] = [
+  { pageType: 'security', title: 'Security Center', aliases: ['security', 'security center', 'antivirus', 'protection'] },
   { pageType: 'flights-rentals', title: 'Flights & Rentals', aliases: ['flights', 'flights and rentals', 'flights & rentals', 'car rentals', 'vacation stays'] },
   { pageType: 'study',      title: 'Bible Study', aliases: ['bible study', 'study', 'study bible', 'daily verse', 'verse of the day', 'memorise verses', 'memorize verses', 'scripture memory', 'bible lessons', 'bible course', 'bible courses'] },
   { pageType: 'bible',      title: 'Bible',      aliases: ['bible', 'holy bible', 'bible reader', 'scripture', 'scriptures', 'kjv'] },

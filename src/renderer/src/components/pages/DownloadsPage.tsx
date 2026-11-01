@@ -4,6 +4,7 @@ import { Download, FolderOpen, FileText, Trash2, CheckCircle2, XCircle, Loader2 
 import { useBrowserStore } from '../../store/browserStore'
 import { formatProgress, percentOf, stateLabel } from '../../services/downloadDisplay'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
+import DownloadSecurity from '../browser/DownloadSecurity'
 
 /**
  * The full downloads history. The toolbar panel (DownloadsButton) is the
@@ -86,10 +87,11 @@ export default function DownloadsPage() {
                   </div>
                 </div>
 
+                {dl.state === 'completed' && <DownloadSecurity scan={dl.security} />}
                 {/* Actions */}
                 {dl.state === 'completed' && dl.savePath && (
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => window.electronAPI.downloads.openFile(dl.savePath)}
+                    <button disabled={dl.security?.state === 'detected' || dl.security?.state === 'blocked' || dl.security?.state === 'scanning'} onClick={() => window.electronAPI.downloads.openFile(dl.savePath)}
                       className="px-3 py-1.5 rounded-lg text-xs bg-aihub-accent/20 hover:bg-aihub-accent/30 text-aihub-accent transition-all">
                       Open
                     </button>

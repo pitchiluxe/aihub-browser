@@ -1,4 +1,5 @@
 import type { PageType } from '../../../shared/pageTypes'
+import type { SecurityFinding, FileScan } from '../../../shared/security'
 import { create } from 'zustand'
 import { proposeGroups, groupColorFor, type TabGroup } from '../services/tabGroups'
 import type { SiteRules } from '../extensions/siteRules'
@@ -8,6 +9,9 @@ export interface Tab { id: string; url: string; title: string; favicon: string; 
 export interface AIMessage { role: 'user'|'assistant'|'system'; content: string; steps?: { label: string; status: 'pending' | 'done' | 'error' }[]; /** Data URLs the user attached to this turn. */ images?: string[] }
 export interface HistoryItem { id: string; url: string; title: string; favicon?: string; timestamp: number }
 export interface DownloadItem { id: string; filename: string; url: string; savePath: string; totalBytes: number; receivedBytes: number; state: string; startedAt: number; completedAt?: number }
+
+export interface Tab { securityFindings?: SecurityFinding[] }
+export interface DownloadItem { security?: FileScan }
 
 interface BrowserState {
   // Bookmarks

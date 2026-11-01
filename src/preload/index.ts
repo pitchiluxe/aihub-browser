@@ -127,6 +127,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('download:update', handler)
     },
   },
+  security: {
+    snapshot: () => ipcRenderer.invoke('security:snapshot'),
+    scan: (kind: 'file' | 'folder' | 'quick' | 'full') => ipcRenderer.invoke('security:scan', kind),
+    analyze: (question: string) => ipcRenderer.invoke('security:analyze', question),
+    openWindows: () => ipcRenderer.invoke('security:openWindows'),
+  },
   vault: {
     list:      () => ipcRenderer.invoke('vault:list'),
     latestFor: (url:string) => ipcRenderer.invoke('vault:latestFor', url),

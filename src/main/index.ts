@@ -15,6 +15,8 @@ import { registerCommunityIpc, releaseCommunityWindow, shutdownCommunityBackend 
 import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
 import { registerMediaScheme, registerMediaProtocol, registerDjIpc } from './dj/library'
 import { viewRect } from './viewBounds'
+import { extractLaunchUrl } from './launchUrl'
+import { registerSecurityIpc } from './security'
 import { registerFaviconIpc } from './favicons'
 import { initAutoUpdater } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt, lighterModelToPull } from './modelRouting'
@@ -628,12 +630,8 @@ async function resolveInstalledOllamaModel(preferred = ''): Promise<string> {
 // When Windows launches us as the default browser (user clicked a link in
 // another app), the URL arrives as a plain argv token — either on our own
 // process.argv (cold start) or via the 'second-instance' commandLine (already
-// running). Filter for the first http(s) URL rather than assuming position,
-// since packaged vs. dev argv layouts differ (extra flags, exe path, etc).
-function extractLaunchUrl(argv: string[]): string | null {
-  for (const a of argv) if (/^https?:\/\//i.test(a)) return a
-  return null
-}
+// running). Accept web links, file URLs, and local HTML paths without assuming
+// an argument position (packaged and development argv layouts differ).
 let pendingOpenUrl: string | null = extractLaunchUrl(process.argv)
 
 // ── Windows ────────────────────────────────────────────────────────────────
@@ -1490,6 +1488,18 @@ function crashPageDataUrl(crashedUrl: string, reason: string): string {
 // own address and title, not the data: URL we swapped in underneath it.
 const isCrashPage = (u: string) => u.startsWith('data:text/html')
 
+const securityNavigations = new WeakMap<Electron.WebContents, number>()
+async function navigateProtected(ctx: AppWin, tabId: string, wc: Electron.WebContents, url: string) {
+  const revision = (securityNavigations.get(wc) || 0) + 1
+  securityNavigations.set(wc, revision)
+  try {
+    const allowed = await browserSecurity.allowHtml(ctx, url)
+    if (wc.isDestroyed() || ctx.win.isDestroyed() || securityNavigations.get(wc) !== revision) return
+    if (allowed) await wc.loadURL(url)
+    else sendTabEvent(ctx, tabId, 'did-stop-loading', { title: wc.getTitle(), url: wc.getURL() })
+  } catch { sendTabEvent(ctx, tabId, 'did-fail-load', { errorCode: -2 }) }
+}
+
 function createTabView(ctx: AppWin | undefined, tabId: string, url: string, containerId?: string | null) {
   if (!ctx || ctx.views.has(tabId)) return
   const tabViews = ctx.views
@@ -1561,6 +1571,10 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   // into a disconnected tab strands the flow after account selection.
   // Plain target=_blank links still open as tabs.
   wc.setWindowOpenHandler(({ url: targetUrl, disposition }) => {
+    if (/^file:/i.test(targetUrl)) {
+      sendTo(ctx, 'open-in-new-tab', targetUrl)
+      return { action: 'deny' }
+    }
     if (disposition === 'new-window') {
       return {
         action: 'allow',
@@ -1637,6 +1651,11 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
     notePageHost(wc.id, navUrl)
     sendTabEvent(ctx, tabId, 'did-navigate', { url: navUrl })
   })
+  wc.on('will-navigate', (event, targetUrl) => {
+    if (!/^file:/i.test(targetUrl)) return
+    event.preventDefault()
+    void navigateProtected(ctx, tabId, wc, targetUrl)
+  })
   wc.on('did-navigate-in-page', (_e, navUrl) => {
     notePageHost(wc.id, navUrl)
     sendTabEvent(ctx, tabId, 'did-navigate-in-page', { url: navUrl })
@@ -1662,6 +1681,9 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
     try { curUrl = wc.getURL() } catch {}
     if (isCrashPage(curUrl)) return
     sendTabEvent(ctx, tabId, 'did-finish-load', { title, url: curUrl })
+    void browserSecurity.checkPage(ctx, wc).then(findings => {
+      if (!wc.isDestroyed() && wc.getURL() === curUrl) sendTabEvent(ctx, tabId, 'security-findings', { findings })
+    }).catch(() => {})
   })
 
   // ── Renderer crash recovery ───────────────────────────────────────────────
@@ -1710,7 +1732,7 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
     wc.insertCSS('::-webkit-scrollbar{width:0!important;height:0!important;background:transparent!important}').catch(() => {})
   })
 
-  wc.loadURL(url)
+  void navigateProtected(ctx, tabId, wc, url)
 }
 
 function destroyTabView(ctx: AppWin | undefined, tabId: string) {
@@ -1910,7 +1932,13 @@ function setupSharedApp(firstWin: BrowserWindow): void {
       if (isPrivate) incognito.settleDownload(dl.id)
       dl.state = state; dl.savePath = item.getSavePath()
       dl.completedAt = Date.now(); dl.receivedBytes = item.getReceivedBytes()
+      if (state === 'completed') dl.security = { state: 'scanning', checkedAt: Date.now(), message: 'Queued for a Defender scan.' }
       persist()
+      if (state === 'completed' && dl.savePath) {
+        const owner = [...appWins.values()].find(ctx => ctx.incognito === isPrivate)
+        if (owner) void browserSecurity.service.scanFile(owner, dl.savePath).then(result => { dl.security = result; persist() }).catch(() => {})
+        else { dl.security = { state: 'unavailable', checkedAt: Date.now(), message: 'No browser window is available to track this scan. The file remains unverified.' }; persist() }
+      }
     })
     persist()
   }
@@ -2064,6 +2092,7 @@ function createAppWindow(initialUrl?: string, opts: { incognito?: boolean } = {}
   }
 
   win.on('closed', () => {
+    browserSecurity.service.release(ctx.id)
     ctx.views.forEach(v => { try { v.webContents.close() } catch {} })
     ctx.views.clear()
     ctx.activeId = null
@@ -2190,7 +2219,10 @@ app.on('second-instance', (_event, commandLine) => {
   const url = extractLaunchUrl(commandLine)
   if (!ctx && appWins.size) {
     // Only private windows are open: a normal window has to exist to take it.
-    createAppWindow(url || undefined)
+    // Secondary-window query strings accept web URLs only. Queue local files
+    // for the new normal renderer instead of losing them in that web-only path.
+    if (url && /^file:/i.test(url)) { pendingOpenUrl = url; createAppWindow() }
+    else createAppWindow(url || undefined)
     return
   }
   const target = ctx?.win ?? BrowserWindow.getAllWindows()[0]
@@ -3122,7 +3154,9 @@ ipcMain.handle('tabview:setOverlayHidden', (e, hidden: boolean) => {
   syncActiveBrowserView(ctx)
 })
 ipcMain.handle('tabview:navigate', (e, tabId: string, url: string) => {
-  try { ctxFromEvent(e)?.views.get(tabId)?.webContents.loadURL(url) } catch {}
+  const ctx = ctxFromEvent(e)
+  const wc = ctx?.views.get(tabId)?.webContents
+  if (ctx && wc && typeof url === 'string') void navigateProtected(ctx, tabId, wc, url)
 })
 ipcMain.handle('tabview:stop', (e, tabId: string) => {
   try { ctxFromEvent(e)?.views.get(tabId)?.webContents.stop() } catch {}
@@ -3847,6 +3881,11 @@ ipcMain.handle('workspace:delete', (_e, id: string) => sessions.deleteWorkspace(
 // Progress ticks rewrite this list several times a second during a transfer;
 // same in-memory + debounced-write treatment as history.
 const downloadsStore = createManagedJsonStore<any[]>(DL_FILE, () => [])
+const browserSecurity = registerSecurityIpc({
+  appDir: APP_DIR,
+  resolveWindow: ctxFromEvent,
+  aiConfig: () => ({ base: getAIConfig().olBase, model: getRoutingSettings().ollamaModel }),
+})
 
 ipcMain.handle('downloads:getAll',       (e) => {
   // A private window lists the downloads of the private session and nothing
@@ -4011,7 +4050,18 @@ ipcMain.handle('vault:open', (e, args: { tabId: string; id: string }) => {
   }
 })
 
-ipcMain.handle('downloads:openFile',     (_e, p: string) => shell.openPath(p))
+ipcMain.handle('downloads:openFile', async (e, p: string) => {
+  const ctx = ctxFromEvent(e)
+  if (!ctx || e.senderFrame !== e.sender.mainFrame || typeof p !== 'string') return
+  const rows = ctx.incognito ? incognito.listDownloads() : downloadsStore.get()
+  if (!rows.some((row: any) => row.savePath === p && row.state === 'completed')) return
+  if (!await browserSecurity.allowDownload(ctx, p) || ctx.win.isDestroyed()) return
+  if (/^\.html?$/i.test(extname(p))) sendTo(ctx, 'open-in-new-tab', pathToFileURL(p).href)
+  else {
+    const error = await shell.openPath(p)
+    if (error) await dialog.showMessageBox(ctx.win, { type: 'error', message: 'Could not open this download', detail: error })
+  }
+})
 ipcMain.handle('downloads:showInFolder', (_e, p: string) => shell.showItemInFolder(p))
 
 // ── IPC: Cache ─────────────────────────────────────────────────────────────

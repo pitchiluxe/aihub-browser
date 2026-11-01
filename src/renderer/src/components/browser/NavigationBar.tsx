@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, RotateCw, Home, Bookmark, Bot, WandSparkles,
-  Lock, AlertTriangle, PanelLeft, Pencil, Search, Globe, Camera, Video, Square, X,
+  Lock, AlertTriangle, Shield, PanelLeft, Pencil, Search, Globe, Camera, Video, Square, X,
   Crop, Monitor, BookOpen, GitCompare, AppWindow,
 } from 'lucide-react'
 import { penSession } from '../../services/screenPen/penSession'
@@ -35,7 +35,7 @@ interface Props {
 }
 
 function isUrl(s: string): boolean {
-  if (s.startsWith('http://') || s.startsWith('https://')) return true
+  if (/^(?:https?|file):\/\//i.test(s)) return true
   if (/^[\w-]+\.[\w.-]+/.test(s)) return true
   return false
 }
@@ -102,7 +102,7 @@ export default function NavigationBar({
     const q = raw.trim()
     if (!q) return
     const url = isUrl(q)
-      ? (q.startsWith('http') ? q : `https://${q}`)
+      ? (/^(?:https?|file):\/\//i.test(q) ? q : `https://${q}`)
       : `https://www.google.com/search?q=${encodeURIComponent(q)}`
     onNavigate(url)
     setIsEditing(false)
@@ -597,6 +597,12 @@ export default function NavigationBar({
 
         {/* Everything this browser has pulled down, with live progress — the
             same list as the downloads page, at a glance. */}
+        <button
+          onClick={() => useBrowserStore.getState().focusOrOpenPage('aihub://security', 'security')}
+          title={activeTab?.securityFindings?.length ? activeTab.securityFindings.map(f => f.title).join(' · ') : 'Security Center'}
+          aria-label={activeTab?.securityFindings?.length ? 'Security warning: review this page' : 'Open Security Center'}
+          className={`no-drag flex items-center gap-1 rounded-xl px-2 py-1.5 text-xs ${activeTab?.securityFindings?.length ? 'bg-amber-500/15 text-amber-300' : 'text-aihub-muted hover:text-emerald-300'}`}
+        ><Shield size={14} />{activeTab?.securityFindings?.length ? 'Review page' : null}</button>
         <DownloadsButton />
 
         <CaptureButton
