@@ -1,6 +1,9 @@
-export type BuiltinGameId = 'blocks' | 'solitaire' | 'maze' | 'property' | 'snake' | '2048'
+export type BuiltinGameId = 'blocks' | 'solitaire' | 'maze' | 'property' | 'snake' | '2048' | 'echo' | 'orbit' | 'rulequake'
 export interface BuiltinGame { id: BuiltinGameId; title: string; genre: string; description: string; color: string; aliases: string; players: string }
 export const BUILTIN_GAMES: BuiltinGame[] = [
+  { id: 'echo', title: 'Echo Heist', genre: 'Originals', description: 'Steal tomorrow’s treasure. Escape yesterday’s moves.', color: '#79dce8', aliases: 'original challenge echo heist strategy', players: '1 player' },
+  { id: 'orbit', title: 'Orbit Auction', genre: 'Originals', description: 'Six reversals. A moving storm. When will you cash out?', color: '#f5ab86', aliases: 'original challenge orbit auction risk stars', players: '1 player' },
+  { id: 'rulequake', title: 'Rulequake', genre: 'Originals', description: 'The board changes. The rule flips. Can your brain keep up?', color: '#c4afff', aliases: 'original challenge rulequake logic reaction', players: '1 player' },
   { id: 'blocks', title: 'Falling Blocks', genre: 'Puzzle', description: 'Stack, rotate, and clear your way to the next level.', color: '#6eb6ff', aliases: 'tetris tetromino', players: '1 player' },
   { id: 'solitaire', title: 'Solitaire', genre: 'Cards', description: 'A quiet table. Fifty-two cards. Your next perfect move.', color: '#6ed5ae', aliases: 'klondike patience cards', players: '1 player' },
   { id: 'maze', title: 'Maze Chase', genre: 'Arcade', description: 'Clear every dot. Turn the chase around with a power orb.', color: '#f5cc68', aliases: 'pac man pacman maze', players: '1 player' },
