@@ -1,10 +1,12 @@
 import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Gamepad2, HardDrive, Pause, Play, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react'
-import { BUILTIN_GAMES, CLASSIC_GAMES, ROM_SYSTEMS, MAX_GAME_LIBRARY_BYTES, MAX_GAME_LIBRARY_COUNT, type BuiltinGameId, type RomSystem } from '../../../../shared/games/catalog'
+import { ArrowLeft, FolderOpen, Gamepad2, HardDrive, Pause, Play, Plus, RotateCcw, Search, X } from 'lucide-react'
+import { BUILTIN_GAMES, CLASSIC_GAMES, ROM_SYSTEMS, MAX_GAME_LIBRARY_BYTES, MAX_GAME_LIBRARY_COUNT, MAX_ROM_BYTES, type BuiltinGameId, type RomSystem } from '../../../../shared/games/catalog'
+import { cleanRomTitle, detectRomSystem } from '../../../../shared/games/romFolder'
 import { listRomGames, prepareRom, readRomFiles, removeRomGame, saveRomGame, type RomFiles, type RomGame } from '../../services/gameLibrary'
 import { IS_INCOGNITO } from '../../services/incognitoMode'
-import GameArtwork from './GameArtwork'
+import { ArcadeCabinet, Cartridge, WantedCard } from './RoomScene'
 import './game-room.css'
+import './game-room-scene.css'
 const BlocksGame = lazy(() => import('./BlocksGame'))
 const SolitaireGame = lazy(() => import('./SolitaireGame'))
 const PropertyGame = lazy(() => import('./PropertyGame'))
@@ -15,7 +17,15 @@ const RomPlayer = lazy(() => import('./RomPlayer'))
 const EchoHeist = lazy(() => import('./OriginalGames').then(module => ({ default: module.EchoHeist })))
 const OrbitAuction = lazy(() => import('./OriginalGames').then(module => ({ default: module.OrbitAuction })))
 const Rulequake = lazy(() => import('./OriginalGames').then(module => ({ default: module.Rulequake })))
-const COMPONENTS = { blocks: BlocksGame, solitaire: SolitaireGame, property: PropertyGame, snake: SnakeGame, maze: MazeGame, '2048': MergeGame, echo: EchoHeist, orbit: OrbitAuction, rulequake: Rulequake }
+const CheckersGame = lazy(() => import('./DraughtsGame').then(module => ({ default: module.CheckersGame })))
+const DamesGame = lazy(() => import('./DraughtsGame').then(module => ({ default: module.DamesGame })))
+const LudoGame = lazy(() => import('./LudoGame'))
+const COMPONENTS = { blocks: BlocksGame, solitaire: SolitaireGame, property: PropertyGame, snake: SnakeGame, maze: MazeGame, '2048': MergeGame, echo: EchoHeist, orbit: OrbitAuction, rulequake: Rulequake, checkers: CheckersGame, dames: DamesGame, ludo: LudoGame }
+const HOW_TO_KEY = 'aihub-game-room-howto-seen-v1'
+function readSeenHowTo(): string[] {
+  if (IS_INCOGNITO) return []
+  try { const stored = JSON.parse(localStorage.getItem(HOW_TO_KEY) || '[]'); return Array.isArray(stored) ? stored.filter(item => typeof item === 'string') : [] } catch { return [] }
+}
 type Selection = { kind: 'builtin'; id: BuiltinGameId } | { kind: 'rom'; game: RomGame; files: RomFiles }
 const SCORE_KEY = 'aihub-game-room-scores-v1'
 function loadScores(): Record<string, number> {
@@ -33,7 +43,15 @@ export default function GameRoomPage({ active }: { active: boolean }) {
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const [importing, setImporting] = useState<{ title: string; system: RomSystem } | null>(null)
   const [romFile, setRomFile] = useState<File | null>(null), [biosFile, setBiosFile] = useState<File | null>(null)
-  const privateFiles = useRef(new Map<string, RomFiles>())
+  const [notice, setNotice] = useState(''), [progress, setProgress] = useState(''), [entering, setEntering] = useState(true)
+  const privateFiles = useRef(new Map<string, RomFiles>()), folderInput = useRef<HTMLInputElement>(null)
+  const [seenHowTo, setSeenHowTo] = useState(readSeenHowTo)
+  const markHowToSeen = (id: string) => setSeenHowTo(previous => {
+    if (previous.includes(id)) return previous
+    const next = [...previous, id]
+    if (!IS_INCOGNITO) try { localStorage.setItem(HOW_TO_KEY, JSON.stringify(next)) } catch { /* Instructions simply reopen next time. */ }
+    return next
+  })
   const paused = manualPause || !active || hidden || !!importing
   useEffect(() => { if (!IS_INCOGNITO) void listRomGames().then(setLibrary).catch(error => setError(error.message)) }, [])
   useEffect(() => {
@@ -72,33 +90,71 @@ export default function GameRoomPage({ active }: { active: boolean }) {
     setBusy(true); setError('')
     try {
       const prepared = await prepareRom(romFile, importing.title, importing.system, biosFile || undefined)
-      if (IS_INCOGNITO) {
-        const others = library.filter(game => game.id !== prepared.info.id)
-        if (others.length >= MAX_GAME_LIBRARY_COUNT || others.reduce((total, game) => total + game.size, 0) + prepared.info.size > MAX_GAME_LIBRARY_BYTES) throw Error('This private room is limited to 40 games and 256 MB. Remove a game before adding another.')
-        privateFiles.current.set(prepared.info.id, prepared.files)
-      }
-      else await saveRomGame(prepared.info, prepared.files)
+      await storeGame(prepared, library)
       setLibrary(previous => [prepared.info, ...previous.filter(game => game.id !== prepared.info.id)])
       setImporting(null); setSelection({ kind: 'rom', game: prepared.info, files: prepared.files }); setManualPause(false); setRound(value => value + 1)
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not import this game.') }
     finally { setBusy(false) }
   }
+  const storeGame = async (prepared: { info: RomGame; files: RomFiles }, current: RomGame[]) => {
+    if (!IS_INCOGNITO) return saveRomGame(prepared.info, prepared.files)
+    const others = current.filter(game => game.id !== prepared.info.id)
+    if (others.length >= MAX_GAME_LIBRARY_COUNT || others.reduce((total, game) => total + game.size, 0) + prepared.info.size > MAX_GAME_LIBRARY_BYTES) throw Error(`This private room is limited to ${MAX_GAME_LIBRARY_COUNT} games and 256 MB. Remove a game before adding another.`)
+    privateFiles.current.set(prepared.info.id, prepared.files)
+  }
+  const importFolder = async (list: FileList | null) => {
+    const files = [...(list || [])]
+    if (folderInput.current) folderInput.current.value = ''
+    if (!files.length || busy) return
+    setBusy(true); setError(''); setNotice('')
+    let current = library, added = 0, already = 0, skipped = 0, failure = ''
+    for (const [index, file] of files.entries()) {
+      setProgress(`Stocking the shelves… ${index + 1} of ${files.length}`)
+      try {
+        if (file.size > MAX_ROM_BYTES || !detectRomSystem(file.name, new Uint8Array(0)) && !/\.zip$/i.test(file.name)) { skipped++; continue }
+        const detected = detectRomSystem(file.name, new Uint8Array(await file.arrayBuffer()))
+        if (!detected) { skipped++; continue }
+        const prepared = await prepareRom(file, cleanRomTitle(detected.innerName), detected.system)
+        if (current.some(game => game.id === prepared.info.id)) { already++; continue }
+        await storeGame(prepared, current)
+        current = [prepared.info, ...current]; added++; setLibrary(current)
+      } catch (error) {
+        failure = error instanceof Error ? error.message : 'A game could not be added.'
+        if (/limited to/.test(failure)) break
+        skipped++
+      }
+    }
+    setProgress(''); setBusy(false)
+    const parts = [`${added} ${added === 1 ? 'game' : 'games'} added to your shelves`, already && `${already} already there`, skipped && `${skipped} skipped (not a console game file)`].filter(Boolean)
+    if (failure && /limited to/.test(failure)) setError(failure)
+    setNotice(parts.join(' · ') + '.')
+  }
   const title = selection?.kind === 'builtin' ? BUILTIN_GAMES.find(game => game.id === selection.id)?.title : selection?.game.title
   const matches = (text: string) => text.toLowerCase().includes(query.toLowerCase().trim())
   const builtins = BUILTIN_GAMES.filter(game => (category === 'All games' || category === 'Play offline' || category === game.genre) && matches(`${game.title} ${game.aliases} ${game.genre}`))
   const classics = CLASSIC_GAMES.filter(game => (category === 'All games' || category === 'Classics') && matches(`${game.title} ${game.genre}`))
-  const imported = library.filter(game => (category === 'All games' || category === 'My games') && matches(game.title))
+  const imported = library.filter(game => (category === 'All games' || category === 'My games') && matches(game.title)).sort((a, b) => a.title.localeCompare(b.title))
+  const remove = async (game: RomGame) => { try { if (IS_INCOGNITO) privateFiles.current.delete(game.id); else await removeRomGame(game.id); setLibrary(previous => previous.filter(item => item.id !== game.id)) } catch { setError('Could not remove this game. Try again.') } }
+  const folderButton = <button className="gr-control" disabled={busy} onClick={() => folderInput.current?.click()}><FolderOpen size={15} />Stock from a folder</button>
   const ActiveGame = selection?.kind === 'builtin' ? COMPONENTS[selection.id] : null
-  return <div className="game-room">
-    <header className="gr-header"><div className="gr-heading"><span className="gr-room-icon"><Gamepad2 size={24} /></span><div><h1>Game room</h1><p>{selection ? 'A good place for one more round.' : 'Quick games. Quiet card tables. Your own classics.'}</p></div></div><button className="gr-control" onClick={() => openImport()}><Plus size={15} />Add a game</button></header>
+  return <div className={`game-room ${selection ? 'is-playing' : ''}`}>
+    <div className="gr-room-backdrop" aria-hidden="true"><i className="gr-ceiling-light" /><i className="gr-ceiling-light" /><i className="gr-ceiling-light" /><i className="gr-floor" /></div>
+    {entering && <div className="gr-doors" aria-hidden="true" onAnimationEnd={event => { if (event.target === event.currentTarget) setEntering(false) }}><i /><i /></div>}
+    <header className="gr-header"><div className="gr-heading"><h1 className="gr-neon" data-text="Game room">Game room</h1><p>{selection ? 'A good place for one more round.' : 'Pull up a stool. The machines are warm.'}</p></div><div className="gr-header-tools">{folderButton}<button className="gr-control is-primary" onClick={() => openImport()}><Plus size={15} />Add a game</button></div></header>
+    <input ref={folderInput} type="file" hidden multiple aria-label="Game folder" {...{ webkitdirectory: '' } as React.InputHTMLAttributes<HTMLInputElement>} onChange={event => void importFolder(event.target.files)} />
+    {(progress || notice) && !importing && <div role="status" className="gr-alert is-notice">{progress || notice}{!progress && <button aria-label="Dismiss message" onClick={() => setNotice('')}><X size={15} /></button>}</div>}
     {error && !importing && <div role="alert" className="gr-alert">{error}<button aria-label="Dismiss error" onClick={() => setError('')}><X size={15} /></button></div>}
-    {selection ? <main className="gr-player-area"><div className="gr-player-toolbar"><button className="gr-back" onClick={() => setSelection(null)}><ArrowLeft size={15} />Library</button><h2>{title}</h2><div className="gr-player-tools"><button className="gr-control" onClick={() => setManualPause(value => !value)}>{manualPause ? <Play size={14} /> : <Pause size={14} />}{manualPause ? 'Resume' : 'Pause'}</button><button className="gr-control" onClick={() => { setRound(value => value + 1); setManualPause(false) }}><RotateCcw size={14} />New game</button></div></div><div className={`gr-game-surface ${selection.kind === 'rom' ? 'is-rom' : ''}`}><Suspense fallback={<p className="gr-loading">Setting up your game…</p>}><div key={`${selection.kind === 'builtin' ? selection.id : selection.game.id}-${round}`} className="gr-game-content">{ActiveGame && <ActiveGame paused={paused} onFinish={onFinish} />}{selection.kind === 'rom' && <RomPlayer game={selection.game} files={selection.files} paused={paused} />}</div></Suspense>{manualPause && <div className="gr-pause-cover"><Pause size={26} /><h3>Take your time.</h3><p>Your game is paused.</p><button className="gr-control" onClick={() => setManualPause(false)}><Play size={15} />Resume game</button></div>}</div><p className="gr-session-note">P pauses built-in games. Switching browser tabs pauses play. {IS_INCOGNITO ? 'This room and its imported files disappear when the private window closes.' : 'Best scores and imported games are saved on this computer.'}</p></main>
-    : <main className="gr-library"><div className="gr-library-intro"><div><h2>What are we playing?</h2><p>Nine games ready now. Three AIHub Originals. Your own classics.</p></div><label className="gr-search"><Search size={15} /><input aria-label="Search games" placeholder="Find your next game…" value={query} onChange={event => setQuery(event.target.value)} /></label></div><nav className="gr-filters" aria-label="Game categories">{['All games', 'Play offline', 'Originals', 'Puzzle', 'Arcade', 'Cards', 'Board', 'Classics', 'My games'].map(item => <button key={item} aria-pressed={category === item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}{item === 'My games' && library.length ? ` (${library.length})` : ''}</button>)}</nav>
-      {builtins.length > 0 && <section aria-label="Offline games"><div className="gr-section-heading"><h3>Ready to play</h3><span>No downloads. No account. Just play.</span></div><div className="gr-game-grid">{builtins.map(game => <button key={game.id} className="gr-game-tile" style={{ '--game-color': game.color } as React.CSSProperties} onClick={() => playBuiltin(game.id)} aria-label={`Play ${game.title}`}><div className="gr-tile-art"><GameArtwork id={game.id} color={game.color} /><span className="gr-play-mark"><Play size={17} fill="currentColor" /></span></div><div className="gr-tile-copy"><div className="gr-tile-meta"><span>{game.genre}</span><span>{game.players}</span></div><h4>{game.title}</h4><p>{game.description}</p><small>{scores[game.id] ? `Best score ${scores[game.id].toLocaleString()}` : 'Play offline'}</small></div></button>)}</div></section>}
-      {imported.length > 0 && <section aria-label="Imported games"><div className="gr-section-heading"><h3>Your collection</h3><span><HardDrive size={13} />{library.length} imported {library.length === 1 ? 'game' : 'games'}</span></div><div className="gr-game-grid">{imported.map(game => <article key={game.id} className="gr-game-tile gr-imported-tile"><button className="gr-imported-play" disabled={busy} onClick={() => void playRom(game)} aria-label={`Play ${game.title}`}><div className="gr-tile-art"><GameArtwork id="rom" color="#6eb6ff" /><span className="gr-play-mark"><Play size={17} fill="currentColor" /></span></div><div className="gr-tile-copy"><div className="gr-tile-meta">{ROM_SYSTEMS.find(system => system.id === game.system)?.label}</div><h4>{game.title}</h4><p>{(game.size / 1024 / 1024).toFixed(1)} MB on this computer</p></div></button><button className="gr-remove-game" aria-label={`Remove ${game.title} from library`} disabled={busy} onClick={async () => { try { if (IS_INCOGNITO) privateFiles.current.delete(game.id); else await removeRomGame(game.id); setLibrary(previous => previous.filter(item => item.id !== game.id)) } catch { setError('Could not remove this game. Try again.') } }}><Trash2 size={14} /></button></article>)}</div></section>}
-      {classics.length > 0 && <section aria-label="Classic games"><div className="gr-section-heading"><h3>Bring back a favorite</h3><span>Import a game file you own to play these titles.</span></div><div className="gr-classics-grid">{classics.map(game => { const existing = library.find(item => item.title === game.title); return <button key={game.title} className="gr-classic" onClick={() => existing ? void playRom(existing) : openImport(game.title, game.system)} disabled={busy}><span className="gr-classic-icon" style={{ color: game.color }}><Gamepad2 size={22} /></span><span><strong>{game.title}</strong><small>{game.genre} · {ROM_SYSTEMS.find(system => system.id === game.system)?.label}</small></span><span className="gr-classic-action">{existing ? 'Play' : 'Add game'}{existing ? <Play size={13} /> : <Plus size={13} />}</span></button> })}</div></section>}
-      {!builtins.length && !classics.length && !imported.length && <div className="gr-empty"><Gamepad2 size={34} /><h3>{category === 'My games' ? 'Your collection starts here' : 'No game found'}</h3><p>{category === 'My games' ? 'Add a supported game file to keep it in your room.' : 'Try another name or category.'}</p>{category === 'My games' && <button className="gr-control" onClick={() => openImport()}>Add your first game</button>}</div>}
-      <footer className="gr-footer">Built-in games are original implementations. Named commercial classics require your own game files. Imported games use EmulatorJS; the emulator downloads when you launch a game and requires an internet connection.</footer>
+    {selection ? <main className="gr-player-area"><div className="gr-player-toolbar"><button className="gr-back" onClick={() => setSelection(null)}><ArrowLeft size={15} />Back to the room</button><h2>{title}</h2><div className="gr-player-tools"><button className="gr-control" onClick={() => setManualPause(value => !value)}>{manualPause ? <Play size={14} /> : <Pause size={14} />}{manualPause ? 'Resume' : 'Pause'}</button><button className="gr-control" onClick={() => { setRound(value => value + 1); setManualPause(false) }}><RotateCcw size={14} />New game</button></div></div>
+      {selection.kind === 'builtin' && (() => { const info = BUILTIN_GAMES.find(game => game.id === selection.id)!; return <details key={info.id} className="gr-howto" open={!seenHowTo.includes(info.id)} onToggle={event => { if (!event.currentTarget.open) markHowToSeen(info.id) }}><summary>How to play {info.title}</summary><div><p className="gr-howto-goal"><strong>Goal</strong>{info.goal}</p><ol>{info.howTo.map(step => <li key={step}>{step}</li>)}</ol><button type="button" className="gr-control" onClick={event => { (event.currentTarget.closest('details') as HTMLDetailsElement).open = false }}>Got it — let’s play</button></div></details> })()}
+      <div className={`gr-stage ${selection.kind === 'rom' ? 'is-tv' : 'is-table'}`}>{selection.kind === 'rom' && <div className="gr-tv-top" aria-hidden="true"><i /><i /></div>}<div className={`gr-game-surface ${selection.kind === 'rom' ? 'is-rom' : ''}`}><Suspense fallback={<p className="gr-loading">Setting up your game…</p>}><div key={`${selection.kind === 'builtin' ? selection.id : selection.game.id}-${round}`} className="gr-game-content">{ActiveGame && <ActiveGame paused={paused} onFinish={onFinish} />}{selection.kind === 'rom' && <RomPlayer game={selection.game} files={selection.files} paused={paused} />}</div></Suspense>{manualPause && <div className="gr-pause-cover"><Pause size={26} /><h3>Take your time.</h3><p>Your game is paused.</p><button className="gr-control" onClick={() => setManualPause(false)}><Play size={15} />Resume game</button></div>}</div>{selection.kind === 'rom' && <div className="gr-tv-base" aria-hidden="true"><span>{ROM_SYSTEMS.find(system => system.id === selection.game.system)?.label}</span><i /><i /></div>}</div>
+      <p className="gr-session-note">P pauses built-in games. Switching browser tabs pauses play. {IS_INCOGNITO ? 'This room and its imported files disappear when the private window closes.' : 'Best scores and imported games are saved on this computer.'}</p></main>
+    : <main className="gr-library"><div className="gr-library-intro"><div><h2>What are we playing?</h2><p>{BUILTIN_GAMES.length} machines on the floor. {library.length ? `${library.length} cartridges on your wall.` : 'An empty cartridge wall, waiting for your classics.'}</p></div><label className="gr-search"><Search size={15} /><input aria-label="Search games" placeholder="Find your next game…" value={query} onChange={event => setQuery(event.target.value)} /></label></div><nav className="gr-filters" aria-label="Game categories">{['All games', 'Play offline', 'Originals', 'Puzzle', 'Arcade', 'Cards', 'Board', 'Classics', 'My games'].map(item => <button key={item} aria-pressed={category === item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}{item === 'My games' && library.length ? ` (${library.length})` : ''}</button>)}</nav>
+      {builtins.length > 0 && <section aria-label="Offline games" className="gr-zone"><div className="gr-section-heading"><h3><span className="gr-plaque">The arcade floor</span></h3><span>No downloads. No account. Just play.</span></div><div className="gr-arcade-row">{builtins.map(game => <ArcadeCabinet key={game.id} game={game} best={scores[game.id] || 0} onPlay={() => playBuiltin(game.id)} />)}</div></section>}
+      {imported.length > 0 && <section aria-label="Imported games" className="gr-zone"><div className="gr-section-heading"><h3><span className="gr-plaque">Cartridge wall</span></h3><span><HardDrive size={13} />{library.length} {library.length === 1 ? 'cartridge' : 'cartridges'} on this computer</span></div><div className="gr-shelf">{imported.map(game => <Cartridge key={game.id} game={game} busy={busy} onPlay={() => void playRom(game)} onRemove={() => void remove(game)} />)}</div></section>}
+      {!library.length && (category === 'All games' || category === 'My games') && !query && <section className="gr-zone gr-shelf-empty"><div className="gr-shelf is-empty" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <i key={index} />)}</div><div><h3>Stock your cartridge wall</h3><p>Pick a folder of game files you own. Every NES, Genesis, Super Nintendo and Game Boy game inside — loose or zipped — gets its own cartridge here.</p>{folderButton}</div></section>}
+      {classics.length > 0 && <section aria-label="Classic games" className="gr-zone"><div className="gr-section-heading"><h3><span className="gr-plaque">Wanted board</span></h3><span>Import a game file you own to play these titles.</span></div><div className="gr-corkboard">{classics.map(game => { const existing = library.find(item => item.title.toLowerCase() === game.title.toLowerCase()); return <WantedCard key={game.title} title={game.title} genre={game.genre} system={game.system} owned={!!existing} busy={busy} onClick={() => existing ? void playRom(existing) : openImport(game.title, game.system)} /> })}</div></section>}
+      {!builtins.length && !classics.length && !imported.length && <div className="gr-empty"><Gamepad2 size={34} /><h3>{category === 'My games' ? 'Your collection starts here' : 'No game found'}</h3><p>{category === 'My games' ? 'Add a supported game file, or a whole folder, to keep it in your room.' : 'Try another name or category.'}</p>{category === 'My games' && <div className="gr-header-tools"><button className="gr-control" onClick={() => openImport()}>Add your first game</button>{folderButton}</div>}</div>}
+      <footer className="gr-footer">Built-in games are original implementations. Cartridge labels are original artwork generated from each title. Named commercial classics require your own game files. Imported games use EmulatorJS; the emulator downloads when you launch a game and requires an internet connection.</footer>
     </main>}
     {importing && <div className="gr-modal-backdrop" onKeyDown={event => { if (event.key === 'Escape' && !busy) setImporting(null) }}><form className="gr-import-modal" role="dialog" aria-modal="true" aria-labelledby="gr-import-title" onSubmit={importGame}><header><h2 id="gr-import-title">Bring a game to your room</h2><button type="button" className="gr-close" aria-label="Close game import" disabled={busy} onClick={() => setImporting(null)}><X size={19} /></button></header><p>Choose a game file you own. The file is stored locally{IS_INCOGNITO ? ' for this private session' : ' on this computer'}; the browser does not upload it.</p><label>Game name<input autoFocus value={importing.title} maxLength={100} placeholder="Use the game’s title, or leave blank for its filename" onChange={event => setImporting({ ...importing, title: event.target.value })} /></label><label>System<select value={importing.system} onChange={event => { setImporting({ ...importing, system: event.target.value as RomSystem }); setRomFile(null) }}>{ROM_SYSTEMS.map(system => <option key={system.id} value={system.id}>{system.label}</option>)}</select></label><label>Game file <small>Up to 64 MB</small><input key={importing.system} type="file" aria-label="Game file" accept={ROM_SYSTEMS.find(system => system.id === importing.system)!.extensions.map(extension => '.' + extension).join(',') + ',.zip'} onChange={event => setRomFile(event.target.files?.[0] || null)} /></label><details><summary>Optional BIOS file</summary><p>Some arcade games need a compatible BIOS or ROM set. Console versions of the named classics are often simpler to set up.</p><input type="file" aria-label="Optional BIOS file" accept=".bin,.rom,.bios,.zip" onChange={event => setBiosFile(event.target.files?.[0] || null)} /></details>{error && <p className="gr-import-error" role="alert">{error}</p>}<button type="submit" className="gr-import-submit" disabled={!romFile || busy}>{busy ? 'Adding your game…' : 'Add and play'}<Play size={15} /></button></form></div>}
   </div>

@@ -1,0 +1,25 @@
+/* A wooden board leaning back on the table; pieces are stacked discs. */
+.gr-draughts-layout{grid-template-columns:minmax(260px,min(520px,62vh)) minmax(170px,250px)!important}
+.gr-dr-stage{perspective:1600px;perspective-origin:50% 0;padding:6px 0 0}
+.gr-dr-board{display:grid;grid-template-columns:repeat(var(--n),1fr);aspect-ratio:1;padding:14px;border-radius:12px;background:linear-gradient(135deg,#6a4327,#4a2d18);box-shadow:inset 0 0 0 2px #ffffff14,inset 0 0 0 14px #3b2312,0 4px 0 #2a180b,0 40px 50px #000b;transform-origin:50% 0;transform:rotateX(24deg);margin-bottom:-6%}
+.gr-dr-square{position:relative;display:grid;place-items:center;padding:0;border:0;border-radius:0;aspect-ratio:1;cursor:default}
+.gr-dr-square.is-light{background:linear-gradient(135deg,#f0dcb4,#e2c799)}
+.gr-dr-square.is-dark{background:linear-gradient(135deg,#7b4a2a,#5e3519);cursor:pointer}
+.game-room .gr-dr-square:disabled{opacity:1;cursor:default}
+.gr-dr-square.is-last{box-shadow:inset 0 0 0 100px #f5cc6824}
+.gr-dr-square.is-target:after{content:'';width:34%;height:34%;border-radius:50%;background:#6ed5ae;box-shadow:0 0 0 3px #6ed5ae55,0 0 14px #6ed5ae;animation:gr-dr-pulse 1.2s ease-in-out infinite}
+.gr-dr-square.is-captured:before{content:'';position:absolute;width:56%;height:56%;border-radius:50%;border:2px dashed #ed9c81aa}
+@keyframes gr-dr-pulse{50%{transform:scale(.75);opacity:.7}}
+.gr-dr-piece{--top:#f6efe0;--edge:#c9b896;--rim:#9c8a69;width:78%;height:78%;border-radius:50%;position:relative;background:radial-gradient(circle at 35% 30%,#fff 0,var(--top) 30%,var(--edge) 100%);box-shadow:inset 0 0 0 3px var(--edge),inset 0 0 0 6px var(--top),inset 0 0 0 7px var(--edge),0 2px 0 var(--rim),0 4px 0 var(--rim),0 6px 6px #0009;transform:translateY(-4px);transition:transform .2s}
+.gr-dr-piece.is-dark{--top:#c0323e;--edge:#7d1a23;--rim:#4a0d12;background:radial-gradient(circle at 35% 30%,#f17a83 0,var(--top) 35%,var(--edge) 100%)}
+/* Jeu de dames: the traditional ebony and boxwood men, turned with ring grooves. */
+.is-dames .gr-dr-piece.is-dark{--top:#3a2618;--edge:#1c120b;--rim:#0d0805;background:repeating-radial-gradient(circle at 50% 50%,#4a3020 0 3px,#2c1c11 3px 4px),#3a2618}
+.is-dames .gr-dr-piece.is-light{background:repeating-radial-gradient(circle at 50% 50%,#f4e6c6 0 3px,#dcc79c 3px 4px),#f4e6c6}
+.gr-dr-piece.is-king{box-shadow:inset 0 0 0 3px var(--edge),inset 0 0 0 6px var(--top),inset 0 0 0 7px var(--edge),0 2px 0 var(--rim),0 5px 0 var(--edge),0 7px 0 var(--rim),0 10px 0 var(--edge),0 12px 0 var(--rim),0 14px 8px #0009;transform:translateY(-10px)}
+.gr-dr-piece.is-king:after{content:'♛';position:absolute;inset:0;display:grid;place-items:center;font-size:calc(min(560px,60vw) / var(--n) * .38);color:#f5cc68;text-shadow:0 1px 0 #0008}
+.gr-dr-square.is-movable .gr-dr-piece{box-shadow:inset 0 0 0 3px var(--edge),inset 0 0 0 6px var(--top),inset 0 0 0 7px var(--edge),0 2px 0 var(--rim),0 4px 0 var(--rim),0 6px 6px #0009,0 0 0 3px #f5cc6888}
+.gr-dr-square.is-movable:hover .gr-dr-piece,.gr-dr-square.is-selected .gr-dr-piece{transform:translateY(-12px)}
+.gr-dr-square.is-selected .gr-dr-piece{box-shadow:inset 0 0 0 3px var(--edge),inset 0 0 0 6px var(--top),inset 0 0 0 7px var(--edge),0 12px 12px #000a,0 0 0 3px #f5cc68,0 0 18px #f5cc68}
+@media(max-width:1000px){.gr-draughts-layout{grid-template-columns:1fr!important}.gr-dr-stage{max-width:560px;width:100%;margin:auto}}
+@media(max-width:650px){.gr-dr-board{padding:8px;box-shadow:inset 0 0 0 8px #3b2312,0 3px 0 #2a180b,0 30px 40px #000b}}
+@media(prefers-reduced-motion:reduce){.gr-dr-square.is-target:after{animation:none}}

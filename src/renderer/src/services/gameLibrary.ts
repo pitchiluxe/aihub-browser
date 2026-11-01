@@ -37,7 +37,7 @@ export async function saveRomGame(info: RomGame, files: RomFiles): Promise<void>
     let message = 'Could not save this game. Check available disk space.'
     request.onsuccess = () => {
       const others = (request.result as RomGame[]).filter(game => game.id !== info.id)
-      if (others.length >= MAX_GAME_LIBRARY_COUNT || others.reduce((total, game) => total + game.size, 0) + info.size > MAX_GAME_LIBRARY_BYTES) { message = 'Your library is limited to 40 games and 256 MB. Remove an imported game before adding another.'; tx.abort(); return }
+      if (others.length >= MAX_GAME_LIBRARY_COUNT || others.reduce((total, game) => total + game.size, 0) + info.size > MAX_GAME_LIBRARY_BYTES) { message = `Your library is limited to ${MAX_GAME_LIBRARY_COUNT} games and 256 MB. Remove an imported game before adding another.`; tx.abort(); return }
       tx.objectStore('games').put(info); tx.objectStore('files').put(files, info.id)
     }
     tx.oncomplete = () => resolve(); tx.onerror = tx.onabort = () => reject(Error(message))
