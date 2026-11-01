@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob: https://cdn.emulatorjs.org; style-src 'unsafe-inline' https://cdn.emulatorjs.org; connect-src https://cdn.emulatorjs.org blob:; worker-src blob:; img-src data: blob: https://cdn.emulatorjs.org; media-src blob:; font-src data: https://cdn.emulatorjs.org; base-uri 'none'; form-action 'none';">
+<meta name="referrer" content="no-referrer"><title>AIHub game player</title>
+<style>html,body,#game{width:100%;height:100%;margin:0;background:#101923;color:#d6e4f0;font-family:system-ui,sans-serif;overflow:hidden}#message{position:absolute;inset:0;display:grid;place-items:center;padding:30px;text-align:center;pointer-events:none;font-size:14px}</style></head>
+<body><div id="game"></div><div id="message">Preparing your game player…</div>
+<script>
+(() => {
+  'use strict';
+  let channel, loaded = false, paused = false;
+  const report = (type, message) => channel && channel.postMessage({type, message});
+  const fail = message => { document.getElementById('message').textContent = message; report('error', message); };
+  // The sandbox has an opaque origin. These ephemeral stores prevent the
+  // third-party player from trying to use unavailable origin storage.
+  for (const name of ['localStorage', 'sessionStorage']) {
+    const values = new Map();
+    Object.defineProperty(window, name, {value:{getItem:key=>values.get(String(key))??null,setItem:(key,value)=>values.set(String(key),String(value)),removeItem:key=>values.delete(String(key)),clear:()=>values.clear(),key:index=>[...values.keys()][index]??null,get length(){return values.size}},configurable:false});
+  }
+  function pausePlayer() {
+    const emulator = window.EJS_emulator;
+    if (!emulator || typeof emulator.pause !== 'function' || typeof emulator.play !== 'function') return;
+    paused ? emulator.pause() : emulator.play();
+  }
+  window.addEventListener('error', () => fail('The emulator could not start. Check your connection, system selection, and game file.'));
+  window.addEventListener('unhandledrejection', event => {
+    // The core requests an optional screen wake lock. Opaque sandbox origins
+    // cannot receive that permission; this refusal does not stop emulation.
+    if (event.reason?.name === 'NotAllowedError' && /wake\s*lock/i.test(String(event.reason?.message))) { event.preventDefault(); return; }
+    fail('The game player could not load this file. Check the selected system and required BIOS.');
+  });
+  window.addEventListener('message', event => {
+    if (event.source === parent && event.data?.type === 'aihub-game-ping') { parent.postMessage({type:'aihub-game-ready'}, '*'); return; }
+    if (event.source !== parent || event.data?.type !== 'aihub-game-connect' || channel || !event.ports[0]) return;
+    channel = event.ports[0];
+    channel.onmessage = message => {
+      const data = message.data;
+      if (data?.type === 'pause') { paused = data.paused === true; pausePlayer(); return; }
+      if (data?.type !== 'load' || loaded) return;
+      const cores = ['fceumm','picodrive','snes9x','gambatte','mgba','fbneo','mame2003_plus'];
+      if (!cores.includes(data.core) || !(data.rom instanceof ArrayBuffer) || data.rom.byteLength < 1 || data.rom.byteLength > 67108864 || (data.bios && (!(data.bios instanceof ArrayBuffer) || data.bios.byteLength > 8388608))) { fail('Unsupported game file.'); return; }
+      loaded = true;
+      const clean = value => String(value || 'game').replace(/[<>"'`\\/]/g, '').slice(0, 100);
+      window.EJS_player = '#game'; window.EJS_core = data.core;
+      window.EJS_gameUrl = new File([data.rom], clean(data.fileName));
+      if (data.bios) window.EJS_biosUrl = new File([data.bios], 'bios.bin');
+      window.EJS_gameName = clean(data.title); window.EJS_gameID = 1;
+      window.EJS_pathtodata = 'https://cdn.emulatorjs.org/4.2.3/data/';
+      window.EJS_startOnLoaded = true; window.EJS_color = '#6eb6ff';
+      window.EJS_threads = false; window.EJS_disableDatabases = true; window.EJS_disableLocalStorage = true;
+      window.EJS_language = 'en-US'; window.EJS_disableAutoLang = false;
+      window.EJS_Buttons = { netplay: false, cacheManager: false, screenRecord: false };
+      window.EJS_onGameStart = () => { document.getElementById('message').style.display = 'none'; pausePlayer(); report('started'); };
+      const loader = document.createElement('script'); loader.src = window.EJS_pathtodata + 'loader.js';
+      loader.onerror = () => fail('Could not download the emulator. Connect to the internet and try again.');
+      document.body.appendChild(loader);
+    };
+    channel.start(); report('connected');
+  });
+  parent.postMessage({type:'aihub-game-ready'}, '*');
+})();
+</script></body></html>

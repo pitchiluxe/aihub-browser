@@ -49,6 +49,7 @@ const FlightsRentalsPage = lazy(() => import('./components/travel/FlightsRentals
 const TravelPage     = lazy(() => import('./components/travel/TravelPage'))
 const DeclutterPage = lazy(() => import('./components/pages/DeclutterPage'))
 const DeveloperPage = lazy(() => import('./components/pages/DeveloperPage'))
+const GameRoomPage = lazy(() => import('./components/games/GameRoomPage'))
 
 import type { PageType } from '../../shared/pageTypes'
 import type { GrammarRequest } from '../../shared/grammarEditing'
@@ -1129,6 +1130,7 @@ export default function App() {
                     {tab.pageType === 'settings'   && <SettingsPage />}
                     {tab.pageType === 'history'    && <HistoryPage onNavigate={navigate} />}
                     {tab.pageType === 'developer' && <DeveloperPage />}
+                    {tab.pageType === 'games' && <GameRoomPage active={tab.id === activeTabId} />}
                     {tab.pageType === 'downloads'  && <DownloadsPage />}
                     {tab.pageType === 'security' && <SecurityPage />}
                     {tab.pageType === 'wifi'       && <WifiPage />}

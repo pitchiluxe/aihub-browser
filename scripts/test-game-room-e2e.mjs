@@ -1,0 +1,127 @@
+import { _electron } from 'playwright-core'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import assert from 'node:assert/strict'
+const root = process.cwd(), profile = fs.mkdtempSync(path.join(os.tmpdir(), 'aihub-game-room-e2e-'))
+const executablePath = process.platform === 'darwin' ? path.join(root, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron') : path.join(root, 'node_modules/electron/dist', process.platform === 'win32' ? 'electron.exe' : 'electron')
+let application, processHandle, page, passed = 0
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+const check = (label, value) => { assert.ok(value, label); passed++; console.log('PASS ' + label) }
+function makeOriginalNesFixture() {
+  // Original NROM program: wait for vblank, paint a blue backdrop, loop.
+  // No commercial game code, graphics, sounds, or other assets are included.
+  const rom = Buffer.alloc(16 + 16384 + 8192)
+  Buffer.from([0x4e, 0x45, 0x53, 0x1a, 1, 1]).copy(rom)
+  const program = [0x78,0xd8,0xa2,0xff,0x9a,0xe8,0x8e,0x00,0x20,0x8e,0x01,0x20,0x2c,0x02,0x20,0x10,0xfb,0x2c,0x02,0x20,0x10,0xfb,0xa9,0x3f,0x8d,0x06,0x20,0xa9,0x00,0x8d,0x06,0x20,0xa9,0x21,0x8d,0x07,0x20]
+  const loop = 0x8000 + program.length; program.push(0x4c, loop & 255, loop >> 8)
+  Buffer.from(program).copy(rom, 16)
+  for (const vector of [0x3ffa, 0x3ffc, 0x3ffe]) { rom[16 + vector] = 0; rom[16 + vector + 1] = 0x80 }
+  return rom
+}
+try {
+  const env = { ...process.env, USERPROFILE: profile, HOME: profile, NODE_ENV: 'production' }
+  delete env.ELECTRON_RUN_AS_NODE; delete env.ELECTRON_RENDERER_URL
+  application = await _electron.launch({ executablePath, args: [root], cwd: root, env, timeout: 60_000 })
+  processHandle = application.process(); page = await application.firstWindow(); page.setDefaultTimeout(20_000)
+  const emulatorRequests = []
+  application.context().on('request', request => { if (request.url().includes('emulatorjs.org')) emulatorRequests.push(request.url()) })
+  page.on('console', message => { if (message.type() === 'error' && /emulat|content security|wasm|SecurityError/i.test(message.text())) console.log('PLAYER:', message.text().slice(0, 700)) })
+  await page.getByRole('button', { name: 'Game room', exact: true }).last().click()
+  await page.getByRole('heading', { name: 'Game room', exact: true }).waitFor()
+  for (const title of ['Falling Blocks', 'Solitaire', 'Maze Chase', 'Property Circuit', 'Snake', '2048']) check(`${title} is available from the homepage room`, await page.getByRole('button', { name: `Play ${title}`, exact: true }).isVisible())
+  check('Emulation code is not loaded with the library', emulatorRequests.length === 0)
+  fs.mkdirSync(path.join(root, 'test-shots'), { recursive: true })
+  await page.screenshot({ path: path.join(root, 'test-shots/game-room-library.png') })
+  await page.getByRole('button', { name: 'Play Falling Blocks', exact: true }).click()
+  await page.getByTestId('blocks-board').waitFor()
+  await page.keyboard.press('Space')
+  check('Falling Blocks hard drop locks a real piece', await page.locator('.gr-block-board .filled').count() >= 8)
+  await page.getByRole('button', { name: 'Pause', exact: true }).click()
+  const before = await page.getByTestId('blocks-board').innerHTML(); await sleep(1000)
+  check('Pausing stops game ticks', before === await page.getByTestId('blocks-board').innerHTML())
+  await page.getByRole('button', { name: 'Resume game', exact: true }).click()
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('app-shortcut', 'new-tab'))
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('app-shortcut', 'prev-tab'))
+  await page.getByRole('button', { name: 'Resume game', exact: true }).waitFor()
+  check('Changing browser tabs pauses the game', await page.locator('.gr-pause-cover').isVisible())
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
+  await page.getByRole('button', { name: 'Play Solitaire', exact: true }).click()
+  await page.getByRole('button', { name: 'Draw card (24 left)', exact: true }).click()
+  check('Solitaire draws from its stock', await page.getByRole('button', { name: 'Draw card (23 left)', exact: true }).isVisible())
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  check('Solitaire undo restores the previous deal', await page.getByRole('button', { name: 'Draw card (24 left)', exact: true }).isVisible())
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
+  await page.getByRole('button', { name: 'Play 2048', exact: true }).click()
+  await page.getByRole('grid', { name: '2048 game board' }).waitFor()
+  const total = async () => page.locator('.gr-merge-board').evaluate(board => [...board.children].reduce((sum, cell) => sum + Number(cell.textContent || 0), 0))
+  const initial = await total()
+  for (const key of ['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp']) await page.keyboard.press(key)
+  check('2048 keyboard moves merge and spawn tiles', await total() > initial)
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
+  await page.getByRole('button', { name: 'Play Property Circuit', exact: true }).click()
+  await page.getByRole('button', { name: 'Roll dice', exact: true }).click()
+  const buy = page.getByRole('button', { name: /^Buy \$/ })
+  if (await buy.count()) await buy.click()
+  await page.getByRole('button', { name: /^(End turn|Pass and end turn)$/ }).click()
+  await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent === 'Roll dice' && !button.disabled))
+  check('Property Circuit computer takes a full turn', await page.locator('.gr-turn-log li').count() >= 3)
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
+  await page.getByRole('button', { name: 'Play Maze Chase', exact: true }).click()
+  await page.getByRole('img', { name: 'Maze Chase game board', exact: true }).waitFor()
+  await sleep(500)
+  check('Running emulator remains visible without a false error overlay', await page.locator('.gr-rom-error').count() === 0)
+  check('Maze Chase moves and collects dots', Number(await page.locator('.gr-stats strong').first().textContent()) > 0)
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
+  await page.getByRole('button', { name: 'Play Snake', exact: true }).click()
+  await page.getByRole('img', { name: 'Snake game board', exact: true }).waitFor()
+  check('Snake renders a playable board', await page.locator('.gr-square-board rect').count() >= 5)
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
+  await page.getByRole('button', { name: /Super Mario Bros\. 1/ }).click()
+  await page.getByRole('dialog', { name: 'Bring a game to your room', exact: true }).waitFor()
+  await page.getByLabel('Game name', { exact: true }).fill('AIHub homebrew display test')
+  await page.getByLabel('Game file', { exact: true }).setInputFiles({ name: 'aihub-display.nes', mimeType: 'application/octet-stream', buffer: makeOriginalNesFixture() })
+  await page.getByRole('button', { name: 'Add and play', exact: true }).click()
+  const player = page.frameLocator('iframe[title="Playing AIHub homebrew display test"]')
+  await player.locator('canvas').waitFor({ timeout: 120_000 })
+  const frame = page.frames().find(frame => frame.url().includes('game-emulator.html'))
+  await frame.waitForFunction(() => window.EJS_emulator?.started, null, { timeout: 120_000 })
+  check('Actual NES emulator starts an original homebrew cartridge', await frame.evaluate(() => !!window.EJS_emulator?.started))
+  check('Player has no parent bridge or Node access', await frame.evaluate(() => !window.electronAPI && typeof require === 'undefined'))
+  check('Imported player uses the sandbox without same-origin permission', !(await page.locator('iframe[title^="Playing AIHub"]').getAttribute('sandbox')).includes('allow-same-origin'))
+  await sleep(500)
+  await page.screenshot({ path: path.join(root, 'test-shots/game-room-emulator.png') })
+  await page.getByRole('button', { name: 'Pause', exact: true }).click()
+  await frame.waitForFunction(() => window.EJS_emulator?.paused === true)
+  check('Pause reaches the running emulation core', await frame.evaluate(() => window.EJS_emulator.paused === true))
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
+  await page.getByRole('button', { name: /My games \(1\)/ }).click()
+  check('Imported ROM appears in the saved library', await page.getByRole('button', { name: 'Play AIHub homebrew display test', exact: true }).isVisible())
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('app-shortcut', 'close-tab'))
+  await page.getByRole('button', { name: 'Game room', exact: true }).last().click()
+  await page.getByRole('heading', { name: 'Game room', exact: true }).waitFor()
+  await page.getByRole('button', { name: /My games \(1\)/ }).click()
+  check('Imported game persists after reopening the room', await page.getByRole('button', { name: 'Play AIHub homebrew display test', exact: true }).isVisible())
+  const privateWindowPromise = application.waitForEvent('window')
+  await page.evaluate(() => window.electronAPI.incognito.openWindow())
+  const privatePage = await privateWindowPromise
+  privatePage.setDefaultTimeout(15_000)
+  privatePage.on('console', message => { if (message.type() === 'error') console.log('PRIVATE:', message.text().slice(0, 300)) })
+  await privatePage.getByRole('button', { name: 'Game room', exact: true }).first().waitFor()
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle().includes('Incognito')).webContents.send('app-shortcut', 'command-palette'))
+  await privatePage.getByPlaceholder(/Search tabs/).fill('Game room')
+  await privatePage.getByText('Game room — arcade, cards, board games, and your classics', { exact: true }).click()
+  await privatePage.getByRole('heading', { name: 'Game room', exact: true }).waitFor()
+  await privatePage.getByRole('button', { name: /My games/ }).click()
+  check('Private windows cannot see the normal game library', await privatePage.getByRole('heading', { name: 'Your collection starts here', exact: true }).isVisible())
+  await page.evaluate(() => window.electronAPI.incognito.closeWindows())
+  await page.getByRole('button', { name: 'Remove AIHub homebrew display test from library', exact: true }).click()
+  await page.getByRole('heading', { name: 'Your collection starts here', exact: true }).waitFor()
+  check('Removing an imported copy updates the local library', await page.getByRole('heading', { name: 'Your collection starts here', exact: true }).isVisible())
+  console.log(JSON.stringify({ passed, profile, emulatorRequests: emulatorRequests.length }))
+} catch (error) {
+  console.error(error); process.exitCode = 1
+  if (page) { await page.screenshot({ path: path.join(root, 'test-shots/game-room-error.png') }).catch(() => {}); console.log('PAGE:', (await page.locator('body').innerText().catch(() => '')).slice(-3500)) }
+} finally {
+  if (application) { await Promise.race([application.close().catch(() => {}), sleep(5000)]); if (processHandle?.exitCode === null) processHandle.kill() }
+}
