@@ -27,8 +27,19 @@ function groupByDate(items: HistoryItem[]): Record<string, HistoryItem[]> {
   return groups
 }
 
+// The visited-pages timeline is what people open History for, so it is the
+// default; the discovery graph is remembered only once someone chooses it.
+const VIEW_KEY = 'aihub-history-view'
+function initialView(): 'graph' | 'list' {
+  try { return localStorage.getItem(VIEW_KEY) === 'graph' ? 'graph' : 'list' } catch { return 'list' }
+}
+
 export default function HistoryPage({ onNavigate }: Props) {
-  const [view, setView] = useState<'graph' | 'list'>('graph')
+  const [view, setViewState] = useState<'graph' | 'list'>(initialView)
+  const setView = (next: 'graph' | 'list') => {
+    setViewState(next)
+    try { localStorage.setItem(VIEW_KEY, next) } catch { /* The choice simply is not remembered. */ }
+  }
   const [revision, setRevision] = useState(0)
   const [allHistory, setAllHistory] = useState<HistoryItem[]>([])
   const [search, setSearch] = useState('')
