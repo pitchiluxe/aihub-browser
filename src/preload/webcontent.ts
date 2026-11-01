@@ -1,4 +1,42 @@
-import { webFrame } from 'electron'
+import { webFrame, ipcRenderer } from 'electron'
+
+// Isolated-world listeners expose no IPC capability to page scripts.
+if (process.isMainFrame) {
+  let dirtyReported = false
+  document.addEventListener('input', event => {
+    if (!event.isTrusted || dirtyReported) return
+    const target = event.target
+    if (!(target instanceof Element) || !target.closest('input,textarea,select,[contenteditable="true"]')) return
+    dirtyReported = true
+    ipcRenderer.send('tab:dirty')
+  }, { passive: true, capture: true })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let anchor: HTMLAnchorElement | null = null
+  let lastX = 0, lastY = 0, lastTime = 0
+  let velocity = 0
+  const cancel = () => { clearTimeout(timer); anchor = null }
+  document.addEventListener('pointermove', event => {
+    if (!event.isTrusted || document.hidden) return
+    const now = performance.now()
+    const elapsed = now - lastTime
+    if (elapsed > 0) velocity = Math.hypot(event.clientX - lastX, event.clientY - lastY) / elapsed
+    lastX = event.clientX; lastY = event.clientY; lastTime = now
+    const next = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null
+    if (next === anchor) return
+    cancel()
+    if (!next || next.hasAttribute('download') || next.relList.contains('noreferrer')) return
+    anchor = next
+    const href = next.href
+    timer = setTimeout(() => {
+      if (anchor !== next || next.href !== href || document.hidden || !next.isConnected || velocity > 1.5) return
+      ipcRenderer.send('navigation:hover', href)
+    }, velocity > 0.5 ? 400 : 200)
+  }, { passive: true })
+  document.addEventListener('scroll', cancel, { passive: true, capture: true })
+  document.addEventListener('pointerout', event => { if (!event.relatedTarget) cancel() }, { passive: true })
+  document.addEventListener('visibilitychange', cancel)
+  window.addEventListener('pagehide', cancel, { once: true })
+}
 
 // ── Web-content preload: restore the browser surface Chrome exposes ─────────
 //

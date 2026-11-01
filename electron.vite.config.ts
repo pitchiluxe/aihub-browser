@@ -87,6 +87,8 @@ export default defineConfig({
         input: {
           index:     resolve('src/main/index.ts'),
           ttsWorker: resolve('src/main/tts/worker.ts'),
+          semanticRankWorker: resolve('src/main/semanticRankWorker.ts'),
+          developerWorker: resolve('src/main/developerWorker.ts'),
         },
         output: { format: 'cjs', entryFileNames: '[name].js' }
       }

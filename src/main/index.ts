@@ -15,6 +15,11 @@ import { registerCommunityIpc, releaseCommunityWindow, shutdownCommunityBackend 
 import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
 import { registerMediaScheme, registerMediaProtocol, registerDjIpc } from './dj/library'
 import { viewRect } from './viewBounds'
+import { createNavigationWarmup } from './navigationWarmup'
+import { registerDeveloperIpc, developmentHeaders } from './developerIpc'
+import { EMPTY_NAVIGATION_GRAPH, recordTransition, removeTrailUrl, type NavigationGraph } from '../shared/navigationGraph'
+import { extractStructuredClip } from '../shared/structuredClip'
+import { rankInBackground, stopSemanticWorker } from './semanticRanking'
 import { extractLaunchUrl } from './launchUrl'
 import { registerSecurityIpc } from './security'
 import { registerFaviconIpc } from './favicons'
@@ -1146,6 +1151,14 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
   try { url = wc.getURL(); title = wc.getTitle() || url } catch {}
 
   let body = (selection || '').trim()
+  let structuredMarkdown = ''
+  if (!body) {
+    try {
+      const extracted = await wc.executeJavaScript(`(${extractStructuredClip.toString()})()`)
+      body = extracted.text
+      structuredMarkdown = extracted.markdown
+    } catch { /* Older or restricted documents use the text extractor. */ }
+  }
   if (!body) {
     try {
       // Readable text only: script and style content would land in the note as
@@ -1161,10 +1174,10 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
   }
 
   const pageText = body || '_(no readable text on this page)_'
-  let markdown = ''
+  let markdown = structuredMarkdown
   let generator: { provider: string; model: string } | undefined
   try {
-    const converted = await runAiRequest(
+    const converted = structuredMarkdown ? { provider: 'none', content: '', model: '' } : await runAiRequest(
       [{ role: 'system', content: MARKDOWN_CONVERSION_SYSTEM }, { role: 'user', content: buildMarkdownPrompt(pageText, url) }],
       undefined, { maxTokens: 2000 },
     )
@@ -1176,7 +1189,9 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
     console.warn('[obsidian] AI clip conversion failed; saving readable page text:', error)
   }
 
-  const sideInfo = await extractPageSideInfo(pageText, url)
+  const sideInfo: PageSideInfo = structuredMarkdown ? {
+    summary: '', keyTakeaways: [], author: '', publishedDate: '', pageType: '', entities: [], concepts: [], links: [],
+  } : await extractPageSideInfo(pageText, url)
   const clipMarkdown = appendPageSideInfo(markdown || `# ${title}\n\n${pageText}`, pageText, url, sideInfo, generator)
 
   const frontmatter = clipMarkdown.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] || ''
@@ -1185,7 +1200,7 @@ async function clipToVault(wc: Electron.WebContents, selection?: string) {
   const noteTitle = convertedTitle || title
   const noteCategory = convertedCategory || detectCategoryFromContent(pageText) || detectCategoryFromUrl(url)
   const noteContent = clipMarkdown.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, '').trim()
-  const aiTags = body ? await suggestTags(noteTitle, pageText) : []
+  const aiTags = body && !structuredMarkdown ? await suggestTags(noteTitle, pageText) : []
   const sideTags = [...sideInfo.entities, ...sideInfo.concepts]
     .map(tag => tag.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 30))
     .filter(Boolean)
@@ -1500,6 +1515,8 @@ async function navigateProtected(ctx: AppWin, tabId: string, wc: Electron.WebCon
   } catch { sendTabEvent(ctx, tabId, 'did-fail-load', { errorCode: -2 }) }
 }
 
+const tabSleepChecks = new Map<number, () => boolean>()
+const tabsWithMediaAccess = new WeakSet<Electron.WebContents>()
 function createTabView(ctx: AppWin | undefined, tabId: string, url: string, containerId?: string | null) {
   if (!ctx || ctx.views.has(tabId)) return
   const tabViews = ctx.views
@@ -1553,6 +1570,23 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   try { view.setBackgroundColor('#ffffff') } catch {}
   tabViews.set(tabId, view)
   const wc = view.webContents
+  const acceptWarmup = createNavigationWarmup()
+  let dirtyForm = false
+  let mediaPlaying = false
+  wc.on('dom-ready', () => { dirtyForm = false; mediaPlaying = false })
+  wc.on('media-started-playing', () => { mediaPlaying = true })
+  wc.on('media-paused', () => { mediaPlaying = false })
+  wc.ipc.on('tab:dirty', event => {
+    if (event.senderFrame === wc.mainFrame) dirtyForm = true
+  })
+  tabSleepChecks.set(wc.id, () => !dirtyForm && !mediaPlaying && !tabsWithMediaAccess.has(wc) && !wc.isCurrentlyAudible() && !wc.isBeingCaptured() && !wc.isDevToolsOpened() && !wc.debugger.isAttached())
+  wc.once('destroyed', () => tabSleepChecks.delete(wc.id))
+  wc.ipc.on('navigation:hover', (event, candidate: unknown) => {
+    if (wc.isDestroyed() || event.senderFrame !== wc.mainFrame || ctx.activeId !== tabId) return
+    const origin = acceptWarmup(candidate)
+    if (!origin) return
+    try { wc.session.preconnect({ url: origin, numSockets: 1 }) } catch { /* Navigation still works. */ }
+  })
   // Set the clean Chrome UA on this view before it loads anything, so no request
   // ever goes out with the Electron default. This clean UA is the whole identity
   // — no CDP debugger, no header forgery (see the CHROME_UA note above).
@@ -1643,8 +1677,13 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
     })
   })
 
+  let lastCommittedUrl: string | null = null
   wc.on('did-navigate', (_e, navUrl) => {
     if (isCrashPage(navUrl)) return
+    if (!ctx.incognito && !partition.startsWith('burner-')) {
+      navigationGraphStore.update(graph => recordTransition(graph, lastCommittedUrl, navUrl, wc.getTitle()))
+    }
+    lastCommittedUrl = navUrl
     // The request filter judges subresources against the page that requested
     // them, so it needs to know this tab's document host before the page's
     // own assets start loading.
@@ -1721,6 +1760,10 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   })
   wc.on('did-fail-load', (_e, errorCode) => { if (errorCode !== -3) sendTabEvent(ctx, tabId, 'did-fail-load', { errorCode }) })
   wc.on('page-title-updated', (_e, title) => sendTabEvent(ctx, tabId, 'page-title-updated', { title }))
+  wc.on('page-title-updated', (_e, title) => {
+    if (ctx.incognito || partition.startsWith('burner-') || !lastCommittedUrl) return
+    navigationGraphStore.update(graph => ({ ...graph, nodes: graph.nodes.map(node => node.url === lastCommittedUrl ? { ...node, title: title.slice(0, 300) } : node) }))
+  })
   wc.on('page-favicon-updated', (_e, favicons) => sendTabEvent(ctx, tabId, 'page-favicon-updated', { favicons }))
   wc.on('found-in-page', (_e, result) => sendTabEvent(ctx, tabId, 'found-in-page', {
     matches: result.matches, activeMatchOrdinal: result.activeMatchOrdinal, finalUpdate: result.finalUpdate,
@@ -1798,6 +1841,7 @@ function configureContentSession(ses: Electron.Session, opts: { privateStats?: b
   installRequestFilter(ses, !!opts.privateStats)
 
   ses.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (_wc && permission === 'media') tabsWithMediaAccess.add(_wc)
     callback(ALLOWED_PERMISSIONS.has(permission))
   })
 
@@ -1810,6 +1854,10 @@ function configureContentSession(ses: Electron.Session, opts: { privateStats?: b
   // Google login (regression: this used to strip every response).
   const STRIP_HEADERS = new Set(['x-frame-options', 'content-security-policy'])
   ses.webRequest.onHeadersReceived((details, callback) => {
+    if (ses === session.fromPartition('persist:container-development')) {
+      const adjusted = developmentHeaders(details.url, details.referrer, details.responseHeaders as Record<string, string[]> || {})
+      if (adjusted) { callback({ responseHeaders: adjusted }); return }
+    }
     if (details.resourceType !== 'subFrame') {
       callback({})
       return
@@ -2957,6 +3005,14 @@ researchService = registerResearchIpc({
   },
 })
 registerFaviconIpc({ mayRemember: mayPersistFrom })
+registerDeveloperIpc({
+  appDir: APP_DIR,
+  owner: ctxFromEvent,
+  async prepareLocal() {
+    const ses = configureContentSession(session.fromPartition('persist:container-development'))
+    await ses.setProxy({ mode: 'direct' })
+  },
+})
 // The Bible's natural reading voice — installed on request, run out of process.
 registerNaturalVoiceIpc({ appDir: APP_DIR, send: safelySend })
 
@@ -3161,16 +3217,26 @@ ipcMain.handle('tabview:navigate', (e, tabId: string, url: string) => {
 ipcMain.handle('tabview:stop', (e, tabId: string) => {
   try { ctxFromEvent(e)?.views.get(tabId)?.webContents.stop() } catch {}
 })
+ipcMain.handle('tabview:canSleep', (e, tabId: string) => {
+  const ctx = ctxFromEvent(e)
+  const wc = ctx?.views.get(tabId)?.webContents
+  if (!ctx || !wc || ctx.activeId === tabId || ctx.splitId === tabId) return false
+  try { return tabSleepChecks.get(wc.id)?.() === true } catch { return false }
+})
 // Warm DNS + TCP + TLS for a host before the page is actually asked for. The
 // renderer fires this the moment a navigation is requested, so the handshake
 // overlaps the React re-render and BrowserView creation that follow instead of
 // happening after them. Purely additive — a failed preconnect costs nothing.
 ipcMain.handle('tabview:preconnect', (e, url: string) => {
   try {
-    const origin = new URL(url).origin
+    const parsed = new URL(url)
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return
+    const origin = parsed.origin
     // Warm the jar the page will actually load in. A private window warming
     // the normal session would open sockets to its sites from the wrong profile.
-    tabSessionFor(ctxFromEvent(e)).preconnect({ url: origin, numSockets: 2 })
+    const ctx = ctxFromEvent(e)
+    const active = ctx?.activeId ? ctx.views.get(ctx.activeId)?.webContents : undefined
+    ;(active?.session || tabSessionFor(ctx)).preconnect({ url: origin, numSockets: 1 })
   } catch {}
 })
 ipcMain.handle('tabview:goBack', (e, tabId: string) => {
@@ -3283,10 +3349,17 @@ ipcMain.handle('bookmarks:summarize', async (_e, id: string) => {
 // the same work is ~0.01 ms; the disk sees one debounced write per burst.
 const HISTORY_CAP = 2000
 const historyStore = createManagedJsonStore<any[]>(HIST_FILE, () => [])
+const navigationGraphStore = createManagedJsonStore<NavigationGraph>(join(APP_DIR, 'navigation-trails.json'), EMPTY_NAVIGATION_GRAPH, { debounceMs: 5000 })
+ipcMain.handle('history:graph', event => {
+  const owner = ctxFromEvent(event)
+  return !owner || owner.incognito || event.senderFrame !== owner.win.webContents.mainFrame ? EMPTY_NAVIGATION_GRAPH() : navigationGraphStore.get()
+})
 
 ipcMain.handle('history:getAll',     () => historyStore.get())
-ipcMain.handle('history:clear',      () => { historyStore.set([]); return true })
+ipcMain.handle('history:clear',      () => { historyStore.set([]); navigationGraphStore.set(EMPTY_NAVIGATION_GRAPH()); return true })
 ipcMain.handle('history:deleteItem', (_e, id: string) => {
+  const removed = historyStore.get().find(item => item.id === id)
+  if (removed) navigationGraphStore.update(graph => removeTrailUrl(graph, removed.url))
   historyStore.update(h => h.filter((x: any) => x.id !== id))
   return true
 })
@@ -4538,7 +4611,8 @@ async function ollamaEmbed(text: string): Promise<number[] | null> {
   return null
 }
 
-const semanticIndex = createSemanticIndex(APP_DIR, ollamaEmbed)
+const semanticIndex = createSemanticIndex(APP_DIR, ollamaEmbed, rankInBackground)
+app.on('before-quit', stopSemanticWorker)
 
 // Rewind evicts its oldest pages at the cap but nothing removed their vectors,
 // so the index only ever grew. Reconcile once, well after startup, so loading

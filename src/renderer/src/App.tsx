@@ -48,6 +48,7 @@ const DjPage         = lazy(() => import('./components/dj/DjPage'))
 const FlightsRentalsPage = lazy(() => import('./components/travel/FlightsRentalsPage'))
 const TravelPage     = lazy(() => import('./components/travel/TravelPage'))
 const DeclutterPage = lazy(() => import('./components/pages/DeclutterPage'))
+const DeveloperPage = lazy(() => import('./components/pages/DeveloperPage'))
 
 import type { PageType } from '../../shared/pageTypes'
 
@@ -801,7 +802,7 @@ export default function App() {
     for (const tab of tabs) if (!lastActiveAt.current.has(tab.id)) lastActiveAt.current.set(tab.id, now)
   }, [tabs])
   useEffect(() => {
-    const timer = setInterval(() => {
+    const timer = setInterval(async () => {
       const now = Date.now()
       const store = useBrowserStore.getState()
       const liveTabIds = new Set(store.tabs.map(tab => tab.id))
@@ -811,11 +812,16 @@ export default function App() {
       const sleepIds = selectTabsToSleep({
         tabs: store.tabs,
         activeTabId: store.activeTabId,
+        splitTabId: store.splitTabId,
         liveViewIds: createdViewIds.current,
         lastUseAt: lastActiveAt.current,
         now,
       })
-      if (sleepIds.length) store.sleepTabs(sleepIds)
+      const safe: string[] = []
+      for (const id of sleepIds) {
+        try { if (await window.electronAPI.tabView.canSleep(id)) safe.push(id) } catch { /* Keep the tab alive when its state is unknown. */ }
+      }
+      if (safe.length) useBrowserStore.getState().sleepTabs(safe)
     }, getTabSleepCheckInterval(tabs.length))
     return () => clearInterval(timer)
   }, [tabs.length])
@@ -1117,6 +1123,7 @@ export default function App() {
                   <Suspense fallback={null}>
                     {tab.pageType === 'settings'   && <SettingsPage />}
                     {tab.pageType === 'history'    && <HistoryPage onNavigate={navigate} />}
+                    {tab.pageType === 'developer' && <DeveloperPage />}
                     {tab.pageType === 'downloads'  && <DownloadsPage />}
                     {tab.pageType === 'security' && <SecurityPage />}
                     {tab.pageType === 'wifi'       && <WifiPage />}

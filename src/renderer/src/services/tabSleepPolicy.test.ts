@@ -53,6 +53,11 @@ describe('adaptive tab sleeping policy', () => {
     expect(selectTabsToSleep(input({ activeTabId: null }))).toEqual([])
   })
 
+  it('never unloads the visible split partner or ephemeral session tabs', () => {
+    expect(selectTabsToSleep(input({ splitTabId: 'old' }))).toEqual([])
+    expect(selectTabsToSleep(input({ tabs: [tab('old', { containerId: 'burner:unique' })] }))).toEqual([])
+  })
+
   it.each([
     ['active', input({ activeTabId: 'old' })],
     ['asleep', input({ tabs: [tab('old', { asleep: true })] })],

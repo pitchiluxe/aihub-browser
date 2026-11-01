@@ -407,13 +407,14 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   // loadFailed is cleared with it — waking builds a brand new view that loads
   // the URL itself, so a leftover flag would make the wake reload twice.
   sleepTab: (id) => set(s => (
-    id === s.activeTabId ? {} : { tabs: s.tabs.map(t => t.id === id ? { ...t, asleep: true, loadFailed: false, isAudible: false } : t) }
+    id === s.activeTabId || id === s.splitTabId ? {} : { tabs: s.tabs.map(t => t.id === id ? { ...t, asleep: true, loadFailed: false, isAudible: false } : t) }
   )),
 
   sleepTabs: (ids) => set(s => {
     if (!ids.length) return {}
     const requested = new Set(ids)
     requested.delete(s.activeTabId || '')
+    requested.delete(s.splitTabId || '')
     if (!requested.size || !s.tabs.some(tab => requested.has(tab.id) && !tab.asleep)) return {}
     return { tabs: s.tabs.map(tab => requested.has(tab.id) && !tab.asleep
       ? { ...tab, asleep: true, loadFailed: false, isAudible: false }

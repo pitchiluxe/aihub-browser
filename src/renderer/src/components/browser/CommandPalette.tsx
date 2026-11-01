@@ -182,6 +182,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       }, 'workspace save group set of tabs project')
 
     const pages: [PageType, string][] = [
+      ['developer', 'Developer tools — API sandbox and local services'],
       ['obsidian-graph', 'Obsidian Graph — your saved markdown knowledge map'], ['research', 'Research Mode'], ['agents', 'Agent Mode'], ['notes', 'Sticky Notes'],
       ['rewind', 'Rewind — search what you\'ve read'], ['watch', 'Watch & Ping — track a page for changes'],
       ['bible', 'Bible — read, highlight and study'], ['study', 'Bible Study — daily verse, courses and memorisation'], ['history', 'History'], ['downloads', 'Downloads'],

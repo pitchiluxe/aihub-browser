@@ -48,4 +48,16 @@ describe('restoring a large session', () => {
     expect(state.tabs.slice(1).every(tab => tab.asleep && !tab.isAudible)).toBe(true)
     expect(notifications).toBe(1)
   })
+
+  it('keeps a visible split partner alive for both manual and automatic sleeping', () => {
+    useBrowserStore.getState().restoreTabs(entries.slice(0, 3), 0)
+    const partner = useBrowserStore.getState().tabs[1].id
+    useBrowserStore.setState({ splitTabId: partner })
+    useBrowserStore.getState().updateTab(partner, { asleep: false })
+    useBrowserStore.getState().sleepTab(partner)
+    expect(useBrowserStore.getState().tabs[1].asleep).toBe(false)
+    useBrowserStore.getState().sleepTabs([partner])
+    expect(useBrowserStore.getState().tabs[1].asleep).toBe(false)
+    useBrowserStore.setState({ splitTabId: null })
+  })
 })

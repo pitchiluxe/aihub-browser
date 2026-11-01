@@ -8,7 +8,7 @@
  * exported type instead: miss an import and the compiler says so.
  */
 export type PageType =
-  | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'security'
+  | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'security' | 'developer'
   | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind'
   | 'watch' | 'bible' | 'study' | 'community' | 'vault' | 'recall' | 'ledger' | 'brief'
   | 'community-lists' | 'obsidian-graph' | 'dj' | 'travel' | 'flights-rentals' | 'declutter'

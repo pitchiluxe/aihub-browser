@@ -110,6 +110,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     import:  ()                 => ipcRenderer.invoke('bookmarks:import'),
   },
   history: {
+    graph: () => ipcRenderer.invoke('history:graph'),
     getAll:     () => ipcRenderer.invoke('history:getAll'),
     add:        (e:any) => ipcRenderer.invoke('history:add', e),
     clear:      () => ipcRenderer.invoke('history:clear'),
@@ -636,6 +637,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   urlbar: {
     showContextMenu: (hasText: boolean) => ipcRenderer.invoke('urlbar:showContextMenu', hasText),
   },
+  developer: {
+    snapshot: (tabId: string) => ipcRenderer.invoke('developer:snapshot', tabId),
+    start: (tabId: string, intercept: boolean) => ipcRenderer.invoke('developer:start', { tabId, intercept }),
+    stop: (tabId: string) => ipcRenderer.invoke('developer:stop', tabId),
+    resolve: (input: unknown) => ipcRenderer.invoke('developer:resolve', input),
+    devtools: (tabId: string) => ipcRenderer.invoke('developer:devtools', tabId),
+    replay: (request: unknown) => ipcRenderer.invoke('developer:replay', request),
+    probe: (ports: number[]) => ipcRenderer.invoke('developer:probe', ports),
+    openLocal: (url: string) => ipcRenderer.invoke('developer:openLocal', url),
+    templates: () => ipcRenderer.invoke('developer:templates'),
+    save: (request: unknown) => ipcRenderer.invoke('developer:save', request),
+    delete: (id: string) => ipcRenderer.invoke('developer:delete', id),
+  },
   tabView: {
     create:          (tabId: string, url: string, containerId?: string | null)                    => ipcRenderer.invoke('tabview:create', tabId, url, containerId),
     destroy:         (tabId: string)                                                            => ipcRenderer.invoke('tabview:destroy', tabId),
@@ -652,6 +666,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     goForward:       (tabId: string)                                                             => ipcRenderer.invoke('tabview:goForward', tabId),
     reload:          (tabId: string)                                                             => ipcRenderer.invoke('tabview:reload', tabId),
     stop:            (tabId: string)                                                             => ipcRenderer.invoke('tabview:stop', tabId),
+    canSleep:        (tabId: string) => ipcRenderer.invoke('tabview:canSleep', tabId),
     getNavState:     (tabId: string): Promise<{ canGoBack: boolean; canGoForward: boolean }>     => ipcRenderer.invoke('tabview:getNavState', tabId),
     execJs:          (tabId: string, script: string)                                             => ipcRenderer.invoke('tabview:execJs', tabId, script),
     find:            (tabId: string, text: string, forward?: boolean, findNext?: boolean)        => ipcRenderer.invoke('tabview:find', tabId, text, forward, findNext),

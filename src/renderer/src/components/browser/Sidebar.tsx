@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useState } from 'react'
 import {
-  Home, History, Download, Settings, Plus, Sparkles, WandSparkles,
+  Home, History, Download, Settings, Plus, Sparkles, WandSparkles, AppWindow,
   Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing, BookMarked, GraduationCap, Users, Archive, Brain, Receipt, Sunrise, Library,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -41,6 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Users,        label: 'Community',    page: 'community',    type: 'community',  accent: '#34d399' },
   { icon: Library,      label: 'Reading Lists', page: 'community-lists', type: 'community-lists', accent: '#a78bfa' },
   { icon: History,      label: 'History',      page: 'history',      type: 'history'    },
+  { icon: AppWindow,    label: 'Developer tools', page: 'developer', type: 'developer' },
   { icon: Download,     label: 'Downloads',    page: 'downloads',    type: 'downloads'  },
   { icon: Shield,       label: 'Security Center', page: 'security', type: 'security', accent: '#34d399' },
   { icon: Puzzle,       label: 'Extensions',   page: 'extensions',   type: 'extensions', accent: '#fb923c' },

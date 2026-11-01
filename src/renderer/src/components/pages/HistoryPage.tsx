@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { lazy, Suspense, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Search, Trash2, ExternalLink, Clock, X } from 'lucide-react'
 import { HistoryItem } from '../../store/browserStore'
 import Favicon from '../common/Favicon'
 
 interface Props { onNavigate: (url: string) => void }
+const HistoryGraph = lazy(() => import('./HistoryGraph'))
 
 function groupByDate(items: HistoryItem[]): Record<string, HistoryItem[]> {
   const groups: Record<string, HistoryItem[]> = {}
@@ -27,6 +28,8 @@ function groupByDate(items: HistoryItem[]): Record<string, HistoryItem[]> {
 }
 
 export default function HistoryPage({ onNavigate }: Props) {
+  const [view, setView] = useState<'graph' | 'list'>('graph')
+  const [revision, setRevision] = useState(0)
   const [allHistory, setAllHistory] = useState<HistoryItem[]>([])
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState<HistoryItem[]>([])
@@ -45,6 +48,7 @@ export default function HistoryPage({ onNavigate }: Props) {
     setClearing(true)
     await window.electronAPI.history.clear()
     setAllHistory([])
+    setRevision(value => value + 1)
     setSearchResults([])
     setClearing(false)
   }
@@ -90,6 +94,11 @@ export default function HistoryPage({ onNavigate }: Props) {
           <h1 className="text-2xl font-bold text-aihub-text">History</h1>
           <p className="text-sm text-aihub-muted mt-0.5">{allHistory.length} pages visited</p>
         </div>
+        <div className="flex gap-2 items-center">
+        <div role="group" aria-label="History view" className="flex border border-aihub-border rounded-lg overflow-hidden text-xs">
+          <button aria-pressed={view === 'graph'} className={`px-3 py-2 ${view === 'graph' ? 'bg-aihub-card text-aihub-accent' : ''}`} onClick={() => setView('graph')}>Discovery graph</button>
+          <button aria-pressed={view === 'list'} className={`px-3 py-2 ${view === 'list' ? 'bg-aihub-card text-aihub-accent' : ''}`} onClick={() => setView('list')}>Timeline</button>
+        </div>
         <button
           onClick={clearAll}
           disabled={clearing || allHistory.length === 0}
@@ -97,8 +106,10 @@ export default function HistoryPage({ onNavigate }: Props) {
         >
           <Trash2 size={14} /> Clear all
         </button>
+        </div>
       </div>
 
+      {view === 'graph' ? <Suspense fallback={<div className="p-8 text-aihub-muted">Loading discovery graph…</div>}><HistoryGraph onNavigate={onNavigate} revision={revision} /></Suspense> : <>
       {/* Search */}
       <div className="px-8 py-3">
         <div className="relative max-w-lg">
@@ -165,6 +176,7 @@ export default function HistoryPage({ onNavigate }: Props) {
           ))
         )}
       </div>
+      </>}
     </div>
   )
 }

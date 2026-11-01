@@ -8,6 +8,7 @@ const EXTREME_TAB_COUNT = 50
 export interface TabSleepPolicyInput {
   tabs: readonly Tab[]
   activeTabId: string | null
+  splitTabId?: string | null
   liveViewIds: ReadonlySet<string>
   lastUseAt: ReadonlyMap<string, number>
   now: number
@@ -32,13 +33,13 @@ export function getTabSleepCheckInterval(tabCount: number): number {
 }
 
 /** Return live background browser tabs safe to release at this check. */
-export function selectTabsToSleep({ tabs, activeTabId, liveViewIds, lastUseAt, now }: TabSleepPolicyInput): string[] {
+export function selectTabsToSleep({ tabs, activeTabId, splitTabId, liveViewIds, lastUseAt, now }: TabSleepPolicyInput): string[] {
   if (!Number.isFinite(now) || !activeTabId) return []
   const idleLimit = getTabSleepIdleLimit(tabs.length)
   const ids: string[] = []
 
   for (const tab of tabs) {
-    if (tab.id === activeTabId || tab.asleep || tab.isLoading || tab.isAudible) continue
+    if (tab.id === activeTabId || tab.id === splitTabId || tab.asleep || tab.isLoading || tab.isAudible || tab.containerId?.startsWith('burner')) continue
     if (tab.isHome || tab.pageType !== 'browser' || !liveViewIds.has(tab.id)) continue
     const seen = lastUseAt.get(tab.id)
     if (typeof seen !== 'number' || !Number.isFinite(seen)) continue

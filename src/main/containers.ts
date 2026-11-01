@@ -10,6 +10,8 @@
  * else.
  */
 
+import { createHash, randomUUID } from 'node:crypto'
+
 export interface Container {
   id: string
   name: string
@@ -58,14 +60,14 @@ export function isBurnerId(containerId: string | null | undefined): boolean {
 
 /** A fresh burner id. Unique per tab, so no two burners share a session. */
 export function newBurnerId(seed: string | number = Date.now()): string {
-  return `${BURNER_PREFIX}:${String(seed)}-${Math.random().toString(36).slice(2, 8)}`
+  return `${BURNER_PREFIX}:${String(seed)}-${randomUUID()}`
 }
 
 /** Partition string for a container id. Never collides with persist:main. */
 export function partitionFor(containerId: string | null | undefined): string {
   if (!containerId) return DEFAULT_PARTITION
   // No "persist:" — this is the difference between a burner and a container.
-  if (isBurnerId(containerId)) return `burner-${slugifyContainerId(containerId)}`
+  if (isBurnerId(containerId)) return `burner-${createHash('sha256').update(containerId).digest('hex')}`
   const slug = slugifyContainerId(containerId)
   return `persist:container-${slug}`
 }

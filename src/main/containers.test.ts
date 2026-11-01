@@ -102,6 +102,12 @@ describe('burner tabs', () => {
     expect(partitionFor(newBurnerId(1))).not.toBe(partitionFor(newBurnerId(1)))
   })
 
+  it('retains uniqueness beyond the old 32 character truncation boundary', () => {
+    const prefix = `burner:${'a'.repeat(100)}`
+    expect(partitionFor(`${prefix}-one`)).not.toBe(partitionFor(`${prefix}-two`))
+    expect(partitionFor('burner:a:b')).not.toBe(partitionFor('burner:a-b'))
+  })
+
   it('leaves ordinary containers persistent', () => {
     expect(partitionFor('work')).toBe('persist:container-work')
     expect(partitionFor(null)).toBe(DEFAULT_PARTITION)

@@ -143,7 +143,7 @@ export function rankDocs(
 
 export type Embedder = (text: string) => Promise<number[] | null>
 
-export function createSemanticIndex(appDir: string, embed: Embedder) {
+export function createSemanticIndex(appDir: string, embed: Embedder, rank: (typeof rankDocs) | ((...args: Parameters<typeof rankDocs>) => Promise<ScoredDoc[]>) = rankDocs) {
   const store = createManagedJsonStore<Record<string, Embedding>>(
     join(appDir, 'semantic-index.json'), () => ({}), { debounceMs: 5000 },
   )
@@ -238,7 +238,7 @@ export function createSemanticIndex(appDir: string, embed: Embedder) {
       if (!trimmed) return { results: [], semantic: false }
       let queryVector: number[] | null = null
       try { queryVector = await embed(trimmed) } catch { queryVector = null }
-      const results = rankDocs(docs, trimmed, queryVector, this.vectors())
+      const results = await rank(docs, trimmed, queryVector, this.vectors())
       return { results: results.slice(0, limit), semantic: !!queryVector }
     },
 
