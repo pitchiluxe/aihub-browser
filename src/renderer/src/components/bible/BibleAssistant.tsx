@@ -7,6 +7,8 @@ import { cleanNarration } from '../../services/agentTools'
 import Markdown from '../ai/Markdown'
 import { useBibleLang } from '../../services/bibleLang'
 
+import type { Passage } from '../../services/bibleCourses'
+
 interface Msg { role: 'user' | 'assistant'; content: string; cites?: Hit[] }
 
 // Shown whenever the model can't be reached (Ollama not running, no OpenRouter
@@ -18,6 +20,8 @@ const AI_UNAVAILABLE_FR =
 const isUnavailable = (s: string) => s === AI_UNAVAILABLE_EN || s === AI_UNAVAILABLE_FR
 
 interface Props {
+  initialQuestion?: string
+  passage?: Passage
   open: boolean
   onClose: () => void
   // Where the reader currently is, so "explain this" and "this chapter" mean something.
@@ -89,7 +93,7 @@ const buildSystem = (): string => {
 }
 
 export default function BibleAssistant({
-  open, onClose, bookId, bookName, chapter, selectedRef, onOpenRef,
+  open, onClose, bookId, bookName, chapter, selectedRef, onOpenRef, initialQuestion, passage,
 }: Props) {
   const { lang, t } = useBibleLang()
   const AI_UNAVAILABLE = lang === 'fr' ? AI_UNAVAILABLE_FR : AI_UNAVAILABLE_EN
@@ -166,7 +170,10 @@ export default function BibleAssistant({
       let hits: Hit[] = []
       const wantsHere = /\bthis (verse|chapter|passage|page)\b|\bhere\b/i.test(q)
 
-      if (selectedRef) {
+      if (passage) {
+        hits = hits.concat(context(passage.bookId, passage.chapter, passage.from, passage.to - passage.from)
+          .filter(h => h.verse >= passage.from && h.verse <= passage.to))
+      } else if (selectedRef) {
         const p = parseRef(selectedRef)
         if (p) hits = hits.concat(context(p.bookId, p.chapter, p.verse, 4))
       }
@@ -214,7 +221,15 @@ export default function BibleAssistant({
     } finally {
       setBusy(false)
     }
-  }, [busy, selectedRef, bookId, bookName, chapter, onOpenRef])
+  }, [busy, selectedRef, bookId, bookName, chapter, onOpenRef, passage])
+
+  // Mark before sending so effect re-runs (including StrictMode) cannot duplicate it.
+  const submittedQuestion = useRef<string | null>(null)
+  useEffect(() => {
+    if (!open || !initialQuestion || busy || submittedQuestion.current === initialQuestion) return
+    submittedQuestion.current = initialQuestion
+    void ask(initialQuestion)
+  }, [open, initialQuestion, busy, ask])
 
   // The answer renders as markdown (the model writes lists, bold and the odd
   // table), and each [John 3:16] citation that matches a retrieved verse

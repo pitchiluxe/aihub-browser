@@ -7,7 +7,7 @@ import { grade, labStats, type VerseBook } from '../../services/bibleSrs'
 import {
   currentStreak, evaluateBadges, newlyEarned, recordDay, type Badge, type RewardFacts,
 } from '../../services/bibleRewards'
-import { completedCourses, lessonKey, lessonsCompleted } from '../../services/bibleCourses'
+import { completedCourses, lessonKey, lessonsCompleted, type Passage } from '../../services/bibleCourses'
 import {
   addVerses, advancePlan, removeVerse, setLesson, useBibleStudy, type StudyState,
 } from '../../services/bibleStudyStore'
@@ -16,6 +16,7 @@ import { requestBibleVerse } from '../../services/bibleNavigation'
 import { useBibleLang } from '../../services/bibleLang'
 import { badgeText } from '../../services/bibleRewards'
 import PassageModal, { verseView, type PassageView } from '../bible/PassageModal'
+import BibleAssistant from '../bible/BibleAssistant'
 import VerseGraph from '../bible/VerseGraph'
 import DailyVerseCard from '../study/DailyVerseCard'
 import StudyDesk, { type DeskMarks } from '../study/StudyDesk'
@@ -49,6 +50,7 @@ export default function BibleStudyPage() {
   const [celebrating, setCelebrating] = useState<Badge[]>([])
   const [reading, setReading] = useState<Reading | null>(null)
   const [graphOpen, setGraphOpen] = useState(false)
+  const [explanation, setExplanation] = useState<{ question: string; passage: Passage } | null>(null)
 
   // The whole marks object, including the fields this page never shows
   // (lastRead). Saving a verse has to write the file back whole, and merging
@@ -190,8 +192,8 @@ export default function BibleStudyPage() {
     focusOrOpenPage('aihub://bible', 'bible')
   }, [focusOrOpenPage, persistMarks])
 
-  const askAI = useCallback((question: string) => {
-    document.dispatchEvent(new CustomEvent('aihub-ai-send', { detail: { text: question, display: question } }))
+  const askAI = useCallback((question: string, passage: Passage) => {
+    setExplanation({ question, passage })
   }, [])
 
   useEffect(() => {
@@ -205,7 +207,7 @@ export default function BibleStudyPage() {
   const dueCount = useMemo(() => labStats(study.verses, Date.now()).due, [study.verses])
 
   return (
-    <div className="flex h-full flex-col overflow-hidden page-enter" style={{ background: 'var(--ds-page-bg)' }}>
+    <div className="relative flex h-full flex-col overflow-hidden page-enter" style={{ background: 'var(--ds-page-bg)' }}>
       <div className="flex shrink-0 items-center justify-between px-6 py-4"
         style={{ borderBottom: '1px solid rgba(230,200,110,0.12)' }}>
         <div className="flex items-center gap-3">
@@ -292,6 +294,22 @@ export default function BibleStudyPage() {
           />
         )}
       </div>
+
+      {explanation && (
+        <div className="absolute inset-y-0 right-0 z-50 shadow-2xl">
+          <BibleAssistant
+            open
+            onClose={() => setExplanation(null)}
+            initialQuestion={explanation.question}
+            passage={explanation.passage}
+            bookId={explanation.passage.bookId}
+            bookName={explanation.passage.label}
+            chapter={explanation.passage.chapter}
+            selectedRef={`${explanation.passage.bookId}.${explanation.passage.chapter}.${explanation.passage.from}`}
+            onOpenRef={ref => { setExplanation(null); readVerse(ref) }}
+          />
+        </div>
+      )}
 
       {/* Scripture, over whatever room asked for it. Closing it puts the reader
           straight back on the plan or the lesson they were working through. */}

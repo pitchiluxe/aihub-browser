@@ -1,6 +1,6 @@
 {
   "name": "aihub-browser",
-  "version": "1.89.1",
+  "version": "1.89.2",
   "description": "AIHub — Next-Generation AI-Powered Browser",
   "main": "./out/main/index.js",
   "homepage": ".",

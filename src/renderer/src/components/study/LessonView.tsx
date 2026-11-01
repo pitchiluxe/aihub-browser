@@ -18,7 +18,7 @@ interface Props {
   onOpenReader: (ref: string) => void
   /** Opens the lesson's passages in the popup, starting at the one clicked. */
   onReadPassages: (views: Passage[], focusRef?: string | null, index?: number) => void
-  onAskAI?: (question: string) => void
+  onAskAI?: (question: string, passage: Passage) => void
 }
 
 type Stage = 'read' | 'quiz' | 'done'
@@ -119,7 +119,7 @@ export default function LessonView({
                       <BookOpen size={11} /> {t('Read it', 'Lire')}
                     </button>
                     {onAskAI && (
-                      <button onClick={() => onAskAI(t(`Explain ${passageLabel(p, lang)} — what does it mean and what was going on when it was written?`, `Explique ${passageLabel(p, lang)} — que veut dire ce passage, et que se passait-il quand il a été écrit ?`))}
+                      <button onClick={() => onAskAI(t(`Explain ${passageLabel(p, lang)} — what does it mean and what was going on when it was written?`, `Explique ${passageLabel(p, lang)} — que veut dire ce passage, et que se passait-il quand il a été écrit ?`), p)}
                         className="flex items-center gap-1 rounded-lg px-2 py-1 text-[10.5px] font-semibold opacity-60 hover:opacity-100"
                         style={{ border: '1px solid var(--ds-border-sm)' }}>
                         <Sparkles size={11} /> {t('Explain', 'Expliquer')}

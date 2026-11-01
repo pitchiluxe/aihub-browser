@@ -25,7 +25,7 @@ interface Props {
   onAddToLab: (refs: string[]) => void
   onOpenReader: (ref: string) => void
   onReadPassages: (views: Passage[], focusRef?: string | null, index?: number) => void
-  onAskAI?: (question: string) => void
+  onAskAI?: (question: string, passage: Passage) => void
 }
 
 // Three authored courses, six lessons each. The lessons are readable in any
