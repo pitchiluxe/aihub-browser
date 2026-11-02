@@ -4,12 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Sparkles, LayoutGrid, Network, RefreshCw, Zap, Clock, X,
   ChevronLeft, ChevronRight, Download, Upload, Eye, EyeOff,
-  FlaskConical, Bot, Newspaper, Search, Disc3, Globe2, Plane, Gamepad2,
+  FlaskConical, Bot, Newspaper, Search, Disc3, Globe2, Plane,
 } from 'lucide-react'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { useBrowserStore } from '../../store/browserStore'
 import { loadBookmarks, removeBookmark, isBookmarkProtected } from '../../services/bookmarkService'
 import SearchBar from './SearchBar'
+import GameRoomDoor from './GameRoomDoor'
 import AddBookmarkModal from './AddBookmarkModal'
 import { useTheme } from '../../hooks/useTheme'
 import { getHoliday, holidayThemeEnabled } from '../../services/holidayService'
@@ -230,26 +231,7 @@ export default function HomePage({ onNavigate }: Props) {
             <SearchBar onNavigate={onNavigate} />
           </motion.div>
 
-          <button
-            type="button"
-            aria-label="Game room"
-            onClick={() => useBrowserStore.getState().focusOrOpenPage('aihub://games', 'games')}
-            className="mt-4 w-full max-w-2xl flex items-center gap-4 rounded-2xl px-5 py-4 text-left transition-[filter] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-400 hover:brightness-110"
-            style={{
-              backgroundColor: isLight ? 'rgba(245, 204, 104, 0.20)' : 'rgba(245, 204, 104, 0.10)',
-              border: `1px solid ${isLight ? 'rgba(161, 98, 7, 0.30)' : 'rgba(245, 204, 104, 0.35)'}`,
-              color: isLight ? '#854d0e' : '#f5cc68',
-            }}
-          >
-            <Gamepad2 size={28} aria-hidden="true" className="shrink-0" />
-            <span className="flex-1 min-w-0">
-              <span className="block text-base font-semibold">Game room</span>
-              <span className={`block mt-0.5 text-xs ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
-                Arcade, cards, board games, and your classics
-              </span>
-            </span>
-            <ChevronRight size={20} aria-hidden="true" className="shrink-0" />
-          </button>
+          <GameRoomDoor isLight={isLight} onEnter={() => useBrowserStore.getState().focusOrOpenPage('aihub://games', 'games')} />
 
         </div>
 

@@ -1,0 +1,124 @@
+/* Felt tables shared by dominoes and the card room: a padded rail, a lamp
+   overhead, pieces that land with a small bounce. 3D tilts the felt back. */
+.gr-tabletop-layout{grid-template-columns:minmax(0,1fr) minmax(200px,260px)!important;width:100%}
+.gr-felt-stage{position:relative;perspective:1800px;perspective-origin:50% 0;padding-top:26px}
+.gr-felt-stage>.gr-view-toggle,.gr-card-tabs .gr-view-toggle{position:absolute;top:-4px;right:0}
+.gr-card-tabs .gr-view-toggle{position:static;margin-left:auto}
+.gr-felt{position:relative;display:flex;flex-direction:column;gap:14px;min-height:min(460px,calc(100vh - 480px));padding:14px 18px 16px;border-radius:26px;background:radial-gradient(ellipse 70% 60% at 50% 45%,#2a8a6c,#14513f 60%,#0c3227);box-shadow:inset 0 0 0 1px #ffffff1a,inset 0 0 60px #000a,0 0 0 12px #5b3a22,0 0 0 14px #2c1b0f,0 30px 50px #000b;transform-origin:50% 0;transition:transform .7s cubic-bezier(.3,.7,.2,1)}
+.is-3d .gr-felt{transform:rotateX(26deg) scale(.9);margin-bottom:-6%}
+.gr-felt:before{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:radial-gradient(ellipse 40% 30% at 50% 0%,#fff3d018,transparent 70%)}
+
+.gr-opponents{display:flex;justify-content:center;gap:18px;flex-wrap:wrap}
+.gr-opponent{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 12px;border-radius:12px;background:#0003;color:#e9f4ef;font-size:11px;transition:box-shadow .3s}
+.gr-opponent.current{box-shadow:0 0 0 2px #f5cc68,0 0 22px #f5cc6866}
+.gr-opponent small{color:#bfe0d6}
+.gr-opponent-hand,.gr-backs,.gr-reveal{display:flex}.gr-opponent-hand>*,.gr-backs>*{margin-left:-14px}.gr-opponent-hand>:first-child,.gr-backs>:first-child{margin-left:0}
+.gr-reveal{gap:3px}
+
+/* ── Dominoes ── */
+.gr-domino{--u:clamp(15px,2.1vw,22px);position:relative;display:inline-flex;align-items:center;flex-shrink:0;width:calc(var(--u) * 2 + 3px);height:var(--u);padding:1px;border-radius:5px;background:linear-gradient(160deg,#fffdf6,#eee6d2);box-shadow:inset 0 0 0 1px #0002,0 2px 0 #c8bc9f,0 3px 0 #a99c7c,0 5px 6px #0007}
+.gr-domino.is-vertical{flex-direction:column;width:var(--u);height:calc(var(--u) * 2 + 3px)}
+.gr-domino.is-hidden{background:linear-gradient(160deg,#2c2c34,#151519);box-shadow:inset 0 0 0 1px #ffffff1a,0 2px 0 #0a0a0c,0 4px 5px #0008}
+.gr-domino.is-hidden:after{content:'';position:absolute;inset:30%;border-radius:50%;background:#d8b25a55}
+.gr-dom-half{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);width:calc(var(--u) - 2px);height:calc(var(--u) - 2px);padding:12%}
+.gr-dom-half i{border-radius:50%;margin:12%}.gr-dom-half i.on{background:radial-gradient(circle at 40% 35%,#4a4752,#121115)}
+.gr-dom-bar{width:1px;align-self:stretch;margin:12% 0;background:#0004}.gr-domino.is-vertical .gr-dom-bar{width:auto;height:1px;margin:0 12%}
+.gr-domino.is-fresh{animation:gr-land .45s cubic-bezier(.2,.9,.3,1.3)}
+@keyframes gr-land{from{transform:translateY(-40px) rotate(-14deg) scale(1.3);opacity:0}}
+.gr-dom-chain{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:8px 70px;min-height:110px}
+.gr-dom-row{display:flex;align-items:center;gap:2px}.gr-dom-row.is-reversed{flex-direction:row-reverse}
+.gr-dom-empty{color:#cfe8df;font-size:12px;opacity:.8}
+.gr-dom-end{position:absolute;top:50%;transform:translateY(-50%);padding:8px 10px;border-radius:8px;border:1px dashed #f5cc68;background:#f5cc6822;color:#ffe9b0;font-size:11px;cursor:pointer;animation:gr-pulse-glow 1.1s ease-in-out infinite}
+.gr-dom-end.is-left{left:6px}.gr-dom-end.is-right{right:6px}
+@keyframes gr-pulse-glow{50%{box-shadow:0 0 18px #f5cc6888}}
+.gr-dom-boneyard{display:flex;align-items:center;justify-content:center;gap:4px;min-height:28px}.gr-dom-boneyard .gr-domino{--u:11px}.gr-dom-boneyard small{margin-left:8px;color:#bfe0d6;font-size:10px}
+.gr-dom-tally{font-size:11px!important}
+.gr-my-hand{display:flex;justify-content:center;align-items:flex-end;flex-wrap:wrap;gap:8px;padding:12px 8px 4px;border-radius:14px;transition:background .3s}
+.gr-my-hand.is-turn{background:#ffffff0a;box-shadow:inset 0 0 0 1px #f5cc6833}
+.gr-hand-tile{padding:0;border:0;background:none;transition:transform .2s;cursor:default}
+.gr-hand-tile .gr-domino{--u:clamp(20px,2.6vw,28px)}
+.gr-hand-tile.is-playable{cursor:pointer}.gr-hand-tile.is-playable .gr-domino{box-shadow:inset 0 0 0 1px #0002,0 2px 0 #c8bc9f,0 3px 0 #a99c7c,0 0 0 2px #f5cc68,0 0 16px #f5cc68aa}
+.gr-hand-tile.is-playable:hover,.gr-hand-tile.is-chosen{transform:translateY(-10px)}
+.game-room .gr-hand-tile:disabled{opacity:1}
+
+/* ── Playing cards ── */
+.gr-card-room{max-width:1100px;margin:0 auto}
+.gr-card-tabs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.gr-card-tabs>button:not(.gr-view-toggle){padding:9px 16px;border-radius:999px;border:1px solid #ffffff22;background:#ffffff08;color:var(--gr-ink);font-size:12px;font-weight:600}
+.gr-card-tabs>button.active{background:linear-gradient(#f5cc68,#d89d2f);color:#2a1a08;border-color:transparent;box-shadow:0 0 18px #f5cc6866}
+.gr-card-blurb{font-size:12px;color:var(--gr-muted);margin:0 0 4px}
+.gr-pc{--w:clamp(46px,5.6vw,70px);position:relative;display:inline-flex;flex-direction:column;justify-content:center;align-items:center;flex-shrink:0;width:var(--w);height:calc(var(--w) * 1.4);padding:0;border:0;border-radius:calc(var(--w) * .1);background:linear-gradient(160deg,#fff,#efece4);color:#1b2233;font-family:Georgia,'Times New Roman',serif;box-shadow:inset 0 0 0 1px #0002,0 3px 8px #0007;transition:transform .2s,box-shadow .2s;animation:gr-deal .45s var(--deal,0ms) cubic-bezier(.2,.8,.3,1.1) both}
+.gr-pc.is-red{color:#c0283f}
+.gr-pc.is-small{--w:30px;animation:none}
+.gr-pc.is-back{background:repeating-linear-gradient(45deg,#7a1f2e 0 5px,#8e2737 5px 10px);box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 4px #0003,0 3px 6px #0008}
+.gr-pc.is-empty{background:#0002;box-shadow:inset 0 0 0 2px #ffffff22;animation:none}
+.gr-pc-corner{position:absolute;top:5%;left:8%;font-size:calc(var(--w) * .2);font-weight:700;line-height:1;text-align:center}.gr-pc-corner.is-flip{top:auto;left:auto;bottom:5%;right:8%;transform:rotate(180deg)}
+.gr-pc-pip{font-size:calc(var(--w) * .5);line-height:1}
+.gr-pc.is-small .gr-pc-corner,.gr-pc.is-small .gr-pc-pip{display:none}
+.gr-pc.is-glow{cursor:pointer;box-shadow:inset 0 0 0 1px #0002,0 0 0 2px #f5cc68,0 0 18px #f5cc68aa}
+button.gr-pc.is-glow:hover:not(:disabled){transform:translateY(-14px) rotate(-2deg)}
+.game-room button.gr-pc:disabled{opacity:1;cursor:default}
+.gr-pc.is-played{animation:gr-toss .4s cubic-bezier(.2,.8,.3,1.1)}
+@keyframes gr-deal{from{transform:translate(0,-60px) rotate(-20deg) scale(.6);opacity:0}}
+@keyframes gr-toss{from{transform:translateY(90px) rotate(18deg) scale(1.15);opacity:.2}}
+.gr-my-hand.is-fan{gap:0;padding-top:22px}.gr-my-hand.is-fan>.gr-pc{margin-left:calc(var(--w) * -.32)}.gr-my-hand.is-fan>.gr-pc:first-child{margin-left:0}
+.gr-pc.is-meld{box-shadow:inset 0 0 0 1px #0002,0 3px 8px #0007,inset 0 -5px 0 var(--meld)}
+.gr-pc.meld-0{--meld:#2fb38c}.gr-pc.meld-1{--meld:#3f8fe0}.gr-pc.meld-2{--meld:#e0785a}
+.gr-card-center{flex:1;display:flex;align-items:center;justify-content:center;gap:26px;min-height:150px}
+.gr-stock{position:relative;padding:0;border:0;background:none;filter:drop-shadow(3px 3px 0 #0003) drop-shadow(6px 6px 0 #0002)}
+.gr-stock small{position:absolute;bottom:-18px;left:0;right:0;text-align:center;color:#cfe8df;font-size:10px}
+.gr-stock:not(:disabled):hover .gr-pc{transform:translateY(-6px)}
+.gr-suit-badge{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:#f7f3e8;color:#1b2233;font-size:24px;box-shadow:0 4px 10px #0008;animation:gr-land .4s ease-out}
+.gr-suit-badge.is-red{color:#c0283f}
+.gr-suit-badge.is-trump{position:absolute;top:16px;left:16px;width:56px;height:56px;flex-direction:column;font-size:22px;line-height:1}.gr-suit-badge small{font-size:8px;font-family:system-ui;letter-spacing:1px;text-transform:uppercase;color:#6a6252}
+.gr-wild{position:absolute;left:50%;top:50%;z-index:5;transform:translate(-50%,-50%);padding:16px 18px;border-radius:14px;background:#14121f;color:#fff;text-align:center;box-shadow:0 20px 50px #000c,0 0 0 1px #f5cc6855}
+.gr-wild div{display:flex;gap:8px;margin-top:10px}.gr-wild button{display:flex;flex-direction:column;align-items:center;width:62px;padding:8px;border-radius:10px;border:0;background:#f7f3e8;color:#1b2233;font-size:28px;line-height:1}.gr-wild button.is-red{color:#c0283f}.gr-wild button small{font-size:9px;margin-top:4px;color:#555}
+.gr-wild button:hover{transform:translateY(-4px)}
+.gr-whist-felt{display:grid;grid-template-columns:1fr 2fr 1fr;grid-template-rows:auto 1fr auto;min-height:min(600px,calc(100vh - 290px))}
+.gr-whist-seat{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#e9f4ef;font-size:11px;border-radius:12px;padding:6px}
+.gr-whist-seat.current{box-shadow:0 0 0 2px #f5cc68,0 0 22px #f5cc6866}
+.gr-whist-seat.seat-1{grid-area:2/1}.gr-whist-seat.seat-2{grid-area:1/2}.gr-whist-seat.seat-3{grid-area:2/3}
+.gr-whist-seat.seat-1 .gr-backs,.gr-whist-seat.seat-3 .gr-backs{flex-direction:column}.gr-whist-seat.seat-1 .gr-backs>*,.gr-whist-seat.seat-3 .gr-backs>*{margin:-30px 0 0}.gr-whist-seat.seat-1 .gr-backs>:first-child,.gr-whist-seat.seat-3 .gr-backs>:first-child{margin:0}
+.gr-trick{grid-area:2/2;position:relative;min-height:200px}
+.gr-trick .gr-pc{position:absolute;left:50%;top:50%}
+.gr-trick .trick-0{transform:translate(-50%,-10%)}.gr-trick .trick-1{transform:translate(-120%,-50%) rotate(-8deg)}.gr-trick .trick-2{transform:translate(-50%,-90%)}.gr-trick .trick-3{transform:translate(20%,-50%) rotate(8deg)}
+.gr-whist-felt .gr-my-hand{grid-area:3/1/4/4}
+
+@media(max-width:1000px){.gr-tabletop-layout{grid-template-columns:1fr!important}}
+@media(max-width:650px){.gr-felt{padding:12px;border-radius:18px}.gr-dom-chain{padding:12px 46px}.gr-domino{--u:13px}}
+@media(prefers-reduced-motion:reduce){.gr-pc,.gr-domino.is-fresh,.gr-dom-end,.gr-suit-badge{animation:none}}
+
+/* ── Pool ── a low lamp over the table, the canvas scaled to fit the window. */
+.gr-pool-layout{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px}
+.gr-pool-lamp{position:absolute;top:-30px;left:50%;width:70%;height:120px;transform:translateX(-50%);background:radial-gradient(ellipse 50% 100% at 50% 0%,#fff1c455,transparent 70%);pointer-events:none;z-index:1}
+.gr-pool-table{width:min(100%,calc((100vh - 470px) * 1.84),1100px);height:auto;border-radius:22px;box-shadow:0 30px 60px #000c,0 0 0 1px #00000080;touch-action:none}
+.gr-pool-table.is-aiming{cursor:crosshair}
+.gr-pool-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;width:min(100%,1100px)}
+.gr-pool-bar p{flex:1;min-width:200px;margin:0;font-size:12px;color:var(--gr-muted)}
+.gr-pool-player{display:flex;flex-direction:column;gap:3px;padding:8px 12px;border-radius:10px;background:#ffffff08;border:1px solid #ffffff14;min-width:150px}
+.gr-pool-player.current{border-color:#f5cc68;box-shadow:0 0 18px #f5cc6844}
+.gr-pool-player strong{font-size:13px}.gr-pool-player small{font-size:10px;color:var(--gr-muted);text-transform:capitalize}
+.gr-pool-rack{display:flex;gap:3px;min-height:10px}.gr-pool-rack i{width:10px;height:10px;border-radius:50%;box-shadow:inset -2px -2px 3px #0006}
+
+/* ── Animal jigsaw ── */
+.gr-jigsaw-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,250px);gap:24px;align-items:start}
+.gr-jigsaw{width:min(100%,calc((100vh - 400px) * 2.4));height:auto;touch-action:none;user-select:none}
+.gr-piece{cursor:grab;filter:drop-shadow(0 3px 3px #0008);transition:filter .2s}
+.gr-piece.is-dragging{cursor:grabbing;filter:drop-shadow(0 14px 12px #000b) brightness(1.06)}
+.gr-piece.is-placed{cursor:default;filter:none;animation:gr-snap .35s ease-out}
+@keyframes gr-snap{50%{filter:brightness(1.4) drop-shadow(0 0 10px #f5cc68)}}
+.gr-jigsaw-done{animation:gr-reveal 1.2s ease-out both;pointer-events:none}
+.gr-jigsaw-done text{font:700 34px Georgia,serif;fill:#fff;paint-order:stroke;stroke:#0008;stroke-width:6px}
+@keyframes gr-reveal{from{opacity:0}}
+@media(max-width:1000px){.gr-jigsaw-layout{grid-template-columns:1fr}}
+
+/* ── Pinball ── a cabinet with a lit backbox. */
+.gr-pinball-layout{grid-template-columns:auto minmax(200px,260px)!important}
+.gr-pinball-cabinet{display:flex;flex-direction:column;align-items:center;padding:10px 12px 14px;border-radius:18px 18px 10px 10px;background:linear-gradient(#2a1840,#120a22);box-shadow:inset 0 0 0 2px #ff5fa855,0 0 40px #ff5fa833,0 30px 50px #000c}
+.gr-pinball-backbox{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;margin-bottom:8px;padding:6px 12px;border-radius:8px;background:#05030d;box-shadow:inset 0 0 0 1px #ffffff1a}
+.gr-pinball-backbox span{font:italic 900 12px Georgia,serif;letter-spacing:2px;color:#ff8ac4;text-shadow:0 0 8px #ff5fa8}
+.gr-pinball-backbox b{font:700 20px ui-monospace,Consolas,monospace;color:#ffcf3a;text-shadow:0 0 8px #ff9f1a;white-space:pre}
+.gr-pinball{height:min(calc(100vh - 420px),780px);min-height:360px;width:auto;aspect-ratio:400/700;border-radius:10px}
+.gr-pinball-pad{display:flex;gap:6px;margin:12px 0}.gr-pinball-pad .gr-control{flex:1;touch-action:none;user-select:none}
+.gr-felt-stage.is-3d{perspective-origin:50% 50%}
+.is-3d .gr-felt{transform-origin:50% 50%;transform:rotateX(22deg) scale(.92);margin-bottom:0}

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob: https://cdn.emulatorjs.org; style-src 'unsafe-inline' https://cdn.emulatorjs.org; connect-src https://cdn.emulatorjs.org blob:; worker-src blob:; img-src data: blob: https://cdn.emulatorjs.org; media-src blob:; font-src data: https://cdn.emulatorjs.org; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob: aihub-emu: https://cdn.emulatorjs.org; style-src 'unsafe-inline' aihub-emu: https://cdn.emulatorjs.org; connect-src aihub-emu: https://cdn.emulatorjs.org blob:; worker-src blob:; img-src data: blob: aihub-emu: https://cdn.emulatorjs.org; media-src blob:; font-src data: aihub-emu: https://cdn.emulatorjs.org; base-uri 'none'; form-action 'none';">
 <meta name="referrer" content="no-referrer"><title>AIHub game player</title>
 <style>html,body,#game{width:100%;height:100%;margin:0;background:#101923;color:#d6e4f0;font-family:system-ui,sans-serif;overflow:hidden}#message{position:absolute;inset:0;display:grid;place-items:center;padding:30px;text-align:center;pointer-events:none;font-size:14px}</style></head>
 <body><div id="game"></div><div id="message">Preparing your game player…</div>
@@ -44,15 +44,19 @@
       window.EJS_gameUrl = new File([data.rom], clean(data.fileName));
       if (data.bios) window.EJS_biosUrl = new File([data.bios], 'bios.bin');
       window.EJS_gameName = clean(data.title); window.EJS_gameID = 1;
-      window.EJS_pathtodata = 'https://cdn.emulatorjs.org/4.2.3/data/';
+      // Served by the app from its on-disk copy; the first launch downloads it once.
+      window.EJS_pathtodata = 'aihub-emu://player/data/';
       window.EJS_startOnLoaded = true; window.EJS_color = '#6eb6ff';
       window.EJS_threads = false; window.EJS_disableDatabases = true; window.EJS_disableLocalStorage = true;
       window.EJS_language = 'en-US'; window.EJS_disableAutoLang = false;
       window.EJS_Buttons = { netplay: false, cacheManager: false, screenRecord: false };
       window.EJS_onGameStart = () => { document.getElementById('message').style.display = 'none'; pausePlayer(); report('started'); };
-      const loader = document.createElement('script'); loader.src = window.EJS_pathtodata + 'loader.js';
-      loader.onerror = () => fail('Could not download the emulator. Connect to the internet and try again.');
-      document.body.appendChild(loader);
+      const addLoader = retry => {
+        const loader = document.createElement('script'); loader.src = window.EJS_pathtodata + 'loader.js' + (retry ? '?retry=1' : '');
+        loader.onerror = () => retry ? fail('The game player could not be downloaded. It is fetched once, the first time you play — check your internet connection and press Try again.') : setTimeout(() => addLoader(true), 1500);
+        document.body.appendChild(loader);
+      };
+      addLoader(false);
     };
     channel.start(); report('connected');
   });

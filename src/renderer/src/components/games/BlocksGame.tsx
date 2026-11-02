@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { BLOCK_SHAPES, blocksAction, ghostPiece, newBlocks, type BlocksState } from '../../../../shared/games/blocks'
-import { GameButton, GameResult, GameStats, useGameKeys, type GameProps } from './GameControls'
+import { GameButton, GameResult, GameStats, useCounterSound, useEndSound, useGameKeys, type GameProps } from './GameControls'
 import './blocks-3d.css'
 const COLORS = ['transparent', '#75d7e8', '#f5cc68', '#bda3f5', '#75d5a6', '#ef9ca6', '#6eb6ff', '#edaa75']
 const KEY_ACTION: Record<string, Parameters<typeof blocksAction>[1]> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowDown: 'down', ArrowUp: 'rotate', ' ': 'drop', c: 'hold', C: 'hold' }
@@ -10,6 +10,7 @@ function Preview({ kind }: { kind: number | null }) {
 }
 export default function BlocksGame({ paused, onFinish }: GameProps) {
   const [state, setState] = useState<BlocksState>(() => newBlocks())
+  useCounterSound(state.lines, 'clear'); useCounterSound(state.board.flat().filter(Boolean).length, 'tile'); useEndSound(state.over, false)
   const act = (action: Parameters<typeof blocksAction>[1]) => { if (!paused) setState(value => blocksAction(value, action)) }
   useGameKeys(key => { const action = KEY_ACTION[key]; if (action) act(action) }, paused || state.over)
   useEffect(() => {

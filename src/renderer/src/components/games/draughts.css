@@ -1,7 +1,9 @@
 /* A wooden board leaning back on the table; pieces are stacked discs. */
-.gr-draughts-layout{grid-template-columns:minmax(260px,min(520px,62vh)) minmax(170px,250px)!important}
-.gr-dr-stage{perspective:1600px;perspective-origin:50% 0;padding:6px 0 0}
-.gr-dr-board{display:grid;grid-template-columns:repeat(var(--n),1fr);aspect-ratio:1;padding:14px;border-radius:12px;background:linear-gradient(135deg,#6a4327,#4a2d18);box-shadow:inset 0 0 0 2px #ffffff14,inset 0 0 0 14px #3b2312,0 4px 0 #2a180b,0 40px 50px #000b;transform-origin:50% 0;transform:rotateX(24deg);margin-bottom:-6%}
+.gr-draughts-layout{grid-template-columns:minmax(260px,min(600px,calc((100vh - 370px) * var(--fit,1)))) minmax(170px,250px)!important}
+.gr-dr-stage{position:relative;perspective:1600px;perspective-origin:50% 0;padding:26px 0 0}
+.gr-draughts-layout:has(.gr-dr-stage.is-3d){--fit:.92}
+.gr-dr-stage.is-flat .gr-dr-board{transform:none;margin-bottom:0}
+.gr-dr-board{display:grid;grid-template-columns:repeat(var(--n),1fr);aspect-ratio:1;padding:14px;border-radius:12px;background:linear-gradient(135deg,#6a4327,#4a2d18);box-shadow:inset 0 0 0 2px #ffffff14,inset 0 0 0 14px #3b2312,0 4px 0 #2a180b,0 40px 50px #000b;transform-origin:50% 0;transform:rotateX(24deg);margin-bottom:-6%;transition:transform .6s cubic-bezier(.3,.7,.2,1)}
 .gr-dr-square{position:relative;display:grid;place-items:center;padding:0;border:0;border-radius:0;aspect-ratio:1;cursor:default}
 .gr-dr-square.is-light{background:linear-gradient(135deg,#f0dcb4,#e2c799)}
 .gr-dr-square.is-dark{background:linear-gradient(135deg,#7b4a2a,#5e3519);cursor:pointer}
@@ -23,3 +25,7 @@
 @media(max-width:1000px){.gr-draughts-layout{grid-template-columns:1fr!important}.gr-dr-stage{max-width:560px;width:100%;margin:auto}}
 @media(max-width:650px){.gr-dr-board{padding:8px;box-shadow:inset 0 0 0 8px #3b2312,0 3px 0 #2a180b,0 30px 40px #000b}}
 @media(prefers-reduced-motion:reduce){.gr-dr-square.is-target:after{animation:none}}
+.gr-draughts-layout:has(.gr-dr-stage.is-3d){--fit:1}
+.gr-dr-stage.is-3d{perspective-origin:50% 50%}
+.gr-dr-stage.is-3d .gr-dr-board{transform-origin:50% 50%;transform:rotateX(24deg) scale(.94);margin-bottom:0}
+.gr-draughts-layout:has(.gr-dr-stage.is-3d){--fit:.8}

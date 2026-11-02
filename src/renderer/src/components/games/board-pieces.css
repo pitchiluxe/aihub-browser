@@ -1,11 +1,22 @@
-/* 3D die and standing pawn shared by the tabletop games. */
+/* 3D dice and standing pawns shared by the tabletop games.
+   A die is a rounded ivory cube: bevelled faces lit from the top left, pips
+   drilled in and painted, a red ace, a solid core behind the rounded corners,
+   and a soft contact shadow. A roll throws it up, tumbles it and lets it
+   bounce twice before it settles. */
 .gr-pawn{display:block;width:15px;height:22px;filter:drop-shadow(0 2px 1px #0007)}
-.gr-die-wrap{--size:30px;display:block;width:var(--size);height:var(--size);transform-style:preserve-3d;transform:translateZ(calc(var(--size) / 2))}
-.gr-die-wrap.rolled{animation:gr-hop .75s cubic-bezier(.3,.7,.4,1)}.gr-die-wrap.rolled .gr-die{animation:gr-tumble .75s cubic-bezier(.25,.8,.35,1)}
+.gr-die-wrap{--size:30px;position:relative;display:block;width:var(--size);height:var(--size);transform-style:preserve-3d;transform:translateZ(calc(var(--size) / 2))}
+.gr-die-wrap:before{content:'';position:absolute;inset:6%;border-radius:30%;background:radial-gradient(closest-side,#000b,#0000);filter:blur(2px);transform:translateZ(calc(var(--size) / -2 - 1px)) translate(6%,10%) scale(1.12)}
+.gr-die-wrap.rolled{animation:gr-hop 1.05s cubic-bezier(.3,.7,.4,1)}.gr-die-wrap.rolled .gr-die{animation:gr-tumble 1.05s cubic-bezier(.2,.75,.25,1.04)}
 .gr-die{position:relative;display:block;width:100%;height:100%;transform-style:preserve-3d}
-.gr-die-face{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:4px;gap:1px;border-radius:6px;background:radial-gradient(circle at 30% 25%,#fff,#e8e6ea);box-shadow:inset 0 0 0 1px #0002,inset 0 -2px 3px #0002;backface-visibility:hidden}
-.gr-die-face i{border-radius:50%;margin:1px}.gr-die-face i.on{background:radial-gradient(circle at 40% 35%,#55535e,#16151a)}
-.gr-die-face.f0{transform:translateZ(15px)}.gr-die-face.f1{transform:rotateX(180deg) translateZ(15px)}.gr-die-face.f2{transform:rotateY(90deg) translateZ(15px)}.gr-die-face.f3{transform:rotateY(-90deg) translateZ(15px)}.gr-die-face.f4{transform:rotateX(90deg) translateZ(15px)}.gr-die-face.f5{transform:rotateX(-90deg) translateZ(15px)}
-@keyframes gr-tumble{from{transform:rotateX(calc(var(--spin) * 720deg)) rotateY(calc(var(--spin) * -540deg)) rotateZ(90deg)}}
-@keyframes gr-hop{0%{transform:translateZ(15px) translateY(-30px)}40%{transform:translateZ(70px) translateY(-8px)}70%{transform:translateZ(20px)}85%{transform:translateZ(28px)}100%{transform:translateZ(15px)}}
+.gr-die-core{position:absolute;inset:3%;border-radius:12%;background:#e2dbc9}
+.gr-die-core.x{transform:rotateY(90deg)}.gr-die-core.y{transform:rotateX(90deg)}
+.gr-die-face{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:14%;gap:0;border-radius:20%;background:linear-gradient(145deg,#fffefa 0%,#f4efe3 48%,#ddd5c3 100%);box-shadow:inset 0 0 0 1px #0000001a,inset 1.5px 1.5px 2px #ffffffd9,inset -2px -2.5px 4px #00000030;backface-visibility:hidden}
+.gr-die-face i{position:relative;border-radius:50%;margin:11%}
+.gr-die-face i.on{background:radial-gradient(circle at 46% 40%,#34313d 0,#0c0b10 72%);box-shadow:inset 0 1.5px 1.5px #000d,0 .8px 0 #ffffffc0}
+.gr-die-face.v1 i.on{margin:2%;background:radial-gradient(circle at 46% 40%,#ef5a60 0,#9b1520 75%);box-shadow:inset 0 2px 2px #4a050acc,0 1px 0 #ffffffc0}
+.gr-die-face.f0{transform:translateZ(calc(var(--size) / 2))}.gr-die-face.f1{transform:rotateX(180deg) translateZ(calc(var(--size) / 2))}
+.gr-die-face.f2{transform:rotateY(90deg) translateZ(calc(var(--size) / 2))}.gr-die-face.f3{transform:rotateY(-90deg) translateZ(calc(var(--size) / 2))}
+.gr-die-face.f4{transform:rotateX(90deg) translateZ(calc(var(--size) / 2))}.gr-die-face.f5{transform:rotateX(-90deg) translateZ(calc(var(--size) / 2))}
+@keyframes gr-tumble{0%{transform:rotateX(calc(var(--spin) * 900deg)) rotateY(calc(var(--spin) * -720deg)) rotateZ(160deg)}55%{transform:rotateX(calc(var(--spin) * 110deg)) rotateY(calc(var(--spin) * -70deg)) rotateZ(14deg)}80%{transform:rotateX(calc(var(--spin) * -12deg)) rotateY(calc(var(--spin) * 8deg))}100%{transform:none}}
+@keyframes gr-hop{0%{transform:translateZ(calc(var(--size) / 2)) translateY(-40px) translateX(calc(var(--spin) * -30px))}30%{transform:translateZ(calc(var(--size) * 2.6)) translateY(-10px)}52%{transform:translateZ(calc(var(--size) / 2))}66%{transform:translateZ(calc(var(--size) * 1.05))}80%{transform:translateZ(calc(var(--size) / 2))}89%{transform:translateZ(calc(var(--size) * .68))}100%{transform:translateZ(calc(var(--size) / 2))}}
 @media(prefers-reduced-motion:reduce){.gr-die-wrap.rolled,.gr-die-wrap.rolled .gr-die{animation:none}}

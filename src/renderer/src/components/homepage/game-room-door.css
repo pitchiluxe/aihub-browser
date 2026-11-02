@@ -1,0 +1,53 @@
+/* Homepage entrance to the Game room: marquee bulbs chase around a pair of
+   doors; the neon sign breathes, and the doors part on hover to let light out. */
+.grd{position:relative;width:100%;max-width:42rem;margin-top:1rem;padding:16px;border-radius:22px;background:linear-gradient(#2a1630,#1a0f24);box-shadow:inset 0 0 0 2px #ffcf6b55,inset 0 0 30px #000a,0 14px 40px #0008;isolation:isolate}
+.grd.is-lit{box-shadow:inset 0 0 0 2px #ffcf6b88,inset 0 0 30px #000a,0 14px 40px #0008,0 0 50px #ff5fa833,0 0 90px #ffb70322;animation:grd-aura 4s ease-in-out infinite}
+@keyframes grd-aura{50%{box-shadow:inset 0 0 0 2px #ffcf6b,inset 0 0 30px #000a,0 14px 40px #0008,0 0 70px #ff5fa855,0 0 120px #3fc1ff33}}
+
+.grd-bulbs{position:absolute;display:flex;justify-content:space-between;pointer-events:none;z-index:2}
+.grd-bulbs.is-top{top:5px;left:18px;right:18px}.grd-bulbs.is-bottom{bottom:5px;left:18px;right:18px}
+.grd-bulbs.is-left,.grd-bulbs.is-right{top:22px;bottom:22px;flex-direction:column}.grd-bulbs.is-left{left:5px}.grd-bulbs.is-right{right:5px}
+.grd-bulbs i{width:7px;height:7px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff8,transparent 45%),#4a3a4e;box-shadow:inset 0 -1px 1px #0006}
+.grd.is-lit .grd-bulbs i{background:radial-gradient(circle at 35% 30%,#fff,var(--bulb) 55%);box-shadow:0 0 4px var(--bulb),0 0 10px var(--bulb),0 0 18px color-mix(in srgb,var(--bulb) 60%,transparent);animation:grd-chase 1.6s calc(var(--order) * -60ms) linear infinite}
+@keyframes grd-chase{0%,100%{opacity:1;transform:scale(1.15)}45%{opacity:.35;transform:scale(.85);box-shadow:none}}
+
+.grd-door{position:relative;display:block;width:100%;min-height:118px;padding:0;border:0;border-radius:12px;overflow:hidden;background:radial-gradient(ellipse at 50% 120%,#ffcf6b44,transparent 60%),#120a18;cursor:pointer;perspective:700px}
+.grd-door:focus-visible{outline:2px solid #ffcf6b;outline-offset:4px}
+.grd-leaf{position:absolute;top:0;bottom:0;width:50%;background:linear-gradient(90deg,#3d2416,#5a3722 45%,#3d2416);box-shadow:inset 0 0 0 2px #00000066,inset 0 0 24px #0008;transition:transform .7s cubic-bezier(.3,.7,.2,1);z-index:1}
+.grd-leaf:before{content:'';position:absolute;inset:14px 16px;border:2px solid #ffffff14;border-radius:6px;box-shadow:inset 0 0 12px #0006}
+.grd-leaf i{position:absolute;top:50%;width:6px;height:34px;margin-top:-17px;border-radius:3px;background:linear-gradient(#ffe2a0,#a77a2d);box-shadow:0 0 6px #ffcf6b88}
+.grd-leaf.is-left{left:0;transform-origin:0 50%}.grd-leaf.is-left i{right:10px}
+.grd-leaf.is-right{right:0;transform-origin:100% 50%}.grd-leaf.is-right i{left:10px}
+.grd-door:hover .grd-leaf.is-left,.grd-door:focus-visible .grd-leaf.is-left{transform:rotateY(58deg)}
+.grd-door:hover .grd-leaf.is-right,.grd-door:focus-visible .grd-leaf.is-right{transform:rotateY(-58deg)}
+.grd-glow{position:absolute;inset:0;background:radial-gradient(ellipse 45% 70% at 50% 50%,#ffcf6b55,#ff5fa822 50%,transparent 75%);opacity:0;transition:opacity .6s;z-index:0}
+.grd-door:hover .grd-glow{opacity:1}
+
+.grd-sign{position:relative;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:118px;padding:14px 20px;text-align:center;pointer-events:none}
+.grd-title{display:inline-flex;align-items:center;gap:10px;font:400 clamp(28px,4.5vw,40px)/1 'Brush Script MT','Segoe Script',cursive;color:#fff1f8;text-shadow:0 0 4px #fff,0 0 12px #ff5fa8,0 0 26px #ff5fa8,0 0 48px #ff5fa899}
+.grd-title svg{color:#ffd66b;filter:drop-shadow(0 0 6px #ffcf6b)}
+.grd.is-lit .grd-title{animation:grd-neon 6s infinite}
+@keyframes grd-neon{0%,17%,21%,62%,100%{opacity:1}18%,20%{opacity:.6}63%{opacity:.85}}
+.grd-sub{font-size:12px;color:#f1dcc4;text-shadow:0 1px 2px #000}
+.grd-enter{margin-top:4px;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#2a1508;background:linear-gradient(#ffe08a,#e6a93a);box-shadow:0 0 14px #ffcf6b88;opacity:.92;transition:transform .3s}
+.grd-door:hover .grd-enter{transform:scale(1.08)}
+.grd.is-dark .grd-title{text-shadow:0 0 3px #ff5fa877;color:#e8cfdc}.grd.is-dark .grd-enter{box-shadow:none}
+
+.grd-switch{position:absolute;top:-10px;right:-10px;z-index:4;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;border:1px solid #ffcf6b88;background:#1a0f24;color:#ffcf6b;cursor:pointer;box-shadow:0 4px 10px #0008}
+.grd.is-lit .grd-switch{box-shadow:0 4px 10px #0008,0 0 12px #ffcf6b88}
+.grd-switch:hover{background:#2a1630}.grd-switch:focus-visible{outline:2px solid #ffcf6b;outline-offset:2px}
+.grd.is-light-theme{box-shadow:inset 0 0 0 2px #b8862a88,0 10px 26px #0003}
+@media(prefers-reduced-motion:reduce){.grd,.grd .grd-bulbs i,.grd-title{animation:none!important}.grd-leaf{transition:none}}
+
+/* Readability: a dark glass plate carries the sign, the title is a bold block
+   face with a tight glow, and the door handles sit low, away from the text. */
+.grd-sign{min-height:118px;padding:12px 16px}
+.grd-sign>*{position:relative}
+.grd-sign:before{content:'';position:absolute;inset:12px 50% 12px 50%;width:min(440px,86%);transform:translateX(-50%);border-radius:14px;background:#0b0612d9;box-shadow:inset 0 0 0 1px #ffcf6b55,0 8px 24px #000a;backdrop-filter:blur(3px)}
+.grd-title{gap:12px;font:800 clamp(22px,3.6vw,32px)/1 'Segoe UI',system-ui,sans-serif;letter-spacing:4px;text-transform:uppercase;color:#fff;text-shadow:0 0 2px #fff,0 0 8px #ff5fa8,0 0 18px #ff5fa8aa}
+.grd.is-lit .grd-title{animation:grd-neon-soft 5s ease-in-out infinite}
+@keyframes grd-neon-soft{50%{text-shadow:0 0 2px #fff,0 0 10px #ff5fa8,0 0 26px #ff5fa8cc}}
+.grd-sub{font-size:13px;font-weight:500;color:#fff;text-shadow:none;opacity:.92}
+.grd-enter{font-size:11px;letter-spacing:2.5px}
+.grd-leaf i{top:auto;bottom:18px;margin-top:0;height:26px}
+.grd.is-dark .grd-title{color:#f3e6ee;text-shadow:0 0 4px #ff5fa866}

@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { chooseLudoMove, legalLudoMoves, LUDO_HOME, LUDO_SAFE, LUDO_SEATS, moveLudo, newLudo, rollLudo, type LudoState } from '../../../../shared/games/ludo'
 import { Die, Pawn } from './BoardPieces'
-import { GameButton, GameResult, useGameKeys, type GameProps } from './GameControls'
+import { DICE_SETTLE_MS, GameButton, GameResult, useBoardView, useGameKeys, ViewToggle, type GameProps } from './GameControls'
+import { playSound } from './sounds'
 import './ludo.css'
 
 const COLORS = ['#e2453c', '#2fa64a', '#f1c232', '#2d8be0']
@@ -26,33 +27,60 @@ function cellOf(seat: number, progress: number): [number, number] | null {
 
 export default function LudoGame({ paused, onFinish }: GameProps) {
   const [state, setState] = useState<LudoState>(() => newLudo()), [rolls, setRolls] = useState(0), reported = useRef(false)
-  const player = state.players[state.current], moves = legalLudoMoves(state), humanTurn = !player.bot && state.phase !== 'over'
-  const roll = () => { if (!paused && state.phase === 'roll') { setState(value => rollLudo(value)); setRolls(value => value + 1) } }
-  const move = (token: number) => { if (!paused && moves.includes(token)) setState(value => moveLudo(value, token)) }
+  const [tilted, toggleView] = useBoardView('ludo'), [settled, setSettled] = useState(true)
+  // Pawns shown on the board trail the real state by one square per tick, so a move is a walk.
+  const [shown, setShown] = useState(() => state.players.map(person => [...person.tokens]))
+  const walking = shown.some((tokens, p) => tokens.some((progress, t) => progress !== state.players[p]?.tokens[t])) || shown.length !== state.players.length
+  const player = state.players[state.current], moves = settled ? legalLudoMoves(state) : [], humanTurn = !player.bot && state.phase !== 'over'
+  const roll = () => { if (!paused && settled && !walking && state.phase === 'roll') { setState(value => rollLudo(value)); setRolls(value => value + 1) } }
+  const move = (token: number) => { if (!paused && !walking && moves.includes(token)) setState(value => moveLudo(value, token)) }
+  useEffect(() => {
+    if (!rolls) return
+    playSound('dice'); setSettled(false)
+    const timer = setTimeout(() => setSettled(true), DICE_SETTLE_MS); return () => clearTimeout(timer)
+  }, [rolls])
+  useEffect(() => {
+    if (!walking) return
+    const timer = setTimeout(() => setShown(previous => {
+      if (previous.length !== state.players.length) return state.players.map(person => [...person.tokens])
+      let stepped = false, captured = false
+      const next = previous.map((tokens, p) => tokens.map((progress, t) => {
+        const target = state.players[p].tokens[t]
+        if (progress === target) return progress
+        if (target < progress) { captured = true; return target }
+        if (stepped || progress < 0) return target
+        stepped = true; return progress + 1
+      }))
+      playSound(captured ? 'capture' : 'step')
+      return next
+    }), 150)
+    return () => clearTimeout(timer)
+  }, [shown, state])
   useGameKeys(key => { if (key === ' ' && humanTurn) roll() }, paused || !humanTurn)
   useEffect(() => {
-    if (paused || state.phase === 'over') return
+    if (paused || state.phase === 'over' || walking || !settled) return
     if (player.bot) {
       const timer = setTimeout(() => {
         if (state.phase === 'roll') { setState(value => rollLudo(value)); setRolls(value => value + 1) }
         else { const token = chooseLudoMove(state); if (token !== null) setState(value => moveLudo(value, token)) }
-      }, state.phase === 'roll' ? 700 : 650)
+      }, state.phase === 'roll' ? 700 : 350)
       return () => clearTimeout(timer)
     }
     // With only one possible move there is nothing to decide.
     if (state.phase !== 'move' || moves.length !== 1) return
-    const timer = setTimeout(() => setState(value => moveLudo(value, moves[0])), 450)
+    const timer = setTimeout(() => setState(value => moveLudo(value, moves[0])), 250)
     return () => clearTimeout(timer)
-  }, [paused, state])
+  }, [paused, state, walking, settled])
   useEffect(() => {
     if (state.phase !== 'over' || reported.current) return
     reported.current = true
+    playSound(state.players[state.winner!].bot ? 'lose' : 'win')
     if (!state.players[state.winner!].bot) onFinish(Math.max(100, 2000 - state.turns * 10))
   }, [state.phase])
-  const restart = (humans: number, total: number) => { setState(newLudo(humans, total)); reported.current = false }
+  const restart = (humans: number, total: number) => { const fresh = newLudo(humans, total); setState(fresh); setShown(fresh.players.map(person => [...person.tokens])); reported.current = false }
 
   const pawnsAt = new Map<string, { player: number; token: number }[]>()
-  state.players.forEach((person, index) => person.tokens.forEach((progress, token) => {
+  state.players.forEach((person, index) => (shown[index] || person.tokens).forEach((progress, token) => {
     const cell = cellOf(person.seat, progress)
     if (cell) { const key = cell.join(','); pawnsAt.set(key, [...(pawnsAt.get(key) || []), { player: index, token }]) }
   }))
@@ -68,17 +96,17 @@ export default function LudoGame({ paused, onFinish }: GameProps) {
   COLUMNS.forEach((column, seat) => column.forEach(([x, y], step) => cells.push(<div key={`c${seat}-${step}`} className="gr-ludo-cell is-column" style={{ gridColumn: x + 1, gridRow: y + 1, '--seat': COLORS[seat] } as React.CSSProperties}>{(pawnsAt.get(`${x},${y}`) || []).map(({ player: p, token }) => pawnButton(p, token))}</div>)))
 
   return <div className="gr-play-layout gr-ludo-layout">
-    <div className="gr-ludo-stage"><div className="gr-ludo-board" role="group" aria-label="Ludo board" data-testid="ludo-board">
-      {YARDS.map(([x, y], seat) => { const owner = state.players.findIndex(person => person.seat === seat); return <div key={`y${seat}`} className="gr-ludo-yard" style={{ gridColumn: `${x + 1} / span 6`, gridRow: `${y + 1} / span 6`, '--seat': COLORS[seat] } as React.CSSProperties}><div className="gr-ludo-nest">{[0, 1, 2, 3].map(token => <span key={token} className="gr-ludo-spot">{owner >= 0 && state.players[owner].tokens[token] === -1 && pawnButton(owner, token)}</span>)}</div></div> })}
+    <div className={`gr-ludo-stage ${tilted ? 'is-3d' : 'is-flat'}`}><ViewToggle tilted={tilted} onToggle={toggleView} /><div className="gr-ludo-board" role="group" aria-label="Ludo board" data-testid="ludo-board">
+      {YARDS.map(([x, y], seat) => { const owner = state.players.findIndex(person => person.seat === seat); return <div key={`y${seat}`} className="gr-ludo-yard" style={{ gridColumn: `${x + 1} / span 6`, gridRow: `${y + 1} / span 6`, '--seat': COLORS[seat] } as React.CSSProperties}><div className="gr-ludo-nest">{[0, 1, 2, 3].map(token => <span key={token} className="gr-ludo-spot">{owner >= 0 && (shown[owner] || state.players[owner].tokens)[token] === -1 && pawnButton(owner, token)}</span>)}</div></div> })}
       {cells}
-      <div className="gr-ludo-center" style={{ gridColumn: '7 / span 3', gridRow: '7 / span 3' }}>{state.players.map((person, index) => <span key={index} className={`gr-ludo-finished seat-${person.seat}`}>{person.tokens.map((progress, token) => progress === LUDO_HOME ? <Pawn key={token} color={COLORS[person.seat]} /> : null)}</span>)}</div>
+      <div className="gr-ludo-center" style={{ gridColumn: '7 / span 3', gridRow: '7 / span 3' }}>{state.players.map((person, index) => <span key={index} className={`gr-ludo-finished seat-${person.seat}`}>{(shown[index] || person.tokens).map((progress, token) => progress === LUDO_HOME ? <Pawn key={token} color={COLORS[person.seat]} /> : null)}</span>)}</div>
     </div></div>
     <aside className="gr-game-aside gr-ludo-aside">
       <div className="gr-player-list">{state.players.map((person, index) => <div key={index} className={state.current === index ? 'current' : ''}><Pawn color={COLORS[person.seat]} /><span>{person.name}</span><strong>{person.tokens.filter(progress => progress === LUDO_HOME).length}/4 home</strong></div>)}</div>
       <div className="gr-ludo-tray"><span key={rolls} className={`gr-die-wrap ${state.dice ? 'rolled' : ''}`} style={{ '--spin': rolls % 2 ? '1' : '-1' } as React.CSSProperties} aria-label={state.dice ? `Die shows ${state.dice}` : 'Die not rolled'} role="img"><Die value={state.dice || 6} /></span></div>
       <h3>{state.phase === 'over' ? 'Game over' : player.bot ? `${player.name} is playing…` : state.phase === 'roll' ? `${player.name}${player.name === 'You' ? '' : ' —'} roll the die` : 'Choose a pawn to move'}</h3>
       <p>{state.log[0]}</p>
-      <div className="gr-circuit-actions"><GameButton disabled={paused || !humanTurn || state.phase !== 'roll'} onClick={roll}>Roll die</GameButton></div>
+      <div className="gr-circuit-actions"><GameButton disabled={paused || !humanTurn || state.phase !== 'roll' || walking || !settled} onClick={roll}>Roll die</GameButton></div>
       {state.phase === 'over' && <GameResult title={`${state.players[state.winner!].name} ${state.players[state.winner!].name === 'You' ? 'win' : 'wins'}!`} text={`All four pawns home after ${state.turns} turns.`} />}
       <details className="gr-rules"><summary>Players</summary><div className="gr-circuit-actions"><GameButton onClick={() => restart(1, 2)}>You vs 1 computer</GameButton><GameButton onClick={() => restart(1, 4)}>You vs 3 computers</GameButton><GameButton onClick={() => restart(2, 2)}>2 players</GameButton><GameButton onClick={() => restart(4, 4)}>4 players</GameButton></div></details>
       <ol className="gr-turn-log" aria-label="Turn history">{state.log.slice(1, 6).map((message, i) => <li key={i}>{message}</li>)}</ol>

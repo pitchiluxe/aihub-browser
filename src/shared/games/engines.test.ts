@@ -3,7 +3,6 @@ import { seededRandom, shuffled } from './random'
 import { blockFits, blocksAction, clearBlockLines, newBlocks, BLOCK_SHAPES } from './blocks'
 import { drawSolitaire, moveSolitaire, newSolitaire, selectedCards, solitaireWon, type Card } from './solitaire'
 import { board2048Over, DELTAS, MAZE, mazeOpen, mazeStep, move2048, newMaze, newSnake, snakeFood, snakeStep, spawn2048 } from './arcade'
-import { circuitAction, circuitWorth, newCircuit, ownsCircuitGroup } from './property'
 import { MAX_ROM_BYTES, validateRom } from './catalog'
 
 describe('reproducible game randomness', () => {
@@ -149,31 +148,6 @@ describe('Maze Chase', () => {
     const state = newMaze(); state.ghosts[0] = { x: 8, y: 9 }; state.lives = 1
     const before = structuredClone(state), next = mazeStep(state, 'left', 1)
     expect(next.lives).toBe(0); expect(next.over).toBe(true); expect(state).toEqual(before)
-  })
-})
-describe('Property Circuit', () => {
-  it('purchases property and advances the turn only when ended', () => {
-    const state = newCircuit(), landed = circuitAction(state, 'roll', () => 0)
-    expect(landed.players[0].position).toBe(2); expect(landed.phase).toBe('buy')
-    const bought = circuitAction(landed, 'buy')
-    expect(bought.owners[2]).toBe(0); expect(bought.players[0].cash).toBe(1080)
-    expect(circuitAction(bought, 'end').current).toBe(1); expect(state.owners[2]).toBe(-1)
-  })
-  it('transfers rent and doubles it for a full color pair', () => {
-    const state = newCircuit(); state.current = 1; state.owners[1] = state.owners[2] = 0
-    expect(ownsCircuitGroup(state, 2, 0)).toBe(true)
-    const next = circuitAction(state, 'roll', () => 0)
-    expect(next.players[1].cash).toBe(1156); expect(next.players[0].cash).toBe(1244)
-  })
-  it('pays Launch bonuses, limits development, and resolves bankruptcy', () => {
-    const state = newCircuit(); state.players[0].position = 19
-    expect(circuitAction(state, 'roll', () => 0).players[0].cash).toBe(1300)
-    state.owners[1] = state.owners[2] = 0; state.players[0].position = 2; state.phase = 'upgrade'
-    expect(circuitAction(state, 'upgrade').levels[2]).toBe(1)
-    state.phase = 'roll'; state.current = 1; state.players[1].cash = 1
-    const bankrupt = circuitAction(state, 'roll', () => 0)
-    expect(bankrupt.players[1].out).toBe(true); expect(bankrupt.phase).toBe('over'); expect(bankrupt.winner).toBe(0)
-    expect(circuitWorth(state, 0)).toBeGreaterThan(state.players[0].cash)
   })
 })
 describe('game import boundaries', () => {

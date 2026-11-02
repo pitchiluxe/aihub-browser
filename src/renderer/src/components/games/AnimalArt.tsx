@@ -1,0 +1,52 @@
+import React from 'react'
+// Original flat illustrations for the animal puzzle, drawn on a 400 × 300 canvas.
+export const ANIMALS = ['Lion', 'Elephant', 'Giraffe', 'Panda', 'Fox', 'Owl', 'Turtle', 'Whale', 'Penguin', 'Parrot'] as const
+export type Animal = typeof ANIMALS[number]
+
+const Sky = ({ top, bottom, sun = '#ffe08a', ground, groundY = 220 }: { top: string; bottom: string; sun?: string; ground: string; groundY?: number }) => <>
+  <defs><linearGradient id={`sky-${top.slice(1)}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={top} /><stop offset="1" stopColor={bottom} /></linearGradient></defs>
+  <rect width="400" height="300" fill={`url(#sky-${top.slice(1)})`} /><circle cx="330" cy="62" r="34" fill={sun} opacity=".9" />
+  <path d={`M0 ${groundY}Q100 ${groundY - 18} 200 ${groundY}T400 ${groundY}V300H0Z`} fill={ground} />
+</>
+const Eye = ({ x, y, r = 6 }: { x: number; y: number; r?: number }) => <g><circle cx={x} cy={y} r={r} fill="#1c1a22" /><circle cx={x - r * .3} cy={y - r * .35} r={r * .35} fill="#fff" /></g>
+
+export default function AnimalArt({ animal }: { animal: Animal }) {
+  switch (animal) {
+    case 'Lion': return <g><Sky top="#ffb26b" bottom="#ffe3a8" ground="#d9a441" /><path d="M40 230q10-40 30-10M340 236q12-36 26-6" stroke="#8a6a1f" strokeWidth="4" fill="none" />
+      <circle cx="200" cy="150" r="92" fill="#b85c1e" />{Array.from({ length: 16 }, (_, i) => <circle key={i} cx={200 + Math.cos(i / 16 * Math.PI * 2) * 84} cy={150 + Math.sin(i / 16 * Math.PI * 2) * 84} r="24" fill={i % 2 ? '#c96a24' : '#a24f16'} />)}
+      <circle cx="200" cy="155" r="62" fill="#f2b445" /><circle cx="152" cy="108" r="14" fill="#f2b445" /><circle cx="248" cy="108" r="14" fill="#f2b445" /><Eye x={178} y={146} /><Eye x={222} y={146} />
+      <ellipse cx="200" cy="182" rx="30" ry="22" fill="#ffe2a6" /><path d="M188 170h24l-12 12Z" fill="#5a2c14" /><path d="M200 182v8M190 192q10 8 20 0" stroke="#5a2c14" strokeWidth="3" fill="none" strokeLinecap="round" /></g>
+    case 'Elephant': return <g><Sky top="#7cc8f0" bottom="#d8f1ff" ground="#9cc56a" /><path d="M0 220h400" stroke="#6d9a45" strokeWidth="3" />
+      <ellipse cx="215" cy="175" rx="105" ry="68" fill="#8d96a8" /><rect x="140" y="200" width="30" height="62" rx="10" fill="#7d8698" /><rect x="190" y="210" width="30" height="56" rx="10" fill="#8d96a8" /><rect x="250" y="205" width="30" height="58" rx="10" fill="#7d8698" /><rect x="292" y="200" width="28" height="60" rx="10" fill="#8d96a8" />
+      <ellipse cx="120" cy="140" rx="58" ry="55" fill="#9aa3b5" /><ellipse cx="148" cy="138" rx="40" ry="50" fill="#b7bfcf" stroke="#7d8698" strokeWidth="3" /><path d="M80 160q-20 50 10 80q8 6 12-4q-18-30 0-66Z" fill="#9aa3b5" /><path d="M94 172q-12 22 4 40" stroke="#fff" strokeWidth="5" fill="none" strokeLinecap="round" /><Eye x={100} y={128} /><path d="M318 168q22 10 14 40" stroke="#7d8698" strokeWidth="5" fill="none" /></g>
+    case 'Giraffe': return <g><Sky top="#ffa36b" bottom="#ffe9b8" ground="#c7a04a" /><circle cx="80" cy="150" r="40" fill="#5f8f3a" /><rect x="76" y="180" width="8" height="50" fill="#6b4a2a" />
+      <path d="M190 280V170q0-30 20-30h50q20 0 20 30v110" fill="#f1c45a" /><path d="M235 150L250 50h30l-10 105Z" fill="#f1c45a" /><ellipse cx="275" cy="48" rx="38" ry="22" fill="#f1c45a" />
+      {[[205, 190], [240, 175], [260, 215], [215, 240], [250, 255], [258, 120], [263, 85], [228, 210]].map(([x, y], i) => <path key={i} d={`M${x} ${y}l14-6 10 10-6 14-14 0Z`} fill="#b86a24" />)}
+      <path d="M262 28l-4-16M282 26l2-16" stroke="#8a5a20" strokeWidth="4" strokeLinecap="round" /><circle cx="258" cy="12" r="5" fill="#8a5a20" /><circle cx="284" cy="10" r="5" fill="#8a5a20" /><Eye x={272} y={44} r={5} /><ellipse cx="305" cy="54" rx="12" ry="9" fill="#e6a94a" /></g>
+    case 'Panda': return <g><Sky top="#9ad7b0" bottom="#e7f7e9" ground="#5c9c55" />{[40, 70, 330, 360].map((x, i) => <g key={x}><rect x={x} y={40 + i * 6} width="10" height="200" fill="#6fb35e" /><path d={`M${x + 10} ${90 + i * 10}q20-10 30 4`} stroke="#6fb35e" strokeWidth="4" fill="none" /></g>)}
+      <ellipse cx="200" cy="215" rx="90" ry="62" fill="#f7f7f2" /><circle cx="200" cy="130" r="70" fill="#f7f7f2" /><circle cx="148" cy="76" r="22" fill="#222" /><circle cx="252" cy="76" r="22" fill="#222" />
+      <ellipse cx="174" cy="128" rx="18" ry="24" fill="#222" transform="rotate(-25 174 128)" /><ellipse cx="226" cy="128" rx="18" ry="24" fill="#222" transform="rotate(25 226 128)" /><circle cx="176" cy="126" r="6" fill="#fff" /><circle cx="224" cy="126" r="6" fill="#fff" />
+      <ellipse cx="200" cy="158" rx="12" ry="8" fill="#222" /><path d="M188 172q12 8 24 0" stroke="#222" strokeWidth="3" fill="none" /><ellipse cx="130" cy="220" rx="26" ry="38" fill="#222" /><ellipse cx="270" cy="220" rx="26" ry="38" fill="#222" /><rect x="260" y="160" width="8" height="70" fill="#6fb35e" transform="rotate(20 264 195)" /></g>
+    case 'Fox': return <g><Sky top="#3a3f7a" bottom="#f7a86b" sun="#fff1c4" ground="#2f5a3a" />{[[60, 40], [120, 70], [30, 110], [200, 30]].map(([x, y]) => <circle key={x} cx={x} cy={y} r="2" fill="#fff" />)}
+      <path d="M260 230q90-10 110-80q-40 30-80 20Z" fill="#e8742c" /><path d="M350 165q14-8 20-15q-6 20-22 26Z" fill="#fff" />
+      <ellipse cx="220" cy="225" rx="70" ry="45" fill="#e8742c" /><ellipse cx="210" cy="240" rx="34" ry="26" fill="#fff4e6" />
+      <path d="M130 90l20 60h-50Z" fill="#e8742c" /><path d="M230 90l-20 60h50Z" fill="#e8742c" /><path d="M120 140q60-40 120 0q-10 60-60 80q-50-20-60-80Z" fill="#e8742c" /><path d="M140 160q40 20 80 0q-10 50-40 60q-30-10-40-60Z" fill="#fff4e6" /><Eye x={160} y={150} /><Eye x={200} y={150} /><circle cx="180" cy="192" r="8" fill="#222" /></g>
+    case 'Owl': return <g><Sky top="#1d2450" bottom="#4b4b8f" sun="#fff3c4" ground="#3b2a20" groundY={250} /><path d="M0 230q200-30 400 0" stroke="#5a3b25" strokeWidth="14" fill="none" />
+      <ellipse cx="200" cy="160" rx="72" ry="88" fill="#8a5a3a" /><ellipse cx="200" cy="185" rx="48" ry="58" fill="#e8cfa0" />{Array.from({ length: 9 }, (_, i) => <path key={i} d={`M${172 + (i % 3) * 22} ${160 + Math.floor(i / 3) * 22}q8 8 16 0`} stroke="#a77a4a" strokeWidth="3" fill="none" />)}
+      <path d="M140 90l18 28M260 90l-18 28" stroke="#8a5a3a" strokeWidth="14" strokeLinecap="round" /><circle cx="172" cy="122" r="28" fill="#f7f0d8" /><circle cx="228" cy="122" r="28" fill="#f7f0d8" /><circle cx="172" cy="122" r="16" fill="#f5b42a" /><circle cx="228" cy="122" r="16" fill="#f5b42a" /><Eye x={172} y={122} r={8} /><Eye x={228} y={122} r={8} /><path d="M192 144l8 16 8-16Z" fill="#f5b42a" /><path d="M170 244l-8 10M186 246v12M214 246v12M230 244l8 10" stroke="#f5b42a" strokeWidth="4" strokeLinecap="round" /></g>
+    case 'Turtle': return <g><rect width="400" height="300" fill="#4fb3d9" /><rect y="210" width="400" height="90" fill="#f0d79a" />{[[60, 40], [320, 90], [120, 180]].map(([x, y]) => <circle key={x} cx={x} cy={y} r="8" fill="#ffffff55" />)}
+      <ellipse cx="200" cy="160" rx="110" ry="74" fill="#3f8a4a" /><ellipse cx="200" cy="150" rx="94" ry="60" fill="#5fb05a" />{[[200, 150], [150, 135], [250, 135], [165, 175], [235, 175]].map(([x, y]) => <path key={`${x}${y}`} d={`M${x - 20} ${y}l10-17h20l10 17-10 17h-20Z`} fill="#3f8a4a" opacity=".7" />)}
+      <ellipse cx="320" cy="150" rx="34" ry="26" fill="#8ccf6e" /><Eye x={332} y={142} /><path d="M330 162q10 4 18-2" stroke="#2a5a30" strokeWidth="3" fill="none" />{[[110, 210], [290, 210], [120, 100], [280, 98]].map(([x, y], i) => <ellipse key={i} cx={x} cy={y} rx="26" ry="13" fill="#8ccf6e" transform={`rotate(${i % 2 ? -30 : 30} ${x} ${y})`} />)}</g>
+    case 'Whale': return <g><rect width="400" height="300" fill="#bfe8ff" /><rect y="110" width="400" height="190" fill="#2a74c4" />{[0, 80, 160, 240, 320].map(x => <path key={x} d={`M${x} 110q20-10 40 0t40 0`} stroke="#ffffffaa" strokeWidth="3" fill="none" />)}
+      <path d="M200 70q-10-30 0-40M200 70q10-30 30-30M200 70q-20-25-35-20" stroke="#bfe8ff" strokeWidth="6" fill="none" strokeLinecap="round" />
+      <path d="M90 170q0-90 130-90q110 0 120 70q30-40 60-40q-20 40-10 60q-20 0-50-10q-30 70-140 70q-110 0-110-60Z" fill="#3b5fa8" /><path d="M100 190q60 45 180 10q-30 50-110 45q-60-5-70-55Z" fill="#cfe2ff" />
+      {[150, 170, 190, 210, 230].map(x => <path key={x} d={`M${x} 205q4 14 0 26`} stroke="#9ab7e8" strokeWidth="3" />)}<Eye x={140} y={150} r={8} /><path d="M120 178q20 10 40 2" stroke="#1c2a4a" strokeWidth="3" fill="none" /></g>
+    case 'Penguin': return <g><Sky top="#9ed6ff" bottom="#eef9ff" sun="#fff" ground="#f4fbff" groundY={235} /><path d="M0 120l70-50 60 40 80-60 90 70 100-40v80H0Z" fill="#d8eefb" />
+      <ellipse cx="200" cy="175" rx="70" ry="95" fill="#1f2433" /><ellipse cx="200" cy="190" rx="50" ry="74" fill="#fbfbfb" /><circle cx="200" cy="100" r="48" fill="#1f2433" /><ellipse cx="186" cy="104" rx="16" ry="20" fill="#fbfbfb" /><ellipse cx="214" cy="104" rx="16" ry="20" fill="#fbfbfb" />
+      <Eye x={187} y={104} r={5} /><Eye x={213} y={104} r={5} /><path d="M190 120h20l-10 14Z" fill="#f5a623" /><ellipse cx="128" cy="180" rx="16" ry="48" fill="#1f2433" transform="rotate(18 128 180)" /><ellipse cx="272" cy="180" rx="16" ry="48" fill="#1f2433" transform="rotate(-18 272 180)" /><ellipse cx="178" cy="268" rx="20" ry="8" fill="#f5a623" /><ellipse cx="222" cy="268" rx="20" ry="8" fill="#f5a623" /><path d="M175 140q25 14 50 0" stroke="#ffcf3a" strokeWidth="6" fill="none" /></g>
+    case 'Parrot': return <g><Sky top="#2fb38c" bottom="#bff0d9" ground="#2a7a3a" groundY={260} />{[[40, 60], [350, 200], [20, 220], [370, 40]].map(([x, y]) => <ellipse key={x} cx={x} cy={y} rx="40" ry="18" fill="#2f8f4a" transform={`rotate(${x > 200 ? -30 : 30} ${x} ${y})`} />)}<path d="M80 250h260" stroke="#6b4a2a" strokeWidth="12" strokeLinecap="round" />
+      <path d="M200 250l-30 50h20l20-40 20 40h20l-30-50Z" fill="#2f6fd8" /><ellipse cx="200" cy="170" rx="56" ry="84" fill="#e8342c" /><path d="M150 160q-30 60 20 100q10-60-20-100Z" fill="#2f6fd8" /><path d="M250 160q30 60-20 100q-10-60 20-100Z" fill="#f2c230" />
+      <circle cx="200" cy="100" r="44" fill="#e8342c" /><ellipse cx="216" cy="96" rx="16" ry="12" fill="#fff" /><Eye x={218} y={96} r={5} /><path d="M232 104q30 4 22 36q-10-16-24-16Z" fill="#2a2a2a" /><path d="M232 104q20 0 20 12h-20Z" fill="#f2e6c8" />
+      <path d="M190 245l-6 12M210 245l6 12" stroke="#4a4a4a" strokeWidth="5" strokeLinecap="round" /></g>
+  }
+}

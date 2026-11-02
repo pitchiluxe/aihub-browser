@@ -1,41 +1,105 @@
-/* Property Circuit as a tabletop: a framed felt board viewed at an angle,
-   printed tiles, standing pawns and houses, and real cube dice. Everything
-   that stands up is counter-rotated by the board's tilt (--tilt). */
-.gr-circuit-layout{--tilt:50deg;grid-template-columns:minmax(330px,660px) minmax(180px,260px)!important;align-items:start}
-.gr-circuit-stage{position:relative;perspective:2200px;perspective-origin:50% 0%;padding:4px 0 10px}
-.gr-circuit-stage .gr-view-toggle{position:absolute;top:-4px;right:0;z-index:3;display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:7px;border:1px solid #ffffff22;background:#0008;color:#e6ecf5;font-size:11px}
-.gr-circuit-stage .gr-view-toggle:hover{background:#000b}
+/* Property Circuit as a tabletop: a framed felt board, printed tiles, standing
+   pawns and houses, and real cube dice. In 3D everything that stands up is
+   counter-rotated by the board's tilt (--tilt). The board is sized from the
+   window height so the whole circuit is always on screen. */
+.gr-circuit-layout{--tilt:42deg;grid-template-columns:minmax(0,1fr) minmax(220px,290px)!important;width:100%;align-items:start}
+.gr-circuit-stage{position:relative;perspective:2400px;perspective-origin:50% 10%;padding:4px 0 10px;width:min(100%,calc((100vh - 360px) * var(--fit,1)),820px);min-width:300px;margin:0 auto}
+.gr-circuit-stage.is-3d{--fit:.86}
+.gr-view-toggle{position:absolute;top:-6px;right:0;z-index:6;display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:7px;border:1px solid #ffffff22;background:#000a;color:#e6ecf5;font-size:11px;cursor:pointer}
+.gr-view-toggle:hover{background:#000d;border-color:#f5cc6888}
 
-.gr-circuit-layout .gr-circuit-board{gap:5px;padding:14px;border:0;border-radius:16px;background:radial-gradient(ellipse at 50% 40%,#1f6b5c,#0f3d35 75%);box-shadow:inset 0 0 0 1px #ffffff14,inset 0 0 40px #0008,0 0 0 12px #5b3a22,0 0 0 14px #2c1b0f,0 3px 0 14px #2c1b0f;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.3,.7,.2,1);margin:22px 16px 30px}
-/* Tilting about the top edge leaves the lower third of the layout box empty; the negative margin reclaims it. */
-.gr-circuit-layout .gr-circuit-board.is-3d{transform-origin:50% 0;transform:translateY(26px) rotateX(var(--tilt));margin-bottom:-26%;box-shadow:inset 0 0 0 1px #ffffff14,inset 0 0 40px #0008,0 0 0 12px #5b3a22,0 0 0 14px #2c1b0f,0 3px 0 14px #2c1b0f,0 60px 60px #000c}
+.gr-circuit-layout .gr-circuit-board{grid-template-columns:repeat(10,1fr);grid-template-rows:repeat(10,1fr);gap:3px;padding:12px;border:0;border-radius:16px;background:radial-gradient(ellipse at 50% 40%,#1f6b5c,#0f3d35 75%);box-shadow:inset 0 0 0 1px #ffffff14,inset 0 0 40px #0008,0 0 0 10px #5b3a22,0 0 0 12px #2c1b0f,0 3px 0 12px #2c1b0f;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.3,.7,.2,1),margin .7s;margin:18px 14px 26px}
+/* Tilting about the top edge leaves the lower part of the layout box empty; the negative margin reclaims it. */
+.is-3d .gr-circuit-board{transform-origin:50% 0;transform:translateY(20px) rotateX(var(--tilt));margin-bottom:-24%;box-shadow:inset 0 0 0 1px #ffffff14,inset 0 0 40px #0008,0 0 0 10px #5b3a22,0 0 0 12px #2c1b0f,0 3px 0 12px #2c1b0f,0 60px 60px #000c}
 
-.gr-circuit-layout .gr-property{transform-style:preserve-3d;overflow:visible;padding:0 5px 5px;border:0;border-radius:4px;background:linear-gradient(#f7f0dc,#e9dfc3);color:#1e2532;box-shadow:0 3px 0 #b9ab86,0 5px 6px #0006;transition:transform .25s,box-shadow .25s}
-.gr-circuit-layout .gr-property:before{content:'';display:block;height:22%;min-height:8px;margin:0 -5px 5px;border-radius:4px 4px 0 0;background:var(--band);box-shadow:inset 0 -1px 0 #0003}
-.gr-circuit-layout .gr-property:not(.is-property):before{display:none}.gr-circuit-layout .gr-property:not(.is-property){padding-top:6px;background:linear-gradient(#e8f0ec,#d3e0d9)}
-.gr-circuit-layout .gr-property.is-corner{background:linear-gradient(#ffe7b8,#f0cf8a)}
-.gr-circuit-layout .gr-property>strong{font-size:9px;font-weight:700;line-height:1.2;color:#1e2532}
-.gr-circuit-layout .gr-property>small{font-size:9px;color:#5b6272;margin-top:2px}
-.gr-space-icon{font-size:15px;line-height:1;color:#1e2532;opacity:.75;margin-bottom:2px}
-.gr-circuit-layout .gr-property:after{content:'';position:absolute;left:0;right:0;bottom:0;height:4px;border-radius:0 0 4px 4px;background:var(--owner)}
-.gr-circuit-layout .gr-property.current{outline:0;box-shadow:0 3px 0 #b9ab86,0 0 0 2px #fff,0 0 18px 4px #f5cc68}
-.gr-circuit-board.is-3d .gr-property.current{transform:translateZ(6px)}
+.gr-circuit-layout .gr-property{transform-style:preserve-3d;overflow:hidden;min-width:0;padding:0 3px 3px;border:0;border-radius:3px;background:linear-gradient(#f7f0dc,#e9dfc3);color:#1e2532;box-shadow:0 2px 0 #b9ab86,0 3px 5px #0006;transition:transform .25s,box-shadow .25s;font:inherit;text-align:center;align-items:center;cursor:pointer}
+.gr-circuit-layout .gr-property:before{content:'';display:block;align-self:stretch;height:20%;min-height:6px;margin:0 -3px 3px;background:var(--band);box-shadow:inset 0 -1px 0 #0003}
+.gr-circuit-layout .gr-property:not(.is-property):before{display:none}.gr-circuit-layout .gr-property:not(.is-property){padding-top:4px;background:linear-gradient(#e8f0ec,#d3e0d9)}
+.gr-circuit-layout .gr-property.side-corner{background:linear-gradient(#ffe7b8,#f0cf8a)}
+.gr-circuit-layout .gr-property.is-gotojail{background:linear-gradient(#f6c4b6,#e79a86)}
+.gr-circuit-layout .gr-property>strong{font-size:clamp(6px,.8vw,9px);font-weight:700;line-height:1.15;color:#1e2532;overflow-wrap:anywhere}
+.gr-circuit-layout .gr-property>small{font-size:clamp(6px,.75vw,8.5px);color:#5b6272;margin-top:1px}
+.gr-space-icon{font-size:clamp(10px,1.3vw,15px);line-height:1;color:#1e2532;opacity:.75;margin-bottom:1px}
+.gr-circuit-layout .gr-property:after{content:'';position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--owner)}
+.gr-circuit-layout .gr-property:hover{box-shadow:0 2px 0 #b9ab86,0 0 0 2px #ffffffaa}
+.gr-circuit-layout .gr-property.selected{box-shadow:0 2px 0 #b9ab86,0 0 0 2px #fff,0 0 16px 3px #f5cc68}
+.is-3d .gr-property.selected{transform:translateZ(6px)}
+.gr-property.is-mortgaged>*:not(.gr-mortgage-stamp){opacity:.4}
+.gr-mortgage-stamp{position:absolute;inset:auto 2px 38% 2px;transform:rotate(-14deg);border:1.5px solid #b8233a;border-radius:3px;color:#b8233a;font-size:clamp(5px,.65vw,7px);font-weight:800;letter-spacing:.5px;text-transform:uppercase;background:#fff8}
 
-.gr-circuit-layout .gr-owner{display:flex;gap:1px;margin-top:auto;transform-style:preserve-3d}.gr-owner>i{display:none}
-.gr-house{width:12px;height:12px;filter:drop-shadow(0 1px 0 #0006)}
-.gr-circuit-layout .gr-tokens{gap:0;bottom:6px;right:3px;transform-style:preserve-3d}.gr-circuit-layout .gr-tokens>span{display:block;margin-left:-5px;transform-style:preserve-3d}
-.gr-circuit-board.is-3d .gr-tokens>span,.gr-circuit-board.is-3d .gr-house{transform:rotateX(calc(var(--tilt) * -1));transform-origin:50% 100%}
-.gr-circuit-board.is-3d .gr-pawn{width:17px;height:25px}
+.gr-circuit-layout .gr-owner{display:flex;gap:1px;margin-top:auto;transform-style:preserve-3d}
+.gr-house{width:clamp(7px,1vw,11px);height:clamp(7px,1vw,11px);filter:drop-shadow(0 1px 0 #0006)}.gr-house.is-tower{width:clamp(10px,1.4vw,15px);height:clamp(10px,1.4vw,15px)}
+.is-3d .gr-house{transform:rotateX(calc(var(--tilt) * -1));transform-origin:50% 100%}
 
-.gr-circuit-layout .gr-circuit-center{transform-style:preserve-3d;color:#e8f3ef}
+/* Pawns live on the board grid and hop one cell at a time. */
+.gr-walker{position:relative;z-index:3;pointer-events:none;transform-style:preserve-3d;align-self:end;justify-self:end;margin:0 3px 5px;animation:gr-step .17s ease-out}
+.gr-walker.seat-1{justify-self:start;margin-left:3px}.gr-walker.seat-2{align-self:center;justify-self:end}.gr-walker.seat-3{align-self:center;justify-self:start}
+.gr-walker-hop{display:block;transform-style:preserve-3d;transform-origin:50% 100%}
+.is-3d .gr-walker-hop{transform:rotateX(calc(var(--tilt) * -1))}
+.gr-walker .gr-pawn{width:clamp(11px,1.6vw,18px);height:clamp(16px,2.4vw,27px)}
+@keyframes gr-step{0%{transform:translateZ(0) scale(1)}45%{transform:translateZ(18px) translateY(-6px) scale(1.18)}100%{transform:translateZ(0) scale(1)}}
+
+.gr-circuit-layout .gr-circuit-center{grid-area:2/2/10/10;transform-style:preserve-3d;color:#e8f3ef;gap:4px}
 .gr-circuit-layout .gr-circuit-emblem{color:#f5cc68;text-shadow:0 2px 0 #0006}
-.gr-circuit-layout .gr-circuit-center h2{color:#fff6dc;text-shadow:0 2px 0 #0007;letter-spacing:.5px}
+.gr-circuit-layout .gr-circuit-center h2{color:#fff6dc;text-shadow:0 2px 0 #0007;letter-spacing:.5px;margin:2px 0 4px}
 .gr-circuit-layout .gr-circuit-center p,.gr-circuit-layout .gr-circuit-center small{color:#bfe0d6}
+.gr-chance-card{width:min(78%,250px);padding:10px 14px 12px;border-radius:9px;background:linear-gradient(#fff8e2,#f2e2b5);color:#2a2214;box-shadow:0 10px 18px #0009,inset 0 0 0 2px #d8b25a;animation:gr-card-flip .6s cubic-bezier(.2,.8,.3,1.1)}
+.gr-chance-card.is-chest{background:linear-gradient(#e7f2ff,#c8dcf4);box-shadow:0 10px 18px #0009,inset 0 0 0 2px #6f98c8}
+.gr-chance-card b{display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#8a5a1c;margin-bottom:5px}.gr-chance-card.is-chest b{color:#2f5f98}
+.gr-chance-card p{margin:0;font-size:12px!important;line-height:1.45;color:#2a2214!important}
+@keyframes gr-card-flip{from{transform:rotateY(90deg) translateY(-30px) scale(.7);opacity:0}}
 /* Dice sit below the text: standing up, they project upward over whatever is above them. */
-.gr-circuit-layout .gr-dice{order:5;gap:22px;margin:30px 0 0;transform-style:preserve-3d;height:38px;align-items:center}
+.gr-circuit-layout .gr-dice{order:5;gap:22px;margin:22px 0 4px;transform-style:preserve-3d;height:38px;align-items:center}
 
-.gr-circuit-layout .gr-player-list>div{background:#ffffff08;border-color:#ffffff10}.gr-circuit-layout .gr-player-list>div.current{border-color:#f5cc6888;background:#f5cc6812}.gr-player-list .gr-pawn{width:13px;height:19px;flex-shrink:0}
+.gr-circuit-layout .gr-player-list>div{background:#ffffff08;border-color:#ffffff10}.gr-circuit-layout .gr-player-list>div.current{border-color:#f5cc6888;background:#f5cc6812}.gr-player-list>div.is-out{opacity:.45}.gr-player-list .gr-pawn{width:13px;height:19px;flex-shrink:0}
 
-@media(max-width:1000px){.gr-circuit-layout{grid-template-columns:1fr!important}.gr-circuit-stage{max-width:620px;width:100%;margin:auto}}
-@media(max-width:650px){.gr-circuit-layout .gr-circuit-board{margin:16px 10px 22px;padding:8px;gap:3px}.gr-circuit-layout .gr-property>strong,.gr-circuit-layout .gr-property>small{font-size:7px}.gr-space-icon{font-size:11px}.gr-die-wrap{--size:24px}.gr-die-face.f0{transform:translateZ(12px)}.gr-die-face.f1{transform:rotateX(180deg) translateZ(12px)}.gr-die-face.f2{transform:rotateY(90deg) translateZ(12px)}.gr-die-face.f3{transform:rotateY(-90deg) translateZ(12px)}.gr-die-face.f4{transform:rotateX(90deg) translateZ(12px)}.gr-die-face.f5{transform:rotateX(-90deg) translateZ(12px)}}
-@media(prefers-reduced-motion:reduce){.gr-die-wrap.rolled,.gr-die-wrap.rolled .gr-die{animation:none}.gr-circuit-layout .gr-circuit-board{transition:none}}
+.gr-deed{margin:14px 0;border-radius:10px;background:#f7f0dc;color:#1e2532;overflow:hidden;box-shadow:0 10px 24px #0008;animation:gr-card-flip .35s ease-out}
+.gr-deed header{position:relative;padding:8px 30px 8px 12px;background:var(--band);color:#fff;text-shadow:0 1px 2px #0008}
+.gr-deed header small{display:block;font-size:9px;letter-spacing:2px;text-transform:uppercase;opacity:.9}.gr-deed header strong{font-size:15px}
+.gr-deed header button{position:absolute;top:6px;right:8px;border:0;background:none;color:#fff;font-size:18px;line-height:1}
+.gr-deed table{width:100%;border-collapse:collapse;font-size:11px;margin:6px 0}.gr-deed td{padding:3px 12px}.gr-deed td:last-child{text-align:right;font-weight:700}.gr-deed tr.is-now{background:#f5cc6866}
+.game-room .gr-deed p{font-size:11px;color:#3a4252;margin:6px 12px;line-height:1.6}
+.gr-deed .gr-circuit-actions{padding:0 10px;margin:8px 0 10px}.gr-deed .gr-control{color:#1e2532;background:#fff;border-color:#0002}
+.gr-deed-note{display:block;padding:0 12px 10px;font-size:10px;color:#6a6252}
+.gr-trade{display:flex;flex-direction:column;gap:9px;margin:12px 0;padding:12px;border-radius:10px;border:1px solid #ffffff1c;background:#ffffff08;font-size:11px}
+.gr-trade select,.gr-trade input[type=range]{width:100%;margin-top:4px}.gr-trade select{padding:5px;border-radius:6px;background:#1b1830;color:inherit;border:1px solid #ffffff22}
+.gr-trade-cols{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gr-trade fieldset{margin:0;padding:6px;border:1px solid #ffffff18;border-radius:7px;max-height:160px;overflow:auto;min-width:0}.gr-trade legend{font-size:10px;color:var(--gr-muted)}
+.gr-trade-item{display:flex;align-items:center;gap:5px;padding:2px 0 2px 6px;border-left:3px solid var(--band);font-size:10px;line-height:1.3}
+.gr-trade.is-summary p{margin:0;font-size:11px;line-height:1.6;color:var(--gr-ink)}
+
+@media(max-width:1000px){.gr-circuit-layout{grid-template-columns:1fr!important}.gr-circuit-stage{width:min(100%,calc((100vh - 200px) * var(--fit,1)),680px)}}
+@media(max-width:650px){.gr-circuit-layout .gr-circuit-board{margin:16px 6px 22px;padding:6px;gap:2px}.gr-die-wrap{--size:24px}.gr-die-face.f0{transform:translateZ(12px)}.gr-die-face.f1{transform:rotateX(180deg) translateZ(12px)}.gr-die-face.f2{transform:rotateY(90deg) translateZ(12px)}.gr-die-face.f3{transform:rotateY(-90deg) translateZ(12px)}.gr-die-face.f4{transform:rotateX(90deg) translateZ(12px)}.gr-die-face.f5{transform:rotateX(-90deg) translateZ(12px)}}
+@media(prefers-reduced-motion:reduce){.gr-die-wrap.rolled,.gr-die-wrap.rolled .gr-die,.gr-walker,.gr-chance-card,.gr-deed{animation:none}.gr-circuit-layout .gr-circuit-board{transition:none}}
+
+/* Classic property-board look: a mint board, wide corners, a colour bar on
+   each street's inner edge, and every tile's text facing its own side. */
+.gr-circuit-layout .gr-circuit-board{grid-template-columns:1.55fr repeat(8,1fr) 1.55fr;grid-template-rows:1.55fr repeat(8,1fr) 1.55fr;gap:0;padding:0;border-radius:4px;background:#cfe7d2;box-shadow:0 0 0 2px #1b2a22,0 0 0 9px #cfe7d2,0 0 0 11px #1b2a22,0 4px 0 11px #0d1712,0 30px 50px #000b}
+.is-3d .gr-circuit-board{box-shadow:0 0 0 2px #1b2a22,0 0 0 9px #cfe7d2,0 0 0 11px #1b2a22,0 4px 0 11px #0d1712,0 60px 60px #000c}
+.gr-circuit-layout .gr-property,.gr-circuit-layout .gr-property:not(.is-property),.gr-circuit-layout .gr-property.side-corner,.gr-circuit-layout .gr-property.is-gotojail{padding:0;border-radius:0;background:#d6ecd8;box-shadow:inset 0 0 0 .5px #1b2a22;color:#14201a}
+.gr-circuit-layout .gr-property:before{display:none}
+.gr-circuit-layout .gr-property:hover{background:#e6f5e7;box-shadow:inset 0 0 0 .5px #1b2a22}
+.gr-circuit-layout .gr-property.selected{z-index:2;box-shadow:inset 0 0 0 2px #d8342c,0 0 16px 2px #f5cc68}
+.gr-tile-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;gap:1px;padding-bottom:2px;text-align:center}
+.side-top .gr-tile-face{transform:rotate(180deg)}
+.side-left .gr-tile-face{writing-mode:vertical-rl}
+.side-right .gr-tile-face{writing-mode:vertical-rl;transform:rotate(180deg)}
+.side-corner .gr-tile-face{justify-content:center;padding:4px}
+.gr-tile-band{flex:0 0 23%;align-self:stretch;background:var(--band);border-block-end:1px solid #1b2a22}
+.gr-circuit-layout .gr-property strong{margin-top:2px;font-size:clamp(5.5px,.72vw,8.5px);font-weight:800;text-transform:uppercase;letter-spacing:.2px;line-height:1.1;color:#14201a}
+.gr-circuit-layout .gr-property small{margin-top:auto;font-size:clamp(5.5px,.7vw,8px);font-weight:600;color:#14201a}
+.gr-circuit-layout .side-corner strong{font-size:clamp(7px,.95vw,11px)}
+.gr-circuit-layout .side-corner .gr-space-icon{font-size:clamp(16px,2.4vw,30px);opacity:1}
+.gr-property.is-start .gr-space-icon{color:#d8342c}.gr-property.is-gotojail .gr-space-icon{color:#2f5fb8}.gr-property.is-chance .gr-space-icon{color:#ee8a2c;font-size:clamp(14px,2vw,24px)}.gr-property.is-chest .gr-space-icon{color:#2f7fb8}
+.gr-circuit-layout .gr-owner{position:absolute;inset-block-start:0;inset-inline:0;block-size:23%;display:flex;align-items:center;justify-content:center;margin:0}
+.gr-circuit-layout .gr-property:after{height:3px;background:var(--owner)}
+.gr-circuit-layout .gr-circuit-center{position:relative;overflow:hidden;color:#14201a;justify-content:center}
+.gr-circuit-banner{transform:rotate(-34deg);margin:0!important;padding:.35em 1.1em;border:3px solid #fff;background:#d8342c;color:#fff!important;font:italic 900 clamp(16px,3vw,34px)/1 Georgia,serif!important;letter-spacing:1px!important;text-transform:uppercase;text-shadow:0 2px 0 #0004!important;box-shadow:0 0 0 3px #d8342c,0 10px 20px #0005;white-space:nowrap}
+.gr-deck{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;width:26%;aspect-ratio:1.55;border:2px dashed #1b2a2266;border-radius:6px;font-size:clamp(6px,.8vw,9px);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#14201a99}
+.gr-deck b{font-size:clamp(14px,2vw,24px);line-height:1}
+.gr-deck.is-chance{top:12%;left:9%;transform:rotate(135deg);background:#f6c27a55}.gr-deck.is-chest{bottom:12%;right:9%;transform:rotate(-45deg);background:#8fc0e855}
+.gr-circuit-layout .gr-circuit-center .gr-chance-card{position:absolute;inset:0;margin:auto;height:fit-content;z-index:2}
+.gr-circuit-layout .gr-circuit-center small,.gr-circuit-layout .gr-circuit-center p{color:#2a3b31}
+.gr-circuit-layout .gr-dice{position:absolute;bottom:14%;left:50%;transform:translateX(-50%);margin:0}
+/* 3D tilts about the board's centre and keeps its full layout height, so the near edge never runs off the table. */
+.gr-circuit-stage.is-3d{--fit:1;perspective-origin:50% 50%}
+.is-3d .gr-circuit-board{transform-origin:50% 50%;transform:rotateX(var(--tilt)) scale(.88);margin-bottom:26px}

@@ -14,6 +14,7 @@ import { registerResearchIpc } from './research'
 import { registerCommunityIpc, releaseCommunityWindow, shutdownCommunityBackend } from './community'
 import { registerAttachmentScheme, registerAttachmentProtocol } from './community/attachments'
 import { registerMediaScheme, registerMediaProtocol, registerDjIpc } from './dj/library'
+import { registerEmulatorScheme, registerEmulatorProtocol } from './games/emulatorCache'
 import { viewRect } from './viewBounds'
 import { createNavigationWarmup } from './navigationWarmup'
 import { GRAMMAR_SYSTEM, registerGrammarIpc } from './grammar'
@@ -123,6 +124,8 @@ app.setPath('userData', APP_DIR)
 registerAttachmentScheme()
 // AIHub DJ streams local audio over aihub-media:// (token-gated, range-capable).
 registerMediaScheme()
+// The Game room player loads EmulatorJS over aihub-emu://, cached on disk after the first download.
+registerEmulatorScheme()
 
 // Point GPU and disk caches to our writable directory so Chromium
 // doesn't fight over temp paths that other processes may have locked.
@@ -2349,6 +2352,7 @@ app.whenReady().then(() => {
   setTimeout(() => { void autoStartOllama() }, 1500)
   registerAttachmentProtocol()
   registerMediaProtocol()
+  registerEmulatorProtocol()
   registerDjIpc()
   registerScreenShareHandler()
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')

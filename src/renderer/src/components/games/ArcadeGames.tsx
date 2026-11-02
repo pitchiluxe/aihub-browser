@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { board2048Over, MAZE, mazeStep, move2048, newMaze, newSnake, snakeStep, spawn2048, type Direction } from '../../../../shared/games/arcade'
-import { GameButton, GameResult, GameStats, useGameKeys, type GameProps } from './GameControls'
+import { GameButton, GameResult, GameStats, useCounterSound, useEndSound, useGameKeys, type GameProps } from './GameControls'
 const DIRECTIONS: Record<string, Direction> = { ArrowUp: 'up', ArrowRight: 'right', ArrowDown: 'down', ArrowLeft: 'left' }
 function DirectionPad({ onDirection, disabled }: { onDirection: (direction: Direction) => void; disabled: boolean }) {
   return <div className="gr-direction-pad">{(['up', 'left', 'down', 'right'] as Direction[]).map(direction => <GameButton key={direction} disabled={disabled} label={`Move ${direction}`} onClick={() => onDirection(direction)}>{{ up: '↑', left: '←', down: '↓', right: '→' }[direction]}</GameButton>)}</div>
 }
 export function SnakeGame({ paused, onFinish }: GameProps) {
   const [state, setState] = useState(() => newSnake())
+  useCounterSound(state.score, 'bite'); useEndSound(state.over, !!state.won)
   const wanted = useRef<Direction>('right')
   useGameKeys(key => { if (DIRECTIONS[key]) wanted.current = DIRECTIONS[key] }, paused || state.over)
   useEffect(() => {
@@ -21,6 +22,7 @@ export function SnakeGame({ paused, onFinish }: GameProps) {
 const MOUTH_ANGLE: Record<Direction, number> = { right: 0, down: 90, left: 180, up: 270 }
 export function MazeGame({ paused, onFinish }: GameProps) {
   const [state, setState] = useState(() => newMaze())
+  useCounterSound(state.pellets.length, null, 'bite'); useCounterSound(state.lives, null, 'buzz'); useEndSound(state.over, state.won)
   const wanted = useRef<Direction>('left'), tick = useRef(0)
   useGameKeys(key => { if (DIRECTIONS[key]) wanted.current = DIRECTIONS[key] }, paused || state.over)
   useEffect(() => {
@@ -34,6 +36,7 @@ export function MazeGame({ paused, onFinish }: GameProps) {
 export function MergeGame({ paused, onFinish }: GameProps) {
   const [state, setState] = useState(() => ({ board: spawn2048(spawn2048(Array(16).fill(0))), score: 0, over: false }))
   const [history, setHistory] = useState<typeof state[]>([])
+  useCounterSound(state.score, 'tile'); useEndSound(state.over, state.board.some(value => value >= 2048))
   const move = (direction: Direction) => {
     if (paused || state.over) return
     const result = move2048(state.board, direction)

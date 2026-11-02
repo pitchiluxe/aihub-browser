@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { cardRed, drawSolitaire, moveSolitaire, newSolitaire, solitaireWon, type Card, type CardSource, type SolitaireState } from '../../../../shared/games/solitaire'
-import { GameButton, GameResult, GameStats, type GameProps } from './GameControls'
+import { GameButton, GameResult, GameStats, useCounterSound, useEndSound, type GameProps } from './GameControls'
 const SUITS = ['♠', '♥', '♦', '♣']
 const rank = (value: number) => ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'][value - 1]
 function PlayingCard({ card, selected, onClick, onDoubleClick, style }: { card: Card; selected?: boolean; onClick: () => void; onDoubleClick?: () => void; style?: React.CSSProperties }) {
@@ -12,6 +12,7 @@ export default function SolitaireGame({ paused, onFinish }: GameProps) {
   const [selected, setSelected] = useState<CardSource | null>(null)
   const [hint, setHint] = useState('Select a face-up card, then a destination. Double-click a card to send it home.')
   const won = solitaireWon(state)
+  useCounterSound(history.length, 'card', 'card'); useEndSound(won, true)
   useEffect(() => { if (won) onFinish(Math.max(0, state.score)) }, [won, state.score, onFinish])
   const commit = (next: SolitaireState) => {
     if (paused || next === state) return false

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { applyDraughts, chooseDraughtsMove, legalDraughtsMoves, newDraughts, type DraughtsState, type DraughtsVariant } from '../../../../shared/games/draughts'
-import { GameButton, GameResult, GameStats, type GameProps } from './GameControls'
+import { GameButton, GameResult, GameStats, useBoardView, ViewToggle, type GameProps } from './GameControls'
+import { playSound } from './sounds'
 import './draughts.css'
 
 const NAMES: Record<DraughtsVariant, string> = { checkers: 'Checkers', dames: 'Dames' }
@@ -8,7 +9,8 @@ const squareName = (state: DraughtsState, index: number) => `${String.fromCharCo
 
 function DraughtsGame({ variant, paused, onFinish }: GameProps & { variant: DraughtsVariant }) {
   const [state, setState] = useState(() => newDraughts(variant)), [selected, setSelected] = useState<number | null>(null)
-  const [opponent, setOpponent] = useState<'computer' | 'local'>('computer'), reported = useRef(false)
+  const [opponent, setOpponent] = useState<'computer' | 'local'>('computer'), reported = useRef(false), [tilted, toggleView] = useBoardView(variant)
+  useEffect(() => { if (state.last) playSound(state.last.captures.length ? 'capture' : 'knock') }, [state.last])
   const moves = legalDraughtsMoves(state), computerTurn = opponent === 'computer' && state.turn === -1 && !state.over
   const sources = new Set(moves.map(move => move.from)), targets = moves.filter(move => move.from === selected)
   const mustCapture = moves.some(move => move.captures.length)
@@ -21,19 +23,20 @@ function DraughtsGame({ variant, paused, onFinish }: GameProps & { variant: Drau
   useEffect(() => {
     if (!state.over || reported.current) return
     reported.current = true
+    playSound(opponent === 'computer' && state.winner === -1 ? 'lose' : 'win')
     if (opponent === 'computer' && state.winner === 1) onFinish(counts.you * 100 + Math.max(0, 200 - state.board.length))
   }, [state.over])
   const restart = (mode = opponent) => { setOpponent(mode); setState(newDraughts(variant)); setSelected(null); reported.current = false }
   const click = (index: number) => {
     if (paused || state.over || computerTurn) return
-    if (sources.has(index)) { setSelected(selected === index ? null : index); return }
+    if (sources.has(index)) { playSound('click'); setSelected(selected === index ? null : index); return }
     const move = targets.find(candidate => candidate.path[candidate.path.length - 1] === index)
     if (move) { setState(applyDraughts(state, move)); setSelected(null) }
   }
   const sideName = (side: number) => opponent === 'computer' ? side > 0 ? 'You' : 'Computer' : side > 0 ? 'Light' : 'Dark'
   const lastSquares = new Set(state.last ? [state.last.from, ...state.last.path] : [])
   return <div className="gr-play-layout gr-draughts-layout">
-    <div className="gr-dr-stage"><div className={`gr-dr-board size-${state.size} is-${variant}`} role="grid" aria-label={`${NAMES[variant]} board`} data-testid="draughts-board" style={{ '--n': state.size } as React.CSSProperties}>
+    <div className={`gr-dr-stage ${tilted ? 'is-3d' : 'is-flat'}`}><ViewToggle tilted={tilted} onToggle={toggleView} /><div className={`gr-dr-board size-${state.size} is-${variant}`} role="grid" aria-label={`${NAMES[variant]} board`} data-testid="draughts-board" style={{ '--n': state.size } as React.CSSProperties}>
       {state.board.map((piece, index) => {
         const dark = (index % state.size + Math.floor(index / state.size)) % 2 === 1, target = targets.find(move => move.path[move.path.length - 1] === index)
         const label = `${squareName(state, index)}${piece ? `, ${piece > 0 ? 'light' : 'dark'} ${Math.abs(piece) === 2 ? 'king' : 'piece'}` : ''}${target ? ', move here' : ''}`
