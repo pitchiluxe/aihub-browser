@@ -7,15 +7,17 @@ const clone = (state: GridState): GridState => ({ ...state, board: [...state.boa
 const at = (cols: number, r: number, c: number) => r * cols + c
 const inside = (rows: number, cols: number, r: number, c: number) => r >= 0 && c >= 0 && r < rows && c < cols
 const done = (state: GridState, names = ['White', 'Black']): Outcome | null => state.winner === undefined ? null : { winner: state.winner, text: state.winner === null ? 'A draw.' : `${names[state.winner]} wins.` }
-// Longest run through `index` for the owner of that cell.
-function runAt(board: number[], rows: number, cols: number, index: number, need: number): boolean {
+// The cells of a run of at least `need` through `index` for the owner of that cell, or [] when there is none.
+function runCells(board: number[], rows: number, cols: number, index: number, need: number): number[] {
   const owner = board[index], r0 = Math.floor(index / cols), c0 = index % cols
-  return [[0, 1], [1, 0], [1, 1], [1, -1]].some(([dr, dc]) => {
-    let count = 1
-    for (const sign of [1, -1]) for (let k = 1; ; k++) { const r = r0 + dr * k * sign, c = c0 + dc * k * sign; if (!inside(rows, cols, r, c) || board[at(cols, r, c)] !== owner) break; count++ }
-    return count >= need
-  })
+  for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+    const cells = [index]
+    for (const sign of [1, -1]) for (let k = 1; ; k++) { const r = r0 + dr * k * sign, c = c0 + dc * k * sign; if (!inside(rows, cols, r, c) || board[at(cols, r, c)] !== owner) break; cells.push(at(cols, r, c)) }
+    if (cells.length >= need) return cells.sort((a, b) => a - b)
+  }
+  return []
 }
+const runAt = (board: number[], rows: number, cols: number, index: number, need: number) => runCells(board, rows, cols, index, need).length > 0
 function lineGame(id: string, title: string, rows: number, cols: number, need: number, gravity: boolean, names: string[], colors: string[], depth: number, style: 'plain' | 'intersections'): FamilyGame<GridState> {
   return {
     id, title, players: 2, names, colors, depth, layout: { kind: 'grid', rows, cols, style },
@@ -39,6 +41,7 @@ function lineGame(id: string, title: string, rows: number, cols: number, need: n
     outcome: state => done(state, names),
     pieceAt: (state, i) => state.board[i] < 0 ? null : { owner: state.board[i] },
     lastMove: state => state.last,
+    winningCells: state => state.winner === undefined || state.winner === null || !state.last.length ? [] : runCells(state.board, rows, cols, state.last[0], need),
     evaluate: (state, me) => {
       // Count open windows of `need` cells, weighted by how full each is.
       let score = 0

@@ -6,13 +6,20 @@ import { cachedBoxart, findBoxart } from '../../services/boxartLibrary'
 import type { RomGame } from '../../services/gameLibrary'
 import CartridgeArt from './CartridgeArt'
 import GameArtwork from './GameArtwork'
+import { gamePhoto, photoCaption } from './gamePhotos'
 
 const SHORT_SYSTEM: Record<RomSystem, string> = { nes: 'NES', genesis: 'GENESIS', snes: 'SNES', gb: 'GAME BOY', gba: 'GBA', arcade: 'ARCADE', mame: 'ARCADE' }
+
+// A real photograph where the room has one; the drawn artwork otherwise.
+function GamePicture({ id, color, className }: { id: string; color: string; className: string }) {
+  const url = gamePhoto(id)
+  return url ? <img className={`${className} gr-photo`} src={url} alt="" loading="lazy" decoding="async" title={photoCaption(id)} /> : <GameArtwork id={id} color={color} />
+}
 
 export function ArcadeCabinet({ game, best, onPlay }: { game: BuiltinGame; best: number; onPlay: () => void }) {
   return <button className="gr-cabinet" style={{ '--game-color': game.color } as React.CSSProperties} onClick={onPlay} aria-label={`Play ${game.title}`}>
     <span className="gr-cab-marquee">{game.title}</span>
-    <span className="gr-cab-screen"><GameArtwork id={game.id} color={game.color} /><span className="gr-cab-attract">{best ? `HI ${best.toLocaleString()}` : 'PRESS START'}</span></span>
+    <span className="gr-cab-screen"><GamePicture id={game.id} color={game.color} className="gr-artwork" /><span className="gr-cab-attract">{best ? `HI ${best.toLocaleString()}` : 'PRESS START'}</span></span>
     <span className="gr-cab-panel" aria-hidden="true"><i className="gr-cab-stick" /><i className="gr-cab-btn" /><i className="gr-cab-btn" /></span>
     <span className="gr-cab-body"><small>{game.genre} · {game.players}</small><span className="gr-cab-coin" aria-hidden="true" /></span>
   </button>
@@ -36,9 +43,10 @@ export function Cartridge({ game, busy, onPlay, onRemove }: { game: RomGame; bus
 }
 
 // A board-game box on the family-table shelf: coloured lid, big emblem, and the game's promise on the side.
-export function BoardGameBox({ title, icon, color, blurb, age, players, onPlay }: { title: string; icon: string; color: string; blurb: string; age: string; players: string; onPlay: () => void }) {
+export function BoardGameBox({ id, title, icon, color, blurb, age, players, onPlay }: { id: string; title: string; icon: string; color: string; blurb: string; age: string; players: string; onPlay: () => void }) {
+  const photo = gamePhoto(id)
   return <button className="gr-gamebox" style={{ '--box': color, '--tilt': `${(cartridgeHue(title) % 5) - 2}deg` } as React.CSSProperties} onClick={onPlay} aria-label={`Play ${title}`}>
-    <span className="gr-gamebox-lid"><span className="gr-gamebox-icon" aria-hidden="true">{icon}</span><strong>{title}</strong></span>
+    <span className={`gr-gamebox-lid ${photo ? 'has-photo' : ''}`}>{photo && <img className="gr-gamebox-photo" src={photo} alt="" loading="lazy" decoding="async" title={photoCaption(id)} />}<span className="gr-gamebox-icon" aria-hidden="true">{icon}</span><strong>{title}</strong></span>
     <span className="gr-gamebox-side"><small>{blurb}</small><em>{players} · {age}</em></span>
   </button>
 }

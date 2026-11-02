@@ -21,6 +21,8 @@ export interface FamilyGame<S = any> {
   evaluate?(state: S, player: number): number
   status?(state: S): string
   lastMove?(state: S): number[]
+  /** Cells that make up the winning line, lit up when the game ends. */
+  winningCells?(state: S): number[]
   depth?: number
   /** A hand-written strategy for games where search is a poor fit (dice, hidden information). */
   bot?(state: S, random: Random): Move

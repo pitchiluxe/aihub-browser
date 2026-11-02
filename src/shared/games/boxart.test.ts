@@ -18,6 +18,16 @@ describe('cartridge box art matching', () => {
     expect(matchBoxart('1200-in-1', LISTING)).toBeNull()
     expect(matchBoxart('Mega', LISTING)).toBeNull()
   })
+  it('matches libretro file names, which write & as _', () => {
+    const real = ['Sonic _ Knuckles (World).png', 'Sonic _ Knuckles + Sonic The Hedgehog 3 (USA, Europe).png', 'Sonic _ Knuckles + Sonic The Hedgehog 3 (Europe).png']
+    expect(matchBoxart('Sonic & Knuckles + Sonic The Hedgehog 3', real)).toBe('Sonic _ Knuckles + Sonic The Hedgehog 3 (USA, Europe).png')
+    expect(matchBoxart('Sonic & Knuckles', real)).toBe('Sonic _ Knuckles (World).png')
+  })
+  it('accepts a near-identical title when the dump adds a word, but not a different sequel', () => {
+    const real = ['Flintstones, The - The Surprise at Dinosaur Peak! (USA).png', 'Flintstones, The - The Rescue of Dino _ Hoppy (USA).png', 'Mega Man 3 (USA).png']
+    expect(matchBoxart('The Flintstones 2 - The Surprise at Dinosaur Peak!', real)).toBe('Flintstones, The - The Surprise at Dinosaur Peak! (USA).png')
+    expect(matchBoxart('Mega Man 2', real)).toBeNull()
+  })
   it('builds an encoded thumbnail URL for the system', () => {
     expect(boxartUrl('nes', 'Double Dragon (USA).png')).toBe('https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Nintendo_Entertainment_System/master/Named_Boxarts/Double%20Dragon%20(USA).png')
   })

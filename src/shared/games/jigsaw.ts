@@ -37,9 +37,20 @@ export function piecePath(edges: [number, number, number, number], w: number, h:
   return `M0 0${side(0, 0, w, 0, top)}${side(w, 0, w, h, right)}${side(w, h, 0, h, bottom)}${side(0, h, 0, 0, left)}Z`
 }
 export const SNAP = 18
+// Pieces behave as if a magnet sat in their home cell: within MAGNET of a piece's
+// size the pull starts, growing as it gets closer, and inside SNAP_SHARE it clicks in.
+export const MAGNET = 0.6, SNAP_SHARE = 0.26
+const reach = (puzzle: Jigsaw) => Math.min(puzzle.width / puzzle.cols, puzzle.height / puzzle.rows)
+const home = (puzzle: Jigsaw, index: number) => { const piece = puzzle.pieces[index]; return { tx: piece.col * puzzle.width / puzzle.cols, ty: piece.row * puzzle.height / puzzle.rows } }
+/** Where a dragged piece shows when the pointer puts it at (x, y): drawn toward its home once it is near. */
+export function magnetPull(puzzle: Jigsaw, index: number, x: number, y: number): { x: number; y: number; strength: number } {
+  const { tx, ty } = home(puzzle, index), radius = reach(puzzle) * MAGNET, distance = Math.hypot(x - tx, y - ty)
+  if (distance >= radius) return { x, y, strength: 0 }
+  const strength = (1 - distance / radius) ** 2 * 0.85
+  return { x: x + (tx - x) * strength, y: y + (ty - y) * strength, strength }
+}
 export function tryPlace(puzzle: Jigsaw, index: number, x: number, y: number): { puzzle: Jigsaw; snapped: boolean } {
-  const piece = puzzle.pieces[index], w = puzzle.width / puzzle.cols, h = puzzle.height / puzzle.rows
-  const tx = piece.col * w, ty = piece.row * h, snapped = Math.hypot(x - tx, y - ty) < SNAP
+  const { tx, ty } = home(puzzle, index), snapped = Math.hypot(x - tx, y - ty) < Math.max(SNAP, reach(puzzle) * SNAP_SHARE)
   const pieces = puzzle.pieces.map((other, i) => i === index ? { ...other, x: snapped ? tx : x, y: snapped ? ty : y, placed: snapped } : other)
   return { puzzle: { ...puzzle, pieces }, snapped }
 }

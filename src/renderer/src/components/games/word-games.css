@@ -1,17 +1,18 @@
 /* Crossword and Word Tiles: paper grids and wooden tiles under warm light. */
 .gr-word-layout{display:grid;grid-template-columns:minmax(0,auto) minmax(230px,340px);gap:28px;justify-content:center;align-items:start}
+.gr-word-layout.is-crossword{grid-template-columns:minmax(0,min(calc(100vh - 230px),760px)) minmax(240px,320px)}
 .gr-word-layout.is-tiles{grid-template-columns:minmax(0,auto) minmax(220px,280px)}
 
-.gr-xw-current{margin-bottom:10px;padding:10px 14px;border-radius:10px;background:#f5cc6814;border:1px solid #f5cc6840;font-size:13px;color:#f3e6c4}.gr-xw-current b{margin-right:10px;color:#f5cc68}
-.gr-xw-grid{display:grid;grid-template-columns:repeat(var(--n),1fr);width:min(100%,calc(100vh - 330px),620px);aspect-ratio:1;gap:2px;padding:8px;border-radius:12px;background:#0d0c14;box-shadow:0 20px 40px #000a,0 0 0 1px #ffffff14;outline:none}
+.gr-xw-current{margin-bottom:10px;padding:12px 16px;border-radius:10px;background:#f5cc6814;border:1px solid #f5cc6840;font-size:16px;color:#f3e6c4}.gr-xw-current b{margin-right:10px;color:#f5cc68}
+.gr-xw-grid{container-type:inline-size;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));grid-template-rows:repeat(var(--n),minmax(0,1fr));width:100%;aspect-ratio:1;gap:2px;padding:8px;border-radius:12px;background:#0d0c14;box-shadow:0 20px 40px #000a,0 0 0 1px #ffffff14;outline:none}
 .gr-xw-grid:focus-visible{box-shadow:0 20px 40px #000a,0 0 0 2px #6eb6ff}
 .gr-xw-block{border-radius:2px;background:transparent}
-.gr-xw-cell{position:relative;display:grid;place-items:center;border-radius:3px;background:#fbf7ec;color:#1a1d2a;font:700 clamp(11px,2vw,22px)/1 Georgia,serif;cursor:pointer;user-select:none;transition:background .15s;animation:gr-xw-in .4s calc(var(--i) * 18ms) both}
-.gr-xw-cell small{position:absolute;top:1px;left:2px;font:600 clamp(6px,.75vw,9px)/1 system-ui;color:#5a5e6e}
+.gr-xw-cell{position:relative;display:grid;place-items:center;min-height:0;overflow:hidden;border-radius:3px;background:#fbf7ec;color:#1a1d2a;font:800 max(15px,calc(100cqi / var(--n) * .58))/1 Georgia,serif;cursor:pointer;user-select:none;transition:background .15s;animation:gr-xw-in .4s calc(var(--i) * 18ms) both}
+.gr-xw-cell small{position:absolute;top:1px;left:2px;font:700 max(8px,calc(100cqi / var(--n) * .24))/1 system-ui;color:#4a4e5e}
 .gr-xw-cell.in-word{background:#d9ecff}
 .gr-xw-cell.is-cursor{background:#f5cc68;box-shadow:inset 0 0 0 2px #b8862a}
 .gr-xw-cell.is-wrong span{color:#c0283f;text-decoration:line-through}
-.gr-xw-cell span{animation:gr-pop .2s ease-out}
+.gr-xw-cell span{color:#11131c;animation:gr-pop .2s ease-out}
 .gr-xw-cell.is-done{background:#c9f2dc;animation:gr-xw-win .6s calc(var(--i) * 25ms) both}
 @keyframes gr-xw-in{from{transform:scale(.4) rotate(-10deg);opacity:0}}
 @keyframes gr-xw-win{50%{transform:translateY(-6px) scale(1.08);background:#6ed5ae}}
@@ -19,7 +20,7 @@
 .gr-xw-clues{display:grid;gap:14px;max-height:calc(100vh - 420px);min-height:200px;overflow:auto;padding-right:6px}
 .gr-xw-clues h4{margin:0 0 6px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#f5cc68}
 .gr-xw-clues ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.gr-xw-clues button{display:block;width:100%;padding:5px 8px;border:0;border-radius:6px;background:none;color:var(--gr-ink);font-size:12px;line-height:1.4;text-align:left}
+.gr-xw-clues button{display:block;width:100%;padding:6px 8px;border:0;border-radius:6px;background:none;color:var(--gr-ink);font-size:14px;line-height:1.4;text-align:left}
 .gr-xw-clues button:hover{background:#ffffff0c}.gr-xw-clues button.active{background:#6eb6ff22;box-shadow:inset 3px 0 0 #6eb6ff}
 .gr-xw-clues b{display:inline-block;min-width:22px;color:#f5cc68}.gr-xw-clues small{color:var(--gr-muted)}
 
@@ -43,5 +44,5 @@
 .game-room .gr-wt-rack-slot:disabled{opacity:1}
 .gr-wt-alphabet{display:grid!important;grid-template-columns:repeat(9,1fr);gap:4px!important}.gr-wt-alphabet button{width:auto!important;font-size:14px!important;padding:6px!important}
 .gr-wt-bag{font-size:11px!important;margin:6px 0!important}
-@media(max-width:1000px){.gr-word-layout,.gr-word-layout.is-tiles{grid-template-columns:1fr}.gr-xw-grid,.gr-wt-board{width:min(100%,560px)}}
+@media(max-width:1000px){.gr-word-layout,.gr-word-layout.is-tiles{grid-template-columns:1fr}.gr-xw-grid,.gr-wt-board{width:min(100%,560px)}.gr-word-layout.is-crossword{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.gr-xw-cell,.gr-xw-cell span,.gr-wt-tile.is-fresh{animation:none}}

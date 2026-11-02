@@ -39,7 +39,7 @@ export default function CrosswordGame({ paused, onFinish }: GameProps) {
   const reveal = (cells: [number, number][]) => { setEntries(value => ({ ...value, ...Object.fromEntries(cells.map(([r, c]) => [key(r, c), puzzle.grid[r][c]!])) })); setRevealed(value => value + cells.length); playSound('card') }
   const fresh = () => { const next = buildCrossword(); setPuzzle(next); setEntries({}); setCursor({ row: next.words[0].row, col: next.words[0].col, across: next.words[0].across }); setChecked(false); setRevealed(0); setSeconds(0); setDone(false) }
   const clueList = (across: boolean) => <section><h4>{across ? 'Across' : 'Down'}</h4><ol>{puzzle.words.filter(word => word.across === across).map(word => <li key={`${word.number}-${across}`}><button type="button" className={word === active ? 'active' : ''} onClick={() => select(word)}><b>{word.number}</b>{word.clue} <small>({word.answer.length})</small></button></li>)}</ol></section>
-  return <div className="gr-word-layout">
+  return <div className="gr-word-layout is-crossword">
     <div>
       <div className="gr-xw-current"><b>{active.number} {active.across ? 'Across' : 'Down'}</b>{active.clue}</div>
       <div ref={grid} className="gr-xw-grid" tabIndex={0} role="grid" aria-label="Crossword grid" data-testid="crossword-grid" style={{ '--n': puzzle.size } as React.CSSProperties} onKeyDown={keydown}>

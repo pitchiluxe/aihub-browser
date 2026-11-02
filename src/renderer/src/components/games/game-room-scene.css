@@ -149,3 +149,27 @@
 .gr-gamebox-lid strong{position:relative;font:900 14px/1.1 'Segoe UI',system-ui;letter-spacing:.3px;text-transform:uppercase;color:#fff;text-shadow:0 1px 0 #0008,0 0 8px #0006}
 .gr-gamebox-side{display:flex;flex-direction:column;gap:4px;padding:8px 12px 10px;border-radius:0 0 6px 6px;background:#fbf4e2;color:#2a2214}
 .gr-gamebox-side small{font-size:10px;line-height:1.35;min-height:27px}.gr-gamebox-side em{font-size:9px;font-style:normal;font-weight:700;color:#8a5a1c}
+
+/* ── Win celebration: fireworks over the game surface and a glowing banner ── */
+.gr-fireworks{position:absolute;inset:0;z-index:6;pointer-events:none;display:grid;place-items:center;overflow:hidden}
+.gr-fireworks canvas{position:absolute;inset:0;width:100%;height:100%}
+.gr-fireworks strong{position:relative;max-width:92%;text-align:center;font:900 clamp(30px,5.5vw,68px)/1.05 'Arial Black',Impact,system-ui;letter-spacing:2px;text-transform:uppercase;color:#fff8e6;text-shadow:0 0 8px #fff,0 0 22px #ffd166,0 0 44px #ff5f6d,0 0 80px #c792ff,0 4px 0 #0008;animation:gr-fw-banner 4.8s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes gr-fw-banner{0%{transform:scale(.2) rotate(-8deg);opacity:0}12%{transform:scale(1.12) rotate(2deg);opacity:1}20%{transform:scale(1) rotate(0)}50%{filter:hue-rotate(90deg)}85%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.15) translateY(-30px)}}
+/* The winning line pulses gold. */
+.gr-fcell.is-win{z-index:1;animation:gr-win-cell 1s ease-in-out infinite alternate}
+.gr-fgrid.is-plain .gr-fcell.is-win{background:#f5cc68}
+.gr-fcell.is-win .gr-stone{animation:gr-win-stone .6s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes gr-win-cell{from{box-shadow:inset 0 0 0 2px #fff6,0 0 8px #f5cc68}to{box-shadow:inset 0 0 0 3px #fff,0 0 28px 6px #ffd166}}
+@keyframes gr-win-stone{50%{transform:scale(1.35) rotate(-10deg)}}
+@media(prefers-reduced-motion:reduce){.gr-fireworks strong,.gr-fcell.is-win,.gr-fcell.is-win .gr-stone{animation:none}}
+
+/* ── Real photographs on cabinet screens and box lids ── */
+.gr-cab-screen img.gr-artwork{width:100%;object-fit:cover}
+.gr-gamebox-lid.has-photo{background:#000}
+.gr-gamebox-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .4s}
+.gr-gamebox-lid.has-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 30%,#000c 100%),linear-gradient(90deg,color-mix(in srgb,var(--box) 45%,transparent),transparent 60%);pointer-events:none}
+.gr-gamebox-lid.has-photo strong{z-index:1}
+.gr-gamebox-lid.has-photo .gr-gamebox-icon{z-index:1;top:8px;right:8px;display:grid;place-items:center;width:30px;height:30px;font-size:17px;border-radius:50%;background:var(--box);color:#1b1b22;text-shadow:none;box-shadow:0 2px 6px #0008}
+.gr-gamebox:hover .gr-gamebox-photo{transform:scale(1.07)}
+.gr-photo-credits{margin-top:10px}.gr-photo-credits summary{cursor:pointer;color:var(--gr-muted)}
+.gr-photo-credits ul{columns:2 340px;margin:8px 0 0;padding:0;list-style:none;font-size:10.5px;line-height:1.6}.gr-photo-credits li{break-inside:avoid}.gr-photo-credits a{color:#9fd3ff}

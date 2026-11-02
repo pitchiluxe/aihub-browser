@@ -3,7 +3,7 @@ import { seededRandom } from './random'
 import { canDraw, chooseDominoMove, drawDomino, fullSet, legalDominoMoves, newDominoes, nextDominoRound, passDomino, playDomino, type DominoState } from './dominoes'
 import { BALL_R, choosePoolShot, cueBall, newPool, placeCue, shoot, stepPool, TABLE_H, TABLE_W, type PoolState } from './pool'
 import { launch, newPinball, setFlipper, stepPinball } from './pinball'
-import { cutJigsaw, jigsawDone, piecePath, scatter, tryPlace } from './jigsaw'
+import { cutJigsaw, jigsawDone, magnetPull, piecePath, scatter, tryPlace } from './jigsaw'
 import { bestMelds, botEights, botRummy, chooseWhistCard, drawEights, eightsPlayable, newEights, newRummy, newWhist, nextWhistHand, playEights, playWhist, trickWinner, whistPlayable, type PlayCard } from './cards'
 
 const card = (rank: number, suit: number): PlayCard => ({ rank, suit })
@@ -158,6 +158,12 @@ describe('jigsaw', () => {
     expect(near.snapped).toBe(true); expect(near.puzzle.pieces[7].placed).toBe(true)
     expect(tryPlace(puzzle, 7, 0, 300).snapped).toBe(false)
     expect(jigsawDone(near.puzzle)).toBe(false)
+    // The magnet: nothing far away, a gentle pull nearby, a strong one right next to home.
+    expect(magnetPull(puzzle, 7, 0, 300).strength).toBe(0)
+    const loose = magnetPull(puzzle, 7, 240 + 50, 112.5), close = magnetPull(puzzle, 7, 240 + 15, 112.5)
+    expect(loose.strength).toBeGreaterThan(0); expect(close.strength).toBeGreaterThan(loose.strength)
+    expect(close.x).toBeLessThan(255); expect(close.x).toBeGreaterThan(240)
+    expect(tryPlace(puzzle, 7, 240 + 28, 112.5).snapped).toBe(true)
     expect(piecePath([0, 1, -1, 0], 120, 100)).toMatch(/^M0 0.*Z$/)
   })
 })

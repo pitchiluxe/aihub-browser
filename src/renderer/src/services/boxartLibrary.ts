@@ -4,7 +4,7 @@ import { IS_INCOGNITO } from './incognitoMode'
 
 // Each game's match is remembered (a URL, or '' for "no box exists") so the
 // listings are only downloaded while some cartridge is still unmatched.
-const RESULT_KEY = 'aihub-game-room-boxart-v1'
+const RESULT_KEY = 'aihub-game-room-boxart-v2' // v2: matcher learned libretro's "_" for "&" and near titles, so old misses are retried
 const listings = new Map<RomSystem, Promise<string[]>>()
 function readResults(): Record<string, string> { try { return JSON.parse(localStorage.getItem(RESULT_KEY) || '{}') } catch { return {} } }
 function saveResult(id: string, url: string) { try { localStorage.setItem(RESULT_KEY, JSON.stringify({ ...readResults(), [id]: url })) } catch { /* Matched again next time. */ } }

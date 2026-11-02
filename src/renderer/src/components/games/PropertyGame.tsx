@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { BOARD_SIZE, canBuild, canMortgage, canSell, canUnmortgage, chooseCircuitAction, circuitAction, circuitActor, circuitRent, circuitWorth, JAIL, JAIL_FINE, MAX_LEVEL, mortgageValue, newCircuit, ownsGroup, PROPERTY_BOARD, tradable, unmortgageCost, type CircuitAction, type CircuitState } from '../../../../shared/games/property'
-import { Die, Pawn } from './BoardPieces'
+import { Die } from './BoardPieces'
 import { DICE_SETTLE_MS, GameButton, GameResult, useBoardView, useWalk, ViewToggle, type GameProps } from './GameControls'
 import { playSound } from './sounds'
 import './property-3d.css'
@@ -13,19 +14,57 @@ const cellOf = (index: number) => index <= 9 ? { gridColumn: 10 - index, gridRow
 const sideOf = (index: number) => index % 9 === 0 ? 'corner' : ['bottom', 'left', 'top', 'right'][Math.floor(index / 9)]
 const House = ({ color, tower }: { color: string; tower?: boolean }) => <svg viewBox="0 0 14 14" className={`gr-house ${tower ? 'is-tower' : ''}`}><path d={tower ? 'M2 13V6l5-4.5L12 6v7Z' : 'M1 7L7 1.5 13 7v6H1Z'} fill={tower ? '#d8433b' : color} stroke="#0009" strokeWidth=".8" /><path d="M1 7L7 1.5 13 7" fill="none" stroke="#fff6" strokeWidth=".8" /></svg>
 
-// A pawn waits for the dice to land, then hops one space at a time.
-function Walker({ index, color, name, target, wait }: { index: number; color: string; name: string; target: number; wait: number }) {
+// Playing pieces. Each human picks one (remembered per seat); computers take the first ones nobody chose.
+const TOKENS = [{ id: 'car', icon: '🚗', name: 'Car' }, { id: 'horse', icon: '🐎', name: 'Horse' }, { id: 'plane', icon: '✈️', name: 'Plane' }, { id: 'train', icon: '🚂', name: 'Train' }, { id: 'bus', icon: '🚌', name: 'Bus' }, { id: 'dog', icon: '🐕', name: 'Dog' }, { id: 'boat', icon: '⛵', name: 'Boat' }, { id: 'rocket', icon: '🚀', name: 'Rocket' }]
+const TOKEN_KEY = 'aihub-circuit-tokens-v1'
+const loadPicks = (): string[] => { try { const saved = JSON.parse(localStorage.getItem(TOKEN_KEY) || '[]'); return Array.isArray(saved) ? saved : [] } catch { return [] } }
+function assignTokens(players: CircuitState['players'], picks: string[]) {
+  const chosen = players.map((player, seat) => !player.bot && TOKENS.some(token => token.id === picks[seat]) ? picks[seat] : null)
+  return chosen.map(id => id ?? TOKENS.find(token => !chosen.includes(token.id) && (chosen.push(token.id), true))!.id).map(id => TOKENS.find(token => token.id === id)!)
+}
+const Token = ({ token, color }: { token: typeof TOKENS[number]; color: string }) => <span className="gr-token" style={{ '--seat': color } as React.CSSProperties} title={token.name}><i>{token.icon}</i></span>
+
+// A token waits for the dice to land, then hops one space at a time.
+function Walker({ index, color, name, target, wait, token }: { index: number; color: string; name: string; target: number; wait: number; token: typeof TOKENS[number] }) {
   const [goal, setGoal] = useState(target)
   useEffect(() => { if (target === goal) return; const timer = setTimeout(() => setGoal(target), wait); return () => clearTimeout(timer) }, [target])
   const shown = useWalk(goal, BOARD_SIZE, STEP_MS)
   const first = useRef(true)
   useEffect(() => { if (first.current) { first.current = false; return } playSound('step') }, [shown])
-  return <span key={shown} className={`gr-walker seat-${index}`} style={cellOf(shown)} title={name}><span className="gr-walker-hop"><Pawn color={color} /></span></span>
+  return <span key={shown} className={`gr-walker seat-${index}`} style={cellOf(shown)} title={name}><span className="gr-walker-hop"><Token token={token} color={color} /></span></span>
+}
+
+type DeckName = 'chance' | 'chest'
+const DECK_TITLE: Record<DeckName, string> = { chance: 'Opportunity', chest: 'Town Hall' }
+// A face-down pile in the middle of the board; the top card lifts away when one is drawn.
+function DeckPile({ deck, drawing }: { deck: DeckName; drawing: boolean }) {
+  return <span className={`gr-deck is-${deck} ${drawing ? 'is-drawing' : ''}`} aria-label={`${DECK_TITLE[deck]} cards`}>
+    {[0, 1, 2, 3].map(n => <i key={n} className="gr-deck-card" style={{ '--n': n } as React.CSSProperties}><b>{deck === 'chance' ? '?' : '✉'}</b><small>{DECK_TITLE[deck]}</small></i>)}
+  </span>
+}
+// The drawn card, flipped up large in the middle of the screen so it can be read.
+function DrawnCard({ deck, text, who, onClose }: { deck: DeckName; text: string; who: string; onClose: () => void }) {
+  useEffect(() => { const key = (event: KeyboardEvent) => { if (event.key === 'Escape' || event.key === 'Enter') onClose() }; window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key) }, [onClose])
+  return createPortal(<div className="gr-card-reader" onClick={onClose} data-testid="drawn-card">
+    <div className={`gr-card-big is-${deck}`} role="dialog" aria-modal="true" aria-label={`${DECK_TITLE[deck]} card`} onClick={event => event.stopPropagation()}>
+      <div className="gr-card-big-inner">
+        <div className="gr-card-big-back"><b>{deck === 'chance' ? '?' : '✉'}</b><span>{DECK_TITLE[deck]}</span></div>
+        <div className="gr-card-big-front">
+          <header><span>{deck === 'chance' ? '?' : '✉'}</span>{DECK_TITLE[deck]}</header>
+          <small>{who} drew</small>
+          <p>{text}</p>
+          <button type="button" className="gr-card-big-ok" onClick={onClose} autoFocus>Got it</button>
+        </div>
+      </div>
+    </div>
+  </div>, document.body)
 }
 
 export default function PropertyGame({ paused, onFinish }: GameProps) {
   const [state, setState] = useState<CircuitState>(() => newCircuit()), [tilted, toggleView] = useBoardView('property')
-  const [holding, setHolding] = useState(false), [selected, setSelected] = useState<number | null>(null), [trading, setTrading] = useState(false)
+  const [holding, setHolding] = useState(false), [reading, setReading] = useState<{ deck: DeckName; text: string; who: string; bot: boolean } | null>(null), [selected, setSelected] = useState<number | null>(null), [trading, setTrading] = useState(false)
+  const [picks, setPicks] = useState(loadPicks), tokens = assignTokens(state.players, picks)
+  const pick = (seat: number, id: string) => { const next = [...picks]; next[seat] = id; setPicks(next); playSound('click'); try { localStorage.setItem(TOKEN_KEY, JSON.stringify(next)) } catch { /* Kept for this game only. */ } }
   const lastPositions = useRef(state.players.map(player => player.position)), reported = useRef(false)
   const actor = circuitActor(state), me = state.players[state.current], actorIsHuman = !state.players[actor].bot && state.phase !== 'over'
   const space = PROPERTY_BOARD[me.position]
@@ -49,15 +88,17 @@ export default function PropertyGame({ paused, onFinish }: GameProps) {
     const steps = Math.max(0, ...state.players.map((player, at) => { const forward = (player.position - lastPositions.current[at] + BOARD_SIZE) % BOARD_SIZE; return forward > 12 ? 1 : forward }))
     lastPositions.current = state.players.map(player => player.position)
     setHolding(true)
-    const timer = setTimeout(() => { setHolding(false); if (state.card) playSound('card'); else if (state.log[0]?.includes('rent') || state.log[0]?.includes(' tax')) playSound('pay') }, DICE_SETTLE_MS + steps * STEP_MS + 150)
+    const timer = setTimeout(() => { setHolding(false); if (state.card) { playSound('card'); const drawer = state.players[state.current]; setReading({ ...state.card, who: drawer.name, bot: !!drawer.bot }) } else if (state.log[0]?.includes('rent') || state.log[0]?.includes(' tax')) playSound('pay') }, DICE_SETTLE_MS + steps * STEP_MS + 150)
     return () => clearTimeout(timer)
   }, [state.rollId])
   useEffect(() => { if (!holding) lastPositions.current = state.players.map(player => player.position) }, [state, holding])
+  // Computers' cards stay up long enough to read, then put themselves away.
+  useEffect(() => { if (!reading?.bot || paused) return; const timer = setTimeout(() => setReading(null), 3600); return () => clearTimeout(timer) }, [reading, paused])
   useEffect(() => {
-    if (paused || holding || state.phase === 'over' || !state.players[actor].bot) return
+    if (paused || holding || reading || state.phase === 'over' || !state.players[actor].bot) return
     const timer = setTimeout(() => { const move = chooseCircuitAction(state); if (move) act(move) }, state.phase === 'auction' ? 450 : 750)
     return () => clearTimeout(timer)
-  }, [paused, holding, state])
+  }, [paused, holding, reading, state])
   useEffect(() => {
     if (state.phase !== 'over' || reported.current) return
     reported.current = true
@@ -65,7 +106,7 @@ export default function PropertyGame({ paused, onFinish }: GameProps) {
     playSound(state.players[state.winner!].bot ? 'lose' : 'win')
     if (human >= 0) onFinish(Math.max(0, Math.round(circuitWorth(state, human))))
   }, [state.phase])
-  const restart = (humans: number, bots: number) => { setState(newCircuit(humans, bots)); lastPositions.current = [0, 0, 0, 0]; reported.current = false; setSelected(null); setTrading(false) }
+  const restart = (humans: number, bots: number) => { setReading(null); setState(newCircuit(humans, bots)); lastPositions.current = [0, 0, 0, 0]; reported.current = false; setSelected(null); setTrading(false) }
 
   const deed = selected !== null ? PROPERTY_BOARD[selected] : null
   const manage = actorIsHuman && actor === state.current && ['roll', 'end', 'debt'].includes(state.phase) && !holding
@@ -90,21 +131,22 @@ export default function PropertyGame({ paused, onFinish }: GameProps) {
             {state.mortgaged[i] && <span className="gr-mortgage-stamp">Mortgaged</span>}</span>
           </button>
         })}
-        {state.players.map((player, at) => !player.out && <Walker key={at} index={at} color={PLAYERS[at]} name={player.name} target={player.position} wait={DICE_SETTLE_MS} />)}
+        {state.players.map((player, at) => !player.out && <Walker key={at} index={at} color={PLAYERS[at]} name={player.name} target={player.position} wait={DICE_SETTLE_MS} token={tokens[at]} />)}
         <div className="gr-circuit-center">
-          <span className="gr-deck is-chance" aria-hidden="true"><b>?</b>Opportunity</span><span className="gr-deck is-chest" aria-hidden="true"><b>✉</b>Town Hall</span>
+          <DeckPile deck="chance" drawing={reading?.deck === 'chance'} /><DeckPile deck="chest" drawing={reading?.deck === 'chest'} />
           <h2 className="gr-circuit-banner">Property Circuit</h2>
-          {state.card && !holding ? <div key={state.rollId} className={`gr-chance-card is-${state.card.deck}`}><b>{state.card.deck === 'chance' ? 'Opportunity' : 'Town Hall'}</b><p>{state.card.text}</p></div> : null}
           <div className="gr-dice" aria-label={`Dice: ${state.dice.join(' and ') || 'not rolled'}`}>{(state.dice.length ? state.dice : [5, 3]).map((die, i) => <span key={`${state.rollId}-${i}`} className={`gr-die-wrap ${state.rollId ? 'rolled' : ''}`} style={{ '--spin': i ? '-1' : '1' } as React.CSSProperties}><Die value={die} /></span>)}</div>
           <small>Turn {state.turns + 1}</small>
         </div>
       </div>
     </div>
+    {reading && !paused && <DrawnCard deck={reading.deck} text={reading.text} who={reading.who} onClose={() => { setReading(null); playSound('click') }} />}
     <aside className="gr-circuit-aside">
-      <div className="gr-player-list">{state.players.map((person, i) => <div key={i} className={`${state.current === i ? 'current' : ''} ${person.out ? 'is-out' : ''}`}><Pawn color={PLAYERS[i]} /><span>{person.name}{person.out ? ' · Out' : person.jail >= 0 && person.position === JAIL ? ' · Lockup' : ''}{person.passes ? ` · ${person.passes} pass` : ''}</span><strong>${person.cash}</strong></div>)}</div>
+      <div className="gr-player-list">{state.players.map((person, i) => <div key={i} className={`${state.current === i ? 'current' : ''} ${person.out ? 'is-out' : ''}`}><Token token={tokens[i]} color={PLAYERS[i]} /><span>{person.name}{person.out ? ' · Out' : person.jail >= 0 && person.position === JAIL ? ' · Lockup' : ''}{person.passes ? ` · ${person.passes} pass` : ''}</span><strong>${person.cash}</strong></div>)}</div>
+      <TokenPicker players={state.players} tokens={tokens} onPick={pick} />
       <h3>{state.phase === 'over' ? 'Circuit finished' : state.players[actor].bot ? `${state.players[actor].name} is thinking…` : actor === state.current ? `${me.name}${me.name === 'You' ? ' — your turn' : ' to play'}` : `${state.players[actor].name} to answer`}</h3>
       <p aria-live="polite">{hint}</p>
-      {actorIsHuman && !holding && <div className="gr-circuit-actions">
+      {actorIsHuman && !holding && !reading && <div className="gr-circuit-actions">
         {state.phase === 'roll' && me.jail >= 0 && <><GameButton disabled={paused || me.cash < JAIL_FINE} onClick={() => act({ type: 'payJail' })}>Pay ${JAIL_FINE}</GameButton>{me.passes > 0 && <GameButton disabled={paused} onClick={() => act({ type: 'usePass' })}>Use pass</GameButton>}</>}
         {(state.phase === 'roll' || (state.phase === 'end' && state.again)) && <GameButton disabled={paused} onClick={() => act({ type: 'roll' })}>{me.jail >= 0 ? 'Roll for doubles' : state.again ? 'Roll again' : 'Roll dice'}</GameButton>}
         {state.phase === 'buy' && <><GameButton disabled={paused || me.cash < space.price!} onClick={() => act({ type: 'buy' })}>Buy ${space.price}</GameButton><GameButton disabled={paused} onClick={() => act({ type: 'decline' })}>Auction it</GameButton></>}
@@ -156,4 +198,15 @@ function TradeForm({ state, onOffer }: { state: CircuitState; onOffer: (trade: {
 function TradeSummary({ state }: { state: CircuitState }) {
   const trade = state.trade!, names = (list: number[]) => list.map(at => PROPERTY_BOARD[at].name).join(', ') || 'nothing'
   return <div className="gr-trade is-summary"><p><strong>{state.players[trade.from].name}</strong> gives {names(trade.give)}{trade.cash > 0 ? ` and $${trade.cash}` : ''}.</p><p><strong>{state.players[trade.to].name}</strong> gives {names(trade.get)}{trade.cash < 0 ? ` and $${-trade.cash}` : ''}.</p></div>
+}
+
+function TokenPicker({ players, tokens, onPick }: { players: CircuitState['players']; tokens: typeof TOKENS; onPick: (seat: number, id: string) => void }) {
+  const humans = players.map((player, seat) => ({ player, seat })).filter(({ player }) => !player.bot && !player.out)
+  return <div className="gr-token-picker" aria-label="Pick your token">{humans.map(({ player, seat }) => <div key={seat}>
+    <span>{humans.length > 1 ? `${player.name}'s token` : 'Your token'}</span>
+    <div role="radiogroup" aria-label={`${player.name} token`}>{TOKENS.map(token => {
+      const holder = tokens.findIndex(other => other.id === token.id), mine = holder === seat, takenByHuman = holder >= 0 && !mine && !players[holder].bot
+      return <button type="button" key={token.id} role="radio" aria-checked={mine} aria-label={token.name} title={takenByHuman ? `${token.name} — taken by ${players[holder].name}` : token.name} disabled={takenByHuman} className={mine ? 'is-mine' : ''} style={{ '--seat': PLAYERS[seat] } as React.CSSProperties} onClick={() => onPick(seat, token.id)}>{token.icon}</button>
+    })}</div>
+  </div>)}</div>
 }

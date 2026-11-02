@@ -1,6 +1,6 @@
 // Game room sound effects, synthesized with Web Audio: nothing is downloaded
 // and nothing is recorded. One shared context, created on the first sound.
-export type GameSound = 'dice' | 'step' | 'coin' | 'pay' | 'card' | 'knock' | 'capture' | 'win' | 'lose' | 'click' | 'error' | 'clack' | 'pocket' | 'tile' | 'clear' | 'bite' | 'buzz'
+export type GameSound = 'dice' | 'step' | 'coin' | 'pay' | 'card' | 'knock' | 'capture' | 'win' | 'lose' | 'click' | 'error' | 'clack' | 'pocket' | 'tile' | 'clear' | 'bite' | 'buzz' | 'launch' | 'burst' | 'snap'
 const MUTE_KEY = 'aihub-game-room-muted-v1'
 let context: AudioContext | null = null, master: GainNode | null = null
 let muted = (() => { try { return localStorage.getItem(MUTE_KEY) === '1' } catch { return false } })()
@@ -58,5 +58,10 @@ export function playSound(sound: GameSound) {
     case 'clear': tone(523, 0, 0.12, 'square', 0.15, 1047); tone(784, 0.08, 0.2, 'square', 0.15, 1568); break
     case 'bite': tone(700, 0, 0.06, 'square', 0.18, 1100); break
     case 'buzz': tone(110, 0, 0.3, 'sawtooth', 0.2); break
+    // Fireworks: a rising whistle, then a low thump with crackle trailing off.
+    case 'launch': tone(500, 0, 0.5, 'sine', 0.08, 1700); noise(0, 0.45, 0.12, 3000, 0.7); break
+    case 'burst': tone(90, 0, 0.35, 'sine', 0.7, 40); noise(0, 0.5, 0.5, 900, 0.6); for (let i = 0; i < 9; i++) noise(0.15 + Math.random() * 0.6, 0.02, 0.25, 5000 + Math.random() * 3000, 3); break
+    // A magnet pulling a piece home: a short rising zip and a firm click.
+    case 'snap': tone(380, 0, 0.09, 'sine', 0.25, 900); tone(1400, 0.08, 0.05, 'square', 0.14); noise(0.08, 0.03, 0.45, 2600, 3); break
   }
 }

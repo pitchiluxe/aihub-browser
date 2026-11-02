@@ -107,6 +107,48 @@ button.gr-pc.is-glow:hover:not(:disabled){transform:translateY(-14px) rotate(-2d
 .gr-piece.is-dragging{cursor:grabbing;filter:drop-shadow(0 14px 12px #000b) brightness(1.06)}
 .gr-piece.is-placed{cursor:default;filter:none;animation:gr-snap .35s ease-out}
 @keyframes gr-snap{50%{filter:brightness(1.4) drop-shadow(0 0 10px #f5cc68)}}
+.gr-jigsaw-stage{min-width:0}
+.gr-piece.is-placed{transition:transform .24s cubic-bezier(.3,1.6,.5,1)}
+.gr-piece.is-pulled{filter:drop-shadow(0 0 10px #6ef7ff) drop-shadow(0 10px 10px #000a)}
+.gr-piece.is-snapped{animation:gr-magnet-click .45s ease-out}
+@keyframes gr-magnet-click{0%{filter:brightness(1.6) drop-shadow(0 0 16px #6ef7ff)}100%{filter:none}}
+.gr-magnet-target{fill:#6ef7ff22;stroke:#6ef7ff;stroke-width:2.5;stroke-dasharray:8 6;animation:gr-march .6s linear infinite;pointer-events:none}
+@keyframes gr-march{to{stroke-dashoffset:-14}}
+.gr-piece.is-loose{animation:gr-loose .5s ease-in-out 3}
+@keyframes gr-loose{25%{translate:-5px 0}75%{translate:5px 0}}
+.gr-scan-beam{animation:gr-scan linear both;pointer-events:none;mix-blend-mode:screen}
+@keyframes gr-scan{from{transform:translateX(0)}to{transform:translateX(660px)}}
+/* The puzzle agent waits behind its sign and climbs over it to check the board. */
+.gr-agent{display:grid;gap:8px;margin:6px 0 10px}
+.gr-agent-bubble{position:relative;padding:10px 12px;border-radius:12px;background:#fff8e6;color:#2a2230;font-size:12.5px;line-height:1.45;box-shadow:0 6px 16px #0006;min-height:38px}
+.gr-agent-bubble:after{content:'';position:absolute;left:42px;bottom:-7px;border:8px solid transparent;border-bottom:0;border-top-color:#fff8e6}
+.gr-agent.is-pass .gr-agent-bubble{background:#d8ffe9;box-shadow:0 0 22px #6ed5ae88}.gr-agent.is-pass .gr-agent-bubble:after{border-top-color:#d8ffe9}
+.gr-agent.is-fail .gr-agent-bubble{background:#ffe1e4}.gr-agent.is-fail .gr-agent-bubble:after{border-top-color:#ffe1e4}
+.gr-agent-booth{position:relative;height:150px;overflow:hidden}
+.gr-agent-bot{position:absolute;left:14px;bottom:8px;width:124px;height:124px;transform:translateY(64px);transition:transform .5s cubic-bezier(.3,1.5,.5,1)}
+.gr-agent.is-ready .gr-agent-bot{transform:translateY(46px);animation:gr-peek 1.6s ease-in-out infinite}
+.gr-agent.is-scanning .gr-agent-bot,.gr-agent.is-pass .gr-agent-bot,.gr-agent.is-fail .gr-agent-bot{transform:translateY(-4px);animation:none}
+@keyframes gr-peek{50%{transform:translateY(34px)}}
+.gr-agent-light{fill:#f5cc68;filter:drop-shadow(0 0 4px #f5cc68)}
+.gr-agent.is-scanning .gr-agent-light{animation:gr-blink .3s steps(2) infinite;fill:#6ef7ff}
+.gr-agent.is-pass .gr-agent-light{fill:#6ed5ae}.gr-agent.is-fail .gr-agent-light{fill:#ff5f6d}
+@keyframes gr-blink{50%{opacity:.2}}
+.gr-agent-eyes{fill:#6ef7ff;filter:drop-shadow(0 0 3px #6ef7ff);transform-box:fill-box;transform-origin:center;animation:gr-eye-blink 4s infinite}
+.gr-agent.is-scanning .gr-agent-eyes{animation:gr-eye-scan .9s ease-in-out infinite alternate}
+.gr-agent.is-pass .gr-agent-eyes{fill:#6ed5ae}.gr-agent.is-fail .gr-agent-eyes{fill:#ff8a94}
+@keyframes gr-eye-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes gr-eye-scan{from{transform:translateX(-5px)}to{transform:translateX(5px)}}
+.gr-agent-lens{transform-box:view-box;transform-origin:100px 100px;opacity:0;transition:opacity .3s}
+.gr-agent.is-scanning .gr-agent-lens{opacity:1;animation:gr-lens .9s ease-in-out infinite alternate}
+@keyframes gr-lens{from{transform:rotate(-14deg) translateX(-10px)}to{transform:rotate(10deg) translateX(4px)}}
+.gr-agent.is-pass .gr-agent-mouth{d:path('M46 70 Q60 84 74 70')}.gr-agent.is-fail .gr-agent-mouth{d:path('M50 76 Q60 70 70 76')}
+.gr-agent.is-pass .gr-agent-bot{animation:gr-cheer .5s ease-in-out 4 alternate}
+@keyframes gr-cheer{to{transform:translateY(-14px) rotate(-4deg)}}
+.gr-agent-sign{position:absolute;left:0;right:0;bottom:0;height:46px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:8px;background:linear-gradient(#8a5a32,#5e3b1f);box-shadow:inset 0 2px 0 #c08a5a,inset 0 -3px 0 #3d2412,0 6px 14px #0008;font:800 15px/1 'Arial Black',system-ui;letter-spacing:2px;text-transform:uppercase;color:#ffe9b8;text-shadow:0 0 8px #f5cc68,0 2px 0 #0008}
+.gr-agent-sign b{color:#fff;text-shadow:0 0 6px #fff,0 0 14px #6ef7ff,0 0 26px #6ef7ff}
+.gr-done-ready{display:inline-block;animation:gr-done-pulse 1s ease-in-out infinite alternate}
+@keyframes gr-done-pulse{to{transform:scale(1.12);text-shadow:0 0 10px #6ed5ae}}
+@media(prefers-reduced-motion:reduce){.gr-agent *,.gr-piece{animation:none!important;transition:none!important}}
 .gr-jigsaw-done{animation:gr-reveal 1.2s ease-out both;pointer-events:none}
 .gr-jigsaw-done text{font:700 34px Georgia,serif;fill:#fff;paint-order:stroke;stroke:#0008;stroke-width:6px}
 @keyframes gr-reveal{from{opacity:0}}

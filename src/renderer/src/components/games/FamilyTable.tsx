@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { chooseMove, type FamilyGame, type Move } from '../../../../shared/games/family/core'
 import { familyGame } from '../../../../shared/games/family/index'
 import { CustomBoard } from './FamilyCustom'
+import Fireworks from './Fireworks'
 import { GameButton, GameResult, useBoardView, ViewToggle, type GameProps } from './GameControls'
 import { playSound } from './sounds'
 import './family.css'
@@ -14,7 +15,7 @@ export default function FamilyTable({ id, paused, onFinish }: GameProps & { id: 
   const entry = familyGame(id)!, game = entry.game as FamilyGame
   const [mode, setMode] = useState<Mode>('computer'), [state, setState] = useState(() => game.setup(Math.random))
   const [selected, setSelected] = useState<number | null>(null), [thinking, setThinking] = useState(false), [tilted, toggleView] = useBoardView(`family-${id}`)
-  const reported = useRef(false)
+  const reported = useRef(false), [celebrate, setCelebrate] = useState(0)
   const seat = game.current(state), outcome = game.outcome(state), moves = outcome ? [] : game.moves(state)
   const isBot = (player: number) => game.players > 1 && mode === 'computer' && player !== 0
   const humanTurn = !outcome && !isBot(seat)
@@ -37,9 +38,10 @@ export default function FamilyTable({ id, paused, onFinish }: GameProps & { id: 
     reported.current = true
     const won = game.players === 1 ? outcome.winner === 0 : mode === 'computer' ? outcome.winner === 0 : outcome.winner !== null
     playSound(won ? 'win' : 'lose')
+    if (won) setCelebrate(value => value + 1)
     if (won && (game.players === 1 || mode === 'computer')) onFinish(1000)
   }, [outcome?.text])
-  const restart = (next: Mode = mode) => { setMode(next); setState(game.setup(Math.random)); setSelected(null); reported.current = false }
+  const restart = (next: Mode = mode) => { setMode(next); setState(game.setup(Math.random)); setSelected(null); reported.current = false; setCelebrate(0) }
 
   // Board clicks: pick a piece with moves, then a destination; or place directly when moves have no source.
   const sources = new Set(moves.filter(m => m.from !== undefined).map(m => m.from!))
@@ -54,7 +56,7 @@ export default function FamilyTable({ id, paused, onFinish }: GameProps & { id: 
   const buttons = moves.filter(m => m.from === undefined && m.to === undefined && !m.area && m.label && !(game.layout.kind === 'custom' && customHandles(id, m)))
   const names = game.names || ['Player 1', 'Player 2', 'Player 3', 'Player 4']
   const nameOf = (player: number) => game.players === 1 ? 'You' : mode === 'computer' ? player === 0 ? 'You' : names[player].startsWith('Computer') ? names[player] : `Computer (${names[player]})` : names[player] === 'You' ? 'Player 1' : names[player] === 'Computer' ? 'Player 2' : names[player]
-  const board = { game, state, moves, selected, sources, targets, humanTurn, click, play, last: game.lastMove?.(state) || [], seat, mode }
+  const board = { game, state, moves, selected, sources, targets, humanTurn, click, play, last: game.lastMove?.(state) || [], won: outcome ? game.winningCells?.(state) || [] : [], seat, mode }
   return <div className={`gr-play-layout gr-family-layout is-${game.layout.kind}`}>
     <div className={`gr-family-stage ${tilted ? 'is-3d' : 'is-flat'}`}>
       {game.layout.kind !== 'custom' && <ViewToggle tilted={tilted} onToggle={toggleView} />}
@@ -70,6 +72,7 @@ export default function FamilyTable({ id, paused, onFinish }: GameProps & { id: 
       <details className="gr-rules" open={!outcome}><summary>How to play</summary><ol className="gr-family-rules">{entry.rules.map(rule => <li key={rule}>{rule}</li>)}</ol></details>
       <div className="gr-circuit-actions">{game.players > 1 && <GameButton onClick={() => restart('computer')}>Play the computer</GameButton>}{game.players > 1 && !HIDDEN_INFO.has(id) && <GameButton onClick={() => restart('local')}>{game.players > 2 ? `${game.players} players` : '2 players'}, one screen</GameButton>}{game.players === 1 && <GameButton onClick={() => restart()}>Start over</GameButton>}</div>
     </aside>
+    {celebrate > 0 && <Fireworks key={celebrate} title={id === 'tictactoe' ? 'Three in a row!' : 'You win!'} onDone={() => setCelebrate(0)} />}
   </div>
 }
 // Custom tables draw their own controls for these moves, so they are not repeated as aside buttons.
@@ -83,7 +86,7 @@ function customHandles(id: string, move: Move): boolean {
   }
 }
 
-export interface BoardProps { game: FamilyGame; state: any; moves: Move[]; selected: number | null; sources: Set<number>; targets: Move[]; humanTurn: boolean; click: (index: number) => void; play: (move: Move, sound?: Parameters<typeof playSound>[0]) => void; last: number[]; seat: number; mode: Mode }
+export interface BoardProps { game: FamilyGame; state: any; moves: Move[]; selected: number | null; sources: Set<number>; targets: Move[]; humanTurn: boolean; click: (index: number) => void; play: (move: Move, sound?: Parameters<typeof playSound>[0]) => void; last: number[]; won: number[]; seat: number; mode: Mode }
 
 function Stone({ game, state, index }: { game: FamilyGame; state: unknown; index: number }) {
   const piece = game.pieceAt?.(state, index)
@@ -92,7 +95,7 @@ function Stone({ game, state, index }: { game: FamilyGame; state: unknown; index
   return <span className={`gr-stone ${piece.glyph ? 'has-glyph' : ''} ${piece.king ? 'is-king' : ''}`} style={{ '--stone': color, '--ink': dark ? '#fff4e6' : '#1b1b22' } as React.CSSProperties}>{piece.glyph && <b>{piece.glyph}</b>}</span>
 }
 
-function GridBoard({ game, state, selected, sources, targets, humanTurn, click, last }: BoardProps) {
+function GridBoard({ game, state, selected, sources, targets, humanTurn, click, last, won }: BoardProps) {
   const layout = game.layout as Extract<FamilyGame['layout'], { kind: 'grid' }>, cells = layout.rows * layout.cols
   const targetSet = new Set(targets.flatMap(m => [m.to, ...((m.area as number[]) || [])]).filter(i => i !== undefined) as number[])
   return <div className={`gr-fgrid is-${layout.style}`} style={{ '--rows': layout.rows, '--cols': layout.cols } as React.CSSProperties} role="grid" aria-label={`${game.title} board`} data-testid="family-board">
@@ -101,7 +104,7 @@ function GridBoard({ game, state, selected, sources, targets, humanTurn, click, 
       if (layout.holes?.(i)) return <span key={i} className="gr-fcell is-hole" />
       const r = Math.floor(i / layout.cols), c = i % layout.cols, dark = layout.style === 'checker' && (r + c) % 2 === 1
       const palace = layout.style === 'xiangqi' && c >= 3 && c <= 5 && (r <= 2 || r >= 7)
-      return <button type="button" key={i} className={`gr-fcell ${dark ? 'is-dark' : ''} ${palace ? 'is-palace' : ''} ${last.includes(i) ? 'is-last' : ''} ${selected === i ? 'is-selected' : ''} ${humanTurn && sources.has(i) ? 'is-source' : ''} ${humanTurn && targetSet.has(i) ? 'is-target' : ''} ${layout.style === 'intersections' || layout.style === 'xiangqi' ? `edge-${r === 0 ? 't' : r === layout.rows - 1 ? 'b' : ''}${c === 0 ? 'l' : c === layout.cols - 1 ? 'r' : ''}` : ''}`} onClick={() => click(i)} aria-label={`Row ${r + 1}, column ${c + 1}`}><Stone game={game} state={state} index={i} /></button>
+      return <button type="button" key={i} className={`gr-fcell ${dark ? 'is-dark' : ''} ${palace ? 'is-palace' : ''} ${last.includes(i) ? 'is-last' : ''} ${won.includes(i) ? 'is-win' : ''} ${selected === i ? 'is-selected' : ''} ${humanTurn && sources.has(i) ? 'is-source' : ''} ${humanTurn && targetSet.has(i) ? 'is-target' : ''} ${layout.style === 'intersections' || layout.style === 'xiangqi' ? `edge-${r === 0 ? 't' : r === layout.rows - 1 ? 'b' : ''}${c === 0 ? 'l' : c === layout.cols - 1 ? 'r' : ''}` : ''}`} onClick={() => click(i)} aria-label={`Row ${r + 1}, column ${c + 1}`}><Stone game={game} state={state} index={i} /></button>
     })}
   </div>
 }

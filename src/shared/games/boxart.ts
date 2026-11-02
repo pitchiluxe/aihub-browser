@@ -9,7 +9,15 @@ export const BOXART_REPOS: Partial<Record<RomSystem, string>> = {
 const ROMAN: Record<string, string> = { ii: '2', iii: '3', iv: '4', v: '5', vi: '6' }
 export function boxartKey(name: string): string {
   return name.replace(/\.[a-z0-9]{2,4}$/i, '').replace(/\s*[([][^)\]]*[)\]]/g, '').replace(/,\s*the\b/i, '').toLowerCase()
-    .replace(/&/g, ' and ').replace(/[_:\-–!'’.,+]/g, ' ').replace(/^the\s+/, '').split(/\s+/).filter(Boolean).map(word => ROMAN[word] ?? word).join(' ')
+    // libretro writes "&" as "_", so "&", "_" and the word "and" all count as nothing.
+    .replace(/[&_:\-–!'’.,+]/g, ' ').replace(/^the\s+/, '').split(/\s+/).filter(word => word && word !== 'and').map(word => ROMAN[word] ?? word).join(' ')
+}
+// Share of words two keys have in common (Jaccard), for titles that differ by a word.
+function overlap(a: string, b: string): number {
+  const left = new Set(a.split(' ')), right = new Set(b.split(' '))
+  let shared = 0
+  for (const word of left) if (right.has(word)) shared++
+  return shared / (left.size + right.size - shared)
 }
 // Prefer the US/World release, then Europe, then anything else; unlicensed and hacked dumps last.
 function rank(file: string): number {
@@ -37,6 +45,16 @@ export function matchBoxart(title: string, files: readonly string[]): string | n
     const shorter = key.length < wanted.length ? key : wanted
     if (shorter.split(' ').length < 2 || !(wanted.startsWith(key + ' ') || key.startsWith(wanted + ' '))) continue
     const score = rank(file) + 10
+    if (score < bestRank) { best = file; bestRank = score }
+  }
+  if (best) return best
+  // Last, a title that differs by one word ("Flintstones 2 - The Surprise…" vs "Flintstones - The Surprise…"),
+  // as long as every number on the box is also in the dump name, so Mega Man 3 never stands in for Mega Man 2.
+  const numbers = (key: string) => key.split(' ').filter(word => /^\d+$/.test(word))
+  for (const file of files) {
+    const key = boxartKey(file)
+    if (key.split(' ')[0] !== wanted.split(' ')[0] || overlap(key, wanted) < 0.8 || !numbers(key).every(n => numbers(wanted).includes(n))) continue
+    const score = rank(file) + 20
     if (score < bestRank) { best = file; bestRank = score }
   }
   return best

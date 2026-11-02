@@ -42,6 +42,13 @@ describe('family rules', () => {
     let state = TIC_TAC_TOE.setup(random); state = { ...state, board: [0, 0, -1, 1, -1, -1, -1, -1, -1], turn: 1 }
     expect(chooseMove(TIC_TAC_TOE, state, random, 500)!.to).toBe(2)
   })
+  it('tic-tac-toe names the three winning cells', () => {
+    let state = TIC_TAC_TOE.setup(seededRandom(1)); state = { ...state, board: [0, -1, 1, 1, 0, -1, -1, -1, -1], turn: 0 }
+    expect(TIC_TAC_TOE.winningCells!(state)).toEqual([])
+    state = TIC_TAC_TOE.play(state, { to: 8 }, seededRandom(1))
+    expect(state.winner).toBe(0)
+    expect(TIC_TAC_TOE.winningCells!(state)).toEqual([0, 4, 8])
+  })
   it('four in a row drops discs to the bottom and finds a winning column', () => {
     const random = seededRandom(1), base = FOUR_IN_A_ROW.setup(random)
     expect(FOUR_IN_A_ROW.moves(base).map(m => m.to)).toEqual([35, 36, 37, 38, 39, 40, 41])

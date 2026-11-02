@@ -36,7 +36,7 @@
 .gr-walker.seat-1{justify-self:start;margin-left:3px}.gr-walker.seat-2{align-self:center;justify-self:end}.gr-walker.seat-3{align-self:center;justify-self:start}
 .gr-walker-hop{display:block;transform-style:preserve-3d;transform-origin:50% 100%}
 .is-3d .gr-walker-hop{transform:rotateX(calc(var(--tilt) * -1))}
-.gr-walker .gr-pawn{width:clamp(11px,1.6vw,18px);height:clamp(16px,2.4vw,27px)}
+.gr-walker .gr-token{margin:-4px}
 @keyframes gr-step{0%{transform:translateZ(0) scale(1)}45%{transform:translateZ(18px) translateY(-6px) scale(1.18)}100%{transform:translateZ(0) scale(1)}}
 
 .gr-circuit-layout .gr-circuit-center{grid-area:2/2/10/10;transform-style:preserve-3d;color:#e8f3ef;gap:4px}
@@ -94,12 +94,53 @@
 .gr-circuit-layout .gr-property:after{height:3px;background:var(--owner)}
 .gr-circuit-layout .gr-circuit-center{position:relative;overflow:hidden;color:#14201a;justify-content:center}
 .gr-circuit-banner{transform:rotate(-34deg);margin:0!important;padding:.35em 1.1em;border:3px solid #fff;background:#d8342c;color:#fff!important;font:italic 900 clamp(16px,3vw,34px)/1 Georgia,serif!important;letter-spacing:1px!important;text-transform:uppercase;text-shadow:0 2px 0 #0004!important;box-shadow:0 0 0 3px #d8342c,0 10px 20px #0005;white-space:nowrap}
-.gr-deck{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;width:26%;aspect-ratio:1.55;border:2px dashed #1b2a2266;border-radius:6px;font-size:clamp(6px,.8vw,9px);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#14201a99}
-.gr-deck b{font-size:clamp(14px,2vw,24px);line-height:1}
-.gr-deck.is-chance{top:12%;left:9%;transform:rotate(135deg);background:#f6c27a55}.gr-deck.is-chest{bottom:12%;right:9%;transform:rotate(-45deg);background:#8fc0e855}
-.gr-circuit-layout .gr-circuit-center .gr-chance-card{position:absolute;inset:0;margin:auto;height:fit-content;z-index:2}
+.gr-deck{position:absolute;width:27%;aspect-ratio:1.55;z-index:1}
+.gr-deck.is-chance{top:11%;left:8%;transform:rotate(135deg)}.gr-deck.is-chest{bottom:11%;right:8%;transform:rotate(-45deg)}
+.gr-deck-card{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:6px;transform:translate(calc(var(--n) * -1.5px),calc(var(--n) * -1.5px));box-shadow:1px 1px 0 #0003,2px 3px 5px #0004;font-weight:900;letter-spacing:1px;text-transform:uppercase;font-style:normal}
+.gr-deck.is-chance .gr-deck-card{background:repeating-linear-gradient(45deg,#f39a3a 0 6px,#ee8a2c 6px 12px);border:2px solid #fff3dc;color:#fff}
+.gr-deck.is-chest .gr-deck-card{background:repeating-linear-gradient(45deg,#4f93cf 0 6px,#3f84c2 6px 12px);border:2px solid #e7f2ff;color:#fff}
+.gr-deck-card b{font:900 clamp(14px,2.2vw,28px)/1 Georgia,serif;text-shadow:0 2px 0 #0004}
+.gr-deck-card small{font-size:clamp(5px,.75vw,9px)!important;color:#fff!important;text-shadow:0 1px 0 #0005}
+.gr-deck.is-drawing .gr-deck-card:last-child{animation:gr-deck-lift .7s ease-in both}
+@keyframes gr-deck-lift{to{transform:translate(-20px,-60px) rotate(-12deg) scale(1.2);opacity:0}}
+/* The card being read: a dimmed screen and a big card that flips face up. */
+.gr-card-reader{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 45%,#0007,#000c);backdrop-filter:blur(3px);animation:gr-reader-in .25s ease-out both;perspective:1400px}
+@keyframes gr-reader-in{from{opacity:0}}
+.gr-card-big{width:min(460px,90vw);aspect-ratio:1.5;animation:gr-card-rise .5s cubic-bezier(.2,1.2,.4,1) both}
+@keyframes gr-card-rise{from{transform:translateY(40vh) scale(.3) rotate(-20deg)}}
+.gr-card-big-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;animation:gr-card-turn .8s .35s cubic-bezier(.3,1.3,.5,1) both}
+@keyframes gr-card-turn{from{transform:rotateY(180deg)}to{transform:rotateY(0)}}
+.gr-card-big-back,.gr-card-big-front{position:absolute;inset:0;border-radius:18px;backface-visibility:hidden;box-shadow:0 30px 60px #000b,0 0 0 4px #fff,0 0 50px var(--glow)}
+.gr-card-big{--glow:#f5a24a88}.gr-card-big.is-chest{--glow:#6eb6ff88}
+.gr-card-big-back{transform:rotateY(180deg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#fff;font:900 22px/1 'Arial Black',system-ui;letter-spacing:3px;text-transform:uppercase;background:repeating-linear-gradient(45deg,#f39a3a 0 14px,#ee8a2c 14px 28px)}
+.gr-card-big.is-chest .gr-card-big-back{background:repeating-linear-gradient(45deg,#4f93cf 0 14px,#3f84c2 14px 28px)}
+.gr-card-big-back b{font:900 80px/1 Georgia,serif;text-shadow:0 4px 0 #0004}
+.gr-card-big-front{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:22px 30px;text-align:center;color:#231a10;background:linear-gradient(#fffaf0,#f6e7c4);border:8px solid #fffaf0;outline:3px solid #ee8a2c;outline-offset:-14px}
+.gr-card-big.is-chest .gr-card-big-front{background:linear-gradient(#f4f9ff,#d7e7fa);border-color:#f4f9ff;outline-color:#3f84c2;color:#10223a}
+.gr-card-big-front header{display:flex;align-items:center;gap:10px;font:900 22px/1 'Arial Black',system-ui;letter-spacing:3px;text-transform:uppercase;color:#c4621a}
+.gr-card-big.is-chest .gr-card-big-front header{color:#2f6aa8}
+.gr-card-big-front header span{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:currentColor;color:#fff;font:900 20px/1 Georgia,serif}
+.gr-card-big-front header span{color:#fff;background:#ee8a2c}.gr-card-big.is-chest .gr-card-big-front header span{background:#3f84c2}
+.gr-card-big-front small{font:600 12px/1 system-ui;letter-spacing:1px;text-transform:uppercase;opacity:.6}
+.gr-card-big-front p{margin:0;font:600 clamp(17px,2.4vw,22px)/1.4 Georgia,serif;max-width:32ch}
+.gr-card-big-ok{margin-top:4px;padding:9px 26px;border:0;border-radius:999px;background:#231a10;color:#fff;font:700 14px/1 system-ui;cursor:pointer;box-shadow:0 4px 10px #0005}
+.gr-card-big-ok:hover{transform:translateY(-1px);background:#3a2c1c}
+@media(prefers-reduced-motion:reduce){.gr-card-reader,.gr-card-big,.gr-card-big-inner,.gr-deck.is-drawing .gr-deck-card{animation:none}}
 .gr-circuit-layout .gr-circuit-center small,.gr-circuit-layout .gr-circuit-center p{color:#2a3b31}
 .gr-circuit-layout .gr-dice{position:absolute;bottom:14%;left:50%;transform:translateX(-50%);margin:0}
 /* 3D tilts about the board's centre and keeps its full layout height, so the near edge never runs off the table. */
 .gr-circuit-stage.is-3d{--fit:1;perspective-origin:50% 50%}
 .is-3d .gr-circuit-board{transform-origin:50% 50%;transform:rotateX(var(--tilt)) scale(.88);margin-bottom:26px}
+/* Tokens: the chosen piece standing on a coloured base in the player's colour. */
+.gr-token{position:relative;display:grid;place-items:end center;width:clamp(20px,2.7vw,32px);height:clamp(22px,3vw,36px);font-style:normal}
+.gr-token:before{content:'';position:absolute;left:8%;right:8%;bottom:0;height:34%;border-radius:50%;background:radial-gradient(ellipse at 50% 35%,#fff9,var(--seat) 45%,color-mix(in srgb,var(--seat) 55%,#000));box-shadow:0 2px 3px #0008,0 0 0 1.5px #0006}
+.gr-token i{position:relative;font-style:normal;font-size:clamp(15px,2.1vw,25px);line-height:1;margin-bottom:12%;filter:drop-shadow(0 2px 1px #0009)}
+.gr-player-list .gr-token{flex:0 0 24px;width:24px;height:26px}.gr-player-list .gr-token i{font-size:17px}
+.gr-token-picker{display:grid;gap:10px;margin:14px 0 4px}
+.gr-token-picker>div>span{display:block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gr-muted);margin-bottom:6px}
+.gr-token-picker [role=radiogroup]{display:flex;flex-wrap:wrap;gap:5px}
+.gr-token-picker button{width:36px;height:36px;display:grid;place-items:center;padding:0;border:1px solid #ffffff1c;border-radius:10px;background:#ffffff0a;font-size:20px;cursor:pointer;transition:transform .15s,background .15s,box-shadow .15s}
+.gr-token-picker button:hover:not(:disabled){transform:translateY(-2px);background:#ffffff16}
+.gr-token-picker button.is-mine{background:color-mix(in srgb,var(--seat) 28%,transparent);border-color:var(--seat);box-shadow:0 0 12px color-mix(in srgb,var(--seat) 60%,transparent);animation:gr-token-pick .35s cubic-bezier(.3,1.6,.5,1)}
+.gr-token-picker button:disabled{opacity:.3;cursor:not-allowed}
+@keyframes gr-token-pick{50%{transform:scale(1.25) rotate(-8deg)}}
