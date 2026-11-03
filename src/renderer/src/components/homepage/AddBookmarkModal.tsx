@@ -1,11 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Link, Loader2, AlertCircle, CheckCircle2, Info } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import { addBookmarkWithAI } from '../../services/bookmarkService'
 
 export default function AddBookmarkModal() {
-  const { isAddBookmarkOpen, setAddBookmarkOpen, bookmarks, addBookmark, bookmarkPrefill, setBookmarkPrefill } = useBrowserStore()
+  // Always mounted, so subscribe only to what it renders — not every tab update.
+  const { isAddBookmarkOpen, setAddBookmarkOpen, bookmarks, addBookmark, bookmarkPrefill, setBookmarkPrefill } = useBrowserStore(useShallow(s => ({
+    isAddBookmarkOpen: s.isAddBookmarkOpen, setAddBookmarkOpen: s.setAddBookmarkOpen,
+    bookmarks: s.bookmarks, addBookmark: s.addBookmark,
+    bookmarkPrefill: s.bookmarkPrefill, setBookmarkPrefill: s.setBookmarkPrefill,
+  })))
   const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')

@@ -7,6 +7,7 @@ import {
   FlaskConical, Bot, Newspaper, Search, Disc3, Globe2, Plane,
 } from 'lucide-react'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
+import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import { loadBookmarks, removeBookmark, isBookmarkProtected } from '../../services/bookmarkService'
 import SearchBar from './SearchBar'
@@ -36,7 +37,12 @@ function glassStyle(isLight: boolean): React.CSSProperties {
 
 export default function HomePage({ onNavigate }: Props) {
   const { isLight } = useTheme()
-  const { bookmarks, setBookmarks, removeBookmark: storeRemove, setAddBookmarkOpen } = useBrowserStore()
+  // Selector: the whole-store form re-rendered the home page (and the bookmark
+  // sphere under it) on every tab title, favicon and loading change.
+  const { bookmarks, setBookmarks, removeBookmark: storeRemove, setAddBookmarkOpen } = useBrowserStore(useShallow(s => ({
+    bookmarks: s.bookmarks, setBookmarks: s.setBookmarks,
+    removeBookmark: s.removeBookmark, setAddBookmarkOpen: s.setAddBookmarkOpen,
+  })))
   const [view,            setView]            = useState<'grid' | 'sphere'>('grid')
   const [time,            setTime]            = useState(new Date())
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
