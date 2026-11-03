@@ -48,6 +48,7 @@ const DjPage         = lazy(() => import('./components/dj/DjPage'))
 const FlightsRentalsPage = lazy(() => import('./components/travel/FlightsRentalsPage'))
 const TravelPage     = lazy(() => import('./components/travel/TravelPage'))
 const DeclutterPage = lazy(() => import('./components/pages/DeclutterPage'))
+const DoctorPage = lazy(() => import('./components/pages/DoctorPage'))
 const DeveloperPage = lazy(() => import('./components/pages/DeveloperPage'))
 const GameRoomPage = lazy(() => import('./components/games/GameRoomPage'))
 
@@ -1139,6 +1140,7 @@ export default function App() {
                     {tab.pageType === 'agents'     && <AgentsPage />}
                     {tab.pageType === 'extensions' && <ExtensionsPage />}
                     {tab.pageType === 'declutter' && <DeclutterPage />}
+                    {tab.pageType === 'doctor' && <DoctorPage />}
                     {tab.pageType === 'mail'       && <MailPage />}
                     {tab.pageType === 'notes'      && <NotesPage onNavigate={navigate} />}
                     {tab.pageType === 'manual'     && <ManualPage />}

@@ -54,6 +54,7 @@ import {
 } from './aiRouting'
 import { createManagedJsonStore, flushAllJsonStores, type JsonStore } from './jsonStore'
 import { createRecordLog } from './recordLog'
+import { startDoctor } from './doctor/register'
 import { createSessionManager, type SessionTab } from './sessions'
 import { createSemanticIndex, type SearchDoc } from './semantic'
 import { createNetGet, createNetPostJson, isWebUrl } from './netGet'
@@ -1539,6 +1540,9 @@ async function navigateProtected(ctx: AppWin, tabId: string, wc: Electron.WebCon
 
 const tabSleepChecks = new Map<number, () => boolean>()
 const tabsWithMediaAccess = new WeakSet<Electron.WebContents>()
+// Agent Doctor (aihub://doctor). Started once the app is ready — process
+// metrics are unavailable before that — and every tab registers with it.
+let doctor: ReturnType<typeof startDoctor> | null = null
 function createTabView(ctx: AppWin | undefined, tabId: string, url: string, containerId?: string | null) {
   if (!ctx || ctx.views.has(tabId)) return
   const tabViews = ctx.views
@@ -1603,6 +1607,7 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   })
   tabSleepChecks.set(wc.id, () => !dirtyForm && !mediaPlaying && !tabsWithMediaAccess.has(wc) && !wc.isCurrentlyAudible() && !wc.isBeingCaptured() && !wc.isDevToolsOpened() && !wc.debugger.isAttached())
   wc.once('destroyed', () => tabSleepChecks.delete(wc.id))
+  doctor?.attachTab(wc, ctx, tabId)
   wc.ipc.on('navigation:hover', (event, candidate: unknown) => {
     if (wc.isDestroyed() || event.senderFrame !== wc.mainFrame || ctx.activeId !== tabId) return
     const origin = acceptWarmup(candidate)
@@ -2360,6 +2365,7 @@ app.whenReady().then(() => {
   registerEmulatorProtocol()
   registerDjIpc()
   registerScreenShareHandler()
+  doctor = startDoctor({ windows: () => appWins.values(), isAppSender: e => !!ctxFromEvent(e) })
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
   if (isDev) {
     app.on('browser-window-created', (_, w) => {

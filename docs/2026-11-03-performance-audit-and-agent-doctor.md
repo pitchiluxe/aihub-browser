@@ -3,7 +3,7 @@
 Date: 2026-11-03 · Branch audited: `feat/ai-dj-core` @ d7e472b (v1.96.0)
 Method: static read of `src/main`, `src/renderer`, build output in `out/`, plus timing of the real profile files in `~/.aihub-browser` (Node 22, this machine). Every finding below cites a file and line. Anything not measured is marked **unmeasured**.
 
-**Status (branch `perf/sandbox-and-main-thread-stalls`):** done — S1, #1, #2, #3, #4, #5, #6, #7, plus the semantic index moved to the same append log as Rewind. #8 already existed. Open — #10 (Bible saves, user-action only, ~1 ms), #11–#13, Phase 3 features, Agent Doctor.
+**Status (branch `perf/sandbox-and-main-thread-stalls`):** done — S1, #1, #2, #3, #4, #5, #6, #7, plus the semantic index moved to the same append log as Rewind. #8 already existed. Agent Doctor phase 1 shipped (`aihub://doctor`: sensors, rules, session journal, user-initiated Show / Sleep / Restart). Deviation from 4.2: tab hangs are detected with a per-sample liveness ping (`webFrameMain.executeJavaScript('0')`) because Chromium's `unresponsive` event never fired for a blocked tab in testing. Open — #10 (Bible saves, user-action only, ~1 ms), #11–#13, Phase 3 features, Doctor phases 2–5 (automatic remedies, Ollama, dev-server cockpit).
 
 ---
 
