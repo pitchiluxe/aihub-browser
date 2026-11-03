@@ -4,6 +4,7 @@ import {
   Bot, X, Send, Loader2, Sparkles, FileText, Trash2, AlertCircle,
   Zap, Paperclip, Download, BookmarkPlus, Check, Square, Brain, Save,
 } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { useBrowserStore } from '../../store/browserStore'
 import { parseActionsBlock, executeAction, cleanNarration, AGENT_TOOLS_DOC } from '../../services/agentTools'
 import { planContext, summarizeCondensed, looksLikeRecall, buildRecallBlock } from '../../services/aiContext'
@@ -54,13 +55,23 @@ const FEATURE_MAP = `## AIHub Browser — full feature map (answer any "can the 
 
 
 export default function AIAssistant({ currentUrl, currentTitle, getPageContent }: Props) {
+  // A selector, not the whole store: this panel is always mounted, and the
+  // whole-store form re-rendered it on every tab title, favicon and loading
+  // change anywhere in the browser.
   const {
     isAIPanelOpen, toggleAIPanel,
     aiMessages, addAIMessage, clearAIMessages, setAIMessages,
     isAILoading, setAILoading,
     ollamaStatus, setOllamaStatus,
     bookmarks, addTab,
-  } = useBrowserStore()
+  } = useBrowserStore(useShallow(s => ({
+    isAIPanelOpen: s.isAIPanelOpen, toggleAIPanel: s.toggleAIPanel,
+    aiMessages: s.aiMessages, addAIMessage: s.addAIMessage,
+    clearAIMessages: s.clearAIMessages, setAIMessages: s.setAIMessages,
+    isAILoading: s.isAILoading, setAILoading: s.setAILoading,
+    ollamaStatus: s.ollamaStatus, setOllamaStatus: s.setOllamaStatus,
+    bookmarks: s.bookmarks, addTab: s.addTab,
+  })))
 
   // The reply as it is being written. Deliberately local component state and
   // never part of aiMessages: the message list is persisted to disk on every

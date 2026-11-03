@@ -26,7 +26,7 @@ function topSelf(prof, n = 25) {
   fs.mkdirSync(dst)
   for (const f of fs.readdirSync(src)) {
     const p = path.join(src, f)
-    if (fs.statSync(p).isFile() && /\.json$/.test(f)) fs.copyFileSync(p, path.join(dst, f))
+    if (fs.statSync(p).isFile() && /\.(nd)?json$/.test(f)) fs.copyFileSync(p, path.join(dst, f))
   }
   const env = { ...process.env, USERPROFILE: home, HOME: home }; delete env.ELECTRON_RUN_AS_NODE
   const t0 = Date.now()

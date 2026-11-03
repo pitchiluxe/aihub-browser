@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useState } from 'react'
 import {
-  Home, History, Download, Settings, Plus, Sparkles, WandSparkles, AppWindow, Gamepad2,
+  Home, History, Download, Settings, Plus, Sparkles, WandSparkles, AppWindow, Gamepad2, Stethoscope,
   Wifi, Shield, FlaskConical, Bot, Puzzle, LayoutGrid, Mail, StickyNote, BookOpen, Rewind, BellRing, BookMarked, GraduationCap, Users, Archive, Brain, Receipt, Sunrise, Library,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -47,6 +47,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Shield,       label: 'Security Center', page: 'security', type: 'security', accent: '#34d399' },
   { icon: Puzzle,       label: 'Extensions',   page: 'extensions',   type: 'extensions', accent: '#fb923c' },
   { icon: WandSparkles, label: 'Site Declutter', page: 'declutter', type: 'declutter', accent: '#67e8f9' },
+  { icon: Stethoscope,  label: 'Agent Doctor', page: 'doctor',       type: 'doctor',     accent: '#67e8f9' },
   { icon: Wifi,         label: 'Free WiFi',    page: 'wifi',         type: 'wifi'       },
   { icon: Shield,       label: 'VPN / Proxy',  page: 'vpn',          type: 'vpn'        },
   { icon: Mail,         label: 'Mail',         page: 'mail',         type: 'mail'       },

@@ -7,7 +7,8 @@ import dns from 'dns'
 import os from 'os'
 import fs from 'fs'
 import { pathToFileURL, fileURLToPath } from 'url'
-import { execSync, execFileSync, spawn } from 'child_process'
+import { execSync, execFile, spawn } from 'child_process'
+import { promisify } from 'util'
 import { recordVisit, generateRecommendations, saveRecommendations, getStoredRecommendations, buildProfile } from './ai-brain'
 import { registerGoogleIpc } from './google'
 import { registerResearchIpc } from './research'
@@ -51,7 +52,9 @@ import {
   routeGenerate, selectOllamaModel, summarizeOpenRouterSkips,
   type RoutingSettings, type OpenRouterFailure,
 } from './aiRouting'
-import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
+import { createManagedJsonStore, flushAllJsonStores, type JsonStore } from './jsonStore'
+import { createRecordLog } from './recordLog'
+import { startDoctor } from './doctor/register'
 import { createSessionManager, type SessionTab } from './sessions'
 import { createSemanticIndex, type SearchDoc } from './semantic'
 import { createNetGet, createNetPostJson, isWebUrl } from './netGet'
@@ -131,9 +134,12 @@ registerEmulatorScheme()
 // doesn't fight over temp paths that other processes may have locked.
 app.commandLine.appendSwitch('disk-cache-dir',     join(APP_DIR, 'cache'))
 app.commandLine.appendSwitch('gpu-disk-cache-dir', join(APP_DIR, 'gpu-cache'))
-// Disable problematic GPU sandbox on Windows to avoid cache permission errors
+// Disable problematic GPU sandbox on Windows to avoid cache permission errors.
+// The renderer sandbox stays ON: 'no-sandbox' used to be here and it ran every
+// website in an unsandboxed process, so one renderer exploit meant code
+// execution as the user. Tab preloads only require('electron'), which the
+// sandbox allows; the app UI window opts out per-window (sandbox: false).
 if (process.platform === 'win32') {
-  app.commandLine.appendSwitch('no-sandbox')
   app.commandLine.appendSwitch('disable-gpu-sandbox')
   // Windows-only: Chromium's native occlusion detection repeatedly decides our
   // frameless/transparent window is hidden and throttles or blanks the tab's
@@ -150,20 +156,12 @@ app.commandLine.appendSwitch('disk-cache-size', String(512 * 1024 * 1024))
 app.commandLine.appendSwitch('enable-features', 'ParallelDownloading')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('enable-zero-copy')
-// HTTP/2: multiplexes multiple requests over a single connection — cuts the
-// TCP handshakes and TLS round-trips dramatically, especially for pages with
-// dozens of assets across the same host.
-app.commandLine.appendSwitch('enable-http2')
 // QUIC (HTTP/3): even faster connection establishment — 0-RTT for known servers,
 // and handles packet loss better than TCP on lossy networks (mobile, spotty WiFi).
+// (HTTP/2 needs no switch: Chromium has enabled it by default for years. DNS
+// caching is configured through app.configureHostResolver — see applyDoh — not
+// 'host-resolver-rules', which only accepts MAP/EXCLUDE rules, never TTLs.)
 app.commandLine.appendSwitch('enable-quic')
-// Let Chromium size its renderer pool from available memory. A CPU-based
-// process cap forces unrelated tabs to compete inside a small pool.
-// Keep DNS entries cached much longer in Chromium's own resolver (30 min vs ~1 min
-// default). First visits still go through Node's async resolver (with system-fallback
-// fallback); this layer caches aggressively on top so repeated internal references
-// to the same host skip DNS entirely.
-app.commandLine.appendSwitch('host-resolver-rules', 'MaxTTL=1800, MinTTL=300')
 
 // ── Single-instance lock — prevent cache conflicts ─────────────────────────
 // If a second instance launches, focus the existing window instead.
@@ -229,20 +227,28 @@ function seedPinnedBookmarks(d: any): boolean {
 }
 
 function ensureDir() { if (!fs.existsSync(APP_DIR)) fs.mkdirSync(APP_DIR, { recursive: true }) }
-function readJson(f: string, fb: any): any { try { return JSON.parse(fs.readFileSync(f, 'utf-8')) } catch { return fb } }
-// Write through a temp file and rename over the target: rename is atomic, so a
-// crash or power cut mid-write leaves the previous file intact instead of a
-// truncated one. Plain writeFileSync could destroy the user's bookmarks and
-// settings at the moment it was trying to save them.
+// writeJson is write-behind: each file gets a managed JsonStore on its first
+// write, so the stringify and the disk write happen on a debounce, off the IPC
+// path that triggered them (they used to be a synchronous, pretty-printed
+// write per user action). Writes stay atomic (temp file + rename) and are
+// flushed synchronously on before-quit with the other stores.
+const writeBehind = new Map<string, JsonStore<any>>()
+function readJson(f: string, fb: any): any {
+  // A value not yet on disk is the truth. Cloned, so a caller that mutates
+  // what it read without writing it back changes nothing — as with a parse.
+  const pending = writeBehind.get(f)
+  if (pending) return structuredClone(pending.get())
+  try { return JSON.parse(fs.readFileSync(f, 'utf-8')) } catch { return fb }
+}
 function writeJson(f: string, d: any) {
-  const tmp = `${f}.${process.pid}.tmp`
-  try {
-    ensureDir()
-    fs.writeFileSync(tmp, JSON.stringify(d, null, 2))
-    fs.renameSync(tmp, f)
-  } catch {
-    try { fs.unlinkSync(tmp) } catch {}
-  }
+  let store = writeBehind.get(f)
+  if (!store) writeBehind.set(f, store = createManagedJsonStore<any>(f, () => null))
+  // Snapshot now. Callers pass live objects (saveData passes _data and a
+  // shallow copy of it); holding the reference would write whatever those
+  // objects contain at flush time — e.g. a field saveData deliberately
+  // stripped (API keys) could reappear if it were ever nested and shared.
+  // The disk must get exactly what the caller handed over, when it did.
+  store.set(structuredClone(d))
 }
 
 // API keys are kept out of data.json — see secretStore.ts.
@@ -1534,6 +1540,9 @@ async function navigateProtected(ctx: AppWin, tabId: string, wc: Electron.WebCon
 
 const tabSleepChecks = new Map<number, () => boolean>()
 const tabsWithMediaAccess = new WeakSet<Electron.WebContents>()
+// Agent Doctor (aihub://doctor). Started once the app is ready — process
+// metrics are unavailable before that — and every tab registers with it.
+let doctor: ReturnType<typeof startDoctor> | null = null
 function createTabView(ctx: AppWin | undefined, tabId: string, url: string, containerId?: string | null) {
   if (!ctx || ctx.views.has(tabId)) return
   const tabViews = ctx.views
@@ -1598,6 +1607,7 @@ function createTabView(ctx: AppWin | undefined, tabId: string, url: string, cont
   })
   tabSleepChecks.set(wc.id, () => !dirtyForm && !mediaPlaying && !tabsWithMediaAccess.has(wc) && !wc.isCurrentlyAudible() && !wc.isBeingCaptured() && !wc.isDevToolsOpened() && !wc.debugger.isAttached())
   wc.once('destroyed', () => tabSleepChecks.delete(wc.id))
+  doctor?.attachTab(wc, ctx, tabId)
   wc.ipc.on('navigation:hover', (event, candidate: unknown) => {
     if (wc.isDestroyed() || event.senderFrame !== wc.mainFrame || ctx.activeId !== tabId) return
     const origin = acceptWarmup(candidate)
@@ -2355,6 +2365,7 @@ app.whenReady().then(() => {
   registerEmulatorProtocol()
   registerDjIpc()
   registerScreenShareHandler()
+  doctor = startDoctor({ windows: () => appWins.values(), isAppSender: e => !!ctxFromEvent(e) })
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
   if (isDev) {
     app.on('browser-window-created', (_, w) => {
@@ -4436,27 +4447,38 @@ ipcMain.handle('ai:useOllamaPrimary', async () => {
 })
 
 // ── IPC: WiFi ──────────────────────────────────────────────────────────────
+// netsh is always run async and without a shell. The old execSync calls ran
+// on the main thread, so a scan froze every tab for as long as netsh took
+// (up to its 8 s timeout, three times per scan). No shell also means an
+// AP-supplied SSID can never be interpreted as shell syntax.
+const execFileAsync = promisify(execFile)
+async function netsh(args: string[], timeout = 8000): Promise<string> {
+  const { stdout } = await execFileAsync('netsh', args, { encoding: 'utf-8', timeout, windowsHide: true })
+  return stdout
+}
+
 ipcMain.handle('wifi:scan', async () => {
   if (process.platform !== 'win32') return { networks: [], error: 'WiFi scan only on Windows' }
   try {
-    const raw = execSync('netsh wlan show networks mode=bssid', { encoding: 'utf-8', timeout: 8000 })
-    const networks = parseWifiNetworks(raw)
     // Saved profiles let us connect to a secured network without asking for
     // the password again — mark those so the UI can offer one-click connect.
-    let saved: string[] = []
-    try {
-      const profRaw = execSync('netsh wlan show profiles', { encoding: 'utf-8', timeout: 8000 })
-      saved = [...profRaw.matchAll(/(?:All User Profile|User Profile)\s*:\s*(.+)/g)].map(m => m[1].trim())
-    } catch {}
-    for (const n of networks) n.saved = saved.includes(n.ssid)
-    return { networks, connectedSsid: currentWifiSsid() }
+    // The three queries are independent, so they run together.
+    const [raw, profRaw, connectedSsid] = await Promise.all([
+      netsh(['wlan', 'show', 'networks', 'mode=bssid']),
+      netsh(['wlan', 'show', 'profiles']).catch(() => ''),
+      currentWifiSsid(),
+    ])
+    const networks = parseWifiNetworks(raw)
+    const saved = new Set([...profRaw.matchAll(/(?:All User Profile|User Profile)\s*:\s*(.+)/g)].map(m => m[1].trim()))
+    for (const n of networks) n.saved = saved.has(n.ssid)
+    return { networks, connectedSsid }
   } catch (e: any) { return { networks: [], error: e.message } }
 })
 
 // SSID the WLAN interface is actually associated with right now ('' if none).
-function currentWifiSsid(): string {
+async function currentWifiSsid(): Promise<string> {
   try {
-    const raw = execSync('netsh wlan show interfaces', { encoding: 'utf-8', timeout: 8000 })
+    const raw = await netsh(['wlan', 'show', 'interfaces'])
     if (!/^\s*State\s*:\s*connected/im.test(raw)) return ''
     const m = raw.match(/^\s*SSID\s*:\s*(.+)$/im)
     return m ? m[1].trim() : ''
@@ -4481,13 +4503,11 @@ function buildWlanProfileXml(ssid: string, security: { auth: string; encryption:
 </WLANProfile>`
 }
 
-function addWlanProfile(xml: string) {
+async function addWlanProfile(xml: string) {
   const tmp = join(os.tmpdir(), `aihub-wifi-${Date.now()}.xml`)
-  fs.writeFileSync(tmp, xml, 'utf-8')
-  // execFileSync (no shell) — the SSID is an untrusted AP-supplied string,
-  // so it must never be interpolated into a shell command line.
-  try { execFileSync('netsh', ['wlan', 'add', 'profile', `filename=${tmp}`, 'user=all'], { timeout: 8000 }) }
-  finally { try { fs.unlinkSync(tmp) } catch {} }
+  await fs.promises.writeFile(tmp, xml, 'utf-8')
+  try { await netsh(['wlan', 'add', 'profile', `filename=${tmp}`, 'user=all']) }
+  finally { await fs.promises.unlink(tmp).catch(() => {}) }
 }
 
 ipcMain.handle('wifi:connect', async (_e, ssid: string, open?: boolean, password?: string, auth?: string) => {
@@ -4500,18 +4520,18 @@ ipcMain.handle('wifi:connect', async (_e, ssid: string, open?: boolean, password
   let addedProfile = false
   try {
     if (open) {
-      addWlanProfile(buildWlanProfileXml(ssid, { auth: 'open', encryption: 'none' }))
+      await addWlanProfile(buildWlanProfileXml(ssid, { auth: 'open', encryption: 'none' }))
       addedProfile = true
     } else if (password) {
       if (password.length < 8 || password.length > 63) {
         return { success: false, error: 'WiFi passwords are 8–63 characters', needsPassword: true }
       }
       const wpa3 = /wpa3/i.test(auth || '')
-      addWlanProfile(buildWlanProfileXml(ssid, { auth: wpa3 ? 'WPA3SAE' : 'WPA2PSK', encryption: 'AES', password }))
+      await addWlanProfile(buildWlanProfileXml(ssid, { auth: wpa3 ? 'WPA3SAE' : 'WPA2PSK', encryption: 'AES', password }))
       addedProfile = true
     }
     try {
-      execFileSync('netsh', ['wlan', 'connect', `name=${ssid}`], { timeout: 12000 })
+      await netsh(['wlan', 'connect', `name=${ssid}`], 12000)
     } catch (e: any) {
       const detail = (e.stdout?.toString?.() || '').trim() || e.message
       // No saved profile for this secured network → the UI should ask for a password.
@@ -4524,12 +4544,12 @@ ipcMain.handle('wifi:connect', async (_e, ssid: string, open?: boolean, password
     // password just quietly never reaches "connected".
     for (let i = 0; i < 12; i++) {
       await new Promise(r => setTimeout(r, 1000))
-      if (currentWifiSsid() === ssid) return { success: true }
+      if (await currentWifiSsid() === ssid) return { success: true }
     }
     // Never associated. If we just wrote a profile from a typed password,
     // remove it so the bad key doesn't stick around poisoning future attempts.
     if (addedProfile && password) {
-      try { execFileSync('netsh', ['wlan', 'delete', 'profile', `name=${ssid}`], { timeout: 8000 }) } catch {}
+      await netsh(['wlan', 'delete', 'profile', `name=${ssid}`]).catch(() => {})
       return { success: false, needsPassword: true, error: 'Could not connect — wrong password or weak signal. Try again.' }
     }
     return { success: false, error: 'Could not connect — the network did not respond. Move closer and retry.' }
@@ -4584,18 +4604,16 @@ ipcMain.handle('siteMemory:getAll', () => getSiteMemory())
 // actually dwelt on. Lets them find "that article I read last week" by what it
 // SAID, not just its URL. Stored locally, capped, never leaves the machine.
 interface RewindEntry { id: string; url: string; title: string; favicon: string; text: string; ts: number }
-const REWIND_FILE = join(APP_DIR, 'rewind.json')
-// Debounced, async, compact. This file reaches ~11 MB at the cap, and it was
-// pretty-printed and written synchronously on EVERY page dwell — 100 ms+ of
-// frozen main thread per page on a fast machine, seconds on a slow disk.
-const rewindStore = createManagedJsonStore<RewindEntry[]>(REWIND_FILE, () => [], { debounceMs: 4000 })
-function getRewind(): RewindEntry[] {
-  const v = rewindStore.get()
-  if (Array.isArray(v)) return v
-  rewindStore.set([])
-  return rewindStore.get()
-}
 const REWIND_CAP = 3000
+// Append-only log (see recordLog.ts). The archive reaches ~12 MB at the cap;
+// as one JSON file, every page dwell paid a 70 ms main-thread stringify of all
+// of it. Now a dwell appends one line. rewind.json is the legacy format,
+// imported once and removed after the log has been written in full.
+const rewindLog = createRecordLog<RewindEntry>(join(APP_DIR, 'rewind.ndjson'), {
+  cap: REWIND_CAP,
+  legacy: { file: join(APP_DIR, 'rewind.json'), read: raw => { const v = JSON.parse(raw); return Array.isArray(v) ? v : [] } },
+})
+function getRewind(): readonly RewindEntry[] { return rewindLog.all() }
 
 function rewindListItem(e: RewindEntry, snippet?: string) {
   return { id: e.id, url: e.url, title: e.title, favicon: e.favicon, ts: e.ts, snippet: snippet ?? e.text.slice(0, 180) }
@@ -4679,25 +4697,24 @@ ipcMain.handle('semantic:stats', () => ({ ...semanticIndex.stats(), total: getRe
 handlePersistent('rewind:add', (_e, entry: { url: string; title?: string; favicon?: string; text?: string }) => {
   try {
     if (!entry?.url || !/^https?:\/\//i.test(entry.url)) return { ok: false }
-    const store = getRewind()
     // Merge captures of the same URL within 30 min instead of piling up dupes.
-    const recent = store.find(e => e.url === entry.url && Date.now() - e.ts < 30 * 60 * 1000)
-    if (recent) {
-      if (entry.title) recent.title = entry.title
-      if (entry.text) recent.text = entry.text.slice(0, 6000)
-      recent.ts = Date.now()
-    } else {
-      store.unshift({
-        id: `rw-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        url: entry.url, title: entry.title || entry.url, favicon: entry.favicon || '',
-        text: (entry.text || '').slice(0, 6000), ts: Date.now(),
-      })
-      if (store.length > REWIND_CAP) store.length = REWIND_CAP
-    }
-    rewindStore.set(store)
+    const recent = getRewind().find(e => e.url === entry.url && Date.now() - e.ts < 30 * 60 * 1000)
+    // Records are replaced, never mutated: the log appends the new version.
+    const saved: RewindEntry = recent
+      ? {
+          ...recent,
+          ...(entry.title ? { title: entry.title } : {}),
+          ...(entry.text ? { text: entry.text.slice(0, 6000) } : {}),
+          ts: Date.now(),
+        }
+      : {
+          id: `rw-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          url: entry.url, title: entry.title || entry.url, favicon: entry.favicon || '',
+          text: (entry.text || '').slice(0, 6000), ts: Date.now(),
+        }
+    rewindLog.put(saved)
     // Queue the page for background embedding. No-op when Ollama is absent.
-    const saved = store.find(e => e.url === entry.url)
-    if (saved) semanticIndex.index({ id: saved.id, title: saved.title, url: saved.url, text: saved.text, ts: saved.ts })
+    semanticIndex.index({ id: saved.id, title: saved.title, url: saved.url, text: saved.text, ts: saved.ts })
     return { ok: true }
   } catch (e: any) { return { ok: false, error: e.message } }
 }, () => ({ ok: false, private: true }))
@@ -4729,12 +4746,11 @@ ipcMain.handle('rewind:stats', () => {
   return { count: store.length, oldest: store.length ? store[store.length - 1].ts : 0 }
 })
 ipcMain.handle('rewind:remove', (_e, id: string) => {
-  const store = getRewind(); const i = store.findIndex(e => e.id === id)
-  if (i !== -1) { store.splice(i, 1); rewindStore.set(store) }
+  rewindLog.remove(String(id))
   return { ok: true }
 })
 ipcMain.handle('rewind:clear', () => {
-  rewindStore.set([]); rewindStore.flush()
+  rewindLog.clear()
   semanticIndex.prune(new Set())
   return { ok: true }
 })
@@ -6108,18 +6124,22 @@ ipcMain.handle('file:saveVideo', async (_e, { buffer }: { buffer: ArrayBuffer })
 // 3-month cleanup: removes conversations older than 90 days on every load.
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000
 
-function readAgentsStore(): { customAgents: any[]; conversations: any[] } {
-  const s = readJson(AGENTS_FILE, null)
-  const conversations: any[] = (Array.isArray(s?.conversations) ? s.conversations : [])
-    .filter((c: any) => (c.updatedAt || c.createdAt || 0) > Date.now() - THREE_MONTHS_MS)
-  // Persist cleanup so the file shrinks on disk
-  if (conversations.length !== (s?.conversations?.length ?? 0)) {
-    writeJson(AGENTS_FILE, { ...s, conversations })
-  }
-  return {
-    customAgents:  Array.isArray(s?.customAgents)  ? s.customAgents  : [],
-    conversations,
-  }
+// Held in memory and written on a debounce. It used to re-read, re-parse and
+// pretty-rewrite the whole file (2 MB+) synchronously on every agent turn,
+// which blocked the main thread — and with it every tab — for 35-100 ms.
+type AgentsState = { customAgents: any[]; conversations: any[] }
+const agentsStore = createManagedJsonStore<AgentsState>(AGENTS_FILE, () => ({ customAgents: [], conversations: [] }), { debounceMs: 2000 })
+
+function readAgentsStore(): AgentsState {
+  const s: any = agentsStore.get()
+  const valid = !!s && typeof s === 'object' && Array.isArray(s.customAgents) && Array.isArray(s.conversations)
+  const all: any[] = Array.isArray(s?.conversations) ? s.conversations : []
+  const conversations = all.filter(c => (c.updatedAt || c.createdAt || 0) > Date.now() - THREE_MONTHS_MS)
+  // Plain reads must not schedule a write: only persist when the cleanup
+  // dropped something or a malformed file had to be normalised.
+  if (valid && conversations.length === all.length) return s
+  agentsStore.set({ ...(valid ? s : {}), customAgents: Array.isArray(s?.customAgents) ? s.customAgents : [], conversations })
+  return agentsStore.get()
 }
 
 ipcMain.handle('agents:load', () => readAgentsStore())
@@ -6130,14 +6150,14 @@ ipcMain.handle('agents:saveAgent', (_e, agent: any) => {
   const i = s.customAgents.findIndex(a => a.id === agent.id)
   if (i >= 0) s.customAgents[i] = agent
   else s.customAgents.unshift(agent)
-  writeJson(AGENTS_FILE, s)
+  agentsStore.set(s)
   return true
 })
 
 ipcMain.handle('agents:deleteAgent', (_e, id: string) => {
   const s = readAgentsStore()
   s.customAgents = s.customAgents.filter(a => a.id !== id)
-  writeJson(AGENTS_FILE, s)
+  agentsStore.set(s)
   return true
 })
 
@@ -6150,14 +6170,14 @@ handlePersistent('agents:saveConversation', (_e, convo: any) => {
   // Newest first, capped so the archive can't grow unbounded
   s.conversations.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
   s.conversations = s.conversations.slice(0, 100)
-  writeJson(AGENTS_FILE, s)
+  agentsStore.set(s)
   return true
 }, () => false) // the agent runs; its transcript stays in the private window's memory
 
 ipcMain.handle('agents:deleteConversation', (_e, id: string) => {
   const s = readAgentsStore()
   s.conversations = s.conversations.filter(c => c.id !== id)
-  writeJson(AGENTS_FILE, s)
+  agentsStore.set(s)
   return true
 })
 
@@ -6220,7 +6240,7 @@ ipcMain.handle('agents:importAgents', async () => {
         skipped++
       }
     }
-    writeJson(AGENTS_FILE, store)
+    agentsStore.set(store)
     return { success: true, added, skipped, total: store.customAgents.length }
   } catch (e: any) {
     return { success: false, error: e.message }

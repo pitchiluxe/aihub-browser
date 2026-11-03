@@ -193,6 +193,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       ['brief', 'Morning Brief — what happened while you were away'],
       ['extensions', 'Extensions'], ['wifi', 'Free WiFi'], ['vpn', 'VPN / Proxy'], ['mail', 'Mail'],
       ['declutter', 'Site Declutter — hide distractions on websites'],
+      ['doctor', 'Agent Doctor — browser health, lag and stuck tabs'],
       ['dj', 'AIHub DJ — mix and play your music'],
       ['travel', 'Travel the World — explore any country'],
       ['flights-rentals', 'Flights & Rentals — compare trips and book'],

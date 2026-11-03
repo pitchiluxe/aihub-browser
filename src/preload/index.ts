@@ -650,6 +650,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     save: (request: unknown) => ipcRenderer.invoke('developer:save', request),
     delete: (id: string) => ipcRenderer.invoke('developer:delete', id),
   },
+  doctor: {
+    snapshot:   () => ipcRenderer.invoke('doctor:snapshot'),
+    restartTab: (windowId: number, tabId: string) => ipcRenderer.invoke('doctor:restartTab', windowId, tabId),
+  },
   grammar: {
     correct: (id: string) => ipcRenderer.invoke('grammar:correct', { id }),
     apply: (id: string, text: string) => ipcRenderer.invoke('grammar:apply', { id, text }),
