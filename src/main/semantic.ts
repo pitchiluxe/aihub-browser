@@ -1,5 +1,5 @@
 import { join } from 'path'
-import { createManagedJsonStore } from './jsonStore'
+import { createRecordLog } from './recordLog'
 
 /**
  * AIHub Browser — meaning-based search over pages you have actually read.
@@ -144,30 +144,28 @@ export function rankDocs(
 export type Embedder = (text: string) => Promise<number[] | null>
 
 export function createSemanticIndex(appDir: string, embed: Embedder, rank: (typeof rankDocs) | ((...args: Parameters<typeof rankDocs>) => Promise<ScoredDoc[]>) = rankDocs) {
-  const store = createManagedJsonStore<Record<string, Embedding>>(
-    join(appDir, 'semantic-index.json'), () => ({}), { debounceMs: 5000 },
-  )
+  // Append-only log (see recordLog.ts): each new embedding appends one ~4 KB
+  // line. As a single JSON object the 11 MB index was re-stringified on the
+  // main thread (~30 ms) on every debounced save while pages were indexing.
+  // semantic-index.json is the legacy format, imported once — and its old
+  // number-array vectors re-encoded on the way in — then removed.
+  const store = createRecordLog<Embedding>(join(appDir, 'semantic-index.ndjson'), {
+    legacy: {
+      file: join(appDir, 'semantic-index.json'),
+      read: raw => {
+        const all = JSON.parse(raw)
+        if (!all || typeof all !== 'object') return []
+        return Object.values(all as Record<string, Embedding>).map(e =>
+          !e.v && Array.isArray(e.vector)
+            ? { id: e.id, v: encodeVector(e.vector), textHash: e.textHash, ts: e.ts }
+            : e)
+      },
+    },
+  })
 
   // Decoded vectors, built once. Search used to rebuild this map from the raw
   // store on every query; decoding base64 per query would be worse still.
   let cache: Map<string, number[]> | null = null
-  let migrated = false
-
-  /** The live index, with any old number-array entries rewritten once. */
-  const index = (): Record<string, Embedding> => {
-    const current = store.get()
-    if (!migrated) {
-      migrated = true
-      if (Object.values(current).some(e => !e.v && Array.isArray(e.vector))) {
-        store.update(all => {
-          for (const e of Object.values(all)) {
-            if (!e.v && Array.isArray(e.vector)) { e.v = encodeVector(e.vector); delete e.vector }
-          }
-        })
-      }
-    }
-    return store.get()
-  }
 
   // One embedding at a time: the point is to be invisible in the background,
   // not to saturate the machine's GPU while the user is browsing.
@@ -182,7 +180,7 @@ export function createSemanticIndex(appDir: string, embed: Embedder, rank: (type
         const doc = queue.shift()!
         const input = embeddingInput(doc)
         const textHash = hashText(input)
-        const existing = index()[doc.id]
+        const existing = store.get(doc.id)
         if (existing && existing.textHash === textHash) continue
         const vector = await embed(input)
         if (!vector?.length) {
@@ -191,7 +189,7 @@ export function createSemanticIndex(appDir: string, embed: Embedder, rank: (type
           queue.length = 0
           break
         }
-        store.update(all => { all[doc.id] = { id: doc.id, v: encodeVector(vector), textHash, ts: Date.now() } })
+        store.put({ id: doc.id, v: encodeVector(vector), textHash, ts: Date.now() })
         cache?.set(doc.id, vector)
       }
     } catch {
@@ -215,23 +213,18 @@ export function createSemanticIndex(appDir: string, embed: Embedder, rank: (type
     vectors(): Map<string, number[]> {
       if (!cache) {
         cache = new Map()
-        for (const entry of Object.values(index())) cache.set(entry.id, decodeVector(entry))
+        for (const entry of store.all()) cache.set(entry.id, decodeVector(entry))
       }
       return cache
     },
 
     /** Drop vectors whose documents no longer exist. */
     prune(liveIds: Set<string>) {
-      // Migrate first: a save of the legacy number arrays is ~4x the size and
-      // stringify time (37 MB, ~0.4 s of frozen main thread on a real profile).
-      index()
-      store.update(all => {
-        for (const id of Object.keys(all)) if (!liveIds.has(id)) { delete all[id]; cache?.delete(id) }
-      })
+      for (const { id } of [...store.all()]) if (!liveIds.has(id)) { store.remove(id); cache?.delete(id) }
     },
 
-    /** Write pending changes now. */
-    flush() { store.flush() },
+    /** Resolves once background file maintenance has finished (every change is already on disk). */
+    idle() { return store.idle() },
 
     async search(query: string, docs: SearchDoc[], limit = 60): Promise<{ results: ScoredDoc[]; semantic: boolean }> {
       const trimmed = String(query || '').trim()
@@ -243,7 +236,7 @@ export function createSemanticIndex(appDir: string, embed: Embedder, rank: (type
     },
 
     stats() {
-      return { indexed: Object.keys(index()).length, queued: queue.length }
+      return { indexed: store.size(), queued: queue.length }
     },
   }
 }

@@ -166,8 +166,8 @@ describe('createSemanticIndex', () => {
     const index = createSemanticIndex(dir, async () => vec)
     index.index(doc('a', 'A', 'x'))
     await wait(30)
-    index.flush()
-    const raw = fs.readFileSync(join(dir, 'semantic-index.json'), 'utf-8')
+    await index.idle()
+    const raw = fs.readFileSync(join(dir, 'semantic-index.ndjson'), 'utf-8')
     expect(raw).not.toContain('"vector":[')
     // 768 floats as JSON text is ~14 KB; Float32 base64 is ~4 KB.
     expect(raw.length).toBeLessThan(5000)
@@ -182,8 +182,29 @@ describe('createSemanticIndex', () => {
     }))
     const index = createSemanticIndex(dir, async () => null)
     expect(index.vectors().get('old')).toEqual([0.5, 0.25, 0])
-    index.flush()
-    expect(fs.readFileSync(join(dir, 'semantic-index.json'), 'utf-8')).not.toContain('"vector":[')
+  })
+
+  it('writes the migrated index as a log and removes the legacy file', async () => {
+    fs.writeFileSync(join(dir, 'semantic-index.json'), JSON.stringify({
+      old: { id: 'old', vector: [0.5, 0.25, 0], textHash: 'h', ts: 1 },
+    }))
+    const index = createSemanticIndex(dir, async () => null)
+    expect(index.stats().indexed).toBe(1)
+    await index.idle()
+    expect(fs.existsSync(join(dir, 'semantic-index.json'))).toBe(false)
+    const raw = fs.readFileSync(join(dir, 'semantic-index.ndjson'), 'utf-8')
+    expect(raw).not.toContain('"vector":[')
+    expect(createSemanticIndex(dir, async () => null).vectors().get('old')).toEqual([0.5, 0.25, 0])
+  })
+
+  it('keeps pruning across a restart', async () => {
+    const index = createSemanticIndex(dir, async () => [1, 0, 0])
+    index.index(doc('a', 'A', 'x'))
+    index.index(doc('b', 'B', 'y'))
+    await wait(40)
+    index.prune(new Set(['a']))
+    await index.idle()
+    expect([...createSemanticIndex(dir, async () => null).vectors().keys()]).toEqual(['a'])
   })
 
   it('prunes vectors for documents that no longer exist', async () => {
@@ -199,17 +220,18 @@ describe('createSemanticIndex', () => {
 })
 
 describe('createSemanticIndex — legacy number-array files', () => {
-  it('prune() never rewrites the bulky legacy format (live profile: 37 MB rewritten on every save)', () => {
+  it('prune() never rewrites the bulky legacy format (live profile: 37 MB rewritten on every save)', async () => {
     const dir = fs.mkdtempSync(join(os.tmpdir(), 'aihub-sem-legacy-'))
     const legacy = { a: { id: 'a', vector: [0.5, -0.25, 1], textHash: 'h', ts: 1 }, b: { id: 'b', vector: [1, 0, 0], textHash: 'h', ts: 1 } }
     fs.writeFileSync(join(dir, 'semantic-index.json'), JSON.stringify(legacy))
     const index = createSemanticIndex(dir, async () => null)
     index.prune(new Set(['a']))
-    index.flush()
-    const saved = JSON.parse(fs.readFileSync(join(dir, 'semantic-index.json'), 'utf8'))
-    expect(Object.keys(saved)).toEqual(['a'])
-    expect(saved.a.vector).toBeUndefined()
-    expect(typeof saved.a.v).toBe('string')
+    await index.idle()
+    const saved = createSemanticIndex(dir, async () => null)
+    expect([...saved.vectors().keys()]).toEqual(['a'])
+    const raw = fs.readFileSync(join(dir, 'semantic-index.ndjson'), 'utf8')
+    expect(raw).not.toContain('"vector"')
+    expect(raw).toContain('"v":"')
     expect(index.vectors().get('a')).toEqual([0.5, -0.25, 1])
   })
 })

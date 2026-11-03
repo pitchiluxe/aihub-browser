@@ -52,7 +52,7 @@ import {
   routeGenerate, selectOllamaModel, summarizeOpenRouterSkips,
   type RoutingSettings, type OpenRouterFailure,
 } from './aiRouting'
-import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
+import { createManagedJsonStore, flushAllJsonStores, type JsonStore } from './jsonStore'
 import { createRecordLog } from './recordLog'
 import { createSessionManager, type SessionTab } from './sessions'
 import { createSemanticIndex, type SearchDoc } from './semantic'
@@ -226,20 +226,23 @@ function seedPinnedBookmarks(d: any): boolean {
 }
 
 function ensureDir() { if (!fs.existsSync(APP_DIR)) fs.mkdirSync(APP_DIR, { recursive: true }) }
-function readJson(f: string, fb: any): any { try { return JSON.parse(fs.readFileSync(f, 'utf-8')) } catch { return fb } }
-// Write through a temp file and rename over the target: rename is atomic, so a
-// crash or power cut mid-write leaves the previous file intact instead of a
-// truncated one. Plain writeFileSync could destroy the user's bookmarks and
-// settings at the moment it was trying to save them.
+// writeJson is write-behind: each file gets a managed JsonStore on its first
+// write, so the stringify and the disk write happen on a debounce, off the IPC
+// path that triggered them (they used to be a synchronous, pretty-printed
+// write per user action). Writes stay atomic (temp file + rename) and are
+// flushed synchronously on before-quit with the other stores.
+const writeBehind = new Map<string, JsonStore<any>>()
+function readJson(f: string, fb: any): any {
+  // A value not yet on disk is the truth. Cloned, so a caller that mutates
+  // what it read without writing it back changes nothing — as with a parse.
+  const pending = writeBehind.get(f)
+  if (pending) return structuredClone(pending.get())
+  try { return JSON.parse(fs.readFileSync(f, 'utf-8')) } catch { return fb }
+}
 function writeJson(f: string, d: any) {
-  const tmp = `${f}.${process.pid}.tmp`
-  try {
-    ensureDir()
-    fs.writeFileSync(tmp, JSON.stringify(d, null, 2))
-    fs.renameSync(tmp, f)
-  } catch {
-    try { fs.unlinkSync(tmp) } catch {}
-  }
+  let store = writeBehind.get(f)
+  if (!store) writeBehind.set(f, store = createManagedJsonStore<any>(f, () => null))
+  store.set(d)
 }
 
 // API keys are kept out of data.json — see secretStore.ts.

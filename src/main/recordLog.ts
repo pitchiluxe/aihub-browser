@@ -26,6 +26,9 @@ import { dirname } from 'path'
 export interface RecordLog<T extends { id: string }> {
   /** Every live record, newest first. Treat as read-only. */
   all(): readonly T[]
+  get(id: string): T | undefined
+  /** Number of live records. */
+  size(): number
   /** Insert, or replace the record with the same id; it becomes the newest. */
   put(record: T): void
   remove(id: string): void
@@ -180,6 +183,8 @@ export function createRecordLog<T extends { id: string }>(
       if (!newestFirst) newestFirst = [...load().values()].reverse()
       return newestFirst
     },
+    get(id) { return load().get(id) },
+    size() { return load().size },
     put(record) {
       const map = load()
       map.delete(record.id)
