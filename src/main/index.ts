@@ -242,7 +242,12 @@ function readJson(f: string, fb: any): any {
 function writeJson(f: string, d: any) {
   let store = writeBehind.get(f)
   if (!store) writeBehind.set(f, store = createManagedJsonStore<any>(f, () => null))
-  store.set(d)
+  // Snapshot now. Callers pass live objects (saveData passes _data and a
+  // shallow copy of it); holding the reference would write whatever those
+  // objects contain at flush time — e.g. a field saveData deliberately
+  // stripped (API keys) could reappear if it were ever nested and shared.
+  // The disk must get exactly what the caller handed over, when it did.
+  store.set(structuredClone(d))
 }
 
 // API keys are kept out of data.json — see secretStore.ts.
