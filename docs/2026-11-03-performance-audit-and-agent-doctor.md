@@ -56,7 +56,7 @@ The user's machine is slower than this one (CPU-only Ollama, i3-class), so multi
 | # | Finding | Where | Fix |
 |---|---|---|---|
 | 7 | Rewind store at its 3000 cap: every page dwell triggers a 71 ms `JSON.stringify` of 12 MB on the main thread (async write, sync serialize) | `index.ts:4591`, `4681–4697` | Append-only NDJSON log + compaction in a worker (code below) |
-| 8 | No automatic tab sleeping — only the manual "Sleep Tab" menu item. The safety predicate already exists | `index.ts:1599` (`tabSleepChecks`), `2969` | Idle-tab scheduler (code below) |
+| 8 | ~~No automatic tab sleeping~~ **Correction:** automatic sleep already exists — `services/tabSleepPolicy.ts` (idle limit scales 2 h → 5 min with tab count) driven from `App.tsx`, gated by main's `tabSleepChecks`. Missed in the first pass; no action needed. Section 2.5 is superseded | `tabSleepPolicy.ts`, `App.tsx:810` | — |
 | 9 | No hang detection for tabs: `render-process-gone` is handled (`1759`) but `unresponsive` is not | `index.ts` | Agent Doctor watches it (Phase 4) |
 | 10 | Bible save path does `existsSync` + `copyFileSync` + pretty `writeFileSync` + `renameSync` per mark | `index.ts:4885–4890`, `4956–4961`, `5119–5124` | Same store migration; backup on a timer, not per write |
 

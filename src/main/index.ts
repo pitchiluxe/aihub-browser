@@ -53,6 +53,7 @@ import {
   type RoutingSettings, type OpenRouterFailure,
 } from './aiRouting'
 import { createManagedJsonStore, flushAllJsonStores } from './jsonStore'
+import { createRecordLog } from './recordLog'
 import { createSessionManager, type SessionTab } from './sessions'
 import { createSemanticIndex, type SearchDoc } from './semantic'
 import { createNetGet, createNetPostJson, isWebUrl } from './netGet'
@@ -154,20 +155,12 @@ app.commandLine.appendSwitch('disk-cache-size', String(512 * 1024 * 1024))
 app.commandLine.appendSwitch('enable-features', 'ParallelDownloading')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('enable-zero-copy')
-// HTTP/2: multiplexes multiple requests over a single connection — cuts the
-// TCP handshakes and TLS round-trips dramatically, especially for pages with
-// dozens of assets across the same host.
-app.commandLine.appendSwitch('enable-http2')
 // QUIC (HTTP/3): even faster connection establishment — 0-RTT for known servers,
 // and handles packet loss better than TCP on lossy networks (mobile, spotty WiFi).
+// (HTTP/2 needs no switch: Chromium has enabled it by default for years. DNS
+// caching is configured through app.configureHostResolver — see applyDoh — not
+// 'host-resolver-rules', which only accepts MAP/EXCLUDE rules, never TTLs.)
 app.commandLine.appendSwitch('enable-quic')
-// Let Chromium size its renderer pool from available memory. A CPU-based
-// process cap forces unrelated tabs to compete inside a small pool.
-// Keep DNS entries cached much longer in Chromium's own resolver (30 min vs ~1 min
-// default). First visits still go through Node's async resolver (with system-fallback
-// fallback); this layer caches aggressively on top so repeated internal references
-// to the same host skip DNS entirely.
-app.commandLine.appendSwitch('host-resolver-rules', 'MaxTTL=1800, MinTTL=300')
 
 // ── Single-instance lock — prevent cache conflicts ─────────────────────────
 // If a second instance launches, focus the existing window instead.
@@ -4597,18 +4590,16 @@ ipcMain.handle('siteMemory:getAll', () => getSiteMemory())
 // actually dwelt on. Lets them find "that article I read last week" by what it
 // SAID, not just its URL. Stored locally, capped, never leaves the machine.
 interface RewindEntry { id: string; url: string; title: string; favicon: string; text: string; ts: number }
-const REWIND_FILE = join(APP_DIR, 'rewind.json')
-// Debounced, async, compact. This file reaches ~11 MB at the cap, and it was
-// pretty-printed and written synchronously on EVERY page dwell — 100 ms+ of
-// frozen main thread per page on a fast machine, seconds on a slow disk.
-const rewindStore = createManagedJsonStore<RewindEntry[]>(REWIND_FILE, () => [], { debounceMs: 4000 })
-function getRewind(): RewindEntry[] {
-  const v = rewindStore.get()
-  if (Array.isArray(v)) return v
-  rewindStore.set([])
-  return rewindStore.get()
-}
 const REWIND_CAP = 3000
+// Append-only log (see recordLog.ts). The archive reaches ~12 MB at the cap;
+// as one JSON file, every page dwell paid a 70 ms main-thread stringify of all
+// of it. Now a dwell appends one line. rewind.json is the legacy format,
+// imported once and removed after the log has been written in full.
+const rewindLog = createRecordLog<RewindEntry>(join(APP_DIR, 'rewind.ndjson'), {
+  cap: REWIND_CAP,
+  legacy: { file: join(APP_DIR, 'rewind.json'), read: raw => { const v = JSON.parse(raw); return Array.isArray(v) ? v : [] } },
+})
+function getRewind(): readonly RewindEntry[] { return rewindLog.all() }
 
 function rewindListItem(e: RewindEntry, snippet?: string) {
   return { id: e.id, url: e.url, title: e.title, favicon: e.favicon, ts: e.ts, snippet: snippet ?? e.text.slice(0, 180) }
@@ -4692,25 +4683,24 @@ ipcMain.handle('semantic:stats', () => ({ ...semanticIndex.stats(), total: getRe
 handlePersistent('rewind:add', (_e, entry: { url: string; title?: string; favicon?: string; text?: string }) => {
   try {
     if (!entry?.url || !/^https?:\/\//i.test(entry.url)) return { ok: false }
-    const store = getRewind()
     // Merge captures of the same URL within 30 min instead of piling up dupes.
-    const recent = store.find(e => e.url === entry.url && Date.now() - e.ts < 30 * 60 * 1000)
-    if (recent) {
-      if (entry.title) recent.title = entry.title
-      if (entry.text) recent.text = entry.text.slice(0, 6000)
-      recent.ts = Date.now()
-    } else {
-      store.unshift({
-        id: `rw-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        url: entry.url, title: entry.title || entry.url, favicon: entry.favicon || '',
-        text: (entry.text || '').slice(0, 6000), ts: Date.now(),
-      })
-      if (store.length > REWIND_CAP) store.length = REWIND_CAP
-    }
-    rewindStore.set(store)
+    const recent = getRewind().find(e => e.url === entry.url && Date.now() - e.ts < 30 * 60 * 1000)
+    // Records are replaced, never mutated: the log appends the new version.
+    const saved: RewindEntry = recent
+      ? {
+          ...recent,
+          ...(entry.title ? { title: entry.title } : {}),
+          ...(entry.text ? { text: entry.text.slice(0, 6000) } : {}),
+          ts: Date.now(),
+        }
+      : {
+          id: `rw-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          url: entry.url, title: entry.title || entry.url, favicon: entry.favicon || '',
+          text: (entry.text || '').slice(0, 6000), ts: Date.now(),
+        }
+    rewindLog.put(saved)
     // Queue the page for background embedding. No-op when Ollama is absent.
-    const saved = store.find(e => e.url === entry.url)
-    if (saved) semanticIndex.index({ id: saved.id, title: saved.title, url: saved.url, text: saved.text, ts: saved.ts })
+    semanticIndex.index({ id: saved.id, title: saved.title, url: saved.url, text: saved.text, ts: saved.ts })
     return { ok: true }
   } catch (e: any) { return { ok: false, error: e.message } }
 }, () => ({ ok: false, private: true }))
@@ -4742,12 +4732,11 @@ ipcMain.handle('rewind:stats', () => {
   return { count: store.length, oldest: store.length ? store[store.length - 1].ts : 0 }
 })
 ipcMain.handle('rewind:remove', (_e, id: string) => {
-  const store = getRewind(); const i = store.findIndex(e => e.id === id)
-  if (i !== -1) { store.splice(i, 1); rewindStore.set(store) }
+  rewindLog.remove(String(id))
   return { ok: true }
 })
 ipcMain.handle('rewind:clear', () => {
-  rewindStore.set([]); rewindStore.flush()
+  rewindLog.clear()
   semanticIndex.prune(new Set())
   return { ok: true }
 })
