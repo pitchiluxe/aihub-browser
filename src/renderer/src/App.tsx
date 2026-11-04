@@ -47,6 +47,7 @@ const ObsidianGraphView = lazy(() => import('./components/pages/ObsidianGraphVie
 const DjPage         = lazy(() => import('./components/dj/DjPage'))
 const FlightsRentalsPage = lazy(() => import('./components/travel/FlightsRentalsPage'))
 const TravelPage     = lazy(() => import('./components/travel/TravelPage'))
+const NewsPage       = lazy(() => import('./components/news/NewsPage'))
 const DeclutterPage = lazy(() => import('./components/pages/DeclutterPage'))
 const DoctorPage = lazy(() => import('./components/pages/DoctorPage'))
 const DeveloperPage = lazy(() => import('./components/pages/DeveloperPage'))
@@ -926,6 +927,21 @@ export default function App() {
           store.updateTab(tabId, { securityFindings: payload.findings })
           break
 
+        // The tab was opened by a Download button and never showed a page —
+        // its only navigation became the file. Close it (Chrome does) so the
+        // person lands back where they clicked, with the toolbar showing the
+        // transfer. The last tab stays: closing it would close the window.
+        case 'download-only': {
+          finishLoading(tabId)
+          const tab = store.tabs.find(t => t.id === tabId)
+          if (!tab) break
+          // Typed into the home page's search box: go back to home, as Chrome
+          // leaves the New Tab page in place.
+          if (tab.fromHome) store.updateTab(tabId, { url: 'home', title: 'New Tab', isHome: true, isLoading: false, pageType: 'browser', fromHome: false })
+          else if (store.tabs.length > 1) store.closeTab(tabId)
+          break
+        }
+
         case 'did-navigate': {
           const t = loadTimers.current.get(tabId)
           if (t) { clearTimeout(t); loadTimers.current.delete(tabId) }
@@ -1157,6 +1173,7 @@ export default function App() {
                     {tab.pageType === 'obsidian-graph' && <ObsidianGraphView onNavigate={navigate} />}
                     {tab.pageType === 'dj'         && <DjPage />}
                     {tab.pageType === 'travel'     && <TravelPage onNavigate={navigate} />}
+                    {tab.pageType === 'news'       && <NewsPage onOpen={url => useBrowserStore.getState().addTab(url, 'browser')} />}
                     {tab.pageType === 'flights-rentals' && <FlightsRentalsPage onNavigate={navigate} onOpenBooking={url => useBrowserStore.getState().addTab(url, 'browser')} />}
                   </Suspense>
                 </div>

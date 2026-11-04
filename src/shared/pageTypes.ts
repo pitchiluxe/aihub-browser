@@ -11,7 +11,7 @@ export type PageType =
   | 'settings' | 'history' | 'downloads' | 'wifi' | 'vpn' | 'research' | 'security' | 'developer' | 'games'
   | 'agents' | 'extensions' | 'mail' | 'notes' | 'manual' | 'rewind'
   | 'watch' | 'bible' | 'study' | 'community' | 'vault' | 'recall' | 'ledger' | 'brief'
-  | 'community-lists' | 'obsidian-graph' | 'dj' | 'travel' | 'flights-rentals' | 'declutter' | 'doctor'
+  | 'community-lists' | 'obsidian-graph' | 'dj' | 'travel' | 'flights-rentals' | 'declutter' | 'doctor' | 'news'
 
 /** Same set, plus the home page, which is a tab state rather than a page. */
 export type NavTarget = PageType | null

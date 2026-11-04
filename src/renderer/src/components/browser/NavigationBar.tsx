@@ -96,6 +96,22 @@ export default function NavigationBar({
 
   useEffect(() => { if (!isEditing) setUrlInput(displayUrl) }, [activeTab?.url, isEditing])
 
+  // Warm the connection while the address is still being typed, as Chrome's
+  // omnibox does: by the time Enter is pressed, DNS, TCP and TLS for that
+  // host are usually done — 100–300 ms off the first byte of the page. Waits
+  // for a pause in typing so half-typed hosts ("github.co") are rarely warmed.
+  useEffect(() => {
+    if (!isEditing) return
+    const typed = urlInput.trim()
+    if (!typed || typed === displayUrl || /\s/.test(typed) || !isUrl(typed)) return
+    const timer = setTimeout(() => {
+      const href = /^https?:\/\//i.test(typed) ? typed : `https://${typed}`
+      try { void window.electronAPI.tabView.preconnect?.(href) } catch {}
+    }, 300)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlInput, isEditing])
+
   // Smart-navigate any text: a URL goes straight there, anything else becomes
   // a Google search. Shared by Enter, Paste-and-Go, and the middle-click paste.
   const go = (raw: string) => {

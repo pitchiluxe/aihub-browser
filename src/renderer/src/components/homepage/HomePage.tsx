@@ -268,6 +268,7 @@ export default function HomePage({ onNavigate }: Props) {
           <FlightsRentalsButton isLight={isLight} onClick={() => onNavigate('aihub://flights-rentals')} />
           <FocusWidget isLight={isLight} />
           <TravelButton isLight={isLight} onClick={() => onNavigate('aihub://travel')} />
+          <NewsButton isLight={isLight} onClick={() => onNavigate('aihub://news')} />
         </motion.div>
 
         {/* ── Bookmarks ── */}
@@ -450,6 +451,26 @@ function TravelButton({ isLight, onClick }: { isLight: boolean; onClick: () => v
         ...panel, color: isLight ? '#3a4062' : '#bcc2e0', fontSize: 12.5, fontWeight: 600,
       }}>
       <Globe2 size={13} style={{ color: '#22d3ee' }} /> Travel the World
+    </button>
+  )
+}
+
+/** Opens the World News newsroom — a live red dot, because it is live. */
+function NewsButton({ isLight, onClick }: { isLight: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="no-drag" title="World News — every desk, every country, the kitchen"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 999, cursor: 'pointer',
+        background: isLight ? 'rgba(255,255,255,0.82)' : 'rgba(20,26,44,0.9)',
+        border: isLight ? '1px solid rgba(220,38,38,0.25)' : '1px solid rgba(248,113,113,0.28)',
+        color: isLight ? '#3a4062' : '#bcc2e0', fontSize: 12.5, fontWeight: 600,
+      }}>
+      <span style={{ position: 'relative', width: 7, height: 7 }}>
+        <span style={{ position: 'absolute', inset: 0, borderRadius: 99, background: '#ef4444' }} />
+        <span style={{ position: 'absolute', inset: 0, borderRadius: 99, background: '#ef4444', animation: 'aihubNewsPing 1.6s cubic-bezier(0,0,.2,1) infinite' }} />
+      </span>
+      <Newspaper size={13} style={{ color: '#f87171' }} /> News
+      <style>{'@keyframes aihubNewsPing{75%,100%{transform:scale(2.4);opacity:0}}'}</style>
     </button>
   )
 }

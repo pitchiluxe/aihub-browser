@@ -492,6 +492,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onProgress: (cb: (p: any) => void) => { const h = (_: any, p: any) => cb(p); ipcRenderer.on('fares:progress', h); return () => ipcRenderer.removeListener('fares:progress', h) },
     onFlexDay:  (cb: (d: any) => void) => { const h = (_: any, d: any) => cb(d); ipcRenderer.on('fares:flexDay', h); return () => ipcRenderer.removeListener('fares:flexDay', h) },
   },
+  /** aihub://news — multi-outlet desks, the country desk and the kitchen. */
+  news: {
+    desk:    (id: string)     => ipcRenderer.invoke('news:desk', id),
+    country: (code: string)   => ipcRenderer.invoke('news:country', code),
+    recipes: (count?: number) => ipcRenderer.invoke('news:recipes', count),
+    refresh: ()               => ipcRenderer.invoke('news:refresh'),
+  },
   gospel: {
     /** Gospel music from YouTube. Omit the query for a random tradition. */
     search: (query?: string) => ipcRenderer.invoke('gospel:search', query),

@@ -196,6 +196,7 @@ export default function CommandPalette({ onNavigate, onOpenPage, onReadAloud, on
       ['doctor', 'Agent Doctor — browser health, lag and stuck tabs'],
       ['dj', 'AIHub DJ — mix and play your music'],
       ['travel', 'Travel the World — explore any country'],
+      ['news', 'World News — every desk, every country, the kitchen'],
       ['flights-rentals', 'Flights & Rentals — compare trips and book'],
       ['manual', 'User Manual'], ['settings', 'Settings'],
     ]

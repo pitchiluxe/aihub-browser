@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   extensionOf, kindOf, formatBytes, formatProgress, percentOf,
-  stateLabel, activeCount, formatWhen,
+  stateLabel, activeCount, formatWhen, overallPercent,
 } from './downloadDisplay'
 
 const dl = (over: Partial<any> = {}) => ({
@@ -107,5 +107,23 @@ describe('formatWhen', () => {
   })
   it('is empty when nothing was recorded', () => {
     expect(formatWhen(undefined, now)).toBe('')
+  })
+})
+
+describe('overallPercent', () => {
+  const row = (p: Partial<import('../store/browserStore').DownloadItem>) => ({
+    id: 'x', filename: 'a.zip', url: '', savePath: '', totalBytes: 0, receivedBytes: 0,
+    state: 'progressing', startedAt: 0, ...p,
+  })
+  it('is null with nothing measurable in flight', () => {
+    expect(overallPercent([])).toBeNull()
+    expect(overallPercent([row({ receivedBytes: 10 })])).toBeNull()
+    expect(overallPercent([row({ state: 'completed', totalBytes: 10, receivedBytes: 10 })])).toBeNull()
+  })
+  it('combines transfers with a known size', () => {
+    expect(overallPercent([
+      row({ totalBytes: 100, receivedBytes: 25 }),
+      row({ totalBytes: 100, receivedBytes: 75 }),
+    ])).toBe(50)
   })
 })

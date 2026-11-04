@@ -102,3 +102,20 @@ export function formatWhen(ts: number | undefined, now = Date.now()): string {
   if (days < 7) return `${days} d ago`
   return new Date(ts).toLocaleDateString()
 }
+
+/**
+ * Combined 0–100 progress of every transfer in flight, for the ring around
+ * the toolbar button. null when nothing is moving or no server sent a length
+ * (the ring then spins instead of inventing a fill).
+ */
+export function overallPercent(downloads: DownloadItem[]): number | null {
+  let received = 0
+  let total = 0
+  for (const d of downloads) {
+    if (d.state !== 'progressing' || !(d.totalBytes > 0)) continue
+    received += Math.min(d.receivedBytes, d.totalBytes)
+    total += d.totalBytes
+  }
+  if (total <= 0) return null
+  return Math.max(0, Math.min(100, (received / total) * 100))
+}

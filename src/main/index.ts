@@ -1,5 +1,5 @@
 import { app, BrowserWindow, WebContentsView, ipcMain, shell, nativeTheme, session, Menu, MenuItem, clipboard, dialog, Notification, desktopCapturer, safeStorage, webContents as electronWebContents } from 'electron'
-import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname, basename } from 'path'
+import { join, resolve as pathResolve, relative as pathRelative, isAbsolute as pathIsAbsolute, dirname, extname, basename, sep } from 'path'
 import zlib from 'zlib'
 import http from 'http'
 import https from 'https'
@@ -77,6 +77,8 @@ import {
 import { createIncognitoManager, canMoveBetweenWindows } from './incognito'
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
+import { isDownloadOnlyPage, taskbarProgress, uniqueSavePath } from './downloadSurface'
+import { registerNewsIpc } from './news/register'
 import { createVault } from './vault'
 import { extractPdfText, looksLikePdf } from './pdfText'
 import { registrableDomain } from '../shared/credentialGuard'
@@ -1880,8 +1882,17 @@ function configureContentSession(ses: Electron.Session, opts: { privateStats?: b
   // not be secure". Leaving main-frame headers untouched is what restores
   // Google login (regression: this used to strip every response).
   const STRIP_HEADERS = new Set(['x-frame-options', 'content-security-policy'])
-  ses.webRequest.onHeadersReceived((details, callback) => {
-    if (ses === session.fromPartition('persist:container-development')) {
+  // Every response routed through this hook waits on the main JS thread
+  // before Chromium may use it. Only iframe documents need rewriting, so the
+  // ordinary sessions ask for subFrame responses alone — images, scripts,
+  // fonts and XHR of every page no longer queue behind main-process work.
+  // The development container rewrites any response, so it still sees all.
+  const isDevContainer = ses === session.fromPartition('persist:container-development')
+  const headersFilter: Electron.WebRequestFilter = isDevContainer
+    ? { urls: ['<all_urls>'] }
+    : { urls: ['<all_urls>'], types: ['subFrame'] }
+  ses.webRequest.onHeadersReceived(headersFilter, (details, callback) => {
+    if (isDevContainer) {
       const adjusted = developmentHeaders(details.url, details.referrer, details.responseHeaders as Record<string, string[]> || {})
       if (adjusted) { callback({ responseHeaders: adjusted }); return }
     }
@@ -1949,23 +1960,70 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   // N listeners on one session → one download produced N entries. Guard with a
   // WeakSet so each unique Session is hooked exactly once.
   let dlSeq = 0
-  const handleDownload = (sess: Electron.Session, _e: any, item: Electron.DownloadItem) => {
+
+  // Transfers in flight, for the taskbar bar — Chrome shows download progress
+  // on the Windows taskbar button / macOS dock, so the person sees it even
+  // with the window behind something else.
+  const inFlight = new Map<string, Electron.DownloadItem>()
+  const refreshTaskbar = () => {
+    const value = taskbarProgress([...inFlight.values()].map(it => ({
+      receivedBytes: it.getReceivedBytes(), totalBytes: it.getTotalBytes(),
+    })))
+    for (const ctx of appWins.values()) {
+      try {
+        if (ctx.win.isDestroyed()) continue
+        if (value === 2) ctx.win.setProgressBar(2, { mode: 'indeterminate' })
+        else ctx.win.setProgressBar(value)
+      } catch {}
+    }
+  }
+
+  // A Download button wired as target=_blank / window.open leaves an empty tab
+  // or popup behind: its only navigation became the download. Close it, as
+  // Chrome does, so the click reads as "the file is coming" and not as a dead
+  // blank page. The DownloadItem belongs to the session, so it keeps going.
+  const closeDownloadOnlyPage = (wc: Electron.WebContents | undefined) => {
+    if (!wc || wc.isDestroyed()) return
+    let historyLength = 0
+    try { historyLength = wc.navigationHistory.length() } catch {}
+    if (!isDownloadOnlyPage(wc.getURL(), historyLength)) return
+    setTimeout(() => {
+      if (wc.isDestroyed()) return
+      for (const ctx of appWins.values()) {
+        for (const [tabId, view] of ctx.views) {
+          if (view.webContents === wc) { sendTabEvent(ctx, tabId, 'download-only'); return }
+        }
+      }
+      // A scripted popup (window.open with features) is its own window.
+      const popup = BrowserWindow.fromWebContents(wc)
+      if (popup && !appWins.has(wc.id) && !popup.isDestroyed()) popup.close()
+    }, 0)
+  }
+
+  const handleDownload = (sess: Electron.Session, _e: any, item: Electron.DownloadItem, sourceWc?: Electron.WebContents) => {
+    closeDownloadOnlyPage(sourceWc)
     // Classified by the session that started it, which is decided in main.
     const isPrivate = incognito.isIncognitoSession(sess)
     // File the download by type before the transfer starts — setSavePath is
     // only honoured while the item is still 'progressing'. Unrecognised types
     // keep the default location rather than disappearing into an "Other" bin.
-    if (getData().settings?.sortDownloads !== false) {
-      try {
-        const folder = subfolderFor(item.getFilename())
-        if (folder) {
-          const target = join(app.getPath('downloads'), folder)
-          fs.mkdirSync(target, { recursive: true })
-          item.setSavePath(join(target, item.getFilename()))
-        }
-      } catch {
-        // Permission denied or a read-only disk: let Chromium use its default.
-      }
+    //
+    // A save path is ALWAYS set, as Chrome does by default: without one,
+    // Electron opens a Save As dialog, and a click on "Download" looked like
+    // it did nothing while the transfer sat waiting behind that prompt. The
+    // name is made unique so a second "report.pdf" never overwrites the first.
+    try {
+      // getPath throws when Windows cannot resolve the Downloads known folder
+      // (redirected or broken profile); ~/Downloads is where Chrome falls back.
+      let root: string
+      try { root = app.getPath('downloads') } catch { root = join(os.homedir(), 'Downloads') }
+      const folder = getData().settings?.sortDownloads !== false ? subfolderFor(item.getFilename()) : null
+      const target = folder ? join(root, folder) : root
+      fs.mkdirSync(target, { recursive: true })
+      const inFlightPaths = new Set([...inFlight.values()].map(it => it.getSavePath()))
+      item.setSavePath(uniqueSavePath(target, item.getFilename(), p => inFlightPaths.has(p) || fs.existsSync(p), sep))
+    } catch {
+      // Permission denied or a read-only disk: let Chromium use its default.
     }
     const dl: any = {
       id: `dl-${Date.now()}-${++dlSeq}`, filename: item.getFilename(), url: item.getURL(),
@@ -1991,6 +2049,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
       for (const ctx of appWins.values()) if (!ctx.incognito) sendTo(ctx, 'download:update', dl)
     }
     if (isPrivate) incognito.trackActiveDownload(dl.id, () => { try { item.cancel() } catch {} })
+    inFlight.set(dl.id, item)
     // Progress ticks fire many times per second on fast links. The store
     // debounces the disk write, but the renderer broadcast and the array walk
     // are still per-call, so keep the throttle: state transitions and
@@ -2001,10 +2060,19 @@ function setupSharedApp(firstWin: BrowserWindow): void {
       const stateChanged = dl.state !== state
       dl.state = state
       const now = Date.now()
-      if (stateChanged || now - lastProgressWrite >= 500) { lastProgressWrite = now; persist() }
+      if (stateChanged || now - lastProgressWrite >= 500) { lastProgressWrite = now; persist(); refreshTaskbar() }
     })
     item.on('done', (_ev, state) => {
       if (isPrivate) incognito.settleDownload(dl.id)
+      inFlight.delete(dl.id)
+      refreshTaskbar()
+      // Flash the taskbar button once a file lands while the window is in
+      // the background — the "your download finished" nudge.
+      if (state === 'completed') {
+        for (const ctx of appWins.values()) {
+          try { if (!ctx.win.isDestroyed() && !ctx.win.isFocused()) ctx.win.flashFrame(true) } catch {}
+        }
+      }
       dl.state = state; dl.savePath = item.getSavePath()
       dl.completedAt = Date.now(); dl.receivedBytes = item.getReceivedBytes()
       if (state === 'completed') dl.security = { state: 'scanning', checkedAt: Date.now(), message: 'Queued for a Defender scan.' }
@@ -2016,13 +2084,14 @@ function setupSharedApp(firstWin: BrowserWindow): void {
       }
     })
     persist()
+    refreshTaskbar()
   }
 
   const hookedSessions = new WeakSet<Electron.Session>()
   const hookDownloadSession = (sess: Electron.Session) => {
     if (!sess || hookedSessions.has(sess)) return
     hookedSessions.add(sess)
-    sess.on('will-download', (e, item) => handleDownload(sess, e, item))
+    sess.on('will-download', (e, item, wc) => handleDownload(sess, e, item, wc))
   }
 
   // Attach to default session (covers webviews) + mainWindow session
@@ -2364,6 +2433,7 @@ app.whenReady().then(() => {
   registerMediaProtocol()
   registerEmulatorProtocol()
   registerDjIpc()
+  registerNewsIpc({ get: httpGet })
   registerScreenShareHandler()
   doctor = startDoctor({ windows: () => appWins.values(), isAppSender: e => !!ctxFromEvent(e) })
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
