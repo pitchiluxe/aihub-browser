@@ -54,7 +54,7 @@ describe('createAutoDownloadPolicy', () => {
     p.decide(1, 'a.com')
     expect(p.decide(2, 'a.com')).toBe('allow')
   })
-  it('remembers an allowance until the tab moves to another site', () => {
+  it('an Allow lasts until the tab leaves the site', () => {
     const p = createAutoDownloadPolicy()
     p.navigated(1, 'a.com')
     p.decide(1, 'a.com')
@@ -63,8 +63,18 @@ describe('createAutoDownloadPolicy', () => {
     expect(p.decide(1, 'a.com')).toBe('allow')
     p.navigated(1, 'b.com')
     p.navigated(1, 'a.com')
-    expect(p.decide(1, 'a.com')).toBe('allow')
     expect(p.decide(1, 'a.com')).toBe('hold')
+  })
+  it('bouncing between sites or through about:blank earns nothing back', () => {
+    const p = createAutoDownloadPolicy()
+    p.navigated(1, 'a.com'); expect(p.decide(1, 'a.com')).toBe('allow')
+    p.navigated(1, 'b.com'); expect(p.decide(1, 'b.com')).toBe('allow')
+    for (let i = 0; i < 3; i++) {
+      p.navigated(1, 'a.com'); expect(p.decide(1, 'a.com')).toBe('hold')
+      p.navigated(1, ''); p.navigated(1, 'b.com'); expect(p.decide(1, 'b.com')).toBe('hold')
+    }
+    p.userInput(1)
+    expect(p.decide(1, 'b.com')).toBe('allow')
   })
   it('a page reloading itself does not earn a fresh download', () => {
     const p = createAutoDownloadPolicy()

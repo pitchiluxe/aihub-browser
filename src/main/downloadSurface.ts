@@ -61,9 +61,11 @@ export function taskbarProgress(active: Iterable<TransferProgress>): number {
  *
  * The allowance belongs to the tab and its TOP-LEVEL site — never the origin
  * that fired the download, or every cross-origin iframe on a page would claim
- * its own free download. Moving to a different site starts the tab afresh; a
- * page reloading or navigating itself within its own site does not, so a
- * reload loop cannot mint free downloads either.
+ * its own free download. Because the state is per site, a site the tab has
+ * never shown starts with its one download, and navigation never restores a
+ * spent one: not a reload loop, not bouncing between two domains, not a hop
+ * through about:blank. Navigation only ever takes away — an Allow the person
+ * gave ends when the tab leaves that site.
  */
 export function createAutoDownloadPolicy() {
   const spent = new Set<string>()
@@ -77,10 +79,15 @@ export function createAutoDownloadPolicy() {
   }
   return {
     keyOf,
-    /** The tab committed a page on `site`. Only a change of site resets it. */
+    /**
+     * The tab committed a page on `site`. Leaving a site withdraws any Allow
+     * given for it; spent allowances are kept. Pages with no site
+     * (about:blank, data:) change nothing.
+     */
     navigated(tabKey: number, site: string) {
+      if (!site) return
       const prev = siteOfTab.get(tabKey)
-      if (prev !== undefined && prev !== site) clearTab(tabKey)
+      if (prev !== undefined && prev !== site) allowed.delete(keyOf(tabKey, prev))
       siteOfTab.set(tabKey, site)
     },
     /** Real input reached the tab: it may download one more file. */
