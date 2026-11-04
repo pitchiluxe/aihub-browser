@@ -77,7 +77,7 @@ import {
 import { createIncognitoManager, canMoveBetweenWindows } from './incognito'
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
-import { isDownloadOnlyPage, taskbarProgress, uniqueSavePath } from './downloadSurface'
+import { isDownloadOnlyPage, taskbarProgress, uniqueSavePath, createAutoDownloadPolicy } from './downloadSurface'
 import { registerNewsIpc } from './news/register'
 import { createVault } from './vault'
 import { extractPdfText, looksLikePdf } from './pdfText'
@@ -2000,33 +2000,55 @@ function setupSharedApp(firstWin: BrowserWindow): void {
     }, 0)
   }
 
-  const handleDownload = (sess: Electron.Session, _e: any, item: Electron.DownloadItem, sourceWc?: Electron.WebContents) => {
+  // Multiple automatic downloads (see createAutoDownloadPolicy). A held
+  // download is never started: will-download is prevented, so no byte reaches
+  // the disk — pausing was not enough, a small file finished before the pause
+  // landed. The row waits in the toolbar; Allow asks the same tab for the URL
+  // again, and that request reuses the row (reissue) instead of adding one.
+  const autoDownloads = createAutoDownloadPolicy()
+  const heldDownloads = new Map<string, { key: string; release: () => void; block: () => void }>()
+  const reissue = new Map<string, string>() // url → id of the held row it answers
+  const resetHooked = new WeakSet<Electron.WebContents>()
+  const watchTabForReset = (wc: Electron.WebContents | undefined) => {
+    if (!wc || wc.isDestroyed() || resetHooked.has(wc)) return
+    resetHooked.add(wc)
+    const id = wc.id
+    wc.on('did-navigate', () => autoDownloads.resetTab(id))
+    wc.once('destroyed', () => autoDownloads.resetTab(id))
+  }
+  ipcMain.handle('downloads:resolveHeld', (e, id: unknown, allow: unknown) => {
+    // Only the browser's own windows may answer — never a web page.
+    if (!ctxFromEvent(e)) return { ok: false }
+    const held = typeof id === 'string' ? heldDownloads.get(id) : undefined
+    if (!held) return { ok: false }
+    if (allow === true) autoDownloads.allow(held.key)
+    // One answer covers every file the same page is waiting to send.
+    for (const [hid, h] of [...heldDownloads]) {
+      if (h.key !== held.key) continue
+      heldDownloads.delete(hid)
+      if (allow === true) h.release()
+      else h.block()
+    }
+    return { ok: true }
+  })
+
+  const handleDownload = (sess: Electron.Session, e: Electron.Event, item: Electron.DownloadItem, sourceWc?: Electron.WebContents) => {
     closeDownloadOnlyPage(sourceWc)
+    const url = item.getURL()
+    let initiator = ''
+    try { initiator = item.getInitiatorOrigin() || new URL(url).origin } catch {}
+    const tabKey = sourceWc && !sourceWc.isDestroyed() ? sourceWc.id : -1
+    watchTabForReset(sourceWc)
+    let gesture = true
+    try { gesture = item.hasUserGesture() } catch {}
+    // A re-request the person already allowed skips the policy and takes over its row.
+    const reusedId = reissue.get(url)
+    if (reusedId) reissue.delete(url)
+    const hold = !reusedId && autoDownloads.decide(tabKey, initiator, gesture) === 'hold'
     // Classified by the session that started it, which is decided in main.
     const isPrivate = incognito.isIncognitoSession(sess)
-    // File the download by type before the transfer starts — setSavePath is
-    // only honoured while the item is still 'progressing'. Unrecognised types
-    // keep the default location rather than disappearing into an "Other" bin.
-    //
-    // A save path is ALWAYS set, as Chrome does by default: without one,
-    // Electron opens a Save As dialog, and a click on "Download" looked like
-    // it did nothing while the transfer sat waiting behind that prompt. The
-    // name is made unique so a second "report.pdf" never overwrites the first.
-    try {
-      // getPath throws when Windows cannot resolve the Downloads known folder
-      // (redirected or broken profile); ~/Downloads is where Chrome falls back.
-      let root: string
-      try { root = app.getPath('downloads') } catch { root = join(os.homedir(), 'Downloads') }
-      const folder = getData().settings?.sortDownloads !== false ? subfolderFor(item.getFilename()) : null
-      const target = folder ? join(root, folder) : root
-      fs.mkdirSync(target, { recursive: true })
-      const inFlightPaths = new Set([...inFlight.values()].map(it => it.getSavePath()))
-      item.setSavePath(uniqueSavePath(target, item.getFilename(), p => inFlightPaths.has(p) || fs.existsSync(p), sep))
-    } catch {
-      // Permission denied or a read-only disk: let Chromium use its default.
-    }
     const dl: any = {
-      id: `dl-${Date.now()}-${++dlSeq}`, filename: item.getFilename(), url: item.getURL(),
+      id: reusedId || `dl-${Date.now()}-${++dlSeq}`, filename: item.getFilename(), url,
       savePath: '', totalBytes: item.getTotalBytes(), receivedBytes: 0,
       state: 'progressing', startedAt: Date.now(), completedAt: null,
     }
@@ -2048,7 +2070,57 @@ function setupSharedApp(firstWin: BrowserWindow): void {
       })
       for (const ctx of appWins.values()) if (!ctx.incognito) sendTo(ctx, 'download:update', dl)
     }
+
+    if (hold) {
+      e.preventDefault()
+      dl.state = 'held'
+      dl.heldOrigin = initiator
+      liveDownloadIds.add(dl.id)
+      heldDownloads.set(dl.id, {
+        key: autoDownloads.keyOf(tabKey, initiator),
+        release: () => {
+          reissue.set(url, dl.id)
+          try {
+            if (sourceWc && !sourceWc.isDestroyed()) sourceWc.downloadURL(url)
+            else sess.downloadURL(url)
+          } catch {
+            reissue.delete(url)
+            liveDownloadIds.delete(dl.id)
+            dl.state = 'interrupted'; delete dl.heldOrigin; persist()
+          }
+        },
+        block: () => {
+          liveDownloadIds.delete(dl.id)
+          dl.state = 'cancelled'; dl.completedAt = Date.now(); delete dl.heldOrigin
+          persist()
+        },
+      })
+      persist()
+      return
+    }
+    // File the download by type before the transfer starts — setSavePath is
+    // only honoured while the item is still 'progressing'. Unrecognised types
+    // keep the default location rather than disappearing into an "Other" bin.
+    //
+    // A save path is ALWAYS set, as Chrome does by default: without one,
+    // Electron opens a Save As dialog, and a click on "Download" looked like
+    // it did nothing while the transfer sat waiting behind that prompt. The
+    // name is made unique so a second "report.pdf" never overwrites the first.
+    try {
+      // getPath throws when Windows cannot resolve the Downloads known folder
+      // (redirected or broken profile); ~/Downloads is where Chrome falls back.
+      let root: string
+      try { root = app.getPath('downloads') } catch { root = join(os.homedir(), 'Downloads') }
+      const folder = getData().settings?.sortDownloads !== false ? subfolderFor(item.getFilename()) : null
+      const target = folder ? join(root, folder) : root
+      fs.mkdirSync(target, { recursive: true })
+      const inFlightPaths = new Set([...inFlight.values()].map(it => it.getSavePath()))
+      item.setSavePath(uniqueSavePath(target, item.getFilename(), p => inFlightPaths.has(p) || fs.existsSync(p), sep))
+    } catch {
+      // Permission denied or a read-only disk: let Chromium use its default.
+    }
     if (isPrivate) incognito.trackActiveDownload(dl.id, () => { try { item.cancel() } catch {} })
+    liveDownloadIds.add(dl.id)
     inFlight.set(dl.id, item)
     // Progress ticks fire many times per second on fast links. The store
     // debounces the disk write, but the renderer broadcast and the array walk
@@ -2065,6 +2137,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
     item.on('done', (_ev, state) => {
       if (isPrivate) incognito.settleDownload(dl.id)
       inFlight.delete(dl.id)
+      liveDownloadIds.delete(dl.id)
       refreshTaskbar()
       // Flash the taskbar button once a file lands while the window is in
       // the background — the "your download finished" nudge.
@@ -2091,7 +2164,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   const hookDownloadSession = (sess: Electron.Session) => {
     if (!sess || hookedSessions.has(sess)) return
     hookedSessions.add(sess)
-    sess.on('will-download', (e, item, wc) => handleDownload(sess, e, item, wc))
+    sess.on('will-download', (e, item, wc) => handleDownload(sess, e, item, wc ?? undefined))
   }
 
   // Attach to default session (covers webviews) + mainWindow session
@@ -4073,6 +4146,8 @@ const browserSecurity = registerSecurityIpc({
   aiConfig: () => ({ base: getAIConfig().olBase, model: getRoutingSettings().ollamaModel }),
 })
 
+/** Ids of downloads with a live DownloadItem in this app session. */
+const liveDownloadIds = new Set<string>()
 ipcMain.handle('downloads:getAll',       (e) => {
   // A private window lists the downloads of the private session and nothing
   // else; the persistent list is never shown to it, nor its rows to others.
@@ -4081,11 +4156,16 @@ ipcMain.handle('downloads:getAll',       (e) => {
   // entry is still marked progressing on read, its download died with a previous
   // app session (crash / quit mid-transfer) and will never emit 'done' — left
   // as-is it shows a spinner that buffers forever on the Downloads page. Settle
-  // these stale rows to 'interrupted' once, on load.
+  // these stale rows to 'interrupted'. Only rows with no live item: this is
+  // also read mid-session (Clear, the Downloads page), and settling a transfer
+  // that is still running — or one paused waiting for the person's OK, which
+  // sends no further updates to correct it — would show it as failed.
   const raw = downloadsStore.get()
   let changed = false
   for (const dl of raw) {
-    if (dl.state === 'progressing') { dl.state = 'interrupted'; changed = true }
+    if ((dl.state === 'progressing' || dl.state === 'held') && !liveDownloadIds.has(dl.id)) {
+      dl.state = 'interrupted'; delete dl.heldOrigin; changed = true
+    }
   }
   // Legacy duplicate cleanup: stacked will-download listeners (fixed) used to
   // record one real download as N entries — same url+filename started within

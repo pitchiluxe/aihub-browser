@@ -47,6 +47,50 @@ export function taskbarProgress(active: Iterable<TransferProgress>): number {
 }
 
 /**
+ * Chrome's "this site is trying to download multiple files" rule.
+ *
+ * One click buys one download. A page may also start ONE download on its
+ * own (the "your download will begin shortly" pattern). Anything beyond
+ * that — a second automatic download, or a burst of files fired from a
+ * single click — is held until the person allows it, so a hostile page
+ * cannot drop a stream of files on disk. Chromium reports a script-driven
+ * click as a gesture for every file it fires, so gestures arriving within
+ * BURST_MS of an allowed download count as the same click. The allowance is
+ * per tab and per origin, and resets when the tab navigates.
+ */
+export const BURST_MS = 1000
+export function createAutoDownloadPolicy() {
+  const usedAutomatic = new Set<string>()
+  const lastAllowedAt = new Map<string, number>()
+  const allowed = new Set<string>()
+  const keyOf = (tabKey: number, origin: string) => `${tabKey}|${origin}`
+  return {
+    keyOf,
+    decide(tabKey: number, origin: string, userGesture: boolean, now = Date.now()): 'allow' | 'hold' {
+      const key = keyOf(tabKey, origin)
+      if (allowed.has(key)) return 'allow'
+      const last = lastAllowedAt.get(key)
+      if (userGesture) {
+        if (last !== undefined && now - last < BURST_MS) return 'hold'
+        lastAllowedAt.set(key, now)
+        return 'allow'
+      }
+      if (!usedAutomatic.has(key)) { usedAutomatic.add(key); lastAllowedAt.set(key, now); return 'allow' }
+      return 'hold'
+    },
+    /** The person said yes: this tab may keep downloading from this origin. */
+    allow(key: string) { allowed.add(key) },
+    /** The tab navigated or closed: its page gets a fresh allowance. */
+    resetTab(tabKey: number) {
+      const prefix = `${tabKey}|`
+      for (const k of [...usedAutomatic]) if (k.startsWith(prefix)) usedAutomatic.delete(k)
+      for (const k of [...lastAllowedAt.keys()]) if (k.startsWith(prefix)) lastAllowedAt.delete(k)
+      for (const k of [...allowed]) if (k.startsWith(prefix)) allowed.delete(k)
+    },
+  }
+}
+
+/**
  * A save path that does not overwrite anything already on disk:
  * "report.pdf" → "report (1).pdf" → "report (2).pdf", as Chrome names them.
  * `taken` is consulted for each candidate (fs.existsSync in production) and

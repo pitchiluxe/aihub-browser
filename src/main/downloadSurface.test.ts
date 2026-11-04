@@ -33,7 +33,37 @@ describe('taskbarProgress', () => {
   })
 })
 
-import { uniqueSavePath } from './downloadSurface'
+import { uniqueSavePath, createAutoDownloadPolicy } from './downloadSurface'
+
+describe('createAutoDownloadPolicy', () => {
+  it('allows separate clicks, one download each', () => {
+    const p = createAutoDownloadPolicy()
+    for (let i = 0; i < 5; i++) expect(p.decide(1, 'https://a', true, i * 5000)).toBe('allow')
+  })
+  it('holds the rest of a burst fired from one click', () => {
+    const p = createAutoDownloadPolicy()
+    expect(p.decide(1, 'https://a', true, 0)).toBe('allow')
+    expect(p.decide(1, 'https://a', true, 10)).toBe('hold')
+    expect(p.decide(1, 'https://a', true, 20)).toBe('hold')
+  })
+  it('allows one automatic download, then holds', () => {
+    const p = createAutoDownloadPolicy()
+    expect(p.decide(1, 'https://a', false, 0)).toBe('allow')
+    expect(p.decide(1, 'https://a', false, 9000)).toBe('hold')
+    expect(p.decide(1, 'https://b', false, 9000)).toBe('allow')
+    expect(p.decide(2, 'https://a', false, 9000)).toBe('allow')
+  })
+  it('remembers an allowance until the tab navigates', () => {
+    const p = createAutoDownloadPolicy()
+    p.decide(1, 'https://a', false, 0)
+    p.allow(p.keyOf(1, 'https://a'))
+    expect(p.decide(1, 'https://a', false, 5)).toBe('allow')
+    expect(p.decide(1, 'https://a', true, 6)).toBe('allow')
+    p.resetTab(1)
+    expect(p.decide(1, 'https://a', false, 9000)).toBe('allow')
+    expect(p.decide(1, 'https://a', false, 9001)).toBe('hold')
+  })
+})
 describe('uniqueSavePath', () => {
   it('keeps a free name', () => {
     expect(uniqueSavePath('C:/dl', 'a.pdf', () => false)).toBe('C:/dl/a.pdf')

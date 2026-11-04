@@ -11,7 +11,7 @@ export interface HistoryItem { id: string; url: string; title: string; favicon?:
 export interface DownloadItem { id: string; filename: string; url: string; savePath: string; totalBytes: number; receivedBytes: number; state: string; startedAt: number; completedAt?: number }
 
 export interface Tab { securityFindings?: SecurityFinding[] }
-export interface DownloadItem { security?: FileScan }
+export interface DownloadItem { security?: FileScan; /** Set while state is 'held': the site that started it without a click. */ heldOrigin?: string }
 
 interface BrowserState {
   // Bookmarks

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Download, FolderOpen, FileText, Image as ImageIcon, Film, Music, Archive,
-  Package, Code2, CheckCircle2, XCircle, Loader2, Trash2, ExternalLink,
+  Package, Code2, CheckCircle2, XCircle, Loader2, Trash2, ExternalLink, ShieldAlert,
   type LucideIcon,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -15,6 +15,14 @@ import {
 } from '../../services/downloadDisplay'
 
 const RING_LEN = 2 * Math.PI * 14
+
+function hostLabel(originOrUrl: string): string {
+  try { return new URL(originOrUrl).hostname.replace(/^www\./, '') || 'This site' } catch { return 'This site' }
+}
+
+function resolveHeld(id: string, allow: boolean) {
+  return window.electronAPI.heldDownloads?.resolve?.(id, allow)
+}
 
 /** How long a finished file stays named in the toolbar before the pill folds. */
 const LINGER_MS = 4500
@@ -47,7 +55,10 @@ function useDownloadSpotlight(downloads: DownloadItem[]) {
       seen.current.set(d.id, d.state)
       const fresh = (d.startedAt || 0) >= mountedAt.current - 1000
       if (!fresh) continue
-      if (prev === undefined) started = started && started.startedAt > d.startedAt ? started : d
+      // Held downloads are announced by their own banner; they enter the
+      // spotlight once the person lets them through.
+      const begins = (prev === undefined && d.state !== 'held') || (prev === 'held' && d.state === 'progressing')
+      if (begins) started = started && started.startedAt > d.startedAt ? started : d
       if (d.state === 'completed' && prev !== 'completed') landed = true
     }
     if (started) {
@@ -108,7 +119,15 @@ const DOWNLOAD_CSS = `
 .aihub-dl-pill-meta{font-variant-numeric:tabular-nums;opacity:.9}
 .aihub-dl-pill-bar{position:absolute;left:0;bottom:0;height:2px;background:rgb(var(--ds-accent));transition:width .45s ease}
 .aihub-dl-pill-bar[data-indeterminate="true"]{animation:aihubDlSlide 1.2s ease-in-out infinite}
+@keyframes aihubDlHeldIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:none}}
+.aihub-dl-held{display:flex;align-items:center;gap:7px;height:28px;padding:0 4px 0 10px;border-radius:14px;white-space:nowrap;
+  background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);color:#fcd34d;font-size:11px;animation:aihubDlHeldIn .3s ease both}
+.aihub-dl-held-text{max-width:260px;overflow:hidden;text-overflow:ellipsis;color:rgb(var(--ds-text-2))}
+.aihub-dl-held-allow,.aihub-dl-held-block{height:22px;padding:0 9px;border-radius:11px;font-size:10.5px;font-weight:700;cursor:pointer;border:none}
+.aihub-dl-held-allow{background:#f59e0b;color:#1c1204}
+.aihub-dl-held-block{background:transparent;color:rgb(var(--ds-text-3));border:1px solid var(--ds-border-sm)}
 @media (prefers-reduced-motion: reduce){
+  .aihub-dl-held{animation:none}
   .aihub-dl-drop,.aihub-dl-burst,.aihub-dl-ring-spin,.aihub-dl-pill-bar{animation:none!important}
   .aihub-dl-pill{transition:none}
 }
@@ -193,9 +212,26 @@ export default function DownloadsButton() {
   const spotDone = spotlight?.state === 'completed'
   const spotFailed = spotlight?.state === 'cancelled' || spotlight?.state === 'interrupted'
 
+  // Downloads a page started on its own after its first one — the person
+  // decides. One answer covers every file that page is waiting to send.
+  const held = useMemo(() => downloads.filter(d => d.state === 'held'), [downloads])
+  const heldFirst = held[0]
+  const heldGroup = heldFirst ? held.filter(d => d.heldOrigin === heldFirst.heldOrigin) : []
+  const heldHost = heldFirst ? hostLabel(heldFirst.heldOrigin || heldFirst.url) : ''
+
   return (
     <>
       <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {heldFirst && (
+          <div className="aihub-dl-held" role="alert" title={heldGroup.map(d => d.filename).join('\n')}>
+            <ShieldAlert size={13} style={{ flexShrink: 0 }} />
+            <span className="aihub-dl-held-text">
+              <b>{heldHost}</b> wants to download {heldGroup.length} more {heldGroup.length === 1 ? 'file' : 'files'}
+            </span>
+            <button className="aihub-dl-held-allow" onClick={() => void resolveHeld(heldFirst.id, true)}>Allow</button>
+            <button className="aihub-dl-held-block" onClick={() => void resolveHeld(heldFirst.id, false)}>Block</button>
+          </div>
+        )}
         {/* The file that just started, named in the toolbar: what Chrome's
             download bubble does. Lives in the toolbar strip because anything
             drawn lower would sit under the page's view and never be seen. */}
@@ -423,6 +459,12 @@ function DownloadRow({ dl }: { dl: DownloadItem }) {
         </div>
       </div>
 
+      {dl.state === 'held' && (
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <button className="aihub-dl-held-allow" onClick={() => void resolveHeld(dl.id, true)}>Allow</button>
+          <button className="aihub-dl-held-block" onClick={() => void resolveHeld(dl.id, false)}>Block</button>
+        </div>
+      )}
       {done && <DownloadSecurity scan={dl.security} />}
       {done && dl.savePath && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>

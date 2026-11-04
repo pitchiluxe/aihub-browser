@@ -77,6 +77,7 @@ export function stateLabel(state: string): string {
     case 'completed':   return 'Complete'
     case 'cancelled':   return 'Cancelled'
     case 'interrupted': return 'Interrupted'
+    case 'held':        return 'Waiting for your OK'
     default:            return 'Downloading…'
   }
 }
