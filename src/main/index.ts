@@ -2523,7 +2523,11 @@ app.whenReady().then(() => {
   registerMediaProtocol()
   registerEmulatorProtocol()
   registerDjIpc()
-  registerNewsIpc({ get: httpGet, appDir: APP_DIR, userAgent: CHROME_UA })
+  registerNewsIpc({
+    get: httpGet, appDir: APP_DIR, userAgent: CHROME_UA,
+    // The browser window's own top frame only — not a tab, not an iframe.
+    isAppSender: e => { const ctx = ctxFromEvent(e); return !!ctx && e.senderFrame === ctx.win.webContents.mainFrame },
+  })
   registerScreenShareHandler()
   doctor = startDoctor({ windows: () => appWins.values(), isAppSender: e => !!ctxFromEvent(e) })
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')

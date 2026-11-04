@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseFeed, mergeStories, toPlainText, youtubeIdOf, normalizeMeal, decodeEntities, DESK_FEEDS, COUNTRIES, hdImage, extractShareImage, canResolveImage, countryTerms, mentionsAny, countryNewsroomFeeds, chooseDeskResult } from './news'
+import { parseFeed, mergeStories, toPlainText, youtubeIdOf, normalizeMeal, decodeEntities, DESK_FEEDS, COUNTRIES, hdImage, extractShareImage, canResolveImage, countryTerms, mentionsAny, countryNewsroomFeeds, chooseDeskResult, isPublicAddress } from './news'
 
 const RSS = `<?xml version="1.0"?><rss xmlns:media="http://search.yahoo.com/mrss/"><channel>
 <item><title><![CDATA[Polls open across the country]]></title><link>https://example.com/a</link>
@@ -104,6 +104,24 @@ describe('pictures', () => {
     for (const bad of ['http://localhost/x', 'http://127.0.0.1/x', 'http://10.0.0.5/x', 'http://[::1]/x', 'https://a.com:8443/x', 'file:///c/x', 'http://router.local/x', 'http://intranet/x']) {
       expect(canResolveImage(bad)).toBe(false)
     }
+  })
+})
+
+describe('isPublicAddress', () => {
+  it('accepts public addresses', () => {
+    for (const ip of ['8.8.8.8', '151.101.1.69', '2606:4700::6810:84e5', '2a00:1450:4001:82a::200e']) expect(isPublicAddress(ip)).toBe(true)
+  })
+  it('refuses this machine and private networks, in every spelling', () => {
+    for (const ip of [
+      '127.0.0.1', '127.8.8.8', '0.0.0.0', '10.1.2.3', '172.16.0.1', '172.31.255.255', '192.168.1.1',
+      '169.254.169.254', '100.64.0.1', '100.127.255.255', '224.0.0.1', '255.255.255.255', '198.18.0.1',
+      '::1', '::', 'fe80::1', 'fc00::1', 'fd12:3456::1', 'ff02::1', 'fec0::1',
+      '::ffff:127.0.0.1', '::ffff:10.0.0.1', '::ffff:0:192.168.1.1', '64:ff9b::7f00:1', '2002:7f00:1::', '[::1]', 'fe80::1%eth0', '', 'not-an-ip',
+    ]) expect(isPublicAddress(ip), ip).toBe(false)
+  })
+  it('the name check catches a trailing-dot localhost', () => {
+    expect(canResolveImage('http://localhost./x')).toBe(false)
+    expect(canResolveImage('http://router.local./x')).toBe(false)
   })
 })
 

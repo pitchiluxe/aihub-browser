@@ -1,10 +1,11 @@
 import { ipcMain, net } from 'electron'
 import { join } from 'path'
+import { lookup } from 'dns/promises'
 import { createManagedJsonStore } from '../jsonStore'
 import {
   COUNTRIES, deskFeeds, countryFeeds, parseFeed, mergeStories, normalizeMeal,
   extractShareImage, canResolveImage, DESK_FEEDS,
-  countryTerms, mentionsAny, countryNewsroomFeeds, chooseDeskResult,
+  countryTerms, mentionsAny, countryNewsroomFeeds, chooseDeskResult, isPublicAddress,
   type DeskId, type DeskResult, type FeedSource, type RawStory, type Recipe,
 } from '../../shared/news'
 
@@ -101,15 +102,24 @@ const IMAGE_CONCURRENCY = 4
 const HEAD_LIMIT = 400_000
 
 /**
- * The start of an article page, through Chromium's network stack. Redirects
- * are followed by hand so every hop is checked like the first: a feed must
- * not be able to bounce this request onto this machine or a private network.
- * Reading stops at </head> — the share picture lives there — or 400 KB.
+ * Refuses a URL unless its host is written like a public name AND every
+ * address it resolves to is public. The name check alone is not enough: any
+ * public-looking name can point its DNS at 127.0.0.1 or a home router.
  */
-function makeGetHead(userAgent: string): GetHead {
-  return (url, timeoutMs) => new Promise((resolve, reject) => {
-    let current = url
-    let hops = 0
+async function assertPublicTarget(url: string): Promise<void> {
+  if (!canResolveImage(url)) throw new Error('refused: not a public article link')
+  const host = new URL(url).hostname.toLowerCase().replace(/\.+$/, '')
+  const answers = await lookup(host, { all: true, verbatim: true })
+  if (!answers.length || answers.some(a => !isPublicAddress(a.address))) {
+    throw new Error('refused: resolves to a private address')
+  }
+}
+
+type Hop = { status: number; body: string; redirect?: string }
+
+/** One request, no redirects followed: a 3xx comes back as `redirect`. */
+function requestOnce(url: string, userAgent: string, timeoutMs: number): Promise<Hop> {
+  return new Promise((resolve, reject) => {
     let settled = false
     const req = net.request({ url, redirect: 'manual', useSessionCookies: false, credentials: 'omit' } as any)
     const finish = (fn: () => void) => {
@@ -122,15 +132,14 @@ function makeGetHead(userAgent: string): GetHead {
     const timer = setTimeout(() => finish(() => reject(new Error('timeout'))), timeoutMs)
     req.setHeader('User-Agent', userAgent)
     req.setHeader('Accept', 'text/html,application/xhtml+xml')
-    req.on('redirect', (_status, _method, redirectUrl) => {
-      if (++hops > 4 || !canResolveImage(redirectUrl)) { finish(() => reject(new Error('redirect refused'))); return }
-      current = redirectUrl
-      try { req.followRedirect() } catch (e) { finish(() => reject(e)) }
-    })
+    // Electron only lets a redirect be followed synchronously, which leaves
+    // no room to resolve and check the next host. So this request stops here
+    // and the caller starts a fresh, checked request for the next hop.
+    req.on('redirect', (status, _method, redirectUrl) => finish(() => resolve({ status, body: '', redirect: redirectUrl })))
     req.on('response', res => {
       const chunks: Buffer[] = []
       let size = 0
-      const done = () => finish(() => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8'), url: current }))
+      const done = () => finish(() => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }))
       res.on('data', (chunk: Buffer) => {
         chunks.push(chunk)
         size += chunk.length
@@ -142,6 +151,34 @@ function makeGetHead(userAgent: string): GetHead {
     req.on('error', e => finish(() => reject(e)))
     req.end()
   })
+}
+
+/**
+ * The start of an article page, through Chromium's network stack. Every
+ * hop — the first request and each redirect — is resolved and checked before
+ * it is made, so a feed cannot aim this request, or bounce it, onto this
+ * machine or a private network. Reading stops at </head> — the share picture
+ * lives there — or 400 KB.
+ *
+ * Residual risk, accepted: Chromium resolves the name again when it connects,
+ * so a DNS server answering differently a second later (rebinding) could
+ * still slip one request through. Only GET, no cookies, and nothing but an
+ * og:image URL ever comes back, which keeps that window of little use.
+ */
+function makeGetHead(userAgent: string): GetHead {
+  return async (url, timeoutMs) => {
+    const deadline = Date.now() + timeoutMs
+    let current = url
+    for (let hop = 0; hop <= 4; hop++) {
+      await assertPublicTarget(current)
+      const left = deadline - Date.now()
+      if (left <= 0) throw new Error('timeout')
+      const res = await requestOnce(current, userAgent, left)
+      if (!res.redirect) return { status: res.status, body: res.body, url: current }
+      current = new URL(res.redirect, current).toString()
+    }
+    throw new Error('too many redirects')
+  }
 }
 
 function rememberImage(url: string, image: string) {
@@ -198,7 +235,11 @@ async function randomRecipes(get: Get, count: number): Promise<{ ok: boolean; re
     : { ok: false, recipes: [], error: 'The recipe kitchen did not answer. Try again in a moment.' }
 }
 
-export function registerNewsIpc(deps: { get: Get; appDir: string; userAgent: string }) {
+export function registerNewsIpc(deps: {
+  get: Get; appDir: string; userAgent: string
+  /** True only for the browser's own window main frames — never a web page. */
+  isAppSender: (e: Electron.IpcMainInvokeEvent) => boolean
+}) {
   const getHead = makeGetHead(deps.userAgent)
   // The last good front page of every desk, so an outage still has a paper.
   const saved = createManagedJsonStore<Record<string, DeskResult>>(join(deps.appDir, 'news-cache.json'), () => ({}))
@@ -209,13 +250,17 @@ export function registerNewsIpc(deps: { get: Get; appDir: string; userAgent: str
     return chooseDeskResult(fresh, saved.get()[key])
   }
 
-  ipcMain.handle('news:desk', (_e, id: unknown) => {
+  const refused = () => ({ ok: false, stories: [], fetchedAt: Date.now(), sources: [], error: 'Not available here.' })
+
+  ipcMain.handle('news:desk', (e, id: unknown) => {
+    if (!deps.isAppSender(e)) return refused()
     if (typeof id !== 'string' || !Object.prototype.hasOwnProperty.call(DESK_FEEDS, id)) {
       return { ok: false, stories: [], fetchedAt: Date.now(), sources: [], error: 'Unknown desk.' }
     }
     return serve(`desk:${id}`, deskFeeds(id as DeskId), 80)
   })
-  ipcMain.handle('news:country', (_e, code: unknown) => {
+  ipcMain.handle('news:country', (e, code: unknown) => {
+    if (!deps.isAppSender(e)) return refused()
     const country = COUNTRIES.find(c => c.code === code)
     if (!country) return { ok: false, stories: [], fetchedAt: Date.now(), sources: [], error: 'Unknown country.' }
     const terms = countryTerms(country.query)
@@ -224,11 +269,15 @@ export function registerNewsIpc(deps: { get: Get; appDir: string; userAgent: str
       keep: s => mentionsAny(s, terms),
     })
   })
-  ipcMain.handle('news:image', (_e, url: unknown) => {
+  ipcMain.handle('news:image', (e, url: unknown) => {
+    if (!deps.isAppSender(e)) return ''
     if (typeof url !== 'string' || url.length > 2048 || !canResolveImage(url)) return ''
     return resolveImage(getHead, url)
   })
-  ipcMain.handle('news:recipes', (_e, count: unknown) => randomRecipes(deps.get, Number(count)))
+  ipcMain.handle('news:recipes', (e, count: unknown) => {
+    if (!deps.isAppSender(e)) return { ok: false, recipes: [], error: 'Not available here.' }
+    return randomRecipes(deps.get, Number(count))
+  })
   // Pull to refresh: drop the cache for the next reads.
-  ipcMain.handle('news:refresh', () => { feedCache.clear(); return true })
+  ipcMain.handle('news:refresh', e => { if (deps.isAppSender(e)) feedCache.clear(); return true })
 }

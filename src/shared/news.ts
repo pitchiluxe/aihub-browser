@@ -424,7 +424,8 @@ export function canResolveImage(url: string): boolean {
     const u = new URL(url)
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return false
     if (u.port && u.port !== '80' && u.port !== '443') return false
-    const h = u.hostname.toLowerCase()
+    // "localhost." is localhost: drop the root dot before any suffix check.
+    const h = u.hostname.toLowerCase().replace(/\.+$/, '')
     // Google News links open a Google page with Google's logo, not the article's.
     if (/(^|\.)news\.google\.com$/.test(h)) return false
     // Never let a feed aim the main process at this machine or a private network.
@@ -432,6 +433,51 @@ export function canResolveImage(url: string): boolean {
     if (/^\d+(\.\d+){3}$/.test(h) || h.includes(':') || h.startsWith('[')) return false
     return h.includes('.')
   } catch { return false }
+}
+
+/**
+ * Whether a resolved address is on the public internet. The hostname check
+ * above cannot see where a name points, so the main process resolves every
+ * hop and refuses any answer that lands on this machine or a private
+ * network: loopback, RFC 1918, link-local, CGNAT, unspecified, multicast,
+ * reserved, unique-local and site-local IPv6, and IPv4-mapped forms of all.
+ */
+export function isPublicAddress(ip: string): boolean {
+  let a = String(ip || '').trim().toLowerCase()
+  if (!a) return false
+  if (a.startsWith('[') && a.endsWith(']')) a = a.slice(1, -1)
+  const zone = a.indexOf('%')
+  if (zone !== -1) a = a.slice(0, zone)
+  // IPv4-mapped / -translated IPv6 carries an IPv4 inside it.
+  const mapped = a.match(/^(?:::ffff:(?:0:)?|::)(\d+\.\d+\.\d+\.\d+)$/)
+  if (mapped) a = mapped[1]
+  const v4 = a.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
+  if (v4) {
+    const [p, q] = [Number(v4[1]), Number(v4[2])]
+    if ([1, 2, 3, 4].some(i => Number(v4[i]) > 255)) return false
+    if (p === 0 || p === 10 || p === 127) return false
+    if (p === 100 && q >= 64 && q <= 127) return false // CGNAT
+    if (p === 169 && q === 254) return false // link-local
+    if (p === 172 && q >= 16 && q <= 31) return false
+    if (p === 192 && q === 168) return false
+    if (p === 192 && q === 0 && Number(v4[3]) === 0) return false // IETF protocol assignments
+    if (p === 198 && (q === 18 || q === 19)) return false // benchmarking
+    if (p >= 224) return false // multicast and reserved
+    return true
+  }
+  if (!a.includes(':')) return false
+  // Expand the first group of an IPv6 address to classify it.
+  if (a === '::' || a === '::1') return false
+  const first = parseInt(a.split(':')[0] || '0', 16)
+  if (!Number.isFinite(first)) return false
+  if ((first & 0xfe00) === 0xfc00) return false // fc00::/7 unique local
+  if ((first & 0xffc0) === 0xfe80) return false // fe80::/10 link-local
+  if ((first & 0xffc0) === 0xfec0) return false // fec0::/10 site-local
+  if ((first & 0xff00) === 0xff00) return false // multicast
+  if (first === 0) return false // ::/16 reserved (incl. unmapped embeddings)
+  if (first === 0x64 && a.startsWith('64:ff9b:')) return false // NAT64 to anywhere
+  if (first === 0x2002) return false // 6to4 can embed private IPv4
+  return true
 }
 
 // ── Merging outlets ─────────────────────────────────────────────────────────
