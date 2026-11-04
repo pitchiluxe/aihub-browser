@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   RefreshCw, Loader2, Globe2, Landmark, Briefcase, Cpu, FlaskConical, HeartPulse, Trophy,
   Sparkles, UtensilsCrossed, Clapperboard, Newspaper, MapPin, ShieldCheck, ChefHat, PlayCircle,
-  X, Clock, ExternalLink, Wand2, Youtube, Flame,
+  X, Clock, ExternalLink, Wand2, Youtube, Flame, WifiOff,
 } from 'lucide-react'
-import { COUNTRIES, type DeskId, type DeskResult, type NewsStory, type Recipe } from '../../../../shared/news'
+import { COUNTRIES, canResolveImage, type DeskId, type DeskResult, type NewsStory, type Recipe } from '../../../../shared/news'
+import { faviconSourceUrl } from '../../../../shared/favicon'
+import { NEWS_CSS } from './newsStyles'
 
 /**
  * AIHub World News — aihub://news.
@@ -127,12 +129,23 @@ export default function NewsPage({ onOpen }: { onOpen: (url: string) => void }) 
   const busy = !!loading[keyFor(tab)]
   const ticker = results['desk:top']?.stories.slice(0, 14) || []
 
+  // When the newsrooms could not be reached — an empty desk, or the saved
+  // copy standing in — keep trying quietly, so the page heals itself when the
+  // connection comes back instead of waiting for someone to press retry.
+  const needsRetry = !!current && (!current.ok || !!current.stale)
+  useEffect(() => {
+    if (!needsRetry || busy) return
+    const t = setTimeout(() => void load(tab, country, true), 30_000)
+    return () => clearTimeout(t)
+  }, [needsRetry, busy, tab, country]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="aihub-news" style={{ '--desk': desk.color } as React.CSSProperties}>
       <style>{NEWS_CSS}</style>
+      <div className="nr-shell">
 
       {/* ── Masthead ── */}
-      <header className="nr-mast">
+      <header className="nr-mast nr-panel">
         <div className="nr-mast-left">
           <span className="nr-live"><span className="nr-live-dot" />LIVE</span>
           <span className="nr-date">{new Date(now).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
@@ -147,7 +160,7 @@ export default function NewsPage({ onOpen }: { onOpen: (url: string) => void }) 
       </header>
 
       {/* ── Breaking ticker ── */}
-      <div className="nr-ticker" aria-label="Breaking headlines">
+      <div className="nr-ticker nr-panel" aria-label="Breaking headlines">
         <span className="nr-ticker-tag">Breaking</span>
         <div className="nr-ticker-track">
           {ticker.length ? (
@@ -175,7 +188,7 @@ export default function NewsPage({ onOpen }: { onOpen: (url: string) => void }) 
       </div>
 
       {/* ── Desk navigation ── */}
-      <nav className="nr-desks">
+      <nav className="nr-desks nr-panel">
         {DESKS.map(d => {
           const Icon = d.icon
           return (
@@ -192,7 +205,12 @@ export default function NewsPage({ onOpen }: { onOpen: (url: string) => void }) 
           <div className="nr-countries">
             {COUNTRIES.map(c => (
               <button key={c.code} className="nr-country" data-active={c.code === country} onClick={() => pickCountry(c.code)}>
-                <span className="nr-flag">{c.flag}</span>{c.name}
+                {/* Windows has no flag emoji (it draws "CD"), so real flags;
+                    the shared Israel & Palestine desk keeps its dove. */}
+                {c.code === 'il'
+                  ? <span className="nr-flag">{c.flag}</span>
+                  : <img className="nr-flag-img" src={`https://flagcdn.com/w80/${c.code}.png`} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+                {c.name}
               </button>
             ))}
           </div>
@@ -212,6 +230,7 @@ export default function NewsPage({ onOpen }: { onOpen: (url: string) => void }) 
           onRetry={() => void load(tab, country, true)}
         />
       </main>
+      </div>
     </div>
   )
 }
@@ -242,10 +261,16 @@ function DeskView({ result, busy, deskLabel, compact, now, onOpen, onRetry }: {
 
   return (
     <>
+      {result.stale && (
+        <div className="nr-stale" role="status">
+          <WifiOff size={15} />
+          <span>The newsrooms can't be reached right now — showing the headlines saved {timeAgo(result.fetchedAt, now)}. Retrying on its own.</span>
+        </div>
+      )}
       {lead && (
         <section className="nr-front">
           <article className="nr-lead" onClick={() => onOpen(lead.url)}>
-            {lead.image && <img src={lead.image} alt="" referrerPolicy="no-referrer" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />}
+            <StoryThumb s={lead} eager />
             <div className="nr-lead-shade" />
             <div className="nr-lead-body">
               <span className="nr-kicker">{deskLabel}</span>
@@ -254,7 +279,7 @@ function DeskView({ result, busy, deskLabel, compact, now, onOpen, onRetry }: {
               <StoryMeta s={lead} now={now} light />
             </div>
           </article>
-          <aside className="nr-rail">
+          <aside className="nr-rail nr-panel">
             <h3><ShieldCheck size={14} /> Most covered</h3>
             {(mostCovered.length ? mostCovered : rest.slice(0, 5)).map((s, i) => (
               <button key={s.id} className="nr-rail-item" onClick={() => onOpen(s.url)}>
@@ -295,17 +320,89 @@ function StoryMeta({ s, now, light }: { s: NewsStory; now: number; light?: boole
   )
 }
 
+// ── Thumbnails ─────────────────────────────────────────────────────────────
+
+/**
+ * Share pictures found for stories whose feed carried none, kept for the
+ * page's life so switching desks never asks twice. '' means "looked, none".
+ */
+const foundImages = new Map<string, string>()
+
+function hueOf(text: string): number {
+  let h = 0
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) % 360
+  return h
+}
+
+/**
+ * The story's picture in HD. A story without one asks main for the article's
+ * own share picture once it scrolls near the screen; while that runs the
+ * frame shimmers, and if the article has none either, the publisher's card —
+ * its logo on a colour of its own — stands in. Never a bare letter.
+ */
+function StoryThumb({ s, eager }: { s: NewsStory; eager?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const known = s.image || foundImages.get(s.url)
+  const [src, setSrc] = useState<string>(known || '')
+  const [state, setState] = useState<'photo' | 'looking' | 'publisher'>(
+    known ? 'photo' : foundImages.has(s.url) || !canResolveImage(s.url) ? 'publisher' : 'looking',
+  )
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (state !== 'looking') return
+    const el = ref.current
+    if (!el) return
+    let cancelled = false
+    const look = () => {
+      void Promise.resolve(api()?.news?.image?.(s.url)).then((img: string) => {
+        foundImages.set(s.url, img || '')
+        if (cancelled) return
+        if (img) { setSrc(img); setState('photo') } else setState('publisher')
+      }).catch(() => { if (!cancelled) setState('publisher') })
+    }
+    if (eager) { look(); return () => { cancelled = true } }
+    const io = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) { io.disconnect(); look() }
+    }, { rootMargin: '600px 0px' })
+    io.observe(el)
+    return () => { cancelled = true; io.disconnect() }
+  }, [state, s.url, eager])
+
+  return (
+    <div ref={ref} className="nr-thumb">
+      {state === 'photo' && src && (
+        <img
+          src={src} alt="" decoding="async" loading={eager ? 'eager' : 'lazy'} referrerPolicy="no-referrer"
+          className={loaded ? 'is-loaded' : ''}
+          onLoad={() => setLoaded(true)}
+          onError={() => { foundImages.set(s.url, ''); setState('publisher') }}
+        />
+      )}
+      {(state === 'looking' || (state === 'photo' && !loaded)) && <div className="nr-thumb-wait" />}
+      {state === 'publisher' && <PublisherArt s={s} />}
+    </div>
+  )
+}
+
+function PublisherArt({ s }: { s: NewsStory }) {
+  const [logoOk, setLogoOk] = useState(!!s.site)
+  return (
+    <div className="nr-pub" style={{ '--h': hueOf(s.site || s.source) } as React.CSSProperties}>
+      <span className="nr-pub-logo">
+        {logoOk
+          ? <img src={faviconSourceUrl(s.site, 128)} alt="" referrerPolicy="no-referrer" onError={() => setLogoOk(false)} />
+          : <b>{(s.source || '?').slice(0, 1).toUpperCase()}</b>}
+      </span>
+      <span className="nr-pub-name">{s.source}</span>
+    </div>
+  )
+}
+
 function StoryCard({ s, now, onOpen }: { s: NewsStory; now: number; onOpen: (url: string) => void }) {
-  const [imgOk, setImgOk] = useState(!!s.image)
   return (
     <article className="nr-card" onClick={() => onOpen(s.url)}>
-      {imgOk ? (
-        <div className="nr-card-img">
-          <img src={s.image} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setImgOk(false)} />
-        </div>
-      ) : (
-        <div className="nr-card-img nr-card-noimg"><span>{s.source.slice(0, 1)}</span></div>
-      )}
+      <StoryThumb s={s} />
       <div className="nr-card-body">
         <h3>{s.title}</h3>
         {s.summary && <p>{s.summary}</p>}
@@ -564,143 +661,3 @@ function ChefIdeas({ onOpen }: { onOpen: (url: string) => void }) {
     </section>
   )
 }
-
-const NEWS_CSS = `
-.aihub-news{--ink:#0a0c12;--paper:#11141c;--paper2:#161a24;--line:rgba(255,255,255,.07);--text:#e8eaf2;--muted:#9aa1b8;--faint:#6b7290;
-  min-height:100%;background:radial-gradient(1200px 500px at 50% -200px, color-mix(in srgb, var(--desk) 22%, transparent), transparent 70%), var(--ink);
-  color:var(--text);font-family:Inter,system-ui,sans-serif;padding-bottom:60px;transition:background .5s}
-:where(.aihub-news) :where(button){font:inherit;color:inherit;background:none;border:none;cursor:pointer;text-align:left}
-.nr-steps,.nr-idea-steps{list-style:decimal}
-.nr-idea-list{list-style:disc}
-.nr-mast{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;padding:22px 28px 14px;border-bottom:1px solid var(--line)}
-.nr-mast-left{display:flex;align-items:center;gap:12px}
-.nr-mast-right{display:flex;align-items:center;justify-content:flex-end;gap:10px}
-.nr-title{font-family:Fraunces,Georgia,'Times New Roman',serif;font-weight:800;font-size:clamp(28px,3.4vw,44px);letter-spacing:-.02em;margin:0;line-height:1;text-align:center}
-.nr-live{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:4px;background:#dc2626;color:#fff;font-size:11px;font-weight:800;letter-spacing:.12em}
-.nr-live-dot{width:6px;height:6px;border-radius:99px;background:#fff;animation:nrBlink 1.2s steps(2) infinite}
-.nr-date{font-size:12.5px;color:var(--muted)}
-.nr-updated{font-size:11.5px;color:var(--faint)}
-.nr-icon-btn{width:30px;height:30px;border-radius:8px;display:flex!important;align-items:center;justify-content:center;border:1px solid var(--line)!important;color:var(--muted)!important}
-.nr-icon-btn:hover{color:var(--text)!important;background:rgba(255,255,255,.05)!important}
-.nr-ticker{display:flex;align-items:stretch;height:36px;background:#111;border-bottom:1px solid var(--line);overflow:hidden}
-.nr-ticker-tag{display:flex;align-items:center;padding:0 14px;background:#dc2626;color:#fff;font-weight:800;font-size:11px;letter-spacing:.14em;text-transform:uppercase;flex-shrink:0;clip-path:polygon(0 0,100% 0,calc(100% - 10px) 100%,0 100%);padding-right:22px}
-.nr-ticker-track{flex:1;overflow:hidden;position:relative;mask-image:linear-gradient(90deg,transparent,#000 30px,#000 calc(100% - 40px),transparent)}
-.nr-ticker-run{display:flex;gap:36px;width:max-content;height:100%;align-items:center;animation:nrTicker 120s linear infinite}
-.nr-ticker-track:hover .nr-ticker-run{animation-play-state:paused}
-.nr-ticker-item{font-size:13px;white-space:nowrap;color:#f3f4f6!important}
-.nr-ticker-item:hover{color:#fca5a5!important}
-.nr-ticker-src{color:#f87171;font-weight:700;margin-right:8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
-.nr-ticker-wait{display:flex;align-items:center;height:100%;padding-left:16px;font-size:12.5px;color:var(--faint)}
-.nr-clocks{display:flex;gap:4px;overflow-x:auto;padding:10px 28px;border-bottom:1px solid var(--line);scrollbar-width:none}
-.nr-clock{display:flex;flex-direction:column;align-items:center;min-width:84px;padding:4px 8px;border-radius:8px}
-.nr-clock-city{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
-.nr-clock-time{font-variant-numeric:tabular-nums;font-size:15px;font-weight:700;color:var(--text)}
-.nr-desks{position:sticky;top:0;z-index:5;display:flex;gap:6px;overflow-x:auto;padding:12px 28px;background:color-mix(in srgb,var(--ink) 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);scrollbar-width:thin}
-.nr-desk{display:inline-flex!important;align-items:center;gap:6px;white-space:nowrap;padding:7px 13px!important;border-radius:999px;font-size:12.5px;font-weight:600;color:var(--muted)!important;border:1px solid transparent!important;transition:all .2s}
-.nr-desk:hover{color:var(--text)!important;background:color-mix(in srgb,var(--c) 12%,transparent)!important}
-.nr-desk[data-active="true"]{color:#fff!important;background:var(--c)!important;box-shadow:0 6px 22px color-mix(in srgb,var(--c) 45%,transparent)}
-.nr-body{max-width:1320px;margin:0 auto;padding:22px 28px}
-.nr-countries{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
-.nr-country{display:inline-flex!important;align-items:center;gap:7px;padding:7px 12px!important;border-radius:10px;background:var(--paper)!important;border:1px solid var(--line)!important;font-size:12.5px;font-weight:600;color:var(--muted)!important}
-.nr-country[data-active="true"]{border-color:#14b8a6!important;color:#fff!important;background:rgba(20,184,166,.16)!important}
-.nr-flag{font-size:16px}
-.nr-front{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);gap:20px;margin-bottom:26px}
-.nr-lead{position:relative;min-height:400px;border-radius:18px;overflow:hidden;cursor:pointer;background:linear-gradient(135deg,color-mix(in srgb,var(--desk) 40%,#111),#111);box-shadow:0 20px 60px rgba(0,0,0,.45)}
-.nr-lead img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform 6s ease}
-.nr-lead:hover img{transform:scale(1.05)}
-.nr-lead-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 25%,rgba(0,0,0,.92))}
-.nr-lead-body{position:absolute;left:0;right:0;bottom:0;padding:28px}
-.nr-lead h2{font-family:Fraunces,Georgia,serif;font-weight:800;font-size:clamp(24px,2.6vw,36px);line-height:1.12;margin:8px 0 10px;color:#fff;text-wrap:balance}
-.nr-lead p{color:#d1d5db;font-size:14.5px;line-height:1.55;margin:0 0 12px;max-width:760px}
-.nr-kicker{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--desk)}
-.nr-rail{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:18px}
-.nr-rail h3{display:flex;align-items:center;gap:7px;margin:0 0 10px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--desk)}
-.nr-rail-item{display:flex!important;gap:12px;padding:11px 0!important;border-top:1px solid var(--line)!important;width:100%}
-.nr-rail-item:first-of-type{border-top:none!important}
-.nr-rail-n{font-family:Fraunces,Georgia,serif;font-size:26px;font-weight:800;color:color-mix(in srgb,var(--desk) 70%,#555);line-height:1;min-width:22px}
-.nr-rail-title{display:block;font-size:14px;font-weight:600;line-height:1.35;margin-bottom:4px}
-.nr-rail-item:hover .nr-rail-title{color:var(--desk)}
-.nr-meta{display:inline-flex;flex-wrap:wrap;align-items:center;gap:5px;font-size:11.5px;color:var(--faint)}
-.nr-meta[data-light="true"]{color:#cbd5e1}
-.nr-meta-src{font-weight:700;color:var(--muted)}
-.nr-meta[data-light="true"] .nr-meta-src{color:#fff}
-.nr-coverage{display:inline-flex;align-items:center;gap:3px;margin-left:4px;padding:1px 7px;border-radius:99px;background:rgba(34,197,94,.14);color:#4ade80;font-weight:700;font-size:10.5px}
-.nr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px}
-.nr-card{display:flex;flex-direction:column;border-radius:14px;overflow:hidden;background:var(--paper);border:1px solid var(--line);cursor:pointer;transition:transform .25s,border-color .25s,box-shadow .25s}
-.nr-card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--desk) 45%,transparent);box-shadow:0 14px 36px rgba(0,0,0,.4)}
-.nr-card-img{aspect-ratio:16/9;overflow:hidden;background:#0d0f15}
-.nr-card-img img{width:100%;height:100%;object-fit:cover;transition:transform .5s}
-.nr-card:hover .nr-card-img img{transform:scale(1.06)}
-.nr-card-noimg{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,color-mix(in srgb,var(--desk) 30%,#151821),#0e1016)}
-.nr-card-noimg span{font-family:Fraunces,Georgia,serif;font-size:46px;font-weight:800;color:rgba(255,255,255,.18)}
-.nr-card-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:7px;flex:1}
-.nr-card h3{font-family:Fraunces,Georgia,serif;font-size:17px;font-weight:600;line-height:1.28;margin:0;text-wrap:pretty}
-.nr-card p{margin:0;font-size:13px;line-height:1.5;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.nr-card .nr-meta{margin-top:auto}
-.nr-sources{margin:26px 0 0;font-size:11.5px;color:var(--faint);line-height:1.6}
-.nr-section-h{display:flex;align-items:center;gap:8px;font-family:Fraunces,Georgia,serif;font-size:22px;margin:34px 0 14px}
-.nr-empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:60px 20px;color:var(--muted);text-align:center}
-.nr-btn{display:inline-flex!important;align-items:center;gap:7px;padding:9px 16px!important;border-radius:10px;font-weight:700;font-size:12.5px;background:rgba(255,255,255,.07)!important;border:1px solid var(--line)!important;white-space:nowrap}
-.nr-btn:disabled{opacity:.6;cursor:default}
-.nr-btn-warm{background:linear-gradient(135deg,#f97316,#ef4444)!important;color:#fff!important;border:none!important;box-shadow:0 8px 24px rgba(249,115,22,.35)}
-.nr-link{display:inline-flex!important;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#fdba74!important;margin-top:8px}
-.nr-link:hover{text-decoration:underline}
-.nr-kitchen-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:26px;border-radius:20px;margin-bottom:18px;
-  background:radial-gradient(600px 240px at 0% 0%,rgba(249,115,22,.28),transparent 70%),radial-gradient(500px 240px at 100% 100%,rgba(239,68,68,.2),transparent 70%),var(--paper);border:1px solid rgba(249,115,22,.2)}
-.nr-kitchen-title{font-family:Fraunces,Georgia,serif;font-size:32px;font-weight:800;margin:6px 0 6px}
-.nr-kitchen-sub{margin:0;color:var(--muted);font-size:13.5px;max-width:560px}
-.nr-recipes{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:28px}
-.nr-recipe{border-radius:16px;overflow:hidden;background:var(--paper);border:1px solid var(--line);cursor:pointer;transition:transform .25s,box-shadow .25s}
-.nr-recipe:hover{transform:translateY(-4px) rotate(-.3deg);box-shadow:0 16px 40px rgba(249,115,22,.18)}
-.nr-recipe-img{position:relative;aspect-ratio:4/3;background:#1a1410;overflow:hidden}
-.nr-recipe-img img{width:100%;height:100%;object-fit:cover;transition:transform .6s}
-.nr-recipe:hover .nr-recipe-img img{transform:scale(1.08)}
-.nr-play{position:absolute;right:10px;bottom:10px;color:#fff;filter:drop-shadow(0 2px 8px rgba(0,0,0,.6))}
-.nr-recipe-body{padding:12px 14px 14px}
-.nr-recipe-tags{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#fdba74}
-.nr-recipe h3,.nr-idea h3{font-family:Fraunces,Georgia,serif;font-size:19px;font-weight:600;margin:4px 0 4px}
-.nr-recipe-count{font-size:11.5px;color:var(--faint)}
-.nr-chef{padding:24px;border-radius:20px;background:linear-gradient(180deg,rgba(168,85,247,.12),transparent 60%),var(--paper);border:1px solid rgba(168,85,247,.22)}
-.nr-chef-head{display:flex;gap:14px;align-items:flex-start;color:#d8b4fe}
-.nr-chef-form{display:flex;gap:10px;margin:16px 0 8px;flex-wrap:wrap}
-.nr-chef-form input,.nr-chef-form select{background:#0d0f15;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 12px;font-size:13px;outline:none}
-.nr-chef-form input{flex:1;min-width:220px}
-.nr-chef-form input:focus,.nr-chef-form select:focus{border-color:#a855f7}
-.nr-chef-note{font-size:11.5px;color:var(--faint);margin:6px 0 12px}
-.nr-ideas{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-.nr-idea{padding:18px;border-radius:16px;background:#0e1018;border:1px solid var(--line);animation:nrRise .5s ease both}
-.nr-idea:nth-child(2){animation-delay:.08s}.nr-idea:nth-child(3){animation-delay:.16s}
-.nr-idea-desc{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 10px}
-.nr-idea h4,.nr-modal-body h4{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:12px 0 6px}
-.nr-idea-list,.nr-idea-steps{margin:0;padding-left:18px;font-size:13px;line-height:1.55;color:#d1d5db}
-.nr-modal-back{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px;animation:nrFade .2s}
-.nr-modal{position:relative;width:min(1000px,100%);max-height:100%;overflow:auto;border-radius:20px;background:var(--paper);border:1px solid var(--line);box-shadow:0 30px 90px rgba(0,0,0,.6);animation:nrRise .25s ease}
-.nr-modal-x{position:absolute;top:12px;right:12px;z-index:2;width:32px;height:32px;border-radius:99px;display:flex!important;align-items:center;justify-content:center;background:rgba(0,0,0,.55)!important;color:#fff!important}
-.nr-modal-media{background:#000}
-.nr-modal-media iframe{display:block;width:100%;aspect-ratio:16/9;border:0}
-.nr-modal-media img{display:block;width:100%;max-height:420px;object-fit:cover}
-.nr-modal-media-bar{display:flex;justify-content:space-between;gap:10px;padding:8px 14px;background:#0b0b0b}
-.nr-modal-media-bar button{font-size:11.5px;color:var(--faint)!important;display:inline-flex!important;align-items:center;gap:5px}
-.nr-modal-media-bar button:hover{color:var(--text)!important}
-.nr-modal-body{padding:22px 26px 26px}
-.nr-modal-title{font-family:Fraunces,Georgia,serif;font-size:30px;font-weight:800;margin:6px 0 4px}
-.nr-modal-cols{display:grid;grid-template-columns:minmax(200px,1fr) 2fr;gap:26px}
-.nr-ingredients{list-style:none;margin:0;padding:0}
-.nr-ingredients li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}
-.nr-ingredients em{font-style:normal;color:#fdba74;text-align:right}
-.nr-steps{margin:0;padding-left:20px;font-size:13.5px;line-height:1.65;color:#d1d5db}
-.nr-steps li{margin-bottom:8px}
-.nr-sk{border-radius:14px;background:linear-gradient(90deg,var(--paper) 0%,var(--paper2) 50%,var(--paper) 100%);background-size:200% 100%;animation:nrShimmer 1.3s linear infinite}
-.nr-sk-lead{height:400px;margin-bottom:24px;border-radius:18px}
-.nr-sk-card{height:290px}
-.nr-sk-recipe{height:260px}
-.nr-spin{animation:nrSpin 1s linear infinite}
-@keyframes nrSpin{to{transform:rotate(360deg)}}
-@keyframes nrBlink{50%{opacity:.2}}
-@keyframes nrTicker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-@keyframes nrShimmer{from{background-position:200% 0}to{background-position:-200% 0}}
-@keyframes nrRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-@keyframes nrFade{from{opacity:0}to{opacity:1}}
-@media (max-width:900px){.nr-front{grid-template-columns:1fr}.nr-modal-cols{grid-template-columns:1fr}.nr-mast{grid-template-columns:1fr;text-align:center}.nr-mast-left,.nr-mast-right{justify-content:center}}
-@media (prefers-reduced-motion:reduce){.nr-ticker-run{animation-duration:400s}.nr-lead img,.nr-card-img img,.nr-recipe-img img{transition:none}}
-`

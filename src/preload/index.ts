@@ -501,6 +501,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     desk:    (id: string)     => ipcRenderer.invoke('news:desk', id),
     country: (code: string)   => ipcRenderer.invoke('news:country', code),
     recipes: (count?: number) => ipcRenderer.invoke('news:recipes', count),
+    /** The article's own share picture, for stories whose feed had none ('' if none). */
+    image:   (url: string)    => ipcRenderer.invoke('news:image', url),
     refresh: ()               => ipcRenderer.invoke('news:refresh'),
   },
   gospel: {

@@ -18,6 +18,8 @@ export interface NewsStory {
   source: string
   summary: string
   image: string
+  /** The publisher's host (reuters.com), for its logo when there is no photo. */
+  site: string
   publishedAt: number
   /** How many distinct outlets in this desk carried the same story (≥1). */
   coverage: number
@@ -32,6 +34,8 @@ export interface DeskResult {
   /** Outlets that answered, out of those asked. */
   sources: { name: string; ok: boolean }[]
   error?: string
+  /** Served from the saved copy because no newsroom answered just now. */
+  stale?: boolean
 }
 
 export interface Recipe {
@@ -50,6 +54,26 @@ export interface FeedSource { name: string; url: string }
 
 const gnews = (q: string) =>
   `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`
+
+/**
+ * Bing News search as RSS. Its items carry an HD-capable thumbnail and the
+ * real article link, so it is the picture source for stories the text-only
+ * feeds (Google News, NPR, Al Jazeera) cover too. It answers unevenly, so it
+ * is only ever an extra outlet on a desk, never the only one.
+ */
+const bing = (q: string) => `https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=rss`
+
+const DESK_BING: Record<DeskId, string> = {
+  top: 'world news', politics: 'election results', africa: 'Africa news', americas: 'Americas news',
+  europe: 'Europe news', asia: 'Asia news', middleeast: 'Middle East news', business: 'business news',
+  tech: 'technology news', science: 'science news', health: 'health news', sports: 'sports news',
+  lifestyle: 'lifestyle', food: 'restaurants food', culture: 'entertainment news',
+}
+
+/** Every outlet a desk reads: its newsrooms plus the Bing picture source. */
+export function deskFeeds(id: DeskId): FeedSource[] {
+  return [...DESK_FEEDS[id], { name: 'Bing News', url: bing(DESK_BING[id]) }]
+}
 
 /**
  * Each desk reads several independent newsrooms. A story the BBC, the
@@ -165,8 +189,66 @@ export const COUNTRIES: CountryDesk[] = [
   { code: 'au', name: 'Australia', flag: '🇦🇺', query: 'Australia OR Canberra OR Sydney' },
 ]
 
-export function countryFeed(c: CountryDesk): FeedSource {
-  return { name: 'Google News', url: gnews(`(${c.query}) when:2d`) }
+/**
+ * The names a country desk listens for, from its search query:
+ * '"DR Congo" OR Kinshasa' → ['DR Congo', 'Kinshasa'].
+ */
+export function countryTerms(query: string): string[] {
+  const terms: string[] = []
+  const re = /"([^"]+)"|([^\s()"]+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(query))) {
+    const t = (m[1] || m[2] || '').trim()
+    if (t && t !== 'OR' && t !== 'AND') terms.push(t)
+  }
+  return terms
+}
+
+/** Whether a story names any of the terms, as whole words. */
+export function mentionsAny(s: Pick<RawStory, 'title' | 'summary'>, terms: string[]): boolean {
+  if (!terms.length) return false
+  const text = `${s.title} ${s.summary}`
+  return terms.some(t => {
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}($|[^\\p{L}\\p{N}])`, 'iu').test(text)
+  })
+}
+
+/**
+ * The big newsrooms a country desk also reads, keeping only the stories that
+ * name the country. These carry photographs, which the search feeds mostly
+ * do not, so a country page is not a wall of logos.
+ */
+export function countryNewsroomFeeds(): FeedSource[] {
+  const seen = new Set<string>()
+  const out: FeedSource[] = []
+  for (const id of ['top', 'africa', 'americas', 'europe', 'asia', 'middleeast'] as DeskId[]) {
+    for (const f of DESK_FEEDS[id]) {
+      if (f.name === 'Google News' || seen.has(f.url)) continue
+      seen.add(f.url)
+      out.push(f)
+    }
+  }
+  return out
+}
+
+/**
+ * What a desk shows after a fetch: the fresh page when there is one;
+ * otherwise the last saved page, marked stale; otherwise the failure.
+ */
+export function chooseDeskResult(fresh: DeskResult, saved: DeskResult | undefined): DeskResult {
+  if (fresh.ok) return fresh
+  if (saved?.stories?.length) return { ...saved, ok: true, stale: true, sources: fresh.sources }
+  return fresh
+}
+
+export function countryFeeds(c: CountryDesk): FeedSource[] {
+  return [
+    { name: 'Google News', url: gnews(`(${c.query}) when:2d`) },
+    // Two Bing searches: it answers unevenly, and it is where the pictures are.
+    { name: 'Bing News', url: bing(c.name) },
+    { name: 'Bing News', url: bing(`${c.name} news today`) },
+  ]
 }
 
 // ── Feed parsing ────────────────────────────────────────────────────────────
@@ -212,7 +294,27 @@ function attr(block: string, tagName: string, attrName: string): string {
   return m ? decodeEntities(m[1]) : ''
 }
 
+/**
+ * The sharpest version of a feed thumbnail that its host will serve:
+ * BBC's image service takes the width in the path (240 → 976), Bing's
+ * thumbnail service takes it as parameters. Other hosts sign their URLs, so
+ * those are left alone.
+ */
+export function hdImage(url: string): string {
+  let u = String(url || '')
+  u = u.replace(/^(https:\/\/ichef\.bbci\.co\.uk\/(?:ace|news)\/(?:standard|ws)\/)\d+\//i, '$1976/')
+  if (/^https?:\/\/(?:www\.)?bing\.com\/th\b/i.test(u) || u.startsWith('/th?')) {
+    if (u.startsWith('/')) u = `https://www.bing.com${u}`
+    u = u.replace(/^http:/i, 'https:').replace(/&(?:w|h|c)=[^&]*/g, '')
+    u += '&w=1280&h=720&c=14'
+  }
+  return u
+}
+
 function imageOf(block: string): string {
+  // Bing News carries its thumbnail in its own namespace.
+  const bingImage = tag(block, 'News:Image')
+  if (bingImage) return hdImage(decodeEntities(bingImage))
   // Largest media:content wins over a thumbnail when a feed offers several.
   const contents = [...block.matchAll(/<media:content\b[^>]*>/gi)].map(m => m[0])
   let best = ''
@@ -239,7 +341,23 @@ function imageOf(block: string): string {
   return img ? img[1] : ''
 }
 
-export interface RawStory { title: string; url: string; source: string; summary: string; image: string; publishedAt: number }
+export interface RawStory { title: string; url: string; source: string; summary: string; image: string; site: string; publishedAt: number }
+
+/** Bing News wraps every link in a click-tracker; the article is its url= parameter. */
+function unwrapLink(url: string): string {
+  try {
+    const u = new URL(url)
+    if (/(^|\.)bing\.com$/i.test(u.hostname) && /apiclick/i.test(u.pathname)) {
+      const target = u.searchParams.get('url') || ''
+      if (/^https?:\/\//i.test(target)) return target
+    }
+  } catch { /* keep as is */ }
+  return url
+}
+
+function hostOfUrl(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase() } catch { return '' }
+}
 
 /** RSS 2.0 <item> and Atom <entry> both. Malformed items are skipped, never thrown. */
 export function parseFeed(xml: string, fallbackSource: string): RawStory[] {
@@ -250,10 +368,14 @@ export function parseFeed(xml: string, fallbackSource: string): RawStory[] {
       let title = toPlainText(tag(block, 'title'))
       let url = tag(block, 'link')
       if (!url || url.includes('<')) url = attr(block, 'link', 'href')
-      url = decodeEntities(url).trim()
+      url = unwrapLink(decodeEntities(url).trim())
       if (!title || !/^https?:\/\//i.test(url)) continue
-      // Google News names the outlet in <source> and repeats it after " - ".
-      let source = toPlainText(tag(block, 'source')) || fallbackSource
+      // Google News names the outlet in <source> and repeats it after " - ";
+      // Bing names it in News:Source.
+      let source = toPlainText(tag(block, 'source')) || toPlainText(tag(block, 'News:Source')).replace(/ on MSN$/i, '') || fallbackSource
+      // The publisher's own host: Google News links all point at Google, so
+      // its <source url="…"> is the honest answer there.
+      const site = hostOfUrl(attr(block, 'source', 'url')) || (/news\.google\.com$/i.test(hostOfUrl(url)) ? '' : hostOfUrl(url))
       if (source !== fallbackSource && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3)).trim()
       const rawSummary = tag(block, 'description') || tag(block, 'summary') || tag(block, 'content')
       let summary = toPlainText(rawSummary)
@@ -264,11 +386,52 @@ export function parseFeed(xml: string, fallbackSource: string): RawStory[] {
       const ts = Date.parse(dateText)
       // The page renders this in the app window: only plain https images.
       // A file:, UNC or other scheme from a hostile feed must never reach <img>.
-      const image = imageOf(block).trim()
-      out.push({ title, url, source, summary, image: /^https:\/\//i.test(image) ? image : '', publishedAt: Number.isFinite(ts) ? ts : 0 })
+      const image = hdImage(imageOf(block).trim())
+      out.push({ title, url, source, summary, image: /^https:\/\//i.test(image) ? image : '', site, publishedAt: Number.isFinite(ts) ? ts : 0 })
     } catch { /* one broken item never costs the feed */ }
   }
   return out
+}
+
+/**
+ * An article page's share picture: og:image, then twitter:image, from the
+ * page's <head>. Relative URLs resolve against the page; anything that is not
+ * https is refused, as for feed images.
+ */
+export function extractShareImage(html: string, pageUrl: string): string {
+  const head = String(html || '').slice(0, 400_000)
+  const metas = head.match(/<meta\b[^>]*>/gi) || []
+  const pick = (names: string[]) => {
+    for (const m of metas) {
+      const key = (m.match(/\b(?:property|name)\s*=\s*["']([^"']+)["']/i) || [])[1]?.toLowerCase()
+      if (!key || !names.includes(key)) continue
+      const content = (m.match(/\bcontent\s*=\s*["']([^"']+)["']/i) || [])[1]
+      if (content) return decodeEntities(content.trim())
+    }
+    return ''
+  }
+  const raw = pick(['og:image:secure_url', 'og:image', 'og:image:url']) || pick(['twitter:image', 'twitter:image:src'])
+  if (!raw) return ''
+  try {
+    const abs = new URL(raw, pageUrl).toString()
+    return /^https:\/\//i.test(abs) ? hdImage(abs) : ''
+  } catch { return '' }
+}
+
+/** Whether a story link can be opened to look for its share picture. */
+export function canResolveImage(url: string): boolean {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false
+    if (u.port && u.port !== '80' && u.port !== '443') return false
+    const h = u.hostname.toLowerCase()
+    // Google News links open a Google page with Google's logo, not the article's.
+    if (/(^|\.)news\.google\.com$/.test(h)) return false
+    // Never let a feed aim the main process at this machine or a private network.
+    if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return false
+    if (/^\d+(\.\d+){3}$/.test(h) || h.includes(':') || h.startsWith('[')) return false
+    return h.includes('.')
+  } catch { return false }
 }
 
 // ── Merging outlets ─────────────────────────────────────────────────────────
@@ -311,6 +474,8 @@ export function mergeStories(raw: RawStory[], now = Date.now(), limit = 80): New
     const match = clusters.find(c => c.lead.url === s.url || (tokens.size >= 3 && similarity(c.tokens, tokens) >= 0.6))
     if (match) {
       match.outlets.add(s.source)
+      // Any outlet's photo serves the story — a Google News headline often
+      // borrows the picture Bing or the BBC carried for the same event.
       if (!match.image && s.image) match.image = s.image
       if (!match.summary && s.summary) match.summary = s.summary
       continue
@@ -319,7 +484,9 @@ export function mergeStories(raw: RawStory[], now = Date.now(), limit = 80): New
   }
   const score = (c: typeof clusters[number]) => {
     const ageH = c.lead.publishedAt ? (now - c.lead.publishedAt) / 3_600_000 : 24
-    return c.outlets.size * 2 + (c.image ? 0.5 : 0) - ageH / 6
+    // A photograph is worth about one more outlet: pictured stories rise to
+    // the front of the page, while a story everyone covers still leads.
+    return c.outlets.size * 2 + (c.image ? 2 : 0) - ageH / 6
   }
   return clusters
     .sort((a, b) => score(b) - score(a))
@@ -331,6 +498,7 @@ export function mergeStories(raw: RawStory[], now = Date.now(), limit = 80): New
       source: c.lead.source,
       summary: c.summary,
       image: c.image,
+      site: c.lead.site,
       publishedAt: c.lead.publishedAt,
       coverage: c.outlets.size,
       alsoBy: [...c.outlets].filter(o => o !== c.lead.source).slice(0, 4),

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseFeed, mergeStories, toPlainText, youtubeIdOf, normalizeMeal, decodeEntities, DESK_FEEDS, COUNTRIES } from './news'
+import { parseFeed, mergeStories, toPlainText, youtubeIdOf, normalizeMeal, decodeEntities, DESK_FEEDS, COUNTRIES, hdImage, extractShareImage, canResolveImage, countryTerms, mentionsAny, countryNewsroomFeeds, chooseDeskResult } from './news'
 
 const RSS = `<?xml version="1.0"?><rss xmlns:media="http://search.yahoo.com/mrss/"><channel>
 <item><title><![CDATA[Polls open across the country]]></title><link>https://example.com/a</link>
@@ -54,7 +54,7 @@ describe('parseFeed', () => {
 
 describe('mergeStories', () => {
   const now = Date.parse('2026-11-03T12:00:00Z')
-  const base = { summary: '', image: '', publishedAt: now - 3_600_000 }
+  const base = { summary: '', image: '', site: '', publishedAt: now - 3_600_000 }
   it('folds the same story from several outlets and counts them', () => {
     const merged = mergeStories([
       { ...base, title: 'Congo rebels agree ceasefire in Goma talks', url: 'https://a/1', source: 'BBC' },
@@ -68,6 +68,70 @@ describe('mergeStories', () => {
   })
   it('drops stories older than five days', () => {
     expect(mergeStories([{ ...base, publishedAt: now - 6 * 86_400_000, title: 'Old news story here', url: 'https://o', source: 'X' }], now)).toEqual([])
+  })
+})
+
+describe('pictures', () => {
+  it('reads Bing News items: real link, outlet, HD thumbnail', () => {
+    const xml = `<rss><channel><item><title>Kinshasa talks resume</title>
+<link>http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;url=https%3a%2f%2fwww.aol.com%2farticles%2fx.html&amp;c=1</link>
+<description>Desc</description><pubDate>Tue, 03 Nov 2026 15:27:00 GMT</pubDate>
+<News:Source>BBC on MSN</News:Source><News:Image>/th?id=ONUT.abc&amp;pid=News</News:Image></item></channel></rss>`
+    const [s] = parseFeed(xml, 'Bing News')
+    expect(s.url).toBe('https://www.aol.com/articles/x.html')
+    expect(s.source).toBe('BBC')
+    expect(s.site).toBe('aol.com')
+    expect(s.image).toBe('https://www.bing.com/th?id=ONUT.abc&pid=News&w=1280&h=720&c=14')
+  })
+  it('upgrades BBC thumbnails to 976px', () => {
+    expect(hdImage('https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/abc.jpg')).toBe('https://ichef.bbci.co.uk/ace/standard/976/cpsprodpb/abc.jpg')
+    expect(hdImage('https://i.guim.co.uk/img/x.jpg?width=460&s=sig')).toBe('https://i.guim.co.uk/img/x.jpg?width=460&s=sig')
+  })
+  it('takes the publisher host from a Google News <source url>', () => {
+    const [s] = parseFeed(GNEWS.replace('url="https://reuters.com"', 'url="https://www.reuters.com"'), 'Google News')
+    expect(s.site).toBe('reuters.com')
+  })
+  it('extracts og:image in either attribute order, https only', () => {
+    expect(extractShareImage('<head><meta property="og:image" content="https://a.com/p.jpg"></head>', 'https://a.com/x')).toBe('https://a.com/p.jpg')
+    expect(extractShareImage('<meta content="/img/p.jpg?a=1&amp;b=2" name="twitter:image">', 'https://a.com/x')).toBe('https://a.com/img/p.jpg?a=1&b=2')
+    expect(extractShareImage('<meta property="og:image" content="http://a.com/p.jpg">', 'http://a.com/x')).toBe('')
+    expect(extractShareImage('<meta property="og:image" content="file:///c/p.jpg">', 'https://a.com/x')).toBe('')
+    expect(extractShareImage('<p>none</p>', 'https://a.com/x')).toBe('')
+  })
+  it('only resolves public article links', () => {
+    expect(canResolveImage('https://www.npr.org/2026/11/04/story')).toBe(true)
+    expect(canResolveImage('https://news.google.com/rss/articles/abc')).toBe(false)
+    for (const bad of ['http://localhost/x', 'http://127.0.0.1/x', 'http://10.0.0.5/x', 'http://[::1]/x', 'https://a.com:8443/x', 'file:///c/x', 'http://router.local/x', 'http://intranet/x']) {
+      expect(canResolveImage(bad)).toBe(false)
+    }
+  })
+})
+
+describe('country desk and outages', () => {
+  it('splits a country query into the names it listens for', () => {
+    expect(countryTerms('"DR Congo" OR "Democratic Republic of Congo" OR Kinshasa OR Goma'))
+      .toEqual(['DR Congo', 'Democratic Republic of Congo', 'Kinshasa', 'Goma'])
+  })
+  it('matches whole words only, any case', () => {
+    const terms = ['UK', 'Goma', 'DR Congo']
+    expect(mentionsAny({ title: 'Fighting near Goma intensifies', summary: '' }, terms)).toBe(true)
+    expect(mentionsAny({ title: 'dr congo talks', summary: '' }, terms)).toBe(true)
+    expect(mentionsAny({ title: 'Ukraine latest', summary: 'Bukavu' }, terms)).toBe(false)
+    expect(mentionsAny({ title: 'Gomateam wins', summary: '' }, terms)).toBe(false)
+  })
+  it('the country newsrooms carry pictures (no Google News) and no duplicates', () => {
+    const feeds = countryNewsroomFeeds()
+    expect(feeds.some(f => f.name === 'Google News')).toBe(false)
+    expect(new Set(feeds.map(f => f.url)).size).toBe(feeds.length)
+  })
+  it('serves the saved page, marked stale, when nobody answers', () => {
+    const story = { id: '1', title: 'T', url: 'https://a', source: 'BBC', summary: '', image: '', site: '', publishedAt: 0, coverage: 1, alsoBy: [] }
+    const failed = { ok: false, stories: [], fetchedAt: 9, sources: [{ name: 'BBC', ok: false }], error: 'x' }
+    const saved = { ok: true, stories: [story], fetchedAt: 5, sources: [{ name: 'BBC', ok: true }] }
+    expect(chooseDeskResult(failed, saved)).toMatchObject({ ok: true, stale: true, fetchedAt: 5, stories: [story] })
+    expect(chooseDeskResult(failed, undefined)).toBe(failed)
+    const fresh = { ...saved, fetchedAt: 10 }
+    expect(chooseDeskResult(fresh, saved)).toBe(fresh)
   })
 })
 

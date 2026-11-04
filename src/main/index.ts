@@ -2523,7 +2523,7 @@ app.whenReady().then(() => {
   registerMediaProtocol()
   registerEmulatorProtocol()
   registerDjIpc()
-  registerNewsIpc({ get: httpGet })
+  registerNewsIpc({ get: httpGet, appDir: APP_DIR, userAgent: CHROME_UA })
   registerScreenShareHandler()
   doctor = startDoctor({ windows: () => appWins.values(), isAppSender: e => !!ctxFromEvent(e) })
   if (process.platform === 'win32') app.setAppUserModelId('com.mydigitalsolutions.aihub-browser')
