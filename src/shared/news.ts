@@ -262,7 +262,10 @@ export function parseFeed(xml: string, fallbackSource: string): RawStory[] {
       if (summary.length > 320) summary = summary.slice(0, 317).replace(/\s+\S*$/, '') + '…'
       const dateText = tag(block, 'pubDate') || tag(block, 'published') || tag(block, 'updated') || tag(block, 'dc:date')
       const ts = Date.parse(dateText)
-      out.push({ title, url, source, summary, image: imageOf(block), publishedAt: Number.isFinite(ts) ? ts : 0 })
+      // The page renders this in the app window: only plain https images.
+      // A file:, UNC or other scheme from a hostile feed must never reach <img>.
+      const image = imageOf(block).trim()
+      out.push({ title, url, source, summary, image: /^https:\/\//i.test(image) ? image : '', publishedAt: Number.isFinite(ts) ? ts : 0 })
     } catch { /* one broken item never costs the feed */ }
   }
   return out

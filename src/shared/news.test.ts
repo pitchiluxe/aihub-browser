@@ -39,6 +39,13 @@ describe('parseFeed', () => {
     const [s] = parseFeed(ATOM, 'Org')
     expect(s).toMatchObject({ title: 'Atom story', url: 'https://example.org/atom', summary: 'Short summary' })
   })
+  it('drops image URLs that are not https', () => {
+    const feed = (src: string) => `<rss><item><title>T</title><link>https://e.com/x</link><description><![CDATA[<img src="${src}">]]></description></item></rss>`
+    expect(parseFeed(feed('file://evil/share/a.png'), 'X')[0].image).toBe('')
+    expect(parseFeed(feed('//evil/share/a.png'), 'X')[0].image).toBe('')
+    expect(parseFeed(feed('http://e.com/a.png'), 'X')[0].image).toBe('')
+    expect(parseFeed(feed('https://e.com/a.png'), 'X')[0].image).toBe('https://e.com/a.png')
+  })
   it('never throws on garbage', () => {
     expect(parseFeed('<<<not xml', 'x')).toEqual([])
     expect(parseFeed(undefined as any, 'x')).toEqual([])
