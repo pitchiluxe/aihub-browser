@@ -77,7 +77,7 @@ import {
 import { createIncognitoManager, canMoveBetweenWindows } from './incognito'
 import { encryptJson, decryptJson, mergePayloads, syncableSettings, type SyncPayload } from './syncCrypto'
 import { subfolderFor } from './downloadSorting'
-import { isDownloadOnlyPage, taskbarProgress, uniqueSavePath, createAutoDownloadPolicy } from './downloadSurface'
+import { isDownloadOnlyPage, taskbarProgress, uniqueSavePath, createAutoDownloadPolicy, downloadSiteOf } from './downloadSurface'
 import { registerNewsIpc } from './news/register'
 import { createVault } from './vault'
 import { extractPdfText, looksLikePdf } from './pdfText'
@@ -2013,8 +2013,18 @@ function setupSharedApp(firstWin: BrowserWindow): void {
     if (!wc || wc.isDestroyed() || resetHooked.has(wc)) return
     resetHooked.add(wc)
     const id = wc.id
-    wc.on('did-navigate', () => autoDownloads.resetTab(id))
-    wc.once('destroyed', () => autoDownloads.resetTab(id))
+    // Main-frame commits only (did-navigate never fires for subframes), and
+    // only a change of site resets — see createAutoDownloadPolicy.
+    autoDownloads.navigated(id, downloadSiteOf(wc.getURL(), registrableDomain))
+    wc.on('did-navigate', (_ev, navUrl) => autoDownloads.navigated(id, downloadSiteOf(navUrl, registrableDomain)))
+    // Input the browser delivered to the page — a press, a key, a tap. Page
+    // script cannot produce these events, so they are the honest "the person
+    // did something" signal; hovering does not count.
+    wc.on('input-event', (_ev, input) => {
+      const t = input.type
+      if (t === 'mouseDown' || t === 'rawKeyDown' || t === 'keyDown' || t === 'touchStart' || t === 'gestureTap') autoDownloads.userInput(id)
+    })
+    wc.once('destroyed', () => autoDownloads.forgetTab(id))
   }
   ipcMain.handle('downloads:resolveHeld', (e, id: unknown, allow: unknown) => {
     // Only the browser's own windows may answer — never a web page.
@@ -2035,16 +2045,23 @@ function setupSharedApp(firstWin: BrowserWindow): void {
   const handleDownload = (sess: Electron.Session, e: Electron.Event, item: Electron.DownloadItem, sourceWc?: Electron.WebContents) => {
     closeDownloadOnlyPage(sourceWc)
     const url = item.getURL()
+    // Judged by the page the person is looking at — the tab's top-level URL —
+    // not by the (possibly iframe) origin that fired it. A tab that has not
+    // committed a page yet (a fresh download-only tab) falls back to the
+    // initiator.
     let initiator = ''
     try { initiator = item.getInitiatorOrigin() || new URL(url).origin } catch {}
     const tabKey = sourceWc && !sourceWc.isDestroyed() ? sourceWc.id : -1
     watchTabForReset(sourceWc)
-    let gesture = true
-    try { gesture = item.hasUserGesture() } catch {}
+    let topUrl = ''
+    try { topUrl = sourceWc && !sourceWc.isDestroyed() ? sourceWc.getURL() : '' } catch {}
+    const site = downloadSiteOf(topUrl, registrableDomain) || downloadSiteOf(initiator, registrableDomain)
+    let shownOrigin = initiator
+    try { if (/^https?:/i.test(topUrl)) shownOrigin = new URL(topUrl).origin } catch {}
     // A re-request the person already allowed skips the policy and takes over its row.
     const reusedId = reissue.get(url)
     if (reusedId) reissue.delete(url)
-    const hold = !reusedId && autoDownloads.decide(tabKey, initiator, gesture) === 'hold'
+    const hold = !reusedId && autoDownloads.decide(tabKey, site) === 'hold'
     // Classified by the session that started it, which is decided in main.
     const isPrivate = incognito.isIncognitoSession(sess)
     const dl: any = {
@@ -2074,10 +2091,10 @@ function setupSharedApp(firstWin: BrowserWindow): void {
     if (hold) {
       e.preventDefault()
       dl.state = 'held'
-      dl.heldOrigin = initiator
+      dl.heldOrigin = shownOrigin
       liveDownloadIds.add(dl.id)
       heldDownloads.set(dl.id, {
-        key: autoDownloads.keyOf(tabKey, initiator),
+        key: autoDownloads.keyOf(tabKey, site),
         release: () => {
           reissue.set(url, dl.id)
           try {

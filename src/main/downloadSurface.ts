@@ -49,45 +49,70 @@ export function taskbarProgress(active: Iterable<TransferProgress>): number {
 /**
  * Chrome's "this site is trying to download multiple files" rule.
  *
- * One click buys one download. A page may also start ONE download on its
- * own (the "your download will begin shortly" pattern). Anything beyond
- * that — a second automatic download, or a burst of files fired from a
- * single click — is held until the person allows it, so a hostile page
- * cannot drop a stream of files on disk. Chromium reports a script-driven
- * click as a gesture for every file it fires, so gestures arriving within
- * BURST_MS of an allowed download count as the same click. The allowance is
- * per tab and per origin, and resets when the tab navigates.
+ * Chrome's DownloadRequestLimiter, as a small state machine. A tab starts
+ * able to download ONE file. A download spends that. Real input to the tab
+ * — a mouse press, a key, a tap, reported by the browser and impossible for
+ * page script to forge — earns it back. Anything else is held until the
+ * person allows it, so a hostile page cannot drop a stream of files on disk.
+ *
+ * Chromium's own hasUserGesture() is NOT used: it reports a page's timer-
+ * driven `a.click()` as a gesture too, which would let a script click a
+ * hidden link forever.
+ *
+ * The allowance belongs to the tab and its TOP-LEVEL site — never the origin
+ * that fired the download, or every cross-origin iframe on a page would claim
+ * its own free download. Moving to a different site starts the tab afresh; a
+ * page reloading or navigating itself within its own site does not, so a
+ * reload loop cannot mint free downloads either.
  */
-export const BURST_MS = 1000
 export function createAutoDownloadPolicy() {
-  const usedAutomatic = new Set<string>()
-  const lastAllowedAt = new Map<string, number>()
+  const spent = new Set<string>()
   const allowed = new Set<string>()
-  const keyOf = (tabKey: number, origin: string) => `${tabKey}|${origin}`
+  const siteOfTab = new Map<number, string>()
+  const keyOf = (tabKey: number, site: string) => `${tabKey}|${site}`
+  const clearTab = (tabKey: number) => {
+    const prefix = `${tabKey}|`
+    for (const k of [...spent]) if (k.startsWith(prefix)) spent.delete(k)
+    for (const k of [...allowed]) if (k.startsWith(prefix)) allowed.delete(k)
+  }
   return {
     keyOf,
-    decide(tabKey: number, origin: string, userGesture: boolean, now = Date.now()): 'allow' | 'hold' {
-      const key = keyOf(tabKey, origin)
+    /** The tab committed a page on `site`. Only a change of site resets it. */
+    navigated(tabKey: number, site: string) {
+      const prev = siteOfTab.get(tabKey)
+      if (prev !== undefined && prev !== site) clearTab(tabKey)
+      siteOfTab.set(tabKey, site)
+    },
+    /** Real input reached the tab: it may download one more file. */
+    userInput(tabKey: number) {
+      const prefix = `${tabKey}|`
+      for (const k of [...spent]) if (k.startsWith(prefix)) spent.delete(k)
+    },
+    decide(tabKey: number, site: string): 'allow' | 'hold' {
+      const key = keyOf(tabKey, site)
       if (allowed.has(key)) return 'allow'
-      const last = lastAllowedAt.get(key)
-      if (userGesture) {
-        if (last !== undefined && now - last < BURST_MS) return 'hold'
-        lastAllowedAt.set(key, now)
-        return 'allow'
-      }
-      if (!usedAutomatic.has(key)) { usedAutomatic.add(key); lastAllowedAt.set(key, now); return 'allow' }
-      return 'hold'
+      if (spent.has(key)) return 'hold'
+      spent.add(key)
+      return 'allow'
     },
     /** The person said yes: this tab may keep downloading from this origin. */
     allow(key: string) { allowed.add(key) },
-    /** The tab navigated or closed: its page gets a fresh allowance. */
-    resetTab(tabKey: number) {
-      const prefix = `${tabKey}|`
-      for (const k of [...usedAutomatic]) if (k.startsWith(prefix)) usedAutomatic.delete(k)
-      for (const k of [...lastAllowedAt.keys()]) if (k.startsWith(prefix)) lastAllowedAt.delete(k)
-      for (const k of [...allowed]) if (k.startsWith(prefix)) allowed.delete(k)
-    },
+    /** The tab closed. */
+    forgetTab(tabKey: number) { clearTab(tabKey); siteOfTab.delete(tabKey) },
   }
+}
+
+/**
+ * The site a page belongs to, for the download allowance: the registrable
+ * domain (news.example.co.uk → example.co.uk), or the bare host for IP
+ * addresses and single-label hosts, where "last two labels" means nothing.
+ */
+export function downloadSiteOf(url: string, registrableDomain: (u: string) => string): string {
+  let host = ''
+  try { host = new URL(url).hostname.toLowerCase() } catch { return '' }
+  if (!host) return ''
+  if (/^\d+(\.\d+){3}$/.test(host) || host.includes(':') || host.startsWith('[') || !host.includes('.')) return host
+  return registrableDomain(host) || host
 }
 
 /**

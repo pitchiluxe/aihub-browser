@@ -33,35 +33,64 @@ describe('taskbarProgress', () => {
   })
 })
 
-import { uniqueSavePath, createAutoDownloadPolicy } from './downloadSurface'
+import { uniqueSavePath, createAutoDownloadPolicy, downloadSiteOf } from './downloadSurface'
 
 describe('createAutoDownloadPolicy', () => {
-  it('allows separate clicks, one download each', () => {
+  it('allows one download, then holds until real input', () => {
     const p = createAutoDownloadPolicy()
-    for (let i = 0; i < 5; i++) expect(p.decide(1, 'https://a', true, i * 5000)).toBe('allow')
+    expect(p.decide(1, 'a.com')).toBe('allow')
+    expect(p.decide(1, 'a.com')).toBe('hold')
+    expect(p.decide(1, 'a.com')).toBe('hold')
+    p.userInput(1)
+    expect(p.decide(1, 'a.com')).toBe('allow')
+    expect(p.decide(1, 'a.com')).toBe('hold')
   })
-  it('holds the rest of a burst fired from one click', () => {
+  it('separate clicks each earn one download', () => {
     const p = createAutoDownloadPolicy()
-    expect(p.decide(1, 'https://a', true, 0)).toBe('allow')
-    expect(p.decide(1, 'https://a', true, 10)).toBe('hold')
-    expect(p.decide(1, 'https://a', true, 20)).toBe('hold')
+    for (let i = 0; i < 4; i++) { p.userInput(1); expect(p.decide(1, 'a.com')).toBe('allow') }
   })
-  it('allows one automatic download, then holds', () => {
+  it('keeps tabs apart', () => {
     const p = createAutoDownloadPolicy()
-    expect(p.decide(1, 'https://a', false, 0)).toBe('allow')
-    expect(p.decide(1, 'https://a', false, 9000)).toBe('hold')
-    expect(p.decide(1, 'https://b', false, 9000)).toBe('allow')
-    expect(p.decide(2, 'https://a', false, 9000)).toBe('allow')
+    p.decide(1, 'a.com')
+    expect(p.decide(2, 'a.com')).toBe('allow')
   })
-  it('remembers an allowance until the tab navigates', () => {
+  it('remembers an allowance until the tab moves to another site', () => {
     const p = createAutoDownloadPolicy()
-    p.decide(1, 'https://a', false, 0)
-    p.allow(p.keyOf(1, 'https://a'))
-    expect(p.decide(1, 'https://a', false, 5)).toBe('allow')
-    expect(p.decide(1, 'https://a', true, 6)).toBe('allow')
-    p.resetTab(1)
-    expect(p.decide(1, 'https://a', false, 9000)).toBe('allow')
-    expect(p.decide(1, 'https://a', false, 9001)).toBe('hold')
+    p.navigated(1, 'a.com')
+    p.decide(1, 'a.com')
+    p.allow(p.keyOf(1, 'a.com'))
+    expect(p.decide(1, 'a.com')).toBe('allow')
+    expect(p.decide(1, 'a.com')).toBe('allow')
+    p.navigated(1, 'b.com')
+    p.navigated(1, 'a.com')
+    expect(p.decide(1, 'a.com')).toBe('allow')
+    expect(p.decide(1, 'a.com')).toBe('hold')
+  })
+  it('a page reloading itself does not earn a fresh download', () => {
+    const p = createAutoDownloadPolicy()
+    p.navigated(1, 'evil.com')
+    expect(p.decide(1, 'evil.com')).toBe('allow')
+    for (let i = 0; i < 5; i++) {
+      p.navigated(1, 'evil.com')
+      expect(p.decide(1, 'evil.com')).toBe('hold')
+    }
+  })
+  it('forgets a closed tab', () => {
+    const p = createAutoDownloadPolicy()
+    p.navigated(1, 'a.com')
+    p.decide(1, 'a.com')
+    p.forgetTab(1)
+    expect(p.decide(1, 'a.com')).toBe('allow')
+  })
+})
+
+describe('downloadSiteOf', () => {
+  const reg = (h: string) => h.split('.').slice(-2).join('.')
+  it('groups subdomains and keeps IPs whole', () => {
+    expect(downloadSiteOf('https://cdn.files.example.com/x', reg)).toBe('example.com')
+    expect(downloadSiteOf('http://127.0.0.1:8080/', reg)).toBe('127.0.0.1')
+    expect(downloadSiteOf('http://localhost/', reg)).toBe('localhost')
+    expect(downloadSiteOf('not a url', reg)).toBe('')
   })
 })
 describe('uniqueSavePath', () => {
