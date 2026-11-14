@@ -126,6 +126,10 @@ export function parseSearchResults(html: string, limit = 40): YouTubeVideo[] {
 
     const title = readText(r.title).trim()
     if (!title) continue
+    const thumbnailPrefix = `https://i.ytimg.com/vi/${id}/`
+    const thumbnails: { url?: string; width?: number }[] = Array.isArray(r.thumbnail?.thumbnails) ? r.thumbnail.thumbnails : []
+    const thumbnail = thumbnails.filter(image => typeof image?.url === 'string' && image.url.startsWith(thumbnailPrefix))
+      .sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url
 
     seen.add(id)
     out.push({
@@ -134,7 +138,7 @@ export function parseSearchResults(html: string, limit = 40): YouTubeVideo[] {
       channel: readText(r.ownerText) || readText(r.longBylineText) || '',
       duration,
       views: readText(r.shortViewCountText),
-      thumbnail: thumbnailFor(id),
+      thumbnail: thumbnail || thumbnailFor(id),
       url: `https://www.youtube.com/watch?v=${id}`,
     })
     if (out.length >= limit) break

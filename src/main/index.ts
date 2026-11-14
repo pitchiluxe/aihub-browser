@@ -5907,6 +5907,8 @@ const slowModels = new Set<string>()
 
 type AiRequestOpts = {
   preferCloud?: boolean; needsTools?: boolean; maxTokens?: number
+  ollamaFirst?: boolean
+  localOnly?: boolean
   /** A shorter system prompt to use when a local Ollama model answers. */
   localSystem?: string
   onDelta?: (text: string, reset?: boolean) => void
@@ -5941,10 +5943,15 @@ async function runAiRequestRouted(
   messages = sanitizeChatMessages(messages || [])
   const { olBase, orKey, orBase } = getAIConfig()
   const settings = getRoutingSettings(preferredModel)
+  if (opts?.ollamaFirst) {
+    settings.primaryProvider = 'ollama'
+    if (settings.fallbackProvider !== 'none') settings.fallbackProvider = 'openrouter'
+  }
+  if (opts?.localOnly) settings.fallbackEnabled = false
 
   // The user's own API key (Claude, ChatGPT) answers first — over Ollama and
   // OpenRouter. If it cannot, the configured route below answers as usual.
-  const triedDirect = directKeysFirst(getAIConfig(), { needsTools: opts?.needsTools, carriesImages: hasImages(messages) })
+  const triedDirect = opts?.ollamaFirst ? [] : directKeysFirst(getAIConfig(), { needsTools: opts?.needsTools, carriesImages: hasImages(messages) })
   for (const p of triedDirect) {
     const direct = await tryDirectKey(p, messages, opts)
     if (direct) return direct
@@ -6223,6 +6230,39 @@ ipcMain.handle('ai:chat', async (
   }
 })
 
+ipcMain.handle('techHub:generate', async (event, prompt: unknown) => {
+  const ctx = ctxFromEvent(event)
+  if (!ctx || event.senderFrame !== ctx.win.webContents.mainFrame) throw new Error('Tech Hub requires an AIHub window')
+  if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 12_000) {
+    throw new Error('Invalid Tech Hub request')
+  }
+  return runAiRequest([{ role: 'user', content: prompt }], undefined, { ollamaFirst: true, maxTokens: 5500 })
+})
+
+ipcMain.handle('techHub:resume', async (event, prompt: unknown, allowCloud: unknown) => {
+  const ctx = ctxFromEvent(event)
+  if (!ctx || event.senderFrame !== ctx.win.webContents.mainFrame) throw new Error('Tech Hub requires an AIHub window')
+  if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 25_000) throw new Error('Invalid résumé request')
+  return runAiRequest([{ role: 'user', content: prompt }], undefined, { ollamaFirst: true, localOnly: allowCloud !== true, maxTokens: 3500 })
+})
+
+ipcMain.handle('techHub:readResume', (event, name: unknown, data: unknown) => {
+  const ctx = ctxFromEvent(event)
+  if (!ctx || event.senderFrame !== ctx.win.webContents.mainFrame) throw new Error('Tech Hub requires an AIHub window')
+  if (typeof name !== 'string' || !(data instanceof ArrayBuffer) || !data.byteLength || data.byteLength > 5 * 1024 * 1024) {
+    throw new Error('Choose a résumé file under 5 MB.')
+  }
+  const bytes = Buffer.from(data)
+  let text: string | null
+  if (/\.docx$/i.test(name)) text = docxToText(bytes)
+  else if (/\.pdf$/i.test(name) && looksLikePdf(bytes)) text = extractPdfText(bytes, 8 * 1024 * 1024).text
+  else if (/\.(txt|md)$/i.test(name)) text = bytes.toString('utf8')
+  else throw new Error('Choose a PDF, Word, text, or Markdown résumé.')
+  if (!text?.trim() || text.includes('\u0000')) throw new Error('No readable text found. Paste your résumé or try a text-based copy.')
+  if (text.length > 16_000) throw new Error('The extracted résumé is too long. Paste the relevant sections instead.')
+  return text.trim()
+})
+
 // ── IPC: AI summarize ─────────────────────────────────────────────────────
 ipcMain.handle('ai:summarizePage', async (_e, pageText: string, url: string) => {
   // Build prompt — use real extracted page text if available, else URL-based summary
@@ -6455,12 +6495,14 @@ function extractZipEntry(buf: Buffer, wantedName: string): Buffer | null {
     const localOff   = buf.readUInt32LE(ptr + 42)
     const name = buf.toString('utf-8', ptr + 46, ptr + 46 + nameLen)
     if (name === wantedName) {
+      if (localOff + 30 > buf.length || buf.readUInt32LE(localOff) !== 0x04034b50) return null
       const lNameLen  = buf.readUInt16LE(localOff + 26)
       const lExtraLen = buf.readUInt16LE(localOff + 28)
       const dataStart = localOff + 30 + lNameLen + lExtraLen
+      if (dataStart + compSize > buf.length || compSize > 8 * 1024 * 1024) return null
       const data = buf.subarray(dataStart, dataStart + compSize)
       if (method === 0) return Buffer.from(data)
-      if (method === 8) { try { return zlib.inflateRawSync(data) } catch { return null } }
+      if (method === 8) { try { return zlib.inflateRawSync(data, { maxOutputLength: 8 * 1024 * 1024 }) } catch { return null } }
       return null
     }
     ptr += 46 + nameLen + extraLen + commentLen

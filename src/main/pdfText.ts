@@ -169,7 +169,8 @@ export function extractTextFromStream(content: string): string {
  * result that is no better for our purpose, since we want *all* the text and
  * not a particular object. A stream we cannot inflate is skipped, not fatal.
  */
-export function decodeStreams(bytes: Uint8Array): { contents: string[]; total: number } {
+export function decodeStreams(bytes: Uint8Array, maxDecodedBytes?: number): { contents: string[]; total: number } {
+  let decodedBytes = 0
   const contents: string[] = []
   const haystack = ASCII(bytes, 0, bytes.length)
   let total = 0
@@ -192,7 +193,10 @@ export function decodeStreams(bytes: Uint8Array): { contents: string[]; total: n
 
     const slice = bytes.slice(from, end)
     try {
-      contents.push(zlib.inflateSync(Buffer.from(slice)).toString('latin1'))
+      if (maxDecodedBytes !== undefined && decodedBytes >= maxDecodedBytes) break
+      const decoded = zlib.inflateSync(Buffer.from(slice), maxDecodedBytes === undefined ? undefined : { maxOutputLength: maxDecodedBytes - decodedBytes })
+      decodedBytes += decoded.length
+      contents.push(decoded.toString('latin1'))
       continue
     } catch {
       // Not Flate — either raw, or a filter we do not implement.
@@ -217,11 +221,11 @@ export function tidy(text: string): string {
 }
 
 /** The document's words, best effort, with enough detail to explain a miss. */
-export function extractPdfText(bytes: Uint8Array): PdfText {
+export function extractPdfText(bytes: Uint8Array, maxDecodedBytes?: number): PdfText {
   if (!looksLikePdf(bytes)) return { text: '', streams: 0, decoded: 0, encrypted: false }
 
   const encrypted = ASCII(bytes, 0, bytes.length).includes('/Encrypt')
-  const { contents, total } = decodeStreams(bytes)
+  const { contents, total } = decodeStreams(bytes, maxDecodedBytes)
 
   let text = ''
   let decoded = 0

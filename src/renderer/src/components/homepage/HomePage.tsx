@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Sparkles, LayoutGrid, Network, RefreshCw, Zap, Clock, X,
   ChevronLeft, ChevronRight, Download, Upload, Eye, EyeOff,
-  FlaskConical, Bot, Newspaper, Search, Disc3, Globe2, Plane,
+  FlaskConical, Bot, Newspaper, Search, Disc3, Globe2, Plane, Terminal, ArrowUpRight,
 } from 'lucide-react'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { useShallow } from 'zustand/react/shallow'
@@ -238,6 +238,14 @@ export default function HomePage({ onNavigate }: Props) {
           </motion.div>
 
           <GameRoomDoor isLight={isLight} onEnter={() => useBrowserStore.getState().focusOrOpenPage('aihub://games', 'games')} />
+          <button type="button"
+            className="mt-3 flex items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-[rgb(var(--ds-text))] transition hover:brightness-125"
+            style={glass}
+            onClick={() => useBrowserStore.getState().focusOrOpenPage('aihub://tech-hub', 'tech-hub')}>
+            <span className="rounded-xl bg-emerald-400/15 p-2 text-emerald-500"><Terminal size={18} aria-hidden="true" /></span>
+            <span><strong className="block text-sm">Tech Hub</strong><span className="block text-xs opacity-75">Career roadmaps, labs, and jobs</span></span>
+            <ArrowUpRight size={16} className="ml-3 opacity-60" aria-hidden="true" />
+          </button>
 
         </div>
 

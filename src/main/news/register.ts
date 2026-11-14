@@ -2,6 +2,7 @@ import { ipcMain, net } from 'electron'
 import { join } from 'path'
 import { lookup } from 'dns/promises'
 import { createManagedJsonStore } from '../jsonStore'
+import { TECH_NEWS_FEEDS, type TechNewsTopic } from '../../shared/techNews'
 import {
   COUNTRIES, deskFeeds, countryFeeds, parseFeed, mergeStories, normalizeMeal,
   extractShareImage, canResolveImage, DESK_FEEDS,
@@ -258,6 +259,13 @@ export function registerNewsIpc(deps: {
       return { ok: false, stories: [], fetchedAt: Date.now(), sources: [], error: 'Unknown desk.' }
     }
     return serve(`desk:${id}`, deskFeeds(id as DeskId), 80)
+  })
+  ipcMain.handle('news:techHub', (e, topic: unknown, refresh: unknown) => {
+    if (!deps.isAppSender(e) || typeof topic !== 'string') return refused()
+    if (topic !== 'all' && !Object.prototype.hasOwnProperty.call(TECH_NEWS_FEEDS, topic)) return refused()
+    const feeds = topic === 'all' ? Object.values(TECH_NEWS_FEEDS).flat() : TECH_NEWS_FEEDS[topic as Exclude<TechNewsTopic, 'all'>]
+    if (refresh === true) feeds.forEach(feed => feedCache.delete(feed.url))
+    return serve(`techHub:${topic}`, feeds, 80)
   })
   ipcMain.handle('news:country', (e, code: unknown) => {
     if (!deps.isAppSender(e)) return refused()

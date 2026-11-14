@@ -497,7 +497,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     resolve: (id: string, allow: boolean) => ipcRenderer.invoke('downloads:resolveHeld', id, allow),
   },
   /** aihub://news — multi-outlet desks, the country desk and the kitchen. */
+  techHub: {
+    generate: (prompt: string) => ipcRenderer.invoke('techHub:generate', prompt),
+    tailorResume: (prompt: string, allowCloud: boolean) => ipcRenderer.invoke('techHub:resume', prompt, allowCloud),
+    readResume: (name: string, data: ArrayBuffer) => ipcRenderer.invoke('techHub:readResume', name, data),
+  },
   news: {
+    techHub: (topic: string, refresh = false) => ipcRenderer.invoke('news:techHub', topic, refresh),
     desk:    (id: string)     => ipcRenderer.invoke('news:desk', id),
     country: (code: string)   => ipcRenderer.invoke('news:country', code),
     recipes: (count?: number) => ipcRenderer.invoke('news:recipes', count),

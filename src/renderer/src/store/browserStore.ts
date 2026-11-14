@@ -194,10 +194,14 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
   activeTabId: 'tab-1',
 
   addTab: (url = 'home', pageType = 'browser', containerId?: string) => {
+    if (url === 'aihub://hallo') {
+      url = 'aihub://tech-hub'
+      pageType = 'tech-hub'
+    }
     const id = `tab-${++tabN}`
     const isHome = url === 'home' && pageType === 'browser'
     set(s => ({
-      tabs: [...s.tabs, { id, url, title: isHome ? 'New Tab' : pageType === 'games' ? 'Game room' : pageType === 'dj' ? 'AIHub DJ' : pageType === 'travel' ? 'Travel the World' : pageType === 'flights-rentals' ? 'Flights & Rentals' : pageType === 'news' ? 'World News' : pageType !== 'browser' ? pageType.charAt(0).toUpperCase() + pageType.slice(1) : url, favicon: '', isLoading: false, isHome, pageType, containerId }],
+      tabs: [...s.tabs, { id, url, title: isHome ? 'New Tab' : pageType === 'tech-hub' ? 'Tech Hub' : pageType === 'games' ? 'Game room' : pageType === 'dj' ? 'AIHub DJ' : pageType === 'travel' ? 'Travel the World' : pageType === 'flights-rentals' ? 'Flights & Rentals' : pageType === 'news' ? 'World News' : pageType !== 'browser' ? pageType.charAt(0).toUpperCase() + pageType.slice(1) : url, favicon: '', isLoading: false, isHome, pageType, containerId }],
       activeTabId: id,
       canGoBack: false,
       canGoForward: false,
@@ -232,12 +236,13 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     if (!usable.length) return
     const idx = Number.isFinite(activeIndex) ? Math.min(Math.max(Math.trunc(activeIndex), 0), usable.length - 1) : 0
     const tabs: Tab[] = usable.map((e, index) => {
-      const pageType = (e.pageType || 'browser') as Tab['pageType']
+      const replaced = e.url === 'aihub://hallo'
+      const pageType = replaced ? 'tech-hub' : e.pageType || 'browser'
       const isHome = e.url === 'home' && pageType === 'browser'
       return {
         id: `tab-${++tabN}`,
-        url: e.url,
-        title: e.title || (isHome ? 'New Tab' : e.url),
+        url: replaced ? 'aihub://tech-hub' : e.url,
+        title: pageType === 'tech-hub' ? 'Tech Hub' : e.title || (isHome ? 'New Tab' : e.url),
         favicon: '',
         isLoading: false,
         isHome,
