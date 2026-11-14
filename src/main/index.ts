@@ -546,6 +546,7 @@ function ollamaChatStream(
   base: string, model: string, messages: any[],
   idleTimeoutMs = 120000, firstTokenTimeoutMs?: number,
   onDelta?: (text: string, reset?: boolean) => void,
+  maxTokens?: number,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     let streamStarted = false
@@ -569,7 +570,8 @@ function ollamaChatStream(
     const numCtx = Math.max(tier, ollamaCtxByModel.get(model) || 0)
     ollamaCtxByModel.set(model, numCtx)
     const body = JSON.stringify({
-      model, messages, stream: true, keep_alive: '30m', options: { num_ctx: numCtx },
+      model, messages, stream: true, keep_alive: '30m',
+      options: { num_ctx: numCtx, ...(maxTokens ? { num_predict: maxTokens } : {}) },
     })
     const requestLib = parsed.protocol === 'https:' ? https : http
     const req = requestLib.request({
@@ -6053,6 +6055,7 @@ async function runAiRequestRouted(
               : withoutImages(fitted)
             const raw = await ollamaChatStream(
               probe.base || olBase, attempt, payload, 120000, isRoutedUpgrade ? 60000 : undefined, opts?.onDelta,
+              opts?.ollamaFirst ? opts.maxTokens : undefined,
             )
             const content = stripThinkTags(raw)
             if (content) return { ok: true as const, value: content }
@@ -6197,9 +6200,13 @@ const STREAM_FLUSH_MS = 60
 ipcMain.handle('ai:chat', async (
   e, messages: any[], preferredModel?: string,
   opts?: { preferCloud?: boolean; needsTools?: boolean; localSystem?: string; streamId?: string },
-) => {
-  const streamId = opts?.streamId
-  if (!streamId) return runAiRequest(messages, preferredModel, opts)
+) => runStreamedAiRequest(e, messages, preferredModel, opts, opts?.streamId))
+
+async function runStreamedAiRequest(
+  e: Electron.IpcMainInvokeEvent, messages: any[], preferredModel?: string,
+  opts?: AiRequestOpts, streamId?: unknown,
+) {
+  if (typeof streamId !== 'string' || !streamId || streamId.length > 100) return runAiRequest(messages, preferredModel, opts)
 
   const sender = e.sender
   let pending = ''
@@ -6229,22 +6236,23 @@ ipcMain.handle('ai:chat', async (
     flush()
     try { if (!sender.isDestroyed()) sender.send('ai:chunk', { streamId, done: true }) } catch {}
   }
-})
+}
 
-ipcMain.handle('techHub:generate', async (event, prompt: unknown) => {
+ipcMain.handle('techHub:generate', async (event, prompt: unknown, streamId: unknown, mode: unknown) => {
   const ctx = ctxFromEvent(event)
   if (!ctx || event.senderFrame !== ctx.win.webContents.mainFrame) throw new Error('Tech Hub requires an AIHub window')
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 12_000) {
     throw new Error('Invalid Tech Hub request')
   }
-  return runAiRequest([{ role: 'user', content: prompt }], undefined, { ollamaFirst: true, maxTokens: 5500 })
+  const maxTokens = mode === 'labs' ? 3600 : mode === 'news' ? 750 : mode === 'portfolio' ? 1000 : 1400
+  return runStreamedAiRequest(event, [{ role: 'user', content: prompt }], undefined, { ollamaFirst: true, maxTokens }, streamId)
 })
 
-ipcMain.handle('techHub:resume', async (event, prompt: unknown, allowCloud: unknown) => {
+ipcMain.handle('techHub:resume', async (event, prompt: unknown, allowCloud: unknown, streamId: unknown) => {
   const ctx = ctxFromEvent(event)
   if (!ctx || event.senderFrame !== ctx.win.webContents.mainFrame) throw new Error('Tech Hub requires an AIHub window')
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 25_000) throw new Error('Invalid résumé request')
-  return runAiRequest([{ role: 'user', content: prompt }], undefined, { ollamaFirst: true, localOnly: allowCloud !== true, maxTokens: 3500 })
+  return runStreamedAiRequest(event, [{ role: 'user', content: prompt }], undefined, { ollamaFirst: true, localOnly: allowCloud !== true, maxTokens: 3000 }, streamId)
 })
 
 ipcMain.handle('techHub:readResume', (event, name: unknown, data: unknown) => {

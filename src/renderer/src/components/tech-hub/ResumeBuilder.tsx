@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Download, Sparkles } from 'lucide-react'
 import Markdown from '../ai/MarkdownRenderer'
+import { useTechHubStream } from './useTechHubStream'
 
 export default function ResumeBuilder({ role, onOpen }: { role: string; onOpen: (url: string) => void }) {
   const [source, setSource] = useState('')
@@ -8,6 +9,7 @@ export default function ResumeBuilder({ role, onOpen }: { role: string; onOpen: 
   const [allowCloud, setAllowCloud] = useState(false)
   const [draft, setDraft] = useState<{ role: string; text: string; notes: string }>()
   const [busy, setBusy] = useState(false)
+  const stream = useTechHubStream()
   const [message, setMessage] = useState('')
 
   async function read(file: File) {
@@ -35,7 +37,7 @@ Résumé text:
 ${source}
 Optional job description:
 ${posting}`
-      const result = await window.electronAPI.techHub.tailorResume(prompt, allowCloud)
+      const result = await window.electronAPI.techHub.tailorResume(prompt, allowCloud, stream.start())
       if (result.provider === 'none' || !result.content?.trim()) {
         throw new Error(allowCloud ? 'No AI response. Check your AI provider settings.' : 'No local AI response. Check that Ollama is running with a model installed.')
       }
@@ -44,6 +46,7 @@ ${posting}`
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not tailor the résumé.')
     } finally {
+      stream.finish()
       setBusy(false)
     }
   }
@@ -82,6 +85,7 @@ ${posting}`
       <Sparkles size={16} /> Tailor résumé
     </button>
     <p role="status">{busy ? 'Working…' : message}</p>
+    {stream.partial && <Markdown content={stream.partial} onNavigate={onOpen} streaming />}
     {draft && <article className="tech-lab">
       <h3>Résumé draft for {draft.role}</h3>
       <label>Edit draft<textarea value={draft.text} rows={14} disabled={busy}

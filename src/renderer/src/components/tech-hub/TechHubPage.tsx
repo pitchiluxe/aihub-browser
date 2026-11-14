@@ -4,6 +4,7 @@ import type { DeskResult } from '../../../../shared/news'
 import { TECH_NEWS_TOPICS, type TechNewsTopic } from '../../../../shared/techNews'
 import Markdown from '../ai/MarkdownRenderer'
 import ResumeBuilder from './ResumeBuilder'
+import { useTechHubStream } from './useTechHubStream'
 import TechHubVideos from './TechHubVideos'
 import { careerPrompt, IAM_LAB, readLabs, TRACKS } from './careerContent'
 import './tech-hub.css'
@@ -42,6 +43,7 @@ export default function TechHubPage({ onOpen }: { onOpen: (url: string) => void 
   const [location, setLocation] = useState('')
   const [drafts, setDrafts] = useState<Partial<Record<Mode, Draft>>>({})
   const [busy, setBusy] = useState<Mode | null>(null)
+  const stream = useTechHubStream()
   const [error, setError] = useState<{ mode: Mode; message: string }>()
   const [news, setNews] = useState<DeskResult>()
   const [newsLoading, setNewsLoading] = useState(false)
@@ -89,7 +91,7 @@ export default function TechHubPage({ onOpen }: { onOpen: (url: string) => void 
     setError(undefined)
     const headlines = visibleStories.slice(0, 8).map((story, i) => `${i + 1}. ${story.title} (${story.source})`).join('\n')
     try {
-      const result: Draft = await window.electronAPI.techHub.generate(careerPrompt(mode, targetRole, experience, context, headlines))
+      const result: Draft = await window.electronAPI.techHub.generate(careerPrompt(mode, targetRole, experience, context, headlines), stream.start(), mode)
       if (result.provider === 'none' || !result.content?.trim()) {
         throw new Error('No AI response. Check your Ollama model and OpenRouter fallback in Settings.')
       }
@@ -97,6 +99,7 @@ export default function TechHubPage({ onOpen }: { onOpen: (url: string) => void 
     } catch (failure) {
       setError({ mode, message: failure instanceof Error ? failure.message : 'Could not generate a response.' })
     } finally {
+      stream.finish()
       setBusy(null)
     }
   }
@@ -253,7 +256,10 @@ export default function TechHubPage({ onOpen }: { onOpen: (url: string) => void 
               </li>)}</ul>
             </>}
             {error?.mode === section && <p role="alert" className="tech-error">{error.message}</p>}
-            {draft && <article className="tech-ai-result">
+            {busy === section && stream.partial && <article className="tech-ai-result">
+              <Markdown content={stream.partial} onNavigate={open} streaming />
+            </article>}
+            {draft && busy !== section && <article className="tech-ai-result">
               <small>{draft.provider === 'openrouter' ? 'OpenRouter' : 'Ollama'}{draft.model ? ` · ${draft.model}` : ''}</small>
               {(section !== 'labs' || !generatedLabs.length) && <Markdown content={draft.content} onNavigate={open} />}
             </article>}
