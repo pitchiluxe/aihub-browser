@@ -239,12 +239,12 @@ export default function HomePage({ onNavigate }: Props) {
 
           <GameRoomDoor isLight={isLight} onEnter={() => useBrowserStore.getState().focusOrOpenPage('aihub://games', 'games')} />
           <button type="button"
-            className="mt-3 flex items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-[rgb(var(--ds-text))] transition hover:brightness-125"
-            style={glass}
+            className="group relative mt-4 grid w-full max-w-[340px] grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2 rounded-xl border border-[#477653] bg-gradient-to-r from-[#102520] via-[#192e24] to-[#102520] px-3 py-3 text-center text-[#edfff2] shadow-[0_6px_22px_#174d3438] transition-colors hover:border-[#a8fa75] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#68ba53]"
             onClick={() => useBrowserStore.getState().focusOrOpenPage('aihub://tech-hub', 'tech-hub')}>
-            <span className="rounded-xl bg-emerald-400/15 p-2 text-emerald-500"><Terminal size={18} aria-hidden="true" /></span>
-            <span><strong className="block text-sm">Tech Hub</strong><span className="block text-xs opacity-75">Career roadmaps, labs, and jobs</span></span>
-            <ArrowUpRight size={16} className="ml-3 opacity-60" aria-hidden="true" />
+            <span className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-[#a8fa75] to-transparent" aria-hidden="true" />
+            <span className="grid h-8 w-8 place-items-center rounded-md bg-[#a8fa75]/15 text-[#a8fa75]"><Terminal size={18} aria-hidden="true" /></span>
+            <span><strong className="block font-mono text-base font-bold">Tech Hub</strong><span className="block text-xs text-[#b9d6c5]">Career roadmaps, labs, and jobs</span></span>
+            <ArrowUpRight size={16} className="justify-self-center text-[#a8fa75]" aria-hidden="true" />
           </button>
 
         </div>

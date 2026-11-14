@@ -57,7 +57,14 @@ export default function UpdateNotification() {
     setState(s => (s ? { ...s, phase: 'downloading', percent: 0 } : s))
     window.electronAPI.updater.download()
   }
-  const install = () => window.electronAPI.updater.install()
+  const install = async () => {
+    try {
+      const result = await window.electronAPI.updater.install()
+      if (!result.ok) setState(s => s && { ...s, message: result.error || 'Could not restart to install the update.' })
+    } catch {
+      setState(s => s && { ...s, message: 'Could not restart to install the update.' })
+    }
+  }
 
   const headline =
     state.phase === 'available' ? 'Update available'
@@ -68,7 +75,7 @@ export default function UpdateNotification() {
   const detail =
     state.phase === 'available' ? `Version ${state.version} is ready to download.`
     : state.phase === 'downloading' ? `${state.percent ?? 0}% — you can keep browsing.`
-    : state.phase === 'downloaded' ? `Version ${state.version} will be applied on restart.`
+    : state.phase === 'downloaded' ? state.message || `Version ${state.version} will be applied on restart.`
     : state.message || ''
 
   return (

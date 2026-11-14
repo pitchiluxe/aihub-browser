@@ -27,7 +27,7 @@ import { rankInBackground, stopSemanticWorker } from './semanticRanking'
 import { extractLaunchUrl } from './launchUrl'
 import { registerSecurityIpc } from './security'
 import { registerFaviconIpc } from './favicons'
-import { initAutoUpdater } from './updater'
+import { initAutoUpdater, isRestartingForUpdate } from './updater'
 import { pickAgentModel, orderFreeModels, suggestFasterModel, firstTokenTimeoutForPrompt, lighterModelToPull } from './modelRouting'
 import { sanitizeChatMessages, fitMessagesToBudget, withLocalSystem } from './chatMessages'
 import { createFareEngine } from './fares/engine'
@@ -1952,7 +1952,7 @@ function setupSharedApp(firstWin: BrowserWindow): void {
 
   // ── Auto-update (GitHub Releases) — checks on startup + periodically and
   // notifies the renderer when a newer version is published. No-op in dev. ──
-  initAutoUpdater(() => mainWindow, safelySend)
+  initAutoUpdater(safelySend, () => incognito.activeDownloadCount() === 0)
 
   // ── Download tracking — covers mainWindow + all webviews ──────────────
   // Sessions are shared: every webview created with the same partition returns
@@ -2306,6 +2306,7 @@ function createAppWindow(initialUrl?: string, opts: { incognito?: boolean } = {}
   // Closing the last private window cancels private downloads still running
   // (their session is about to be wiped). Ask first, as Chrome does.
   win.on('close', (e) => {
+    if (isRestartingForUpdate()) return
     if (!isIncognito || incognito.windowCount() !== 1 || !incognito.isIncognitoWindow(winId)) return
     const running = incognito.activeDownloadCount()
     if (!running) return

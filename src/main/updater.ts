@@ -1,4 +1,4 @@
-import { app, ipcMain, BrowserWindow } from 'electron'
+import { app, ipcMain, autoUpdater as nativeUpdater } from 'electron'
 import electronUpdater from 'electron-updater'
 
 const { autoUpdater } = electronUpdater
@@ -23,11 +23,17 @@ type Send = (channel: string, ...args: any[]) => void
 
 let started = false
 let ipcRegistered = false
+let updateReady = false
+let restartingForUpdate = false
 
-export function initAutoUpdater(getWindow: () => BrowserWindow | null, safelySend: Send): void {
+export function isRestartingForUpdate(): boolean {
+  return restartingForUpdate
+}
+
+export function initAutoUpdater(safelySend: Send, canRestart: () => boolean): void {
   // IPC is always registered so the renderer can call these safely; in dev they
   // resolve to a no-op "disabled" state.
-  registerIpc(safelySend)
+  registerIpc(safelySend, canRestart)
 
   if (!app.isPackaged) return
   if (started) return
@@ -46,9 +52,11 @@ export function initAutoUpdater(getWindow: () => BrowserWindow | null, safelySen
   autoUpdater.on('download-progress', p =>
     safelySend('updater:event', { type: 'progress', percent: Math.round(p.percent), bytesPerSecond: p.bytesPerSecond, transferred: p.transferred, total: p.total })
   )
-  autoUpdater.on('update-downloaded', info =>
+  autoUpdater.on('update-downloaded', info => {
+    updateReady = true
     safelySend('updater:event', { type: 'downloaded', version: info.version })
-  )
+  })
+  nativeUpdater.on('before-quit-for-update', () => { restartingForUpdate = true })
   autoUpdater.on('error', err =>
     safelySend('updater:event', { type: 'error', message: cleanError(err) })
   )
@@ -57,7 +65,6 @@ export function initAutoUpdater(getWindow: () => BrowserWindow | null, safelySen
   setTimeout(() => { void safeCheck() }, 15_000)
   setInterval(() => { void safeCheck() }, CHECK_INTERVAL_MS)
 
-  void getWindow // reserved for future modal-dialog use; kept for a stable signature
 }
 
 async function safeCheck(): Promise<void> {
@@ -68,7 +75,7 @@ async function safeCheck(): Promise<void> {
   }
 }
 
-function registerIpc(safelySend: Send): void {
+function registerIpc(safelySend: Send, canRestart: () => boolean): void {
   if (ipcRegistered) return // createWindow can run again on macOS 'activate'
   ipcRegistered = true
 
@@ -101,8 +108,10 @@ function registerIpc(safelySend: Send): void {
   // Quit and install the downloaded update now.
   ipcMain.handle('updater:install', () => {
     if (!app.isPackaged) return { ok: false, disabled: true }
-    // isSilent=false (show installer UI), forceRunAfter=true (relaunch app).
-    setImmediate(() => autoUpdater.quitAndInstall(false, true))
+    if (!updateReady) return { ok: false, error: 'Download the update before restarting.' }
+    if (!canRestart()) return { ok: false, error: 'Finish or cancel active Incognito downloads before restarting.' }
+    // The Windows update uses the existing installation and relaunches once complete.
+    setImmediate(() => autoUpdater.quitAndInstall(process.platform === 'win32', true))
     return { ok: true }
   })
 
