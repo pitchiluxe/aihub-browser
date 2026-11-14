@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Sparkles, LayoutGrid, Network, RefreshCw, Zap, Clock, X,
   ChevronLeft, ChevronRight, Download, Upload, Eye, EyeOff,
-  FlaskConical, Bot, Newspaper, Search, Disc3, Globe2, Plane, Terminal, ArrowUpRight,
+  FlaskConical, Bot, Newspaper, Search, Disc3, Globe2, Plane, Terminal, ArrowUpRight, Bookmark as BookmarkIcon,
 } from 'lucide-react'
 import { getInternalBookmarkIcon } from './InternalBookmarkIcons'
 import { useShallow } from 'zustand/react/shallow'
@@ -660,13 +660,11 @@ function BookmarkTile({ bm, index, isLight, onNavigate, onRemove }: {
           boxShadow: `0 4px 20px ${tint}18, inset 0 1px 0 rgba(255,255,255,0.08)`,
         }}
       >
-        {/* Favicon renders a generated letter tile when there is no real icon.
-            The previous fallback hid a broken <img> and appended a letter span
-            by hand — which only ran after the 404 had already been logged. */}
         {internal ? (
           <internal.Icon size={30} />
         ) : (
-          <Favicon url={bm.url} size={32} className="w-8 h-8 object-contain" />
+          <Favicon url={bm.url} savedIcon={bm.favicon} size={32} className="w-8 h-8 object-contain"
+            fallback={<BookmarkIcon size={28} style={{ color: tint }} aria-hidden="true" />} />
         )}
         <div className="absolute inset-0 rounded-[17px] bg-white/0 group-hover:bg-white/[0.05] transition-all duration-200" />
       </button>

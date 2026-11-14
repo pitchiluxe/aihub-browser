@@ -2,14 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { letterTileDataUri } from '../../../../shared/favicon'
 
 /**
- * A site icon that cannot produce a console error.
+ * A site icon with a local fallback.
  *
- * The `src` is only ever a data URI — either the real icon, fetched and cached
- * by the main process, or a generated letter tile. Nothing here reaches the
- * network, so there is no request to 404 and nothing for Chromium to log.
- *
- * The tile renders first and is replaced if a real icon arrives, which also
- * removes the empty-square flash the old <img> had while Google answered.
+ * The main process resolves and caches the site icon. Bookmarks can also
+ * supply an existing image and a custom fallback while the lookup runs.
  */
 
 /** Resolved icons for this window, so remounting a list is free. */
@@ -43,23 +39,41 @@ interface Props {
   style?: React.CSSProperties
   /** Decorative by default: the label next to it already names the site. */
   alt?: string
+  savedIcon?: string
+  fallback?: React.ReactNode
 }
 
-export default function Favicon({ url, size = 16, className, style, alt = '' }: Props) {
-  const [icon, setIcon] = useState<string | null>(() => memo.get(url) ?? null)
+function usableSavedIcon(icon: string | undefined, url: string): string | undefined {
+  if (!icon) return
+  if (/^data:image\/(?:png|gif|webp|jpeg|x-icon|vnd\.microsoft\.icon);base64,/i.test(icon)) return icon
+  try {
+    const saved = new URL(icon)
+    if (saved.protocol === 'https:' && !saved.username && !saved.password && saved.origin === new URL(url).origin) return saved.href
+  } catch { /* Invalid or unsupported saved icon. */ }
+  return undefined
+}
+
+export default function Favicon({ url, size = 16, className, style, alt = '', savedIcon, fallback }: Props) {
+  const [resolved, setResolved] = useState(() => ({ url, icon: memo.get(url) ?? null }))
+  const [failed, setFailed] = useState<string[]>([])
+  const saved = usableSavedIcon(savedIcon, url)
+  const source = [saved, resolved.url === url ? resolved.icon : memo.get(url)].find(value => value && !failed.includes(value))
 
   useEffect(() => {
     const cached = memo.get(url)
-    if (cached !== undefined) { setIcon(cached); return }
+    if (cached !== undefined) { setResolved({ url, icon: cached }); return }
 
     let cancelled = false
-    void resolve(url).then(data => { if (!cancelled) setIcon(data) })
+    void resolve(url).then(icon => { if (!cancelled) setResolved({ url, icon }) })
     return () => { cancelled = true }
   }, [url])
 
+  if (!source && fallback !== undefined) return <>{fallback}</>
+
   return (
     <img
-      src={icon || letterTileDataUri(url, size)}
+      src={source || letterTileDataUri(url, size)}
+      onError={source ? () => setFailed(values => [...values, source]) : undefined}
       width={size}
       height={size}
       alt={alt}

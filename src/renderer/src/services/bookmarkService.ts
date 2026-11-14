@@ -7,7 +7,8 @@ export async function loadBookmarks(): Promise<Bookmark[]> {
 export async function addBookmarkWithAI(
   url: string,
   title: string,
-  existingBookmarks: Bookmark[]
+  existingBookmarks: Bookmark[],
+  favicon = '',
 ): Promise<{ success: boolean; bookmark?: Bookmark; error?: string; warning?: string }> {
   let normalizedUrl = url.trim()
   if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
@@ -26,9 +27,7 @@ export async function addBookmarkWithAI(
   const bookmark = await window.electronAPI.bookmarks.add({
     url: normalizedUrl,
     title: shortenBookmarkName(title, normalizedUrl),
-    // Resolved on demand by the main process and cached there; storing a
-    // remote URL here is what put a 404 behind every iconless bookmark.
-    favicon: '',
+    favicon,
     category,
     color,
   })

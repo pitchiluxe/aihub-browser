@@ -171,7 +171,7 @@ export default function NavigationBar({
     setBmBusy(true)
     showBmToast('Adding to sphere…')
     try {
-      const result = await addBookmarkWithAI(url, activeTab?.title || '', bookmarks)
+      const result = await addBookmarkWithAI(url, activeTab?.title || '', bookmarks, activeTab?.favicon)
       if (result.success && result.bookmark) {
         addBookmark(result.bookmark)
         showBmToast(result.warning ? 'Already in sphere — updated' : 'Added to sphere')
