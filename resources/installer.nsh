@@ -1,6 +1,10 @@
 ; AIHub Browser — Custom NSIS installer script
 ; Erick OMARI — My Digital Solutions
 
+; Defining customCheckAppRunning suppresses these defaults in electron-builder.
+!include "getProcessInfo.nsh"
+Var pid
+
 !macro customCheckAppRunning
   !insertmacro IS_POWERSHELL_AVAILABLE
   ${If} ${isUpdated}
