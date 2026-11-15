@@ -6238,13 +6238,20 @@ async function runStreamedAiRequest(
   }
 }
 
+// Output budgets per Tech Hub task: long-form guides get room, short prompts
+// (one interview question, a headline briefing) stay fast on CPU Ollama.
+const TECH_HUB_TOKEN_BUDGETS: Record<string, number> = {
+  labs: 3600, cheatsheet: 2000, certs: 2000, skills: 1600, quiz: 1200, interviewFeedback: 1100,
+  portfolio: 1000, news: 750, interview: 400,
+}
+
 ipcMain.handle('techHub:generate', async (event, prompt: unknown, streamId: unknown, mode: unknown) => {
   const ctx = ctxFromEvent(event)
   if (!ctx || event.senderFrame !== ctx.win.webContents.mainFrame) throw new Error('Tech Hub requires an AIHub window')
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 12_000) {
     throw new Error('Invalid Tech Hub request')
   }
-  const maxTokens = mode === 'labs' ? 3600 : mode === 'news' ? 750 : mode === 'portfolio' ? 1000 : 1400
+  const maxTokens = typeof mode === 'string' && Object.hasOwn(TECH_HUB_TOKEN_BUDGETS, mode) ? TECH_HUB_TOKEN_BUDGETS[mode] : 1400
   return runStreamedAiRequest(event, [{ role: 'user', content: prompt }], undefined, { ollamaFirst: true, maxTokens }, streamId)
 })
 

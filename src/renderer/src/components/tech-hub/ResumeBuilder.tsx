@@ -65,7 +65,7 @@ ${posting}`
     }
   }
 
-  return <div className="tech-resume">
+  return <div className="th-resume">
     <p>Tailor your résumé for <strong>{role || 'your chosen role'}</strong>. Upload a file or paste your experience, then review what AI changes.</p>
     <label>Upload résumé (PDF, Word .docx, text, or Markdown)
       <input type="file" accept=".pdf,.docx,.txt,.md" disabled={busy} onChange={event => {
@@ -78,21 +78,21 @@ ${posting}`
       onChange={event => { setSource(event.target.value); setDraft(undefined) }} /></label>
     <label>Job description (optional)<textarea rows={4} maxLength={5000} disabled={busy} value={posting}
       onChange={event => { setPosting(event.target.value); setDraft(undefined) }} /></label>
-    <label className="tech-resume-cloud"><input type="checkbox" checked={allowCloud} disabled={busy}
+    <label className="th-check"><input type="checkbox" checked={allowCloud} disabled={busy}
       onChange={event => setAllowCloud(event.target.checked)} /> Allow cloud processing if local AI is unavailable</label>
     {allowCloud && <p>With cloud fallback enabled in Settings, your résumé text and job description may be sent to OpenRouter.</p>}
-    <button className="tech-primary" disabled={busy || !role || !source.trim()} onClick={() => void tailor()}>
+    <button className="th-btn th-btn-primary" disabled={busy || !role || !source.trim()} onClick={() => void tailor()}>
       <Sparkles size={16} /> Tailor résumé
     </button>
-    <p role="status">{busy ? 'Working…' : message}</p>
-    {stream.partial && <Markdown content={stream.partial} onNavigate={onOpen} streaming />}
-    {draft && <article className="tech-lab">
+    <p role="status" className="th-note">{busy ? 'Working…' : message}</p>
+    {stream.partial && <div className="th-output th-output-live"><div className="th-output-bar"><span className="th-pulse" /> tailoring</div><Markdown content={stream.partial} onNavigate={onOpen} streaming /></div>}
+    {draft && <article className="th-output th-resume-draft">
       <h3>Résumé draft for {draft.role}</h3>
       <label>Edit draft<textarea value={draft.text} rows={14} disabled={busy}
         onChange={event => setDraft({ ...draft, text: event.target.value })} /></label>
       <Markdown content={draft.text} onNavigate={onOpen} />
       {draft.notes && <Markdown content={`## Review notes\n\n${draft.notes}`} onNavigate={onOpen} />}
-      <button disabled={busy || !draft.text.trim()} onClick={() => void save()}><Download size={16} /> Save as Markdown</button>
+      <button className="th-btn" disabled={busy || !draft.text.trim()} onClick={() => void save()}><Download size={16} /> Save as Markdown</button>
     </article>}
   </div>
 }

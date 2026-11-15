@@ -77,47 +77,47 @@ export default function TechHubVideos({ field, role, onOpen }: {
     setFilter('')
   }
 
-  return <div className="tech-video-hub">
+  return <div className="th-videos">
     <p>Watch tutorials and lab walkthroughs for <strong>{role || field}</strong>.</p>
-    <div className="tech-links" role="group" aria-label="Video topics">
-      {TOPICS.map((item, index) => <button key={item.label} aria-pressed={topic === index} onClick={() => chooseTopic(index)}>{item.label}</button>)}
-      <button onClick={() => onOpen(searchUrl)}>Search on YouTube <ArrowUpRight size={15} /></button>
+    <div className="th-chip-row" role="group" aria-label="Video topics">
+      {TOPICS.map((item, index) => <button key={item.label} className="th-chip" aria-pressed={topic === index} onClick={() => chooseTopic(index)}>{item.label}</button>)}
+      <button className="th-btn th-btn-ghost" onClick={() => onOpen(searchUrl)}>Search on YouTube <ArrowUpRight size={15} /></button>
     </div>
-    {selected && <article className="tech-video-player">
+    {selected && <article className="th-video-player">
       <header>
         <div><small>Now playing</small><h3>{selected.title}</h3><p>{selected.channel}</p></div>
-        <button aria-label="Close player" onClick={() => setPlaying(undefined)}><X size={17} /></button>
+        <button className="th-btn th-btn-ghost" aria-label="Close player" onClick={() => setPlaying(undefined)}><X size={17} /></button>
       </header>
       <iframe key={`${selected.id}-${alternate}`}
         src={`https://${alternate ? 'www.youtube.com' : 'www.youtube-nocookie.com'}/embed/${selected.id}?autoplay=1&rel=0`}
         title={selected.title} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
-      <footer className="tech-links">
-        <button onClick={() => setAlternate(value => !value)}>Switch player</button>
-        <button onClick={() => onOpen(`https://www.youtube.com/watch?v=${selected.id}`)}>Watch on YouTube <ArrowUpRight size={15} /></button>
+      <footer className="th-actions">
+        <button className="th-btn" onClick={() => setAlternate(value => !value)}>Switch player</button>
+        <button className="th-btn" onClick={() => onOpen(`https://www.youtube.com/watch?v=${selected.id}`)}>Watch on YouTube <ArrowUpRight size={15} /></button>
       </footer>
     </article>}
-    {liveSearch && !matching && <p role="status">Finding videos…</p>}
-    {usingStarterVideos && <div className="tech-video-status">
+    {liveSearch && !matching && <p role="status" className="th-note">Finding videos…</p>}
+    {usingStarterVideos && <div className="th-video-status">
       <p role="status">{liveSearch ? 'Live search returned no videos. Showing starter videos for this field.' : 'Showing starter videos. Live search is available in AIHub Browser.'}</p>
-      {liveSearch && <button onClick={() => { setResults(undefined); setRetry(value => value + 1) }}><RefreshCw size={15} /> Retry</button>}
+      {liveSearch && <button className="th-btn" onClick={() => { setResults(undefined); setRetry(value => value + 1) }}><RefreshCw size={15} /> Retry</button>}
     </div>}
     {!!available.length && <>
-      <label className="tech-video-filter"><Search size={16} aria-hidden="true" />
+      <label className="th-search"><Search size={16} aria-hidden="true" />
         <input aria-label="Filter videos by title or channel" placeholder="Filter by title or channel" value={filter} onChange={event => setFilter(event.target.value)} />
       </label>
       {!videos.length && <p role="status">No videos match your filter.</p>}
-      <div className="tech-video-grid">
-        {videos.map(video => <button className="tech-video-card" key={video.id} aria-pressed={selected?.id === video.id}
+      <div className="th-video-grid">
+        {videos.map(video => <button className="th-video-card" key={video.id} aria-pressed={selected?.id === video.id}
           onClick={() => {
             setPlaying(video)
             setAlternate(false)
           }}>
-          <span className="tech-video-thumb">
+          <span className="th-video-thumb">
             <VideoThumbnail video={video} />
             <Play size={22} aria-hidden="true" />
             {video.duration && <small>{video.duration}</small>}
           </span>
-          <span className="tech-video-info"><strong>{video.title}</strong><small>{[video.channel, video.views].filter(Boolean).join(' · ')}</small></span>
+          <span className="th-video-info"><strong>{video.title}</strong><small>{[video.channel, video.views].filter(Boolean).join(' · ')}</small></span>
         </button>)}
       </div>
     </>}
